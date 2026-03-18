@@ -1,0 +1,307 @@
+import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { runsApi } from '@/lib/api';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { LoadingState, ErrorState } from '@/components/ui/States';
+import { formatDuration, formatRelativeTime } from '@/lib/utils';
+import {
+  ArrowLeft, RotateCcw, Monitor, Smartphone, Globe,
+  Clock, CheckCircle, XCircle, AlertTriangle, Eye,
+  Camera, FileText, Activity
+} from 'lucide-react';
+
+const PLATFORM_ICONS: Record<string, typeof Monitor> = {
+  desktop: Monitor,
+  mobile: Smartphone,
+  pwa: Globe,
+};
+
+const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: typeof AlertTriangle }> = {
+  critical: { bg: 'bg-red-50', text: 'text-[#FF4D4D]', icon: XCircle },
+  warning: { bg: 'bg-yellow-50', text: 'text-[#EAB508]', icon: AlertTriangle },
+  info: { bg: 'bg-blue-50', text: 'text-[#4B90FF]', icon: Eye },
+  suggestion: { bg: 'bg-gray-50', text: 'text-gray-500', icon: Eye },
+};
+
+export default function RunDetailPage() {
+  const { id } = useParams<{ id: string }>();
+
+  const { data: run, isLoading, error } = useQuery({
+    queryKey: ['run', id],
+    queryFn: () => runsApi.get(id!),
+    enabled: !!id,
+  });
+
+  const { data: findings } = useQuery({
+    queryKey: ['run-findings', id],
+    queryFn: () => runsApi.getFindings(id!),
+    enabled: !!id,
+  });
+
+  if (isLoading) return <LoadingState message="Loading run details..." />;
+  if (error || !run) return <ErrorState message="Run not found" />;
+
+  const r = run as {
+    id: string;
+    name: string;
+    description?: string;
+    status: string;
+    platform: string;
+    triggeredBy: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    stepsCount: number;
+    passedSteps: number;
+    failedSteps: number;
+    findingsCount: number;
+    artifactsCount: number;
+    tags: string[];
+    targets: Array<{
+      id: string;
+      platform: string;
+      deviceName: string;
+      browserOrApp?: string;
+      resolution?: string;
+      os?: string;
+      status: string;
+    }>;
+    createdAt: string;
+  };
+
+  const findingsArr = (findings || []) as Array<{
+    id: string;
+    category: string;
+    severity: string;
+    title: string;
+    description: string;
+    expected?: string;
+    actual?: string;
+    suggestion?: string;
+    resolved: boolean;
+    createdAt: string;
+  }>;
+
+  const PlatformIcon = PLATFORM_ICONS[r.platform] || Monitor;
+
+  return (
+    <div className="px-6 lg:px-10 py-8 max-w-6xl">
+      {/* Back link */}
+      <Link to="/runs" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4B90FF] transition-colors mb-6">
+        <ArrowLeft size={14} />
+        Back to Runs
+      </Link>
+
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <PlatformIcon size={18} className="text-gray-400" />
+            <h1 className="text-xl font-bold text-gray-900">{r.name}</h1>
+            <StatusBadge status={r.status} />
+          </div>
+          {r.description && (
+            <p className="text-sm text-gray-500 max-w-xl">{r.description}</p>
+          )}
+          <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-400">
+            <span className="ce-mono">{r.id}</span>
+            <span>Triggered by {r.triggeredBy}</span>
+            <span>{formatRelativeTime(r.createdAt)}</span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors">
+            <RotateCcw size={13} /> Rerun
+          </button>
+        </div>
+      </div>
+
+      {/* Metrics cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="bg-white border border-gray-100 rounded-lg p-4">
+          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Duration</p>
+          <p className="text-lg font-bold text-gray-800 ce-mono">
+            {r.durationMs ? formatDuration(r.durationMs) : '—'}
+          </p>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-lg p-4">
+          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Steps</p>
+          <p className="text-lg font-bold text-gray-800">
+            {r.passedSteps}/{r.stepsCount}
+          </p>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-lg p-4">
+          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Failures</p>
+          <p className={`text-lg font-bold ${r.failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-800'}`}>
+            {r.failedSteps}
+          </p>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-lg p-4">
+          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Findings</p>
+          <p className={`text-lg font-bold ${r.findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-800'}`}>
+            {r.findingsCount}
+          </p>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-lg p-4">
+          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Artifacts</p>
+          <p className="text-lg font-bold text-[#4B90FF]">{r.artifactsCount}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Targets & Timeline */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Targets */}
+          {r.targets.length > 0 && (
+            <div className="bg-white border border-gray-100 rounded-lg p-5">
+              <p className="text-sm font-semibold text-gray-800 mb-4">Targets</p>
+              <div className="space-y-3">
+                {r.targets.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <Monitor size={14} className="text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-700 font-medium">{t.deviceName}</p>
+                        <p className="text-[11px] text-gray-400">
+                          {t.browserOrApp} · {t.resolution} · {t.os}
+                        </p>
+                      </div>
+                    </div>
+                    <StatusBadge status={t.status} size="sm" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Timeline placeholder */}
+          <div className="bg-white border border-gray-100 rounded-lg p-5">
+            <p className="text-sm font-semibold text-gray-800 mb-4">Timeline</p>
+            <div className="space-y-4">
+              {[
+                { time: r.createdAt, event: 'Run created', icon: Activity, color: '#4B90FF' },
+                ...(r.startedAt ? [{ time: r.startedAt, event: 'Execution started', icon: Clock, color: '#4B90FF' }] : []),
+                ...(r.completedAt
+                  ? [{ time: r.completedAt, event: r.status === 'passed' ? 'Run completed successfully' : r.status === 'failed' ? 'Run completed with failures' : 'Run completed — needs review', icon: r.status === 'passed' ? CheckCircle : r.status === 'failed' ? XCircle : AlertTriangle, color: r.status === 'passed' ? '#56A34A' : r.status === 'failed' ? '#FF4D4D' : '#EAB508' }]
+                  : []),
+              ].map((entry, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${entry.color}15` }}>
+                    <entry.icon size={12} style={{ color: entry.color }} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-700">{entry.event}</p>
+                    <p className="text-[11px] text-gray-400">{new Date(entry.time).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Artifacts placeholder */}
+          <div className="bg-white border border-gray-100 rounded-lg p-5">
+            <p className="text-sm font-semibold text-gray-800 mb-4">Artifacts</p>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: Math.min(r.artifactsCount, 6) }).map((_, i) => (
+                <div key={i} className="border border-gray-100 rounded-md p-3 hover:border-[#4B90FF]/30 transition-colors cursor-pointer">
+                  <div className="flex items-center gap-2 mb-2">
+                    {i % 3 === 0 ? <Camera size={13} className="text-[#4B90FF]" /> : <FileText size={13} className="text-gray-400" />}
+                    <span className="text-xs font-medium text-gray-600 truncate">
+                      {i % 3 === 0 ? `screenshot_step_${i + 1}.png` : i % 3 === 1 ? `trace_${i + 1}.json` : `log_${i + 1}.txt`}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-400">
+                    {i % 3 === 0 ? 'Screenshot' : i % 3 === 1 ? 'Performance trace' : 'Console log'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Findings & Tags */}
+        <div className="space-y-6">
+          {/* Findings */}
+          <div className="bg-white border border-gray-100 rounded-lg p-5">
+            <p className="text-sm font-semibold text-gray-800 mb-4">
+              Findings
+              {findingsArr.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-[#EAB508]/10 text-[#EAB508] text-[10px] font-semibold rounded-full">
+                  {findingsArr.length}
+                </span>
+              )}
+            </p>
+            {findingsArr.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No findings for this run</p>
+            ) : (
+              <div className="space-y-3">
+                {findingsArr.map((f) => {
+                  const sev = SEVERITY_STYLES[f.severity] || SEVERITY_STYLES.info;
+                  const SevIcon = sev.icon;
+                  return (
+                    <div key={f.id} className={`${sev.bg} rounded-md p-3`}>
+                      <div className="flex items-start gap-2">
+                        <SevIcon size={13} className={`${sev.text} mt-0.5 shrink-0`} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-700">{f.title}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{f.description}</p>
+                          {f.suggestion && (
+                            <p className="text-[10px] text-[#4B90FF] mt-1.5 font-medium">
+                              💡 {f.suggestion}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="px-1.5 py-0 text-[9px] text-gray-400 bg-white/80 rounded font-medium capitalize">
+                              {f.category.replace('_', ' ')}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              {formatRelativeTime(f.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          {r.tags.length > 0 && (
+            <div className="bg-white border border-gray-100 rounded-lg p-5">
+              <p className="text-sm font-semibold text-gray-800 mb-3">Tags</p>
+              <div className="flex flex-wrap gap-1.5">
+                {r.tags.map((tag) => (
+                  <span key={tag} className="px-2.5 py-1 text-xs text-gray-500 bg-gray-50 rounded-full border border-gray-100 font-medium">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Run Info */}
+          <div className="bg-white border border-gray-100 rounded-lg p-5">
+            <p className="text-sm font-semibold text-gray-800 mb-3">Details</p>
+            <dl className="space-y-2.5">
+              {[
+                { label: 'Run ID', value: r.id },
+                { label: 'Platform', value: r.platform },
+                { label: 'Triggered by', value: r.triggeredBy },
+                { label: 'Created', value: new Date(r.createdAt).toLocaleString() },
+                ...(r.startedAt ? [{ label: 'Started', value: new Date(r.startedAt).toLocaleString() }] : []),
+                ...(r.completedAt ? [{ label: 'Completed', value: new Date(r.completedAt).toLocaleString() }] : []),
+              ].map((item) => (
+                <div key={item.label} className="flex justify-between">
+                  <dt className="text-[11px] text-gray-400">{item.label}</dt>
+                  <dd className="text-[11px] text-gray-600 ce-mono text-right max-w-[60%] truncate">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - API_PORT=3001
+      - NODE_ENV=development
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+    command: pnpm --filter @bladerunner/api start:dev
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+    depends_on:
+      - api
+    command: pnpm --filter @bladerunner/web dev --host 0.0.0.0

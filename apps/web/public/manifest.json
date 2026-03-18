@@ -1,0 +1,16 @@
+{
+  "name": "Bladerunner by Edgehealth",
+  "short_name": "Bladerunner",
+  "description": "Operational control surface for validating application experiences",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#4B90FF",
+  "icons": [
+    {
+      "src": "/bladerunner-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
