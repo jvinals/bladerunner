@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 const MOCK_AGENTS = [
   {
     id: 'agent_browser_01',
-    workspaceId: 'ws_careexpand',
+    workspaceId: 'ws_edgehealth',
     name: 'Browser Agent — Chrome',
     type: 'browser',
     status: 'online',
@@ -16,7 +16,7 @@ const MOCK_AGENTS = [
   },
   {
     id: 'agent_mobile_01',
-    workspaceId: 'ws_careexpand',
+    workspaceId: 'ws_edgehealth',
     name: 'Mobile Agent — iOS Simulator',
     type: 'mobile',
     status: 'online',
@@ -29,7 +29,7 @@ const MOCK_AGENTS = [
   },
   {
     id: 'agent_desktop_01',
-    workspaceId: 'ws_careexpand',
+    workspaceId: 'ws_edgehealth',
     name: 'Desktop Agent — macOS',
     type: 'desktop',
     status: 'busy',

@@ -2,12 +2,12 @@
 
 > Operational control surface for validating application experiences
 
-Careexpand Pilot is a SaaS platform for recording, managing, and validating application "runs" across desktop, mobile, and PWA targets. It supports product demos, end-to-end verification, CI/CD-linked validation, visual accuracy checks, style consistency audits, and UX smoothness detection.
+Bladerunner by Edgehealth is a SaaS platform for recording, managing, and validating application "runs" across desktop, mobile, and PWA targets. It supports product demos, end-to-end verification, CI/CD-linked validation, visual accuracy checks, style consistency audits, and UX smoothness detection.
 
 ## Architecture
 
 ```
-careexpand-pilot/
+bladerunner/
 ├── apps/
 │   ├── api/          # NestJS backend (TypeScript)
 │   └── web/          # React frontend (Vite + Tailwind + shadcn)
@@ -86,11 +86,11 @@ A Run supports:
 
 ## Design System
 
-Built on the **Careexpand Style Guide**:
+Built on the **Edgehealth Style Guide**:
 - **Colors**: Primary Blue (#4B90FF), Accent (#4D65FF), Success (#56A34A), Warning (#EAB508), Destructive (#FF4D4D)
 - **Typography**: Inter (UI), JetBrains Mono (data)
 - **Radii**: 6px (buttons/inputs), 8px (cards/modals)
-- **Components**: shadcn/ui with Careexpand token overrides
+- **Components**: shadcn/ui with Edgehealth token overrides
 
 ## Tech Stack
 
@@ -104,4 +104,4 @@ Built on the **Careexpand Style Guide**:
 
 ## License
 
-Private — Careexpand © 2026
+Private — Edgehealth © 2026

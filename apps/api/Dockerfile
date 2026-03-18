@@ -6,4 +6,4 @@ COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 RUN pnpm install --frozen-lockfile || pnpm install
 EXPOSE 3001
-CMD ["pnpm", "--filter", "@pilot/api", "start:dev"]
+CMD ["pnpm", "--filter", "@bladerunner/api", "start:dev"]

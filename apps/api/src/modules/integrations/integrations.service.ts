@@ -3,11 +3,11 @@ import { Injectable } from '@nestjs/common';
 const MOCK_INTEGRATIONS = [
   {
     id: 'int_github',
-    workspaceId: 'ws_careexpand',
+    workspaceId: 'ws_edgehealth',
     name: 'GitHub',
     type: 'github',
     status: 'active',
-    config: { org: 'careexpand', webhookEnabled: true },
+    config: { org: 'edgehealth', webhookEnabled: true },
     lastSyncAt: '2026-03-18T10:00:00Z',
     createdAt: '2026-01-15T10:00:00Z',
   },
@@ -17,7 +17,7 @@ const MOCK_INTEGRATIONS = [
     name: 'Slack',
     type: 'slack',
     status: 'active',
-    config: { channel: '#pilot-alerts' },
+    config: { channel: '#bladerunner-alerts' },
     lastSyncAt: '2026-03-18T14:00:00Z',
     createdAt: '2026-02-01T10:00:00Z',
   },

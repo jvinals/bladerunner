@@ -2,7 +2,29 @@ import { Injectable } from '@nestjs/common';
 
 // ─── Mock Data — Realistic seed data for the Bladerunner scaffold ────────────
 
-const MOCK_RUNS = [
+interface MockRun {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string;
+  status: string;
+  platform: string;
+  triggeredBy: string;
+  startedAt: string | undefined;
+  completedAt: string | undefined;
+  durationMs: number | undefined;
+  targets: any[];
+  stepsCount: number;
+  passedSteps: number;
+  failedSteps: number;
+  findingsCount: number;
+  artifactsCount: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+const MOCK_RUNS: any[] = [
   {
     id: 'run_01HQ7K2M3N4P5R6S',
     projectId: 'proj_edgehealth_portal',
@@ -217,7 +239,7 @@ export class RunsService {
         (r) =>
           r.name.toLowerCase().includes(term) ||
           r.description?.toLowerCase().includes(term) ||
-          r.tags.some((t) => t.includes(term)),
+          r.tags.some((t: string) => t.includes(term)),
       );
     }
 

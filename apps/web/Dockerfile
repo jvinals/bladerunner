@@ -6,4 +6,4 @@ COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 RUN pnpm install --frozen-lockfile || pnpm install
 EXPOSE 5173
-CMD ["pnpm", "--filter", "@pilot/web", "dev", "--host", "0.0.0.0"]
+CMD ["pnpm", "--filter", "@bladerunner/web", "dev", "--host", "0.0.0.0"]

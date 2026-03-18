@@ -1,4 +1,4 @@
-// ─── Careexpand Pilot — Shared Domain Types ──────────────────────────────────
+// ─── Bladerunner by Edgehealth — Shared Domain Types ─────────────────────────
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
