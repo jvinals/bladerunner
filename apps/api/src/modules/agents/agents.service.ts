@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 const MOCK_AGENTS = [
   {
     id: 'agent_browser_01',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4', // Default test user
     workspaceId: 'ws_edgehealth',
     name: 'Browser Agent — Chrome',
     type: 'browser',
@@ -16,6 +17,7 @@ const MOCK_AGENTS = [
   },
   {
     id: 'agent_mobile_01',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     workspaceId: 'ws_edgehealth',
     name: 'Mobile Agent — iOS Simulator',
     type: 'mobile',
@@ -29,6 +31,7 @@ const MOCK_AGENTS = [
   },
   {
     id: 'agent_desktop_01',
+    userId: 'other_user',
     workspaceId: 'ws_edgehealth',
     name: 'Desktop Agent — macOS',
     type: 'desktop',
@@ -46,11 +49,11 @@ const MOCK_AGENTS = [
 export class AgentsService {
   private agents = [...MOCK_AGENTS];
 
-  findAll() {
-    return this.agents;
+  findAll(userId: string) {
+    return this.agents.filter((a) => (a as any).userId === userId);
   }
 
-  findOne(id: string) {
-    return this.agents.find((a) => a.id === id) || null;
+  findOne(id: string, userId: string) {
+    return this.agents.find((a) => a.id === id && (a as any).userId === userId) || null;
   }
 }

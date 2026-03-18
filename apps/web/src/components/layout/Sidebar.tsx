@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { Home, Play, Settings, ChevronRight } from 'lucide-react';
+import { UserButton, useUser } from '@clerk/react';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: Home },
@@ -13,6 +14,7 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps) {
   const location = useLocation();
+  const { user } = useUser();
 
   return (
     <div className="flex flex-col h-full">
@@ -60,15 +62,13 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-100">
+      {/* Footer / User */}
+      <div className="px-4 py-4 border-t border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-[#4B90FF] text-xs font-bold">
-            CE
-          </div>
+          <UserButton />
           <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-700 truncate">Edgehealth</p>
-            <p className="text-[10px] text-gray-400 truncate">Workspace</p>
+            <p className="text-xs font-medium text-gray-700 truncate">{user?.fullName || 'User'}</p>
+            <p className="text-[10px] text-gray-400 truncate">{user?.primaryEmailAddress?.emailAddress}</p>
           </div>
         </div>
       </div>

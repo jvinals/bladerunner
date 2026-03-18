@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 const MOCK_PROJECTS = [
   {
     id: 'proj_edgehealth_portal',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4', // Default test user
     workspaceId: 'ws_edgehealth',
     name: 'Edgehealth Portal',
     description: 'Main patient and provider portal — desktop web application',
@@ -13,6 +14,7 @@ const MOCK_PROJECTS = [
   },
   {
     id: 'proj_edgehealth_mobile',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     workspaceId: 'ws_edgehealth',
     name: 'Edgehealth Mobile',
     description: 'Patient-facing mobile app and PWA',
@@ -23,6 +25,7 @@ const MOCK_PROJECTS = [
   },
   {
     id: 'proj_edgehealth_admin',
+    userId: 'other_user',
     workspaceId: 'ws_edgehealth',
     name: 'Edgehealth Admin',
     description: 'Internal admin panel for workspace and system management',
@@ -37,11 +40,11 @@ const MOCK_PROJECTS = [
 export class ProjectsService {
   private projects = [...MOCK_PROJECTS];
 
-  findAll() {
-    return this.projects;
+  findAll(userId: string) {
+    return this.projects.filter((p) => p.userId === userId);
   }
 
-  findOne(id: string) {
-    return this.projects.find((p) => p.id === id) || null;
+  findOne(id: string, userId: string) {
+    return this.projects.find((p) => p.id === id && p.userId === userId) || null;
   }
 }

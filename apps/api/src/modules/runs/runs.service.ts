@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 
 interface MockRun {
   id: string;
+  userId: string;
   projectId: string;
   name: string;
   description: string;
@@ -24,9 +25,26 @@ interface MockRun {
   updatedAt: string;
 }
 
-const MOCK_RUNS: any[] = [
+interface MockFinding {
+  id: string;
+  userId: string;
+  runId: string;
+  stepId: string;
+  category: string;
+  severity: string;
+  title: string;
+  description: string;
+  expected?: string;
+  actual?: string;
+  suggestion?: string;
+  resolved: boolean;
+  createdAt: string;
+}
+
+const MOCK_RUNS: MockRun[] = [
   {
     id: 'run_01HQ7K2M3N4P5R6S',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4', // Default test user
     projectId: 'proj_edgehealth_portal',
     name: 'Patient Dashboard — Full Flow',
     description: 'End-to-end verification of the patient dashboard including login, navigation, and data display',
@@ -50,6 +68,7 @@ const MOCK_RUNS: any[] = [
   },
   {
     id: 'run_02JR8L3N4O5Q6T7U',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     projectId: 'proj_edgehealth_portal',
     name: 'Appointment Booking — Mobile',
     description: 'Visual accuracy and UX smoothness check for the mobile appointment booking flow',
@@ -73,6 +92,7 @@ const MOCK_RUNS: any[] = [
   },
   {
     id: 'run_03KS9M4O5P6R7V8W',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     projectId: 'proj_edgehealth_portal',
     name: 'Settings Page — Style Consistency',
     description: 'Style guide compliance check for settings page components',
@@ -96,6 +116,7 @@ const MOCK_RUNS: any[] = [
   },
   {
     id: 'run_04LT0N5P6Q7S8X9Y',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     projectId: 'proj_edgehealth_mobile',
     name: 'PWA Install Flow — Android',
     description: 'Validate PWA installability and offline-ready state on Android Chrome',
@@ -119,6 +140,7 @@ const MOCK_RUNS: any[] = [
   },
   {
     id: 'run_05MU1O6Q7R8T9Z0A',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     projectId: 'proj_edgehealth_portal',
     name: 'Billing Module — Demo Ready',
     description: 'Pre-demo verification run ensuring billing module is presentation-ready',
@@ -140,6 +162,7 @@ const MOCK_RUNS: any[] = [
   },
   {
     id: 'run_06NV2P7R8S9U0B1C',
+    userId: 'other_user',
     projectId: 'proj_edgehealth_portal',
     name: 'Login — Cross-Browser',
     description: 'Cross-browser validation of the authentication flow',
@@ -164,9 +187,10 @@ const MOCK_RUNS: any[] = [
   },
 ];
 
-const MOCK_FINDINGS = [
+const MOCK_FINDINGS: MockFinding[] = [
   {
     id: 'find_01',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     runId: 'run_02JR8L3N4O5Q6T7U',
     stepId: 'step_04',
     category: 'visual_accuracy',
@@ -181,6 +205,7 @@ const MOCK_FINDINGS = [
   },
   {
     id: 'find_02',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     runId: 'run_02JR8L3N4O5Q6T7U',
     stepId: 'step_06',
     category: 'style_consistency',
@@ -195,6 +220,7 @@ const MOCK_FINDINGS = [
   },
   {
     id: 'find_03',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     runId: 'run_02JR8L3N4O5Q6T7U',
     stepId: 'step_07',
     category: 'ux_friction',
@@ -207,6 +233,7 @@ const MOCK_FINDINGS = [
   },
   {
     id: 'find_04',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     runId: 'run_03KS9M4O5P6R7V8W',
     stepId: 'step_03',
     category: 'style_consistency',
@@ -224,8 +251,8 @@ export class RunsService {
   private runs = [...MOCK_RUNS];
   private findings = [...MOCK_FINDINGS];
 
-  findAll(query?: { status?: string; platform?: string; search?: string; page?: number; pageSize?: number }) {
-    let filtered = [...this.runs];
+  findAll(userId: string, query?: { status?: string; platform?: string; search?: string; page?: number; pageSize?: number }) {
+    let filtered = this.runs.filter((r) => r.userId === userId);
 
     if (query?.status) {
       filtered = filtered.filter((r) => r.status === query.status);
@@ -257,21 +284,22 @@ export class RunsService {
     };
   }
 
-  findOne(id: string) {
-    return this.runs.find((r) => r.id === id) || null;
+  findOne(id: string, userId: string) {
+    return this.runs.find((r) => r.id === id && r.userId === userId) || null;
   }
 
-  findFindings(runId: string) {
-    return this.findings.filter((f) => f.runId === runId);
+  findFindings(runId: string, userId: string) {
+    return this.findings.filter((f) => f.runId === runId && f.userId === userId);
   }
 
-  create(data: { name: string; projectId: string; platform: string; description?: string; tags?: string[] }) {
-    const run = {
+  create(userId: string, data: { name: string; projectId: string; platform: string; description?: string; tags?: string[] }) {
+    const run: MockRun = {
       id: `run_${Date.now()}`,
+      userId,
       projectId: data.projectId,
       name: data.name,
-      description: data.description,
-      status: 'queued' as const,
+      description: data.description || '',
+      status: 'queued',
       platform: data.platform,
       triggeredBy: 'Manual',
       startedAt: undefined,
@@ -291,11 +319,14 @@ export class RunsService {
     return run;
   }
 
-  getDashboardKpis() {
-    const totalRuns = this.runs.length;
-    const passed = this.runs.filter((r) => r.status === 'passed').length;
+  getDashboardKpis(userId: string) {
+    const userRuns = this.runs.filter((r) => r.userId === userId);
+    const userFindings = this.findings.filter((f) => f.userId === userId);
+
+    const totalRuns = userRuns.length;
+    const passed = userRuns.filter((r) => r.status === 'passed').length;
     const passRate = totalRuns > 0 ? Math.round((passed / totalRuns) * 100) : 0;
-    const completed = this.runs.filter((r) => r.durationMs);
+    const completed = userRuns.filter((r) => r.durationMs);
     const avgDuration = completed.length > 0
       ? Math.round(completed.reduce((sum, r) => sum + (r.durationMs || 0), 0) / completed.length)
       : 0;
@@ -305,8 +336,8 @@ export class RunsService {
       passRate,
       avgDuration,
       activeAgents: 3,
-      findingsCount: this.findings.length,
-      runsToday: 4,
+      findingsCount: userFindings.length,
+      runsToday: totalRuns > 0 ? Math.min(totalRuns, 4) : 0,
       runsTrend: 12,
       passRateTrend: 5,
     };

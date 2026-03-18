@@ -1,3 +1,8 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+allowBuilds:
+  '@clerk/shared': false
+  '@nestjs/core': false
+  '@scarf/scarf': false
+  esbuild: false

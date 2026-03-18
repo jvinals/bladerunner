@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Param, Query, Body, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, NotFoundException, UseGuards, Req } from '@nestjs/common';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { RunsService } from './runs.service';
 import { CreateRunDto, RunQueryDto } from './runs.dto';
 
 @ApiTags('runs')
 @Controller('runs')
+@UseGuards(ClerkAuthGuard)
 export class RunsController {
   constructor(private readonly runsService: RunsService) {}
 
@@ -16,23 +18,26 @@ export class RunsController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'pageSize', required: false })
-  findAll(@Query() query: RunQueryDto) {
-    return this.runsService.findAll(query);
+  findAll(@Req() req: any, @Query() query: RunQueryDto) {
+    const userId = req.user.sub;
+    return this.runsService.findAll(userId, query);
   }
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get dashboard KPI metrics' })
   @ApiResponse({ status: 200, description: 'Dashboard KPI data' })
-  getDashboard() {
-    return this.runsService.getDashboardKpis();
+  getDashboard(@Req() req: any) {
+    const userId = req.user.sub;
+    return this.runsService.getDashboardKpis(userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a single run by ID' })
   @ApiResponse({ status: 200, description: 'Run details' })
   @ApiResponse({ status: 404, description: 'Run not found' })
-  findOne(@Param('id') id: string) {
-    const run = this.runsService.findOne(id);
+  findOne(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    const run = this.runsService.findOne(id, userId);
     if (!run) {
       throw new NotFoundException(`Run ${id} not found`);
     }
@@ -42,14 +47,16 @@ export class RunsController {
   @Get(':id/findings')
   @ApiOperation({ summary: 'Get findings for a run' })
   @ApiResponse({ status: 200, description: 'List of findings' })
-  findFindings(@Param('id') id: string) {
-    return this.runsService.findFindings(id);
+  findFindings(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    return this.runsService.findFindings(id, userId);
   }
 
   @Post()
   @ApiOperation({ summary: 'Create a new run' })
   @ApiResponse({ status: 201, description: 'Run created successfully' })
-  create(@Body() createRunDto: CreateRunDto) {
-    return this.runsService.create(createRunDto);
+  create(@Req() req: any, @Body() createRunDto: CreateRunDto) {
+    const userId = req.user.sub;
+    return this.runsService.create(userId, createRunDto);
   }
 }

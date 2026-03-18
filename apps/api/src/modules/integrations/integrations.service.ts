@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 const MOCK_INTEGRATIONS = [
   {
     id: 'int_github',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4', // Default test user
     workspaceId: 'ws_edgehealth',
     name: 'GitHub',
     type: 'github',
@@ -13,6 +14,7 @@ const MOCK_INTEGRATIONS = [
   },
   {
     id: 'int_slack',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     workspaceId: 'ws_careexpand',
     name: 'Slack',
     type: 'slack',
@@ -23,6 +25,7 @@ const MOCK_INTEGRATIONS = [
   },
   {
     id: 'int_orchestrator',
+    userId: 'other_user',
     workspaceId: 'ws_careexpand',
     name: 'Orchestrator',
     type: 'orchestrator',
@@ -33,6 +36,7 @@ const MOCK_INTEGRATIONS = [
   },
   {
     id: 'int_cicd',
+    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
     workspaceId: 'ws_careexpand',
     name: 'CI/CD Pipeline',
     type: 'ci_cd',
@@ -47,11 +51,11 @@ const MOCK_INTEGRATIONS = [
 export class IntegrationsService {
   private integrations = [...MOCK_INTEGRATIONS];
 
-  findAll() {
-    return this.integrations;
+  findAll(userId: string) {
+    return this.integrations.filter((i) => (i as any).userId === userId);
   }
 
-  findOne(id: string) {
-    return this.integrations.find((i) => i.id === id) || null;
+  findOne(id: string, userId: string) {
+    return this.integrations.find((i) => i.id === id && (i as any).userId === userId) || null;
   }
 }
