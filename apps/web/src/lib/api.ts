@@ -18,7 +18,22 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
   });
   if (!res.ok) {
-    throw new Error(`API Error: ${res.status} ${res.statusText}`);
+    let detail = '';
+    try {
+      const ct = res.headers.get('content-type');
+      if (ct?.includes('application/json')) {
+        const body = (await res.json()) as { message?: string | string[] };
+        if (Array.isArray(body.message)) detail = body.message.join(', ');
+        else if (typeof body.message === 'string') detail = body.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      detail
+        ? `API Error: ${res.status} ${res.statusText} — ${detail}`
+        : `API Error: ${res.status} ${res.statusText}`,
+    );
   }
   return res.json();
 }
