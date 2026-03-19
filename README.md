@@ -41,6 +41,21 @@ pnpm dev:web
 pnpm dev
 ```
 
+### Port 3001 already in use (`EADDRINUSE`)
+
+Only **one** process can listen on **3001**. If a previous `pnpm dev` / `pnpm dev:api` didn’t exit cleanly, the old Node process still holds the port.
+
+**macOS / Linux:** find and stop it, then start `pnpm dev` again:
+
+```bash
+lsof -nP -iTCP:3001 -sTCP:LISTEN
+kill <PID>            # use the PID from the LISTEN row
+# If it won’t die:
+kill -9 <PID>
+```
+
+**Or** run the API on another port temporarily: `API_PORT=3003 pnpm dev:api` (and point Vite’s proxy at that port, or use `VITE_API_URL` for the web app if applicable).
+
 ### Database (local vs hosted)
 
 The API needs a reachable **PostgreSQL** `DATABASE_URL`. It loads **`apps/api/.env` first**, then the **repo root `.env`** (Nest gives precedence to the first file present — keep `DATABASE_URL` in one place to avoid stale overrides). If Railway (or any remote DB) is **down or unreachable**, you’ll see **`PrismaClientInitializationError` / P1001** in API logs. The API still **starts** (Prisma connects lazily); **`GET /health`** returns **503** with `services.database: "error"` until the DB is reachable.
@@ -126,6 +141,7 @@ Built on the **Edgehealth Style Guide**:
 
 ## Changelog
 
+- **0.2.15** — README: **EADDRINUSE on port 3001** (stale API process) — how to `lsof` / `kill` or use `API_PORT`.
 - **0.2.14** — Remove dev **`PrismaService` startup logging** of DB host / `sslmode` (debug instrumentation cleanup).
 - **0.2.13** — Railway **`sslmode=require`** is applied in **`PrismaService`’s constructor** (after `ConfigModule` loads `.env`), not at process import time when `DATABASE_URL` was still empty — fixes SSL patch never running.
 - **0.2.12** — (superseded) attempted Railway `sslmode` at import time before env load.
