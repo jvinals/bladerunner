@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { Show, RedirectToSignIn } from '@clerk/react';
+import { Show, RedirectToSignIn, useAuth } from '@clerk/react';
 import { AppShell } from './components/layout/AppShell';
+import { setTokenProvider } from './lib/api';
 import HomePage from './pages/Home';
 import RunsPage from './pages/Runs';
 import RunDetailPage from './pages/RunDetail';
@@ -8,10 +10,19 @@ import SettingsPage from './pages/Settings';
 import DetachedPreview from './pages/DetachedPreview';
 import NotFoundPage from './pages/NotFound';
 
+function AuthTokenSync() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setTokenProvider(getToken);
+  }, [getToken]);
+  return null;
+}
+
 export default function App() {
   return (
     <>
       <Show when="signed-in">
+        <AuthTokenSync />
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<HomePage />} />

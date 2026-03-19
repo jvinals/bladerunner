@@ -1,9 +1,21 @@
 const API_BASE = '/api';
 
+let _getToken: (() => Promise<string | null>) | null = null;
+
+export function setTokenProvider(fn: () => Promise<string | null>) {
+  _getToken = fn;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await _getToken?.();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const auth = await authHeaders();
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
   });
   if (!res.ok) {
     throw new Error(`API Error: ${res.status} ${res.statusText}`);
@@ -12,7 +24,11 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
-  return fetch(`${API_BASE}${path}`, options);
+  const auth = await authHeaders();
+  return fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...auth, ...options?.headers },
+  });
 }
 
 // ─── Runs ────────────────────────────────────────────────────────────────────

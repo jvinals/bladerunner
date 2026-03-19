@@ -4,7 +4,19 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // #region agent log
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'main.ts:bootstrap-start',message:'NestJS bootstrap starting',data:{},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
+  let app;
+  try {
+    app = await NestFactory.create(AppModule);
+  } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'main.ts:bootstrap-create-error',message:'NestFactory.create FAILED',data:{error:String(err),stack:(err as any)?.stack?.slice(0,800)},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    console.error('Failed to create NestJS app:', err);
+    throw err;
+  }
 
   // Global validation pipe
   app.useGlobalPipes(
