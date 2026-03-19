@@ -60,7 +60,7 @@ Smoke check: `node scripts/verify-api-health.mjs` (expects HTTP 200 and `databas
 
 1. **Railway** — Postgres service is **deployed / running** (not stopped). In the DB service, confirm **public networking** or **TCP proxy** is enabled so external clients can connect.
 2. **Fresh URL** — Copy `DATABASE_URL` again from the Railway dashboard (host/port can change).
-3. **SSL** — Railway URLs often need `?sslmode=require` (or the dashboard’s full string). Paste the **entire** string Railway provides.
+3. **SSL** — Railway Postgres expects TLS. If your URL has no `sslmode=`, the API prepends **`sslmode=require`** automatically for `*.rlwy.net` / `*.railway.app` hosts at startup. You can still set it explicitly in `DATABASE_URL` if Railway’s UI provides a different string.
 4. **Local proof** — From repo root: `pnpm check:db-tcp` — must print **TCP connection succeeded**. If this fails, Prisma cannot work until TCP works.
 
 ### URLs
@@ -126,6 +126,7 @@ Built on the **Edgehealth Style Guide**:
 
 ## Changelog
 
+- **0.2.12** — API bootstraps **`sslmode=require`** on `DATABASE_URL` when the host is Railway (`*.rlwy.net`, `*.railway.app`) and no `sslmode` is set, so Prisma can complete TLS to hosted Postgres.
 - **0.2.11** — API `ConfigModule` loads **`.env` via `__dirname`** (`apps/api/.env` then repo root). Fixes wrong/missing `DATABASE_URL` when `cwd` is not the monorepo root (duplicate keys: **first file wins**, so api-local env overrides root).
 - **0.2.10** — `pnpm check:db-tcp` script + README notes for Railway **P1001 / can’t reach server** (TCP proxy, SSL, fresh `DATABASE_URL`).
 - **0.2.9** — Prisma uses **lazy connect** so a bad/unreachable `DATABASE_URL` no longer crashes the API before `listen()` (fixes empty port 3001 + Vite `ECONNREFUSED`). `/health` returns **503** when the DB check fails (with `dbError` in non-production). Optional **`local-db`** Postgres service in `docker-compose.yml`; `verify-api-health.mjs` hints local setup.
