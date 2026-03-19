@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.2.11",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "dev": "pnpm --parallel -r run dev",
@@ -12,7 +12,8 @@
     "build:api": "pnpm --filter @bladerunner/api build",
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r run clean",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "check:db-tcp": "node --env-file=.env scripts/check-db-tcp.mjs"
   },
   "engines": {
     "node": ">=20.0.0",

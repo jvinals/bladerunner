@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './modules/prisma/prisma.module';
@@ -15,7 +16,12 @@ import { LlmModule } from './modules/llm/llm.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '../../.env',
+      // cwd varies (repo root vs apps/api); anchor to compiled output in dist/
+      // First file wins for duplicate keys — api-local .env overrides monorepo root
+      envFilePath: [
+        join(__dirname, '..', '.env'), // apps/api/.env
+        join(__dirname, '..', '..', '..', '.env'), // repo root .env
+      ],
     }),
     PrismaModule,
     AuthModule,
