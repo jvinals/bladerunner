@@ -7,8 +7,25 @@
 const base = process.env.API_URL || 'http://127.0.0.1:3001';
 const url = `${base.replace(/\/$/, '')}/health`;
 
+function explainFetchError(err) {
+  const cause = err?.cause;
+  const code = cause?.code || err?.code;
+  const lines = [`Could not reach ${url}`, `  ${err?.message || err}`];
+  if (code === 'ECONNREFUSED') {
+    lines.push(
+      '',
+      'Nothing is listening on that host/port (API is probably not running).',
+      '  Start it:  pnpm dev:api',
+      '  Or both:   pnpm dev',
+    );
+  } else if (code === 'ENOTFOUND') {
+    lines.push('', 'Host could not be resolved — check API_URL.');
+  }
+  return lines.join('\n');
+}
+
 const res = await fetch(url).catch((e) => {
-  console.error(`Fetch failed (${url}):`, e.message);
+  console.error(explainFetchError(e));
   process.exit(1);
 });
 
