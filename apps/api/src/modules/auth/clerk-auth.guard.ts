@@ -12,9 +12,12 @@ export class ClerkAuthGuard implements CanActivate {
   private clerkClient;
 
   constructor(private configService: ConfigService) {
+    const publishableKey =
+      this.configService.get<string>('CLERK_PUBLISHABLE_KEY') ||
+      this.configService.get<string>('VITE_CLERK_PUBLISHABLE_KEY');
     this.clerkClient = createClerkClient({
       secretKey: this.configService.get<string>('CLERK_SECRET_KEY'),
-      publishableKey: this.configService.get<string>('VITE_CLERK_PUBLISHABLE_KEY'),
+      publishableKey,
     });
   }
 

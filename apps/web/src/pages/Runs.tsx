@@ -1,14 +1,19 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useUser } from '@clerk/react';
 import { runsApi } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
-import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
 import { useRecording } from '@/hooks/useRecording';
+import {
+  useRemotePreviewCanvas,
+  type RemotePreviewBridge,
+} from '@/hooks/useRemotePreviewCanvas';
 import {
   Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown,
 } from 'lucide-react';
 
 export default function RunsPage() {
+  const { user } = useUser();
   const [search, setSearch] = useState('');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [newPanelOpen, setNewPanelOpen] = useState(false);
@@ -18,6 +23,7 @@ export default function RunsPage() {
   const [isDetached, setIsDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewFocusRef = useRef<HTMLDivElement>(null);
   const stepsEndRef = useRef<HTMLDivElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
 
@@ -31,6 +37,11 @@ export default function RunsPage() {
     stopRecording,
     sendInstruction,
     loadRunSteps,
+    sendRemotePointer,
+    sendRemoteKey,
+    sendRemoteTouch,
+    sendRemoteClipboard,
+    socketConnected,
   } = useRecording();
 
   const { data: runsData, isLoading, error, refetch } = useQuery({
@@ -86,6 +97,34 @@ export default function RunsPage() {
     refetch();
   }, [stopRecording, refetch]);
 
+  const userId = user?.id ?? '';
+
+  const previewBridge = useMemo<RemotePreviewBridge>(
+    () => ({
+      pointer: (p) => sendRemotePointer(userId, p),
+      key: (t, k) => sendRemoteKey(userId, t, k),
+      touch: (type, touchPoints) => sendRemoteTouch(userId, { type, touchPoints }),
+      clipboard: (action, text) => sendRemoteClipboard(userId, action, text),
+      isConnected: () => socketConnected,
+    }),
+    [
+      userId,
+      sendRemotePointer,
+      sendRemoteKey,
+      sendRemoteTouch,
+      sendRemoteClipboard,
+      socketConnected,
+    ],
+  );
+
+  const { canvasProps, previewProps } = useRemotePreviewCanvas(
+    userId,
+    canvasRef,
+    previewFocusRef,
+    previewBridge,
+    { isActive: isRecording && !isDetached },
+  );
+
   const handleSendInstruction = useCallback(async () => {
     if (!instructionText.trim() || isSendingInstruction) return;
     setIsSendingInstruction(true);
@@ -135,11 +174,24 @@ export default function RunsPage() {
         <div className="flex-1 relative bg-white border border-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
           {isRecording && !isDetached ? (
             <>
-              <canvas
-                ref={canvasRef}
-                className="max-w-full max-h-full object-contain"
-              />
+              <div ref={previewFocusRef} {...previewProps}>
+                <canvas
+                  ref={canvasRef}
+                  className="max-w-full max-h-full object-contain block touch-none cursor-crosshair select-none"
+                  {...canvasProps}
+                  role="img"
+                  aria-label="Remote browser preview — click to interact"
+                />
+              </div>
+              <p className="absolute bottom-2 left-2 right-2 text-center text-[10px] text-gray-400 pointer-events-none px-8">
+                Mouse, touch (swipe/pinch), scroll wheel, double-click. Click preview to type;{' '}
+                <kbd className="rounded border border-gray-200 bg-gray-50 px-0.5 font-mono text-[9px]">⌘/Ctrl+C/V/X</kbd>{' '}
+                copy/paste/cut between remote and your clipboard.{' '}
+                <kbd className="rounded border border-gray-200 bg-gray-50 px-0.5 font-mono text-[9px]">Esc</kbd> exits
+                keyboard focus.
+              </p>
               <button
+                type="button"
                 onClick={handleDetach}
                 className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
                 title="Detach preview to new window"

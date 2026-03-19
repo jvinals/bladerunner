@@ -72,4 +72,82 @@ export class RecordingGateway implements OnGatewayInit {
       return { event: 'instruct:error', data: { error: message } };
     }
   }
+
+  @SubscribeMessage('pointer')
+  async handlePointer(
+    @MessageBody()
+    data: {
+      runId: string;
+      userId: string;
+      kind: 'move' | 'down' | 'up' | 'wheel' | 'dblclick';
+      x?: number;
+      y?: number;
+      button?: 'left' | 'right' | 'middle';
+      deltaX?: number;
+      deltaY?: number;
+    },
+  ) {
+    await this.recordingService.dispatchRemotePointer(data.runId, data.userId, {
+      kind: data.kind,
+      x: data.x,
+      y: data.y,
+      button: data.button,
+      deltaX: data.deltaX,
+      deltaY: data.deltaY,
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage('touch')
+  async handleTouch(
+    @MessageBody()
+    data: {
+      runId: string;
+      userId: string;
+      type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel';
+      touchPoints: Array<{ id: number; x: number; y: number; force?: number }>;
+    },
+  ) {
+    await this.recordingService.dispatchRemoteTouch(data.runId, data.userId, {
+      type: data.type,
+      touchPoints: data.touchPoints ?? [],
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage('clipboard')
+  async handleClipboard(
+    @MessageBody()
+    data: {
+      runId: string;
+      userId: string;
+      action: 'paste' | 'pull' | 'cut';
+      text?: string;
+    },
+  ) {
+    if (data.action === 'paste' && data.text != null) {
+      await this.recordingService.insertRemoteClipboardText(data.runId, data.userId, data.text);
+      return { ok: true };
+    }
+    if (data.action === 'pull') {
+      const text = await this.recordingService.getRemoteSelectionText(data.runId, data.userId);
+      return { ok: true, text };
+    }
+    if (data.action === 'cut') {
+      const text = await this.recordingService.cutRemoteSelection(data.runId, data.userId);
+      return { ok: true, text };
+    }
+    return { ok: false };
+  }
+
+  @SubscribeMessage('key')
+  async handleKey(
+    @MessageBody() data: { runId: string; userId: string; type: 'down' | 'up'; key: string },
+  ) {
+    await this.recordingService.dispatchRemoteKey(data.runId, data.userId, {
+      type: data.type,
+      key: data.key,
+    });
+    return { ok: true };
+  }
 }

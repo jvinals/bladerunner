@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, IsOptional, IsEnum, IsArray, IsInt, Min } from 'class-validator';
 
 enum RunStatusDto {
   RECORDING = 'RECORDING',
@@ -80,9 +81,15 @@ export class RunQueryDto {
 
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number;
 
   @ApiPropertyOptional({ description: 'Page size', default: 20 })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   pageSize?: number;
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
 import WebSocket from 'ws';
@@ -96,7 +96,10 @@ export class RecordingService extends EventEmitter {
         where: { id: run.id },
         data: { status: 'FAILED', completedAt: new Date() },
       });
-      throw err;
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new ServiceUnavailableException(
+        `Recording could not start (browser worker / Playwright). ${detail}`,
+      );
     }
   }
 
@@ -182,6 +185,190 @@ export class RecordingService extends EventEmitter {
 
     this.emit('step', runId, step);
     return step;
+  }
+
+  /** Forward pointer from the UI preview (canvas) into the Playwright page viewport. */
+  async dispatchRemotePointer(
+    runId: string,
+    userId: string,
+    payload: {
+      kind: 'move' | 'down' | 'up' | 'wheel' | 'dblclick';
+      x?: number;
+      y?: number;
+      button?: 'left' | 'right' | 'middle';
+      deltaX?: number;
+      deltaY?: number;
+    },
+  ): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+
+    const { page } = session;
+    const vp = page.viewportSize() ?? { width: 1280, height: 720 };
+    const rawX = payload.x ?? 0;
+    const rawY = payload.y ?? 0;
+    const x = Math.max(0, Math.min(rawX, vp.width - 1));
+    const y = Math.max(0, Math.min(rawY, vp.height - 1));
+    const button = payload.button ?? 'left';
+
+    try {
+      switch (payload.kind) {
+        case 'move':
+          await page.mouse.move(x, y);
+          break;
+        case 'down':
+          await page.mouse.move(x, y);
+          await page.mouse.down({ button });
+          break;
+        case 'up':
+          await page.mouse.move(x, y);
+          await page.mouse.up({ button });
+          break;
+        case 'wheel':
+          await page.mouse.move(x, y);
+          await page.mouse.wheel(payload.deltaX ?? 0, payload.deltaY ?? 0);
+          break;
+        case 'dblclick':
+          await page.mouse.move(x, y);
+          await page.mouse.click(x, y, { button, clickCount: 2, delay: 50 });
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      this.logger.debug(`dispatchRemotePointer ${payload.kind}: ${err}`);
+    }
+  }
+
+  /**
+   * Real touch / swipe / pinch via CDP (mobile sites ignore mouse-only events).
+   * touchPoints = active contacts still on screen after this event (Chrome CDP contract).
+   */
+  async dispatchRemoteTouch(
+    runId: string,
+    userId: string,
+    payload: {
+      type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel';
+      touchPoints: Array<{ id: number; x: number; y: number; force?: number }>;
+    },
+  ): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+
+    const vp = session.page.viewportSize() ?? { width: 1280, height: 720 };
+    const points = payload.touchPoints.map((t) => {
+      const x = Math.round(Math.max(0, Math.min(t.x, vp.width - 1)));
+      const y = Math.round(Math.max(0, Math.min(t.y, vp.height - 1)));
+      const force = Math.min(1, Math.max(0, t.force ?? 1));
+      return {
+        x,
+        y,
+        radiusX: 6,
+        radiusY: 6,
+        rotationAngle: 0,
+        force,
+        id: Math.floor(Math.abs(t.id)) % 0xffff,
+      };
+    });
+
+    try {
+      await session.cdpSession.send('Input.dispatchTouchEvent' as any, {
+        type: payload.type,
+        touchPoints: points,
+        modifiers: 0,
+      });
+    } catch (err) {
+      this.logger.debug(`dispatchRemoteTouch ${payload.type}: ${err}`);
+    }
+  }
+
+  /** Insert text from the operator clipboard into the focused element in the remote page. */
+  async insertRemoteClipboardText(runId: string, userId: string, text: string): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId || !text) {
+      return;
+    }
+    try {
+      await session.page.keyboard.insertText(text);
+    } catch (err) {
+      this.logger.debug(`insertRemoteClipboardText: ${err}`);
+    }
+  }
+
+  /** Read selected text in the remote page (for copy to operator clipboard). */
+  async getRemoteSelectionText(runId: string, userId: string): Promise<string> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      return '';
+    }
+    try {
+      return await session.page.evaluate(
+        "() => (typeof window !== 'undefined' && window.getSelection?.()?.toString()) || ''",
+      );
+    } catch {
+      return '';
+    }
+  }
+
+  /** Cut: return selected text and remove it in the remote DOM (operator clipboard). */
+  async cutRemoteSelection(runId: string, userId: string): Promise<string> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      return '';
+    }
+    try {
+      return await session.page.evaluate(`() => {
+        const sel = typeof window !== 'undefined' ? window.getSelection?.() : null;
+        if (!sel || sel.rangeCount === 0) return '';
+        const t = sel.toString();
+        if (!t) return '';
+        sel.deleteFromDocument();
+        return t;
+      }`);
+    } catch {
+      return '';
+    }
+  }
+
+  /** Forward keyboard from the focused preview into Playwright. */
+  async dispatchRemoteKey(
+    runId: string,
+    userId: string,
+    payload: { type: 'down' | 'up'; key: string },
+  ): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+
+    const pk = this.normalizePlaywrightKey(payload.key);
+    if (!pk) {
+      return;
+    }
+
+    try {
+      if (payload.type === 'down') {
+        await session.page.keyboard.down(pk);
+      } else {
+        await session.page.keyboard.up(pk);
+      }
+    } catch (err) {
+      this.logger.debug(`dispatchRemoteKey ${payload.type} ${pk}: ${err}`);
+    }
+  }
+
+  private normalizePlaywrightKey(key: string): string | null {
+    if (!key || key === 'Unidentified' || key === 'Dead') {
+      return null;
+    }
+    if (key === ' ') {
+      return ' ';
+    }
+    return key;
   }
 
   private async recordStep(
