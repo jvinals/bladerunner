@@ -249,3 +249,72 @@ export interface WorkspaceSettings {
   slackWebhookUrl?: string;
   retentionDays: number;
 }
+
+// ─── Recording Types ─────────────────────────────────────────────────────────
+
+export enum RecordingRunStatus {
+  Recording = 'RECORDING',
+  Completed = 'COMPLETED',
+  Failed = 'FAILED',
+  Cancelled = 'CANCELLED',
+}
+
+export enum StepAction {
+  Navigate = 'NAVIGATE',
+  Click = 'CLICK',
+  Type = 'TYPE',
+  Scroll = 'SCROLL',
+  Select = 'SELECT',
+  Hover = 'HOVER',
+  Screenshot = 'SCREENSHOT',
+  Assert = 'ASSERT',
+  Wait = 'WAIT',
+  Custom = 'CUSTOM',
+}
+
+export enum StepOrigin {
+  Manual = 'MANUAL',
+  AiDriven = 'AI_DRIVEN',
+}
+
+export interface RecordingRun {
+  id: string;
+  userId: string;
+  name: string;
+  url: string;
+  status: RecordingRunStatus;
+  platform: PlatformType;
+  durationMs?: number;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  steps?: RecordedStep[];
+}
+
+export interface RecordedStep {
+  id: string;
+  runId: string;
+  userId: string;
+  sequence: number;
+  action: StepAction;
+  selector?: string;
+  value?: string;
+  instruction: string;
+  playwrightCode: string;
+  origin: StepOrigin;
+  durationMs?: number;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface RunRecording {
+  id: string;
+  runId: string;
+  userId: string;
+  format: string;
+  url?: string;
+  sizeBytes?: number;
+  createdAt: string;
+}

@@ -11,6 +11,10 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   return res.json();
 }
 
+export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE}${path}`, options);
+}
+
 // ─── Runs ────────────────────────────────────────────────────────────────────
 export const runsApi = {
   list: (params?: Record<string, string>) => {
@@ -25,6 +29,9 @@ export const runsApi = {
   },
   get: (id: string) => apiFetch<unknown>(`/runs/${id}`),
   getFindings: (id: string) => apiFetch<unknown[]>(`/runs/${id}/findings`),
+  getSteps: (id: string) => apiFetch<unknown[]>(`/runs/${id}/steps`),
+  getStatus: (id: string) => apiFetch<{ runId: string; status: string; stepsCount: number; durationMs: number | null }>(`/runs/${id}/status`),
+  getScreenshot: (id: string) => apiFetchRaw(`/runs/${id}/screenshot`),
   getDashboard: () => apiFetch<{
     totalRuns: number;
     passRate: number;
@@ -35,6 +42,21 @@ export const runsApi = {
     runsTrend: number;
     passRateTrend: number;
   }>('/runs/dashboard'),
+  startRecording: (data: { name: string; url: string }) =>
+    apiFetch<{ runId: string; status: string }>('/runs/record/start', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  stopRecording: (runId: string) =>
+    apiFetch<unknown>('/runs/record/stop', {
+      method: 'POST',
+      body: JSON.stringify({ runId }),
+    }),
+  instruct: (runId: string, instruction: string) =>
+    apiFetch<{ step: unknown }>(`/runs/${runId}/instruct`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction }),
+    }),
 };
 
 // ─── Projects ────────────────────────────────────────────────────────────────

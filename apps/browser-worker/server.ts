@@ -1,0 +1,107 @@
+import { WebSocketServer, WebSocket } from 'ws';
+import { chromium, BrowserServer } from 'playwright-core';
+
+const PORT = parseInt(process.env.WORKER_PORT || '3002', 10);
+
+let browserServer: BrowserServer | null = null;
+
+const wss = new WebSocketServer({ port: PORT });
+
+function send(ws: WebSocket, data: Record<string, unknown>) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
+wss.on('connection', (ws) => {
+  console.log('[browser-worker] Client connected');
+
+  ws.on('message', async (raw) => {
+    let msg: { type: string; payload?: Record<string, unknown> };
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch {
+      send(ws, { type: 'error', error: 'Invalid JSON' });
+      return;
+    }
+
+    switch (msg.type) {
+      case 'launch': {
+        if (browserServer) {
+          send(ws, {
+            type: 'launch:result',
+            wsEndpoint: browserServer.wsEndpoint(),
+          });
+          return;
+        }
+
+        try {
+          browserServer = await chromium.launchServer({
+            headless: true,
+            args: [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-gpu',
+            ],
+          });
+          const wsEndpoint = browserServer.wsEndpoint();
+          console.log(`[browser-worker] Browser launched: ${wsEndpoint}`);
+
+          browserServer.on('close', () => {
+            console.log('[browser-worker] Browser server closed');
+            browserServer = null;
+          });
+
+          send(ws, { type: 'launch:result', wsEndpoint });
+        } catch (err) {
+          const error = err instanceof Error ? err.message : String(err);
+          console.error('[browser-worker] Launch failed:', error);
+          send(ws, { type: 'error', error });
+        }
+        break;
+      }
+
+      case 'health': {
+        send(ws, {
+          type: 'health:result',
+          status: 'ok',
+          browserRunning: browserServer !== null,
+          uptime: process.uptime(),
+        });
+        break;
+      }
+
+      case 'shutdown': {
+        console.log('[browser-worker] Shutdown requested');
+        if (browserServer) {
+          await browserServer.close();
+          browserServer = null;
+        }
+        send(ws, { type: 'shutdown:result', status: 'ok' });
+        break;
+      }
+
+      default:
+        send(ws, { type: 'error', error: `Unknown message type: ${msg.type}` });
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('[browser-worker] Client disconnected');
+  });
+});
+
+console.log(`[browser-worker] Listening on ws://0.0.0.0:${PORT}`);
+
+async function gracefulShutdown() {
+  console.log('[browser-worker] Shutting down...');
+  if (browserServer) {
+    await browserServer.close();
+  }
+  wss.close();
+  process.exit(0);
+}
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

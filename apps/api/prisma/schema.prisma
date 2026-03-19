@@ -1,0 +1,97 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RunStatus {
+  RECORDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum Platform {
+  DESKTOP
+  MOBILE
+  PWA
+}
+
+enum StepAction {
+  NAVIGATE
+  CLICK
+  TYPE
+  SCROLL
+  SELECT
+  HOVER
+  SCREENSHOT
+  ASSERT
+  WAIT
+  CUSTOM
+}
+
+enum StepOrigin {
+  MANUAL
+  AI_DRIVEN
+}
+
+model Run {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  name        String
+  url         String
+  status      RunStatus @default(RECORDING)
+  platform    Platform  @default(DESKTOP)
+  durationMs  Int?      @map("duration_ms")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  steps      RunStep[]
+  recordings RunRecording[]
+
+  @@index([userId])
+  @@map("runs")
+}
+
+model RunStep {
+  id             String     @id @default(uuid())
+  runId          String     @map("run_id")
+  userId         String     @map("user_id")
+  sequence       Int
+  action         StepAction
+  selector       String?
+  value          String?
+  instruction    String
+  playwrightCode String     @map("playwright_code")
+  origin         StepOrigin @default(MANUAL)
+  durationMs     Int?       @map("duration_ms")
+  timestamp      DateTime
+  metadata       Json?
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([userId])
+  @@map("run_steps")
+}
+
+model RunRecording {
+  id        String   @id @default(uuid())
+  runId     String   @map("run_id")
+  userId    String   @map("user_id")
+  format    String   @default("webm")
+  url       String?
+  sizeBytes Int?     @map("size_bytes")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("run_recordings")
+}

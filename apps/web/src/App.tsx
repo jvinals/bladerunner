@@ -5,6 +5,7 @@ import HomePage from './pages/Home';
 import RunsPage from './pages/Runs';
 import RunDetailPage from './pages/RunDetail';
 import SettingsPage from './pages/Settings';
+import DetachedPreview from './pages/DetachedPreview';
 import NotFoundPage from './pages/NotFound';
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
+          <Route path="preview/:runId" element={<DetachedPreview />} />
         </Routes>
       </Show>
       <Show when="signed-out">

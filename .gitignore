@@ -1,6 +1,7 @@
 node_modules
 dist
 .env
+apps/api/.env
 *.log
 .DS_Store
 .vite

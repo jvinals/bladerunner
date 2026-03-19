@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "build": "nest build",
@@ -11,20 +11,31 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@clerk/clerk-sdk-node": "^5.1.6",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/platform-socket.io": "^11.1.17",
     "@nestjs/swagger": "^8.0.0",
+    "@nestjs/websockets": "^11.1.17",
+    "@prisma/client": "^6.19.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "openai": "^6.32.0",
+    "playwright-core": "^1.58.2",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "prisma": "^6.19.2",
     "typescript": "^5.7.0"
   }
 }

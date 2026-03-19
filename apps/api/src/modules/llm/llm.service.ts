@@ -1,0 +1,108 @@
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  LlmProvider,
+  ActionToInstructionInput,
+  ActionToInstructionOutput,
+  InstructionToActionInput,
+  InstructionToActionOutput,
+} from './providers/llm-provider.interface';
+
+const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
+1. A concise human-readable instruction describing what the user did
+2. Clean Playwright code that reproduces the action
+
+Respond ONLY with valid JSON: { "instruction": "...", "playwrightCode": "..." }
+
+Guidelines:
+- Instructions should be natural language, e.g. "Click the 'Sign In' button in the navigation bar"
+- Playwright code should use modern locator APIs (getByRole, getByText, getByLabel) when possible
+- Keep instructions concise but specific enough to identify the target element`;
+
+const INSTRUCTION_TO_ACTION_SYSTEM = `You are a Playwright test automation agent. Given a natural language instruction and the current page context, generate the Playwright code to execute the action.
+
+Respond ONLY with valid JSON:
+{
+  "playwrightCode": "...",
+  "action": "click|type|navigate|scroll|select|hover|wait|assert|custom",
+  "selector": "CSS selector or null",
+  "value": "input value or null"
+}
+
+Guidelines:
+- Use modern Playwright locator APIs (getByRole, getByText, getByLabel, getByPlaceholder) when possible
+- For navigation, use page.goto()
+- For typing, use page.fill() or page.getByLabel().fill()
+- Handle waiting implicitly (Playwright auto-waits)
+- Only generate safe Playwright API calls (no eval, no fs, no network)`;
+
+@Injectable()
+export class LlmService {
+  private readonly logger = new Logger(LlmService.name);
+  private provider: LlmProvider | null = null;
+
+  setProvider(provider: LlmProvider) {
+    this.provider = provider;
+  }
+
+  getProvider(): LlmProvider | null {
+    return this.provider;
+  }
+
+  async actionToInstruction(
+    input: ActionToInstructionInput,
+  ): Promise<ActionToInstructionOutput> {
+    if (!this.provider) {
+      return {
+        instruction: `${input.action} on ${input.selector}`,
+        playwrightCode: `// ${input.action}: ${input.selector}`,
+      };
+    }
+
+    const userPrompt = `Action: ${input.action}
+Selector: ${input.selector}
+Element HTML: ${input.elementHtml}
+${input.value ? `Value: ${input.value}` : ''}
+Page context (accessibility tree excerpt):
+${input.pageAccessibilityTree.slice(0, 3000)}`;
+
+    try {
+      const response = await this.provider.chat([
+        { role: 'system', content: ACTION_TO_INSTRUCTION_SYSTEM },
+        { role: 'user', content: userPrompt },
+      ]);
+
+      return JSON.parse(response);
+    } catch (err) {
+      this.logger.error('actionToInstruction failed', err);
+      return {
+        instruction: `${input.action} on ${input.selector}`,
+        playwrightCode: `// ${input.action}: ${input.selector}`,
+      };
+    }
+  }
+
+  async instructionToAction(
+    input: InstructionToActionInput,
+  ): Promise<InstructionToActionOutput> {
+    if (!this.provider) {
+      throw new Error('LLM provider not configured. Set LLM_PROVIDER and the corresponding API key in .env');
+    }
+
+    const userPrompt = `Instruction: ${input.instruction}
+Current page URL: ${input.pageUrl}
+Page context (accessibility tree):
+${input.pageAccessibilityTree.slice(0, 4000)}`;
+
+    const response = await this.provider.chat(
+      [
+        { role: 'system', content: INSTRUCTION_TO_ACTION_SYSTEM },
+        { role: 'user', content: userPrompt },
+      ],
+      {
+        imageBase64: input.screenshotBase64,
+      },
+    );
+
+    return JSON.parse(response);
+  }
+}

@@ -2,55 +2,64 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsEnum, IsArray } from 'class-validator';
 
 enum RunStatusDto {
-  Queued = 'queued',
-  Running = 'running',
-  Passed = 'passed',
-  Failed = 'failed',
-  NeedsReview = 'needs_review',
-  Cancelled = 'cancelled',
+  RECORDING = 'RECORDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
 }
 
 enum PlatformTypeDto {
-  Desktop = 'desktop',
-  Mobile = 'mobile',
-  PWA = 'pwa',
+  DESKTOP = 'DESKTOP',
+  MOBILE = 'MOBILE',
+  PWA = 'PWA',
+}
+
+export class StartRecordingDto {
+  @ApiProperty({ description: 'Name of the test run' })
+  @IsString()
+  name!: string;
+
+  @ApiProperty({ description: 'URL to record against' })
+  @IsString()
+  url!: string;
+}
+
+export class StopRecordingDto {
+  @ApiProperty({ description: 'Run ID to stop' })
+  @IsString()
+  runId!: string;
+}
+
+export class InstructDto {
+  @ApiProperty({ description: 'Natural language instruction for the browser' })
+  @IsString()
+  instruction!: string;
 }
 
 export class CreateRunDto {
   @ApiProperty({ description: 'Name of the run' })
   @IsString()
-  name: string;
+  name!: string;
 
   @ApiPropertyOptional({ description: 'Run description' })
   @IsString()
   @IsOptional()
   description?: string;
 
-  @ApiProperty({ description: 'Project ID' })
+  @ApiProperty({ description: 'URL to test' })
   @IsString()
-  projectId: string;
+  url!: string;
 
   @ApiProperty({ enum: PlatformTypeDto, description: 'Target platform' })
   @IsEnum(PlatformTypeDto)
-  platform: PlatformTypeDto;
+  @IsOptional()
+  platform?: PlatformTypeDto;
 
   @ApiPropertyOptional({ description: 'Tags for categorization', type: [String] })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   tags?: string[];
-}
-
-export class UpdateRunDto {
-  @ApiPropertyOptional({ description: 'Run name' })
-  @IsString()
-  @IsOptional()
-  name?: string;
-
-  @ApiPropertyOptional({ enum: RunStatusDto, description: 'Run status' })
-  @IsEnum(RunStatusDto)
-  @IsOptional()
-  status?: RunStatusDto;
 }
 
 export class RunQueryDto {

@@ -1,236 +1,353 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { runsApi } from '@/lib/api';
-import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StepCard } from '@/components/ui/StepCard';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
-import { formatDuration, formatRelativeTime } from '@/lib/utils';
+import { useRecording } from '@/hooks/useRecording';
 import {
-  Search, Filter, Play, Monitor, Smartphone, Globe,
-  ChevronRight, RotateCcw, X
+  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown,
 } from 'lucide-react';
-
-const PLATFORM_ICONS: Record<string, typeof Monitor> = {
-  desktop: Monitor,
-  mobile: Smartphone,
-  pwa: Globe,
-};
-
-const STATUS_FILTERS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'queued', label: 'Queued' },
-  { value: 'running', label: 'Running' },
-  { value: 'passed', label: 'Passed' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'needs_review', label: 'Needs Review' },
-];
-
-const PLATFORM_FILTERS = [
-  { value: '', label: 'All Platforms' },
-  { value: 'desktop', label: 'Desktop' },
-  { value: 'mobile', label: 'Mobile' },
-  { value: 'pwa', label: 'PWA' },
-];
 
 export default function RunsPage() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [platformFilter, setPlatformFilter] = useState('');
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [newPanelOpen, setNewPanelOpen] = useState(false);
+  const [newUrl, setNewUrl] = useState('');
+  const [newName, setNewName] = useState('');
+  const [instructionText, setInstructionText] = useState('');
+  const [isDetached, setIsDetached] = useState(false);
+  const [isSendingInstruction, setIsSendingInstruction] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stepsEndRef = useRef<HTMLDivElement>(null);
+  const detachedWindowRef = useRef<Window | null>(null);
 
-  const params: Record<string, string> = {};
-  if (search) params.search = search;
-  if (statusFilter) params.status = statusFilter;
-  if (platformFilter) params.platform = platformFilter;
+  const {
+    isRecording,
+    runId,
+    currentFrame,
+    steps,
+    status,
+    startRecording,
+    stopRecording,
+    sendInstruction,
+    loadRunSteps,
+  } = useRecording();
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['runs', params],
-    queryFn: () => runsApi.list(params),
+  const { data: runsData, isLoading, error, refetch } = useQuery({
+    queryKey: ['runs', search],
+    queryFn: () => runsApi.list(search ? { search } : undefined),
   });
 
-  const runs = (data?.data || []) as Array<{
+  const runs = (runsData?.data || []) as Array<{
     id: string;
     name: string;
-    description?: string;
+    url: string;
     status: string;
-    platform: string;
-    triggeredBy: string;
-    durationMs?: number;
     stepsCount: number;
-    passedSteps: number;
-    failedSteps: number;
-    findingsCount: number;
-    tags: string[];
     createdAt: string;
   }>;
 
-  const hasFilters = search || statusFilter || platformFilter;
+  useEffect(() => {
+    if (stepsEndRef.current) {
+      stepsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [steps.length]);
+
+  useEffect(() => {
+    if (!currentFrame || !canvasRef.current || isDetached) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = `data:image/jpeg;base64,${currentFrame}`;
+  }, [currentFrame, isDetached]);
+
+  const handleStartRecording = useCallback(async () => {
+    if (!newUrl || !newName) return;
+    try {
+      await startRecording(newUrl, newName);
+      setNewPanelOpen(false);
+      setNewUrl('');
+      setNewName('');
+      refetch();
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+    }
+  }, [newUrl, newName, startRecording, refetch]);
+
+  const handleStopRecording = useCallback(async () => {
+    await stopRecording();
+    refetch();
+  }, [stopRecording, refetch]);
+
+  const handleSendInstruction = useCallback(async () => {
+    if (!instructionText.trim() || isSendingInstruction) return;
+    setIsSendingInstruction(true);
+    try {
+      await sendInstruction(instructionText.trim());
+      setInstructionText('');
+    } catch (err) {
+      console.error('Instruction failed:', err);
+    } finally {
+      setIsSendingInstruction(false);
+    }
+  }, [instructionText, isSendingInstruction, sendInstruction]);
+
+  const handleSelectRun = useCallback(async (id: string) => {
+    setSelectedRunId(id);
+    await loadRunSteps(id);
+  }, [loadRunSteps]);
+
+  const handleDetach = useCallback(() => {
+    if (!runId) return;
+    const w = window.open(`/preview/${runId}`, 'bladerunner-preview', 'width=1320,height=780');
+    if (w) {
+      detachedWindowRef.current = w;
+      setIsDetached(true);
+      const check = setInterval(() => {
+        if (w.closed) {
+          setIsDetached(false);
+          detachedWindowRef.current = null;
+          clearInterval(check);
+        }
+      }, 500);
+    }
+  }, [runId]);
+
+  const handleReattach = useCallback(() => {
+    if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
+      detachedWindowRef.current.close();
+    }
+    detachedWindowRef.current = null;
+    setIsDetached(false);
+  }, []);
 
   return (
-    <div className="px-6 lg:px-10 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="ce-section-label mb-2">Runs</p>
-          <h1 className="text-2xl font-bold text-gray-900">Run History</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {data ? `${data.total} total runs` : 'Loading...'}
-          </p>
+    <div className="flex h-full overflow-hidden">
+      {/* Preview Area */}
+      <div className="flex-1 flex flex-col min-w-0 p-4">
+        <div className="flex-1 relative bg-white border border-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+          {isRecording && !isDetached ? (
+            <>
+              <canvas
+                ref={canvasRef}
+                className="max-w-full max-h-full object-contain"
+              />
+              <button
+                onClick={handleDetach}
+                className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
+                title="Detach preview to new window"
+              >
+                <ExternalLink size={12} />
+                Detach
+              </button>
+            </>
+          ) : isDetached ? (
+            <div className="text-center">
+              <ExternalLink size={32} className="mx-auto mb-3 text-gray-300" />
+              <p className="text-sm text-gray-500 mb-2">Preview detached to external window</p>
+              <button
+                onClick={handleReattach}
+                className="text-xs text-[#4B90FF] font-medium hover:underline"
+              >
+                Reattach here
+              </button>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#4B90FF]/10 to-[#4D65FF]/10 flex items-center justify-center">
+                <Play size={24} className="text-[#4B90FF]" />
+              </div>
+              <p className="text-sm font-medium text-gray-700 mb-1">No active recording</p>
+              <p className="text-xs text-gray-400">Click "New" to start recording a test run</p>
+            </div>
+          )}
         </div>
-        <button className="flex items-center gap-1.5 px-4 py-2 bg-[#4B90FF] text-white text-sm font-medium rounded-md hover:bg-blue-500 transition-colors">
-          <Play size={14} />
-          New Run
-        </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search runs..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full border border-gray-200 rounded-md pl-9 pr-3 py-2 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
-              <X size={14} />
-            </button>
+      {/* Right Column */}
+      <div className="w-96 flex-shrink-0 border-l border-gray-100 bg-white flex flex-col overflow-hidden">
+        {/* Header Controls */}
+        <div className="p-4 border-b border-gray-50 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search runs..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {isRecording ? (
+              <button
+                onClick={handleStopRecording}
+                className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
+              >
+                <Square size={12} />
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={() => setNewPanelOpen(!newPanelOpen)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#4B90FF] text-white text-xs font-medium rounded-md hover:bg-blue-500 transition-colors"
+              >
+                <Plus size={12} />
+                New
+              </button>
+            )}
+          </div>
+
+          {/* Run Picker */}
+          {!isRecording && (
+            <div className="relative">
+              <select
+                value={selectedRunId || ''}
+                onChange={(e) => e.target.value && handleSelectRun(e.target.value)}
+                className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF] bg-white"
+              >
+                <option value="">Select a run...</option>
+                {isLoading ? (
+                  <option disabled>Loading...</option>
+                ) : (
+                  runs.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} ({r.stepsCount} steps)
+                    </option>
+                  ))
+                )}
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
           )}
         </div>
 
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF] bg-white"
-          >
-            {STATUS_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-          <Filter size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        {/* New Run Sliding Panel */}
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-out border-b border-gray-50 ${
+            newPanelOpen ? 'max-h-[220px] opacity-100' : 'max-h-0 opacity-0'
+          }`}
+        >
+          <div className="p-4 space-y-3">
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+                App URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://myapp.com"
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+                Test Name
+              </label>
+              <input
+                type="text"
+                placeholder="Login flow test"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleStartRecording}
+                disabled={!newUrl || !newName}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#4B90FF] text-white text-xs font-medium rounded-md hover:bg-blue-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Play size={12} />
+                Start Recording
+              </button>
+              <button
+                onClick={() => setNewPanelOpen(false)}
+                className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="relative">
-          <select
-            value={platformFilter}
-            onChange={(e) => setPlatformFilter(e.target.value)}
-            className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-600 appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF] bg-white"
-          >
-            {PLATFORM_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-          <Filter size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        {/* Steps List */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {isRecording && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">
+                Recording — {steps.length} steps
+              </span>
+            </div>
+          )}
+
+          {steps.length === 0 ? (
+            <div className="flex items-center justify-center h-32">
+              <p className="text-xs text-gray-400">
+                {isRecording ? 'Waiting for actions...' : 'No steps to display'}
+              </p>
+            </div>
+          ) : (
+            <div>
+              {steps.map((step) => (
+                <StepCard
+                  key={step.id}
+                  sequence={step.sequence}
+                  action={step.action}
+                  instruction={step.instruction}
+                  playwrightCode={step.playwrightCode}
+                  origin={step.origin}
+                  timestamp={step.timestamp}
+                />
+              ))}
+              <div ref={stepsEndRef} />
+            </div>
+          )}
         </div>
 
-        {hasFilters && (
-          <button
-            onClick={() => { setSearch(''); setStatusFilter(''); setPlatformFilter(''); }}
-            className="text-xs text-gray-500 hover:text-[#4B90FF] transition-colors"
-          >
-            Clear filters
-          </button>
+        {/* Instruction Input (only during recording) */}
+        {isRecording && (
+          <div className="p-3 border-t border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Type an instruction... (e.g. Click the login button)"
+                value={instructionText}
+                onChange={(e) => setInstructionText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendInstruction()}
+                disabled={isSendingInstruction}
+                className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4D65FF]/30 focus:border-[#4D65FF] disabled:opacity-50 bg-white"
+              />
+              <button
+                onClick={handleSendInstruction}
+                disabled={!instructionText.trim() || isSendingInstruction}
+                className="p-2 bg-[#4D65FF] text-white rounded-md hover:bg-[#3d54e8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Send instruction"
+              >
+                <Send size={14} />
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5 px-1">
+              AI will interpret your instruction and execute the Playwright action
+            </p>
+          </div>
         )}
       </div>
-
-      {/* Runs Table */}
-      {isLoading ? (
-        <LoadingState message="Loading runs..." />
-      ) : error ? (
-        <ErrorState message="Failed to load runs" onRetry={() => refetch()} />
-      ) : runs.length === 0 ? (
-        <EmptyState
-          title={hasFilters ? 'No runs match your filters' : 'No runs yet'}
-          description={hasFilters ? 'Try adjusting your filters or search term.' : 'Start your first run to begin validating application experiences.'}
-          action={
-            hasFilters ? (
-              <button onClick={() => { setSearch(''); setStatusFilter(''); setPlatformFilter(''); }} className="text-sm text-[#4B90FF] font-medium hover:underline">
-                Clear filters
-              </button>
-            ) : (
-              <button className="flex items-center gap-1.5 px-4 py-2 bg-[#4B90FF] text-white text-sm font-medium rounded-md hover:bg-blue-500 transition-colors">
-                <Play size={14} /> Start First Run
-              </button>
-            )
-          }
-        />
-      ) : (
-        <div className="bg-white border border-gray-100 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Run</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Platform</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Duration</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Steps</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Triggered</th>
-                <th className="w-8 px-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run, i) => {
-                const PlatformIcon = PLATFORM_ICONS[run.platform] || Monitor;
-                return (
-                  <tr
-                    key={run.id}
-                    className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
-                  >
-                    <td className="px-4 py-3">
-                      <Link to={`/runs/${run.id}`} className="group">
-                        <p className="text-sm font-medium text-gray-700 group-hover:text-[#4B90FF] transition-colors truncate max-w-xs">
-                          {run.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-gray-400 ce-mono">{run.id.slice(0, 16)}</span>
-                          {run.tags.slice(0, 2).map((tag) => (
-                            <span key={tag} className="px-1.5 py-0 text-[9px] text-gray-400 bg-gray-100 rounded font-medium">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <PlatformIcon size={13} className="text-gray-400" />
-                        <span className="capitalize">{run.platform}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <span className="text-xs text-gray-500 ce-mono">
-                        {run.durationMs ? formatDuration(run.durationMs) : '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <div className="text-xs text-gray-500">
-                        {run.passedSteps}/{run.stepsCount}
-                        {run.failedSteps > 0 && (
-                          <span className="text-[#FF4D4D] ml-1">({run.failedSteps} failed)</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={run.status} size="sm" />
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="text-[11px] text-gray-400">{formatRelativeTime(run.createdAt)}</span>
-                    </td>
-                    <td className="px-2 py-3">
-                      <Link to={`/runs/${run.id}`}>
-                        <ChevronRight size={14} className="text-gray-300 hover:text-[#4B90FF] transition-colors" />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

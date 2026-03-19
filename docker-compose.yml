@@ -8,8 +8,13 @@ services:
     environment:
       - API_PORT=3001
       - NODE_ENV=development
+      - BROWSER_WORKER_URL=ws://browser-worker:3002
+    env_file:
+      - .env
     volumes:
       - ./apps/api/src:/app/apps/api/src
+    depends_on:
+      - browser-worker
     command: pnpm --filter @bladerunner/api start:dev
 
   web:
@@ -25,3 +30,15 @@ services:
     depends_on:
       - api
     command: pnpm --filter @bladerunner/web dev --host 0.0.0.0
+
+  browser-worker:
+    build:
+      context: .
+      dockerfile: apps/browser-worker/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - WORKER_PORT=3002
+    shm_size: '2gb'
+    cap_add:
+      - SYS_ADMIN

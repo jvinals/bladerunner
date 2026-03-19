@@ -1,0 +1,18 @@
+FROM mcr.microsoft.com/playwright:v1.50.0-noble
+
+WORKDIR /app
+
+COPY apps/browser-worker/package.json ./
+RUN npm install --production
+
+COPY apps/browser-worker/ ./
+
+RUN npx tsc || true
+
+ENV WORKER_PORT=3002
+EXPOSE 3002
+
+HEALTHCHECK --interval=30s --timeout=5s \
+  CMD node -e "const ws=new(require('ws'))('ws://localhost:3002');ws.on('open',()=>{ws.send(JSON.stringify({type:'health'}));ws.on('message',()=>{process.exit(0)})});ws.on('error',()=>process.exit(1))"
+
+CMD ["node", "dist/server.js"]

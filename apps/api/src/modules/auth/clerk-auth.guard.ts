@@ -22,6 +22,10 @@ export class ClerkAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;
 
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'clerk-auth.guard.ts:canActivate',message:'Auth guard invoked',data:{hasAuthHeader:!!authHeader,authHeaderPrefix:authHeader?.slice(0,15),secretKeySet:!!this.configService.get('CLERK_SECRET_KEY'),url:request.url},timestamp:Date.now(),hypothesisId:'A-B'})}).catch(()=>{});
+    // #endregion
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('No authorization header found');
     }
@@ -33,6 +37,9 @@ export class ClerkAuthGuard implements CanActivate {
       request.user = sessionClaims;
       return true;
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'clerk-auth.guard.ts:verifyToken-catch',message:'Clerk verify failed',data:{error:String(error)},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       console.error('Clerk verification error:', error);
       throw new UnauthorizedException('Invalid or expired token');
     }
