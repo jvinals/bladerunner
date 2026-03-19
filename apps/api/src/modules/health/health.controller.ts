@@ -14,13 +14,10 @@ export class HealthController {
   @ApiResponse({ status: 503, description: 'API up but database unreachable' })
   async getHealth(@Res({ passthrough: true }) res: Response) {
     let database: 'ok' | 'error' = 'ok';
-    let dbError: string | undefined;
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-    } catch (e) {
+    } catch {
       database = 'error';
-      dbError =
-        e instanceof Error ? e.message.slice(0, 300) : 'Database check failed';
     }
 
     const body = {
@@ -32,7 +29,6 @@ export class HealthController {
         database,
         storage: 'ok',
       },
-      ...(database === 'error' && process.env.NODE_ENV !== 'production' && { dbError }),
     };
 
     if (database === 'error') {
