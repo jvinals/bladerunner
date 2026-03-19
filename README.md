@@ -141,6 +141,7 @@ Built on the **Edgehealth Style Guide**:
 
 ## Changelog
 
+- **0.2.17** — Remove **`DevVerboseExceptionFilter`** (dev-only raw exception text in JSON); Nest default handler applies for unhandled errors.
 - **0.2.16** — Remove **`dbError`** from **`GET /health`** (no Prisma message in JSON); align `verify-api-health.mjs` (instrumentation / leak cleanup).
 - **0.2.15** — README: **EADDRINUSE on port 3001** (stale API process) — how to `lsof` / `kill` or use `API_PORT`.
 - **0.2.14** — Remove dev **`PrismaService` startup logging** of DB host / `sslmode` (debug instrumentation cleanup).
