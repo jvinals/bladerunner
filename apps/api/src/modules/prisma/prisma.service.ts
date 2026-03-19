@@ -1,14 +1,18 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { applyRailwaySslToDatabaseUrl } from '../../railway-database-url';
 
 /**
  * No eager `$connect()` in onModuleInit: Prisma connects on first query.
- * That way a bad DATABASE_URL (e.g. unreachable Railway host) does not crash
- * bootstrap before `listen()` — `/health` can still report DB status and the
- * process stays up for local dev.
+ * Railway SSL patch runs in the constructor after ConfigModule has loaded .env.
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
+  constructor() {
+    applyRailwaySslToDatabaseUrl();
+    super();
+  }
+
   async onModuleDestroy() {
     await this.$disconnect();
   }
