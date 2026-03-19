@@ -24,19 +24,9 @@ export class RunsController {
   @Get()
   @ApiOperation({ summary: 'List all runs with optional filtering' })
   @ApiResponse({ status: 200, description: 'Paginated list of runs' })
-  async findAll(@Req() req: any, @Query() query: RunQueryDto) {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'runs.controller.ts:findAll',message:'findAll invoked',data:{hasUser:!!req.user,userId:req.user?.sub},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    try {
-      const userId = req.user.sub;
-      return await this.runsService.findAll(userId, query);
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'runs.controller.ts:findAll-catch',message:'findAll error',data:{error:String(err),stack:(err as any)?.stack?.slice(0,500)},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-      throw err;
-    }
+  findAll(@Req() req: any, @Query() query: RunQueryDto) {
+    const userId = req.user.sub;
+    return this.runsService.findAll(userId, query);
   }
 
   @Get('dashboard')
