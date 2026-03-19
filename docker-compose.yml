@@ -1,4 +1,23 @@
 services:
+  # Optional local DB: docker compose --profile local-db up -d postgres
+  postgres:
+    profiles:
+      - local-db
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bladerunner
+      POSTGRES_PASSWORD: bladerunner
+      POSTGRES_DB: bladerunner
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bladerunner -d bladerunner']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -42,3 +61,6 @@ services:
     shm_size: '2gb'
     cap_add:
       - SYS_ADMIN
+
+volumes:
+  pgdata:

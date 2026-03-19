@@ -41,6 +41,21 @@ pnpm dev:web
 pnpm dev
 ```
 
+### Database (local vs hosted)
+
+The API needs a reachable **PostgreSQL** `DATABASE_URL` (see root `.env`). If Railway (or any remote DB) is **down or unreachable**, you’ll see **`PrismaClientInitializationError` / P1001** in API logs. The API still **starts** (Prisma connects lazily); **`GET /health`** returns **503** with `services.database: "error"` until the DB is reachable.
+
+Optional local DB:
+
+```bash
+docker compose --profile local-db up -d postgres
+# In .env:
+# DATABASE_URL=postgresql://bladerunner:bladerunner@127.0.0.1:5432/bladerunner
+cd apps/api && pnpm exec prisma migrate deploy
+```
+
+Smoke check: `node scripts/verify-api-health.mjs` (expects HTTP 200 and `database: ok`).
+
 ### URLs
 
 | Service        | URL                                    |
@@ -104,6 +119,7 @@ Built on the **Edgehealth Style Guide**:
 
 ## Changelog
 
+- **0.2.9** — Prisma uses **lazy connect** so a bad/unreachable `DATABASE_URL` no longer crashes the API before `listen()` (fixes empty port 3001 + Vite `ECONNREFUSED`). `/health` returns **503** when the DB check fails (with `dbError` in non-production). Optional **`local-db`** Postgres service in `docker-compose.yml`; `verify-api-health.mjs` hints local setup.
 - **0.2.8** — `scripts/verify-api-health.mjs` explains **ECONNREFUSED** (API not running) with `pnpm dev:api` / `pnpm dev` hints.
 - **0.2.7** — API: non-production errors return the real `message` (instead of a generic 500) via `DevVerboseExceptionFilter`; recording failures map to **503** with a clear browser-worker/Playwright hint; `/health` runs a real DB `SELECT 1`; Clerk guard accepts `CLERK_PUBLISHABLE_KEY` or `VITE_CLERK_PUBLISHABLE_KEY`; run list query coerces numeric `page` / `pageSize`.
 - **0.2.6** — `apps/api` defines a `dev` script so root `pnpm dev` starts NestJS (fixes Vite `/api/*` proxy 500s when only the frontend was running). `apiFetch` surfaces Nest JSON `message` on errors.

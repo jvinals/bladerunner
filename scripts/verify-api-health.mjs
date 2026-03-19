@@ -40,13 +40,21 @@ try {
 
 console.log(JSON.stringify(body, null, 2));
 
-if (!res.ok) {
-  console.error(`HTTP ${res.status}`);
+if (body.services?.database !== 'ok') {
+  console.error(
+    'Database check failed — fix DATABASE_URL / Postgres and migrations, then retry.',
+  );
+  if (body.dbError) console.error('Detail:', body.dbError);
+  console.error(
+    '\nLocal Postgres (optional): docker compose --profile local-db up -d postgres',
+    '\nThen set DATABASE_URL=postgresql://bladerunner:bladerunner@127.0.0.1:5432/bladerunner',
+    '\nand run: cd apps/api && pnpm exec prisma migrate deploy',
+  );
   process.exit(1);
 }
 
-if (body.services?.database !== 'ok') {
-  console.error('Database check failed — fix DATABASE_URL / Postgres and migrations, then retry.');
+if (!res.ok) {
+  console.error(`HTTP ${res.status}`);
   process.exit(1);
 }
 
