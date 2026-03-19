@@ -102,6 +102,10 @@ Built on the **Edgehealth Style Guide**:
 | Monorepo  | pnpm workspaces                                     |
 | Infra     | Docker Compose                                      |
 
+## Changelog
+
+- **0.2.2** — Recording preview: Socket.IO connects to `VITE_API_URL` (NestJS) instead of the Vite dev server so screencast frames reach the UI; hydrate steps from REST after `record/start`.
+
 ## License
 
 Private — Edgehealth © 2026

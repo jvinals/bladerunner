@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { runsApi } from '@/lib/api';
+import { createRecordingSocket } from '@/lib/recordingSocket';
 
 export interface RecordedStep {
   id: string;
@@ -44,16 +45,31 @@ export function useRecording(): UseRecordingReturn {
   }, []);
 
   const connectSocket = useCallback((recordRunId: string) => {
-    const socket = io('/recording', {
-      transports: ['websocket'],
-    });
+    const socket = createRecordingSocket();
 
     socket.on('connect', () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'useRecording.ts:connect',message:'recording socket connected',data:{runId:recordRunId},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       socket.emit('join', { runId: recordRunId });
     });
 
+    socket.on('connect_error', (err: Error) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'useRecording.ts:connect_error',message:'recording socket failed',data:{runId:recordRunId,error:String(err?.message)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      console.error('[useRecording] Socket connect_error:', err);
+    });
+
+    let firstFrameLogged = false;
     socket.on('frame', (data: { runId: string; data: string }) => {
       if (data.runId === recordRunId) {
+        if (!firstFrameLogged) {
+          firstFrameLogged = true;
+          // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'useRecording.ts:first_frame',message:'first screencast frame',data:{runId:recordRunId,bytes:data.data?.length??0},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
+        }
         setCurrentFrame(data.data);
       }
     });
@@ -78,12 +94,18 @@ export function useRecording(): UseRecordingReturn {
 
   const startRecording = useCallback(async (url: string, name: string) => {
     const result = await runsApi.startRecording({ name, url });
+    connectSocket(result.runId);
+    let initialSteps: RecordedStep[] = [];
+    try {
+      initialSteps = (await runsApi.getSteps(result.runId)) as RecordedStep[];
+    } catch {
+      /* steps may still arrive via socket */
+    }
     setRunId(result.runId);
-    setSteps([]);
+    setSteps(initialSteps);
     setCurrentFrame(null);
     setIsRecording(true);
     setStatus('recording');
-    connectSocket(result.runId);
   }, [connectSocket]);
 
   const stopRecording = useCallback(async () => {

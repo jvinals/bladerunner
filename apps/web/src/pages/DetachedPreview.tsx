@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
+import { createRecordingSocket } from '@/lib/recordingSocket';
 
 export default function DetachedPreview() {
   const { runId } = useParams<{ runId: string }>();
@@ -11,9 +12,7 @@ export default function DetachedPreview() {
   useEffect(() => {
     if (!runId) return;
 
-    const socket: Socket = io('/recording', {
-      transports: ['websocket'],
-    });
+    const socket: Socket = createRecordingSocket();
 
     socket.on('connect', () => {
       setConnected(true);
