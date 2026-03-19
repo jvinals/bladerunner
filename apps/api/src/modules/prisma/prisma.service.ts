@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { applyRailwaySslToDatabaseUrl } from '../../railway-database-url';
+import { applyRailwayPostgresUrlDefaults } from '../../railway-database-url';
 
 /**
  * No eager `$connect()` in onModuleInit: Prisma connects on first query.
@@ -9,7 +9,21 @@ import { applyRailwaySslToDatabaseUrl } from '../../railway-database-url';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
   constructor() {
-    applyRailwaySslToDatabaseUrl();
+    applyRailwayPostgresUrlDefaults();
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const raw = process.env.DATABASE_URL ?? '';
+        const normalized = raw.replace(/^postgresql(\+\w+)?:/i, 'http:');
+        const host = new URL(normalized).hostname;
+        const ssl = /sslmode=/i.test(raw);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[PrismaService] DATABASE_URL host=${host} hasSslModeParam=${ssl}`,
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     super();
   }
 

@@ -1,11 +1,10 @@
 /**
- * Railway Postgres expects TLS. Append sslmode=require when missing.
- * Must run after env is loaded (e.g. Nest ConfigModule) — not at process start,
- * when DATABASE_URL may still be unset.
+ * Railway-hosted Postgres: TLS + longer connect timeout (cold start / proxy).
+ * Must run after env is loaded (e.g. Nest ConfigModule).
  */
-export function applyRailwaySslToDatabaseUrl(): void {
+export function applyRailwayPostgresUrlDefaults(): void {
   const raw = process.env.DATABASE_URL;
-  if (!raw || /sslmode=/i.test(raw) || /\bssl=true\b/i.test(raw)) return;
+  if (!raw) return;
 
   try {
     const normalized = raw.replace(/^postgresql(\+\w+)?:/i, 'http:');
@@ -14,9 +13,20 @@ export function applyRailwaySslToDatabaseUrl(): void {
       hostname.endsWith('.rlwy.net') || hostname.endsWith('.railway.app');
     if (!railwayHost) return;
 
-    const sep = raw.includes('?') ? '&' : '?';
-    process.env.DATABASE_URL = `${raw}${sep}sslmode=require`;
+    let next = raw;
+    if (!/sslmode=/i.test(next) && !/\bssl=true\b/i.test(next)) {
+      const sep = next.includes('?') ? '&' : '?';
+      next = `${next}${sep}sslmode=require`;
+    }
+    if (!/connect_timeout=/i.test(next)) {
+      const sep = next.includes('?') ? '&' : '?';
+      next = `${next}${sep}connect_timeout=60`;
+    }
+    process.env.DATABASE_URL = next;
   } catch {
     /* leave DATABASE_URL unchanged */
   }
 }
+
+/** @deprecated use applyRailwayPostgresUrlDefaults */
+export const applyRailwaySslToDatabaseUrl = applyRailwayPostgresUrlDefaults;
