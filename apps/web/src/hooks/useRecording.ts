@@ -56,7 +56,7 @@ interface UseRecordingReturn {
   ) => Promise<string | undefined>;
   /** True when the recording socket is connected (for UI / clipboard). */
   socketConnected: boolean;
-  /** One-shot Clerk + AgentMail sign-in on the remote page (API env). */
+  /** One-shot Clerk + MailSlurp sign-in on the remote page (API env). */
   clerkAutoSignIn: () => Promise<void>;
   clerkAutoSigningIn: boolean;
   clerkAutoSignInError: string | null;

@@ -20,6 +20,10 @@ bladerunner/
 
 ## Quick Start
 
+### Package manager
+
+Workspace scripts are defined for **pnpm** (e.g. **`pnpm mailslurp:list-inboxes`**). If you use **npm** instead, run **`npm run mailslurp:list-inboxes`** — not `npm mailslurp:list-inboxes` (npm treats that as an unknown subcommand).
+
 ### Prerequisites
 
 - **Node.js** ≥ 20
@@ -141,29 +145,31 @@ Built on the **Edgehealth Style Guide**:
 
 ## E2E tests (Playwright + Clerk)
 
-Shared **Clerk + password + AgentMail OTP** helpers live in **`@bladerunner/clerk-agentmail-signin`** (`packages/clerk-agentmail-signin`). E2E imports the thin wrappers under `e2e/helpers/`; the **API playback** feature uses the same package for server-side auto sign-in.
+Shared **Clerk + password + MailSlurp OTP** helpers live in **`@bladerunner/clerk-agentmail-signin`** (`packages/clerk-agentmail-signin` — package name is historical). E2E imports thin wrappers under `e2e/helpers/`; **API playback** uses the same package for server-side auto sign-in.
 
 1. Install browser binaries once: `pnpm test:e2e:install`
 2. In **`.env`** (repo root): `VITE_CLERK_PUBLISHABLE_KEY`, **`CLERK_SECRET_KEY`** (same Clerk dev app), then one of:
    - **Ticket sign-in:** **`E2E_CLERK_USER_EMAIL`** only (no password) — `@clerk/testing` signs in via Clerk’s backend.
-   - **Password, no 2FA:** **`E2E_CLERK_USER_EMAIL`** (or **`E2E_CLERK_USER_USERNAME`**) + **`E2E_CLERK_USER_PASSWORD`** — do **not** set **`AGENTMAIL_API_KEY`** / **`E2E_AGENTMAIL_INBOX_ID`**.
-   - **Password + email OTP (e.g. Clerk → AgentMail):** same password vars **plus** **`AGENTMAIL_API_KEY`** and either **`E2E_AGENTMAIL_INBOX_EMAIL`** (e.g. `evocare@agentmail.to`) **or** **`E2E_AGENTMAIL_INBOX_ID`**. The UI often doesn’t show the raw id — run **`pnpm agentmail:list-inboxes`** to print **id + email** for each inbox. The copy icon next to the address in the AgentMail dashboard may also copy the inbox id (paste into a note to check).
+   - **Password, no 2FA:** **`E2E_CLERK_USER_EMAIL`** (or **`E2E_CLERK_USER_USERNAME`**) + **`E2E_CLERK_USER_PASSWORD`** — do **not** set **`MAILSLURP_*`** inbox vars.
+   - **Password + email OTP (Clerk → your MailSlurp inbox):** same password vars **plus** **`MAILSLURP_API_KEY`** (from [MailSlurp](https://app.mailslurp.com)) and either **`MAILSLURP_INBOX_EMAIL`** (full address, e.g. `abc123@mailslurp.biz`) **or** **`MAILSLURP_INBOX_ID`** (UUID). Run **`pnpm mailslurp:list-inboxes`** / **`npm run mailslurp:list-inboxes`** to list inboxes. Register that inbox address as the user’s email in Clerk (or use it only for 2FA delivery as your product allows).
 3. Run: **`pnpm test:e2e`** (starts Vite on **5173**, runs setup auth, then signed-in specs).
 
 Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests assert **`/settings`** so the suite does not require the API or database.
 
-## Playback + Clerk + AgentMail (API + UI)
+## Playback + Clerk + MailSlurp (API + UI)
 
 When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSignIn: true`** on `POST /runs/:id/playback/start`), the API will:
 
-1. Use the **same env vars as E2E** (`E2E_CLERK_USER_EMAIL` / `E2E_CLERK_USER_USERNAME`, `E2E_CLERK_USER_PASSWORD`, `AGENTMAIL_API_KEY`, inbox id/email, `CLERK_SECRET_KEY`, publishable key) to run **one** Clerk + AgentMail OTP flow when the playback browser shows Clerk sign-in.
+1. Use the **same env vars as E2E** (`E2E_CLERK_USER_EMAIL` / `E2E_CLERK_USER_USERNAME`, `E2E_CLERK_USER_PASSWORD`, `MAILSLURP_API_KEY`, `MAILSLURP_INBOX_ID` or `MAILSLURP_INBOX_EMAIL`, `CLERK_SECRET_KEY`, publishable key) to run **one** Clerk + MailSlurp OTP flow when the playback browser shows Clerk sign-in.
 2. **Skip** executing stored `playwrightCode` for steps whose **`metadata.clerkAuthPhase`** is true (set automatically during recording when the URL or UI looks like Clerk sign-in).
 
 **Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off) and **Skip seq &lt;** next to **Play**.
 
-**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk + AgentMail flow once on the remote browser and appends a tagged **CUSTOM** step (`clerkAuthPhase` + `clerkAutoOneShot`) so playback can skip it when auto sign-in is enabled.
+**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk + MailSlurp flow once on the remote browser and appends a tagged **CUSTOM** step (`clerkAuthPhase` + `clerkAutoOneShot`) so playback can skip it when auto sign-in is enabled.
 
 Secrets stay on the **server**; the browser never receives test passwords.
+
+**MailSlurp API errors:** verify **`MAILSLURP_API_KEY`** in **`apps/api/.env`** (overrides) and repo **`.env`**. **`pnpm mailslurp:list-inboxes`** loads both (same order as the list script). Clerk FAPI issues show as **H9** in debug logs; inbox polling uses **H11** (`mailslurp-otp.ts`).
 
 For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **secret for that product’s Clerk instance**. You **cannot** set `CLERK_SECRET_KEY` twice in one `.env` (one name = one value). Instead:
 
@@ -173,6 +179,13 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 
 ## Changelog
 
+- **0.3.0** — **MailSlurp replaces AgentMail** for Clerk email OTP (E2E + recording + playback). **`.env`:** `MAILSLURP_API_KEY`, `MAILSLURP_INBOX_ID` **or** `MAILSLURP_INBOX_EMAIL`. Script **`pnpm mailslurp:list-inboxes`**. Removed **`agentmail`** dependency; package **`@bladerunner/clerk-agentmail-signin`** still hosts **`performClerkPasswordEmail2FA`** (name unchanged).
+- **0.2.41** — README: **`npm run agentmail:list-inboxes`** vs invalid **`npm agentmail:list-inboxes`**; pnpm vs npm note under Quick Start.
+- **0.2.40** — **`pnpm agentmail:list-inboxes`**: load **`apps/api/.env`** with **override** after root `.env` (same as API); catch **403** and print setup hints.
+- **0.2.39** — **AgentMail 403**: clearer errors when **`inboxes.list`** or **`messages.list`** returns **403**; README troubleshooting (**`H11`** `inboxes_list_error` vs Clerk **H9** 200).
+- **0.2.38** — Debug: **`H11`** in **`agentmail-otp`** (`otp_poll_start`, `inboxes_list_*`, `messages_list_error`) to confirm when **`403 Forbidden`** is from **AgentMail** (not Clerk FAPI — H9 already shows **200** on `/v1/client/sign_ins` / `prepare_second_factor`).
+- **0.2.37** — Debug: **`H9`** now logs the **first 24 upstream FAPI responses** (always includes `status`, `atOrAbove400`) so an empty log cannot be misread — **no H9 on 0.2.36 meant every intercepted call returned &lt;400**. **`H10`** logs **`route.fetch` failures** (then we `continue` without the token).
+- **0.2.36** — Debug: **`H9`** logs **upstream HTTP status** from `route.fetch` after appending `__clerk_testing_token` (and **`hadTestingToken`**) so we can tell **403 from Clerk** vs routing misses.
 - **0.2.35** — **Clerk FAPI 403 (recording)**: broaden Playwright routing so `/v1/` calls are intercepted when the **request host** differs from `CLERK_FAPI` (same instance slug on `*.clerk.accounts.dev` / `*.lcl.dev`, optional **`CLERK_FAPI_EXTRA_HOSTS`**, optional **`CLERK_TESTING_FRONTEND_API_URL`** passed to `clerkSetup`). Hardened route **`fulfill`** when the upstream body is not JSON. Debug: **`H7`** `/v1/` request hosts, **`H8`** intercepts, **`H5`** any ≥400 Clerk-related response.
 - **0.2.34** — **Two Clerk instances**: optional **`PLAYBACK_CLERK_SECRET_KEY`** or **`E2E_CLERK_SECRET_KEY`** for `clerkSetup` / testing tokens when the **target app** is not Bladerunner’s Clerk app; **`CLERK_SECRET_KEY`** remains for Bladerunner API auth. (You cannot assign `CLERK_SECRET_KEY` twice in one `.env`.)
 - **0.2.33** — **Clerk auto sign-in (recording / playback)**: read **`publishableKey` from the live page** (`window.Clerk` / `data-clerk-publishable-key`) when it differs from API env (e.g. recording **Evocare** while Bladerunner’s `.env` only had **Bladerunner’s** `VITE_CLERK_PUBLISHABLE_KEY`), then **`clerkSetup`** + testing token for **that** Clerk app. Replaced `setupClerkTestingToken` with a **single dynamic** Playwright route that reads **`CLERK_FAPI` per request** so FAPI updates apply without stacked handlers. **`CLERK_SECRET_KEY` must still belong to the same Clerk instance** as the app under test. Package **`tsconfig`**: add **`DOM`** lib for `page.evaluate` typings.

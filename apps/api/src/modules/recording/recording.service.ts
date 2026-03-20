@@ -171,7 +171,7 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
-   * One-shot Clerk + AgentMail sign-in on the recording browser (server env credentials).
+   * One-shot Clerk + MailSlurp sign-in on the recording browser (server env credentials).
    * Appends a CUSTOM step tagged for playback skip (`clerkAuthPhase` + `clerkAutoOneShot`).
    */
   async clerkAutoSignInDuringRecording(runId: string, userId: string) {
@@ -181,7 +181,7 @@ export class RecordingService extends EventEmitter {
     }
     if (!this.playbackClerkEnvReady()) {
       throw new BadRequestException(
-        'Clerk + AgentMail is not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME, CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY for a different target Clerk app), CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, AGENTMAIL_API_KEY, and E2E_AGENTMAIL_INBOX_ID or E2E_AGENTMAIL_INBOX_EMAIL (same as E2E).',
+        'Clerk + MailSlurp is not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME, CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY for a different target Clerk app), CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, MAILSLURP_API_KEY, and MAILSLURP_INBOX_ID or MAILSLURP_INBOX_EMAIL (same as E2E).',
       );
     }
     const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
@@ -211,7 +211,7 @@ export class RecordingService extends EventEmitter {
         action: 'CUSTOM',
         selector: null,
         value: null,
-        instruction: 'Clerk sign-in (automatic — server used test credentials + AgentMail OTP)',
+        instruction: 'Clerk sign-in (automatic — server used test credentials + MailSlurp OTP)',
         playwrightCode: `await page.waitForLoadState('domcontentloaded').catch(() => {});`,
         origin: 'MANUAL',
       },
@@ -815,11 +815,11 @@ export class RecordingService extends EventEmitter {
     const pub =
       this.configService.get<string>('CLERK_PUBLISHABLE_KEY')?.trim() ||
       this.configService.get<string>('VITE_CLERK_PUBLISHABLE_KEY')?.trim();
-    const agentmail = this.configService.get<string>('AGENTMAIL_API_KEY')?.trim();
+    const mailslurp = this.configService.get<string>('MAILSLURP_API_KEY')?.trim();
     const inbox =
-      this.configService.get<string>('E2E_AGENTMAIL_INBOX_ID')?.trim() ||
-      this.configService.get<string>('E2E_AGENTMAIL_INBOX_EMAIL')?.trim();
-    return !!(password && identifier && secret && pub && agentmail && inbox);
+      this.configService.get<string>('MAILSLURP_INBOX_ID')?.trim() ||
+      this.configService.get<string>('MAILSLURP_INBOX_EMAIL')?.trim();
+    return !!(password && identifier && secret && pub && mailslurp && inbox);
   }
 
   private playbackClerkBaseUrl(runUrl: string): string {
@@ -842,7 +842,7 @@ export class RecordingService extends EventEmitter {
       password,
       skipInitialNavigate: true,
     });
-    this.logger.log('Playback: Clerk + AgentMail auto sign-in completed');
+    this.logger.log('Playback: Clerk + MailSlurp auto sign-in completed');
   }
 
   private async setupEventCapture(session: RecordingSession) {

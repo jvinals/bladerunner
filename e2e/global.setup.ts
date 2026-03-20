@@ -25,19 +25,19 @@ setup('authenticate and save storage state', async ({ page }) => {
 
   if (!(password && identifier) && !email) {
     throw new Error(
-      'E2E auth: set E2E_CLERK_USER_EMAIL (ticket sign-in), or email/username + E2E_CLERK_USER_PASSWORD; for email OTP add AGENTMAIL_API_KEY + E2E_AGENTMAIL_INBOX_ID. See README → E2E tests.',
+      'E2E auth: set E2E_CLERK_USER_EMAIL (ticket sign-in), or email/username + E2E_CLERK_USER_PASSWORD; for email OTP add MAILSLURP_API_KEY + MAILSLURP_INBOX_ID (or MAILSLURP_INBOX_EMAIL). See README → E2E tests.',
     );
   }
 
   fs.mkdirSync(authDir, { recursive: true });
 
-  const useAgentMail2Fa =
-    !!process.env.AGENTMAIL_API_KEY &&
-    !!(process.env.E2E_AGENTMAIL_INBOX_ID?.trim() || process.env.E2E_AGENTMAIL_INBOX_EMAIL?.trim()) &&
+  const useMailSlurp2Fa =
+    !!process.env.MAILSLURP_API_KEY &&
+    !!(process.env.MAILSLURP_INBOX_ID?.trim() || process.env.MAILSLURP_INBOX_EMAIL?.trim()) &&
     !!password &&
     !!identifier;
 
-  if (useAgentMail2Fa) {
+  if (useMailSlurp2Fa) {
     await clerkSignInWithPasswordAndEmail2FA(page, {
       baseURL,
       identifier,

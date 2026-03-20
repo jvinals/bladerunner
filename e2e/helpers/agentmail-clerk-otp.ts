@@ -1,2 +1,2 @@
-/** Re-export shared AgentMail helpers (implementation lives in `@bladerunner/clerk-agentmail-signin`). */
-export { resolveAgentMailInboxId, waitForClerkOtpFromAgentMail } from '@bladerunner/clerk-agentmail-signin';
+/** Re-export MailSlurp inbox helpers (package name is historical: `@bladerunner/clerk-agentmail-signin`). */
+export { resolveMailSlurpInboxId, waitForClerkOtpFromMailSlurp } from '@bladerunner/clerk-agentmail-signin';

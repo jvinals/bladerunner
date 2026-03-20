@@ -1,7 +1,4 @@
-export {
-  resolveAgentMailInboxId,
-  waitForClerkOtpFromAgentMail,
-} from './agentmail-otp';
+export { resolveMailSlurpInboxId, waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
 
 export {
   clerkSignInUrlLooksLike,

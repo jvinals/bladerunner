@@ -1,6 +1,6 @@
 import type { BrowserContext, Page, Request, Response } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
-import { waitForClerkOtpFromAgentMail } from './agentmail-otp';
+import { waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
 
 /** Same query param as `@clerk/testing` Playwright route (see `@clerk/testing` chunk-M5YIJ3SE). */
 const CLERK_TESTING_TOKEN_PARAM = '__clerk_testing_token';
@@ -121,12 +121,15 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
   // #endregion
 
   let interceptLogCount = 0;
+  let upstreamStatusLogCount = 0;
+  let routeFetchErrorLogCount = 0;
   await context.route(
     (url) => shouldInterceptClerkFapiUrl(url),
     async (route) => {
       const req = route.request();
       const u = new URL(req.url());
       const token = process.env.CLERK_TESTING_TOKEN;
+      const hadTestingToken = Boolean(token);
       if (token) {
         u.searchParams.set(CLERK_TESTING_TOKEN_PARAM, token);
       }
@@ -154,6 +157,32 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
       }
       try {
         const response = await route.fetch({ url: u.toString() });
+        const st = response.status();
+        // Always sample first N upstream statuses so "no H9" cannot mean "logger broken" — it means
+        // previously we only logged ≥400; all your intercepts returned <400 (Clerk accepted them).
+        if (upstreamStatusLogCount < 24) {
+          upstreamStatusLogCount += 1;
+          // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+            body: JSON.stringify({
+              sessionId: '5f6bd9',
+              hypothesisId: 'H9',
+              location: 'clerk-sign-in.ts:clerkFapiRoute',
+              message: 'upstream FAPI response after appending __clerk_testing_token',
+              data: {
+                status: st,
+                method: req.method(),
+                pathPrefix: u.pathname.slice(0, 72),
+                hadTestingToken,
+                atOrAbove400: st >= 400,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+        }
         const bodyText = await response.text();
         const headers = response.headers();
         let bodyOut = bodyText;
@@ -180,7 +209,25 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
           headers,
           body: bodyOut,
         });
-      } catch {
+      } catch (err) {
+        if (routeFetchErrorLogCount < 12) {
+          routeFetchErrorLogCount += 1;
+          const msg = err instanceof Error ? err.message.slice(0, 160) : String(err).slice(0, 160);
+          // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+            body: JSON.stringify({
+              sessionId: '5f6bd9',
+              hypothesisId: 'H10',
+              location: 'clerk-sign-in.ts:clerkFapiRoute',
+              message: 'route.fetch failed; continuing without rewritten response (token may be lost)',
+              data: { errorPrefix: msg, hadTestingToken },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+        }
         await route.continue({ url: u.toString() }).catch(() => {});
       }
     },
@@ -519,7 +566,7 @@ export async function performClerkPasswordEmail2FA(
       await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
     }
 
-    const otp = await waitForClerkOtpFromAgentMail({ notBeforeMs, timeoutMs: 120_000 });
+    const otp = await waitForClerkOtpFromMailSlurp({ notBeforeMs, timeoutMs: 120_000 });
 
     const multi = page.locator('input[inputmode="numeric"]');
     const count = await multi.count();

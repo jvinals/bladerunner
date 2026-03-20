@@ -113,7 +113,7 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ runId }),
     }),
-  /** Active recording only: server runs Clerk + AgentMail OTP on the remote browser; appends a tagged step. */
+  /** Active recording only: server runs Clerk + MailSlurp OTP on the remote browser; appends a tagged step. */
   clerkAutoSignInRecording: (runId: string) =>
     apiFetch<{ ok: boolean; step: unknown }>(`/runs/${runId}/recording/clerk-auto-sign-in`, {
       method: 'POST',

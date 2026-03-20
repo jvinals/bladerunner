@@ -536,7 +536,7 @@ export default function RunsPage() {
                 title={
                   !socketConnected
                     ? 'Wait for preview connection'
-                    : 'Run Clerk + AgentMail sign-in once using API credentials (same as E2E)'
+                    : 'Run Clerk + MailSlurp sign-in once using API credentials (same as E2E)'
                 }
                 className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 border border-[#4B90FF]/40 bg-[#4B90FF]/5 text-[#4D65FF] text-[11px] font-medium rounded-md hover:bg-[#4B90FF]/10 transition-colors disabled:opacity-40 disabled:pointer-events-none"
               >
@@ -549,7 +549,7 @@ export default function RunsPage() {
                 </p>
               )}
               <p className="text-[9px] text-gray-400 leading-snug">
-                Uses server env (test user + AgentMail). Navigate to Clerk sign-in in the preview, then click here.
+                Uses server env (test user + MailSlurp). Navigate to Clerk sign-in in the preview, then click here.
               </p>
             </div>
           )}
