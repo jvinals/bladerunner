@@ -1,32 +1,158 @@
-import type { BrowserContext, Page } from 'playwright-core';
-import { clerkSetup, setupClerkTestingToken } from '@clerk/testing/playwright';
+import type { BrowserContext, Page, Response } from 'playwright-core';
+import { clerkSetup } from '@clerk/testing/playwright';
 import { waitForClerkOtpFromAgentMail } from './agentmail-otp';
 
-/** `@clerk/testing` adds a `context.route` per call; handlers stack and can break FAPI traffic. */
-const contextsWithClerkTestingTokenRoute = new WeakSet<BrowserContext>();
+/** Same query param as `@clerk/testing` Playwright route (see `@clerk/testing` chunk-M5YIJ3SE). */
+const CLERK_TESTING_TOKEN_PARAM = '__clerk_testing_token';
 
 /**
- * Playwright testing helpers expect `clerkSetup` to run first (sets `CLERK_FAPI` + `CLERK_TESTING_TOKEN`).
- * E2E global.setup does this; Nest API must do it per-process before any `setupClerkTestingToken`.
- *
- * Always refresh credentials: a long-lived API process may keep `CLERK_FAPI` while the testing token
- * expires, which surfaces as Clerk Frontend API **403 Forbidden** during password / OTP steps.
+ * One dynamic route per context: matches `https://${CLERK_FAPI}/v1/*` using **current** env on each request,
+ * so `clerkSetup` can switch FAPI (e.g. after reading the **target app’s** publishable key) without stacking
+ * incompatible `RegExp` handlers from `setupClerkTestingToken`.
  */
-async function ensureClerkTestingPlaywrightReady(): Promise<void> {
-  const publishableKey =
+const contextsWithDynamicClerkFapiRoute = new WeakSet<BrowserContext>();
+
+function envPublishableKey(): string | undefined {
+  const k =
     process.env.CLERK_PUBLISHABLE_KEY ||
     process.env.VITE_CLERK_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  return k?.trim() || undefined;
+}
+
+async function readPublishableKeyFromPage(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const w = window as Window & {
+      Clerk?: { publishableKey?: string };
+      __clerk_publishable_key?: string;
+    };
+    const fromClerk = w.Clerk?.publishableKey;
+    if (fromClerk && typeof fromClerk === 'string' && fromClerk.startsWith('pk_')) return fromClerk;
+    if (typeof w.__clerk_publishable_key === 'string' && w.__clerk_publishable_key.startsWith('pk_')) {
+      return w.__clerk_publishable_key;
+    }
+    const el = document.querySelector('[data-clerk-publishable-key]');
+    const attr = el?.getAttribute('data-clerk-publishable-key');
+    if (attr && attr.startsWith('pk_')) return attr;
+    return null;
+  });
+}
+
+async function waitForClerkOrSignInUi(page: Page, timeoutMs: number): Promise<void> {
+  const id = page.locator('input[name="identifier"], #identifier-field').first();
+  await Promise.race([
+    page
+      .waitForFunction(
+        () => {
+          const Cl = (window as Window & { Clerk?: { publishableKey?: string } }).Clerk;
+          return Boolean(Cl?.publishableKey);
+        },
+        { timeout: timeoutMs },
+      )
+      .catch(() => {}),
+    id.waitFor({ state: 'visible', timeout: timeoutMs }).catch(() => {}),
+  ]);
+}
+
+async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promise<void> {
+  if (contextsWithDynamicClerkFapiRoute.has(context)) return;
+  contextsWithDynamicClerkFapiRoute.add(context);
+  // #region agent log
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+    body: JSON.stringify({
+      sessionId: '5f6bd9',
+      hypothesisId: 'H2',
+      location: 'clerk-sign-in.ts:installDynamicClerkFapiRouteOnce',
+      message: 'registered dynamic CLERK_FAPI /v1 route (reads env per request)',
+      data: { firstInstall: true },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  await context.route(
+    (url) => {
+      const fapi = process.env.CLERK_FAPI;
+      if (!fapi) return false;
+      return url.protocol === 'https:' && url.hostname === fapi && url.pathname.startsWith('/v1/');
+    },
+    async (route) => {
+      const req = route.request();
+      const u = new URL(req.url());
+      const token = process.env.CLERK_TESTING_TOKEN;
+      if (token) {
+        u.searchParams.set(CLERK_TESTING_TOKEN_PARAM, token);
+      }
+      try {
+        const response = await route.fetch({ url: u.toString() });
+        const json: unknown = await response.json();
+        if (json && typeof json === 'object') {
+          const o = json as {
+            response?: { captcha_bypass?: boolean };
+            client?: { captcha_bypass?: boolean };
+          };
+          if (o.response && typeof o.response === 'object' && o.response.captcha_bypass === false) {
+            o.response.captcha_bypass = true;
+          }
+          if (o.client && typeof o.client === 'object' && o.client.captcha_bypass === false) {
+            o.client.captcha_bypass = true;
+          }
+        }
+        await route.fulfill({ response, json });
+      } catch {
+        await route.continue({ url: u.toString() }).catch(() => {});
+      }
+    },
+  );
+}
+
+function attachClerkFapi403DebugLogger(page: Page): () => void {
+  const handler = (res: Response) => {
+    const url = res.url();
+    if (res.status() !== 403 || !url.includes('/v1/')) return;
+    const fapi = process.env.CLERK_FAPI;
+    let host = '';
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      /* ignore */
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        hypothesisId: 'H5',
+        location: 'clerk-sign-in.ts:response',
+        message: 'Clerk FAPI 403 response',
+        data: { responseHost: host, configuredFapi: fapi ?? '', hostMatchesFapi: !!(fapi && host === fapi) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  };
+  page.on('response', handler);
+  return () => page.off('response', handler);
+}
+
+/**
+ * Refresh `CLERK_FAPI` + `CLERK_TESTING_TOKEN` for the given publishable key (always clears stale token first).
+ */
+async function refreshClerkTestingCredentials(publishableKey: string): Promise<void> {
   const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!publishableKey || !secretKey) {
+  if (!secretKey) {
     throw new Error(
-      'clerkSetup requires CLERK_PUBLISHABLE_KEY (or VITE_CLERK_PUBLISHABLE_KEY) and CLERK_SECRET_KEY so Clerk testing can set CLERK_FAPI.',
+      'clerkSetup requires CLERK_SECRET_KEY so Clerk testing can mint CLERK_TESTING_TOKEN.',
     );
   }
 
-  const hadFapi = Boolean(process.env.CLERK_FAPI);
-  const hadToken = Boolean(process.env.CLERK_TESTING_TOKEN);
-  const tokenLenBefore = process.env.CLERK_TESTING_TOKEN?.length ?? 0;
+  const env = process.env as Record<string, string | undefined>;
+  const hadFapi = Boolean(env.CLERK_FAPI);
+  const hadToken = Boolean(env.CLERK_TESTING_TOKEN);
+  const tokenLenBefore = env.CLERK_TESTING_TOKEN?.length ?? 0;
   // #region agent log
   fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
     method: 'POST',
@@ -34,7 +160,7 @@ async function ensureClerkTestingPlaywrightReady(): Promise<void> {
     body: JSON.stringify({
       sessionId: '5f6bd9',
       hypothesisId: 'H1',
-      location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
+      location: 'clerk-sign-in.ts:refreshClerkTestingCredentials',
       message: 'before clerkSetup (refresh testing token)',
       data: { hadFapi, hadToken, tokenLenBefore },
       timestamp: Date.now(),
@@ -49,9 +175,8 @@ async function ensureClerkTestingPlaywrightReady(): Promise<void> {
     dotenv: false,
   });
 
-  const tokenAfter = process.env as Record<string, string | undefined>;
-  const tokenLenAfter = tokenAfter.CLERK_TESTING_TOKEN?.length ?? 0;
-  const fapiLen = tokenAfter.CLERK_FAPI?.length ?? 0;
+  const tokenLenAfter = env.CLERK_TESTING_TOKEN?.length ?? 0;
+  const fapiLen = env.CLERK_FAPI?.length ?? 0;
   // #region agent log
   fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
     method: 'POST',
@@ -59,35 +184,13 @@ async function ensureClerkTestingPlaywrightReady(): Promise<void> {
     body: JSON.stringify({
       sessionId: '5f6bd9',
       hypothesisId: 'H1',
-      location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
+      location: 'clerk-sign-in.ts:refreshClerkTestingCredentials',
       message: 'after clerkSetup',
       data: { tokenLenAfter, fapiLen },
       timestamp: Date.now(),
     }),
   }).catch(() => {});
   // #endregion
-}
-
-async function ensureClerkTestingTokenRouteOnce(page: Page): Promise<void> {
-  const ctx = page.context();
-  const already = contextsWithClerkTestingTokenRoute.has(ctx);
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H2',
-      location: 'clerk-sign-in.ts:ensureClerkTestingTokenRouteOnce',
-      message: 'setupClerkTestingToken route registration',
-      data: { alreadyRegistered: already },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-  if (already) return;
-  contextsWithClerkTestingTokenRoute.add(ctx);
-  await setupClerkTestingToken({ page });
 }
 
 /**
@@ -183,67 +286,107 @@ export async function performClerkPasswordEmail2FA(
   page: Page,
   opts: PerformClerkPasswordEmail2FAOpts,
 ): Promise<void> {
-  await ensureClerkTestingPlaywrightReady();
-  await ensureClerkTestingTokenRouteOnce(page);
-
+  const envPk = envPublishableKey();
   const base = opts.baseURL.replace(/\/$/, '');
+
   if (!opts.skipInitialNavigate) {
+    if (envPk) {
+      await refreshClerkTestingCredentials(envPk);
+    }
+    await installDynamicClerkFapiRouteOnce(page.context());
     await page.goto(`${base}/`);
   }
 
-  const idField = page.locator('input[name="identifier"], #identifier-field').first();
-  await idField.waitFor({ state: 'visible', timeout: 60_000 });
-  await idField.fill(opts.identifier);
-
-  const passwordAlready = page
-    .locator('input[name="password"][type="password"], input[type="password"]')
-    .first();
-  const combined = await passwordAlready.isVisible().catch(() => false);
-
-  if (!combined) {
-    await locatorAfterIdentifierContinue(page).first().click();
+  await waitForClerkOrSignInUi(page, 90_000);
+  const pagePk = await readPublishableKeyFromPage(page);
+  const publishableKey = (pagePk ?? envPk)?.trim();
+  if (!publishableKey) {
+    throw new Error(
+      'Could not resolve Clerk publishable key: it was not found on the page (window.Clerk.publishableKey / data-clerk-publishable-key) and CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY is unset. Use the **same Clerk application** as the site under test (or set the publishable key env to that app).',
+    );
   }
 
-  const passwordField = page
-    .locator('input[name="password"][type="password"], input[type="password"]')
-    .first();
-  await passwordField.waitFor({ state: 'visible', timeout: 60_000 });
-  const notBeforeMs = Date.now() - 5_000;
-  await passwordField.fill(opts.password);
+  // #region agent log
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+    body: JSON.stringify({
+      sessionId: '5f6bd9',
+      hypothesisId: 'H4',
+      location: 'clerk-sign-in.ts:performClerkPasswordEmail2FA',
+      message: 'publishable key source for clerkSetup',
+      data: {
+        hasPagePk: Boolean(pagePk),
+        pagePkTail: pagePk ? pagePk.slice(-12) : '',
+        envPkTail: envPk ? envPk.slice(-12) : '',
+        envDiffersFromPage: Boolean(pagePk && envPk && pagePk !== envPk),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
-  await locatorAfterPasswordSubmit(page).first().click();
+  await refreshClerkTestingCredentials(publishableKey);
+  await installDynamicClerkFapiRouteOnce(page.context());
 
-  const otpSingle = page
-    .locator(
-      'input[inputmode="numeric"], input[name="code"], input[autocomplete="one-time-code"], [data-input-otp]',
-    )
-    .first();
-
+  const detach403Logger = attachClerkFapi403DebugLogger(page);
   try {
-    await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
-  } catch {
-    const anyOtp = page.locator('input[inputmode="numeric"]').first();
-    await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
-  }
+    const idField = page.locator('input[name="identifier"], #identifier-field').first();
+    await idField.waitFor({ state: 'visible', timeout: 60_000 });
+    await idField.fill(opts.identifier);
 
-  const otp = await waitForClerkOtpFromAgentMail({ notBeforeMs, timeoutMs: 120_000 });
+    const passwordAlready = page
+      .locator('input[name="password"][type="password"], input[type="password"]')
+      .first();
+    const combined = await passwordAlready.isVisible().catch(() => false);
 
-  const multi = page.locator('input[inputmode="numeric"]');
-  const count = await multi.count();
-  if (count >= 6) {
-    const digits = otp.split('');
-    for (let i = 0; i < Math.min(digits.length, count); i++) {
-      await multi.nth(i).fill(digits[i]!);
+    if (!combined) {
+      await locatorAfterIdentifierContinue(page).first().click();
     }
-  } else {
-    await otpSingle.fill(otp);
+
+    const passwordField = page
+      .locator('input[name="password"][type="password"], input[type="password"]')
+      .first();
+    await passwordField.waitFor({ state: 'visible', timeout: 60_000 });
+    const notBeforeMs = Date.now() - 5_000;
+    await passwordField.fill(opts.password);
+
+    await locatorAfterPasswordSubmit(page).first().click();
+
+    const otpSingle = page
+      .locator(
+        'input[inputmode="numeric"], input[name="code"], input[autocomplete="one-time-code"], [data-input-otp]',
+      )
+      .first();
+
+    try {
+      await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
+    } catch {
+      const anyOtp = page.locator('input[inputmode="numeric"]').first();
+      await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
+    }
+
+    const otp = await waitForClerkOtpFromAgentMail({ notBeforeMs, timeoutMs: 120_000 });
+
+    const multi = page.locator('input[inputmode="numeric"]');
+    const count = await multi.count();
+    if (count >= 6) {
+      const digits = otp.split('');
+      for (let i = 0; i < Math.min(digits.length, count); i++) {
+        await multi.nth(i).fill(digits[i]!);
+      }
+    } else {
+      await otpSingle.fill(otp);
+    }
+
+    await locatorAfterOtpSubmit(page).first().click();
+
+    const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
+    await page.waitForURL(
+      (url) => url.hostname === host || url.hostname === 'localhost' || url.hostname === '127.0.0.1',
+      { timeout: 120_000 },
+    );
+  } finally {
+    detach403Logger();
   }
-
-  await locatorAfterOtpSubmit(page).first().click();
-
-  const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
-  await page.waitForURL(
-    (url) => url.hostname === host || url.hostname === 'localhost' || url.hostname === '127.0.0.1',
-    { timeout: 120_000 },
-  );
 }

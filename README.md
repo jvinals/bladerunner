@@ -165,8 +165,11 @@ When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSign
 
 Secrets stay on the **server**; the browser never receives test passwords.
 
+For **third-party targets** (e.g. Evocare on Vercel), **`CLERK_SECRET_KEY` must be for that product’s Clerk application** (not only Bladerunner’s). The server can take **`publishableKey` from the live page** when it differs from `VITE_CLERK_PUBLISHABLE_KEY`, but the **secret** cannot be inferred — set it in API env to match the app under test.
+
 ## Changelog
 
+- **0.2.33** — **Clerk auto sign-in (recording / playback)**: read **`publishableKey` from the live page** (`window.Clerk` / `data-clerk-publishable-key`) when it differs from API env (e.g. recording **Evocare** while Bladerunner’s `.env` only had **Bladerunner’s** `VITE_CLERK_PUBLISHABLE_KEY`), then **`clerkSetup`** + testing token for **that** Clerk app. Replaced `setupClerkTestingToken` with a **single dynamic** Playwright route that reads **`CLERK_FAPI` per request** so FAPI updates apply without stacked handlers. **`CLERK_SECRET_KEY` must still belong to the same Clerk instance** as the app under test. Package **`tsconfig`**: add **`DOM`** lib for `page.evaluate` typings.
 - **0.2.32** — **`repro:clerk-stale-token`**: ignore pnpm’s forwarded **`--`** so the app origin argument parses correctly.
 - **0.2.31** — **Clerk + AgentMail auto sign-in**: always run **`clerkSetup`** before each flow so **`CLERK_TESTING_TOKEN`** is refreshed (long-lived API could keep **`CLERK_FAPI`** and a **stale token**, which surfaced as Clerk FAPI **403** at email OTP). **`setupClerkTestingToken`** only once per **Playwright `BrowserContext`** to avoid stacked **`context.route`** handlers. Repro: **`pnpm run repro:clerk-stale-token -- <app-origin>`** (loads `.env`).
 - **0.2.30** — **Clerk auto sign-in**: use **anchored** button names (`/^Continue$/i`, etc.) so automation does not click **“Continue with Apple”** (substring match on `/continue/i` used to start Apple OAuth and looked like a manual Apple step in the recording).
