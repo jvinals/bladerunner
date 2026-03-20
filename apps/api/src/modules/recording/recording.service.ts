@@ -32,6 +32,7 @@ import {
   removePathIfExists,
   writeJpegThumbnailFromVideo,
 } from './recording-storage';
+import { createScreencastWebmEncoder, type ScreencastWebmEncoder } from './recording-screencast-ffmpeg';
 
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
@@ -48,8 +49,11 @@ export interface RecordingSession {
   cdpSession: CDPSession;
   stepSequence: number;
   latestFrame: Buffer | null;
-  /** Temp dir used by Playwright `recordVideo` (cleaned up after stop or abort). */
-  videoTempDir: string;
+  /**
+   * Encodes CDP screencast JPEGs to WebM on the API host (required when the browser is remote — Playwright
+   * `recordVideo` files are not readable from this process).
+   */
+  screencastWebm: ScreencastWebmEncoder | null;
 }
 
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
@@ -108,16 +112,15 @@ export class RecordingService extends EventEmitter {
 
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
 
-    let videoTempDir: string | undefined;
+    let screencastWebm: ScreencastWebmEncoder | null = null;
+    const ffmpegStagingPath = path.join(os.tmpdir(), `br-screencast-${run.id}-${randomUUID()}.webm`);
     try {
       const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
       const browser = await chromium.connect(wsEndpoint);
-      videoTempDir = path.join(os.tmpdir(), `br-rec-${run.id}-${randomUUID()}`);
-      await fs.mkdir(videoTempDir, { recursive: true });
       const viewport = { width: 1280, height: 720 };
+      screencastWebm = createScreencastWebmEncoder(ffmpegStagingPath, this.logger);
       const context = await browser.newContext({
         viewport,
-        recordVideo: { dir: videoTempDir, size: viewport },
       });
       const page = await context.newPage();
       const cdpSession = await context.newCDPSession(page);
@@ -130,12 +133,14 @@ export class RecordingService extends EventEmitter {
         cdpSession,
         stepSequence: 0,
         latestFrame: null,
-        videoTempDir,
+        screencastWebm,
       };
 
       this.sessions.set(run.id, session);
 
-      await this.attachScreencast(session.cdpSession, session, session.runId);
+      await this.attachScreencast(session.cdpSession, session, session.runId, {
+        onJpegFrame: (jpeg) => screencastWebm?.pushFrame(jpeg),
+      });
       await this.setupEventCapture(session);
 
       await page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -155,7 +160,10 @@ export class RecordingService extends EventEmitter {
       this.logger.log(`Recording started: ${run.id} -> ${url}`);
       return run;
     } catch (err) {
-      if (videoTempDir) await removePathIfExists(videoTempDir);
+      if (screencastWebm) {
+        screencastWebm.kill();
+        await removePathIfExists(ffmpegStagingPath).catch(() => {});
+      }
       await this.prisma.run.update({
         where: { id: run.id },
         data: { status: 'FAILED', completedAt: new Date() },
@@ -174,14 +182,20 @@ export class RecordingService extends EventEmitter {
     }
 
     const latestFrame = session.latestFrame;
-    const videoTempDir = session.videoTempDir;
-    const page = session.page;
-    const video = page.video();
+    const screencastWebm = session.screencastWebm;
 
     try {
       await session.cdpSession.send('Page.stopScreencast');
     } catch (err) {
       this.logger.warn('stopScreencast', err);
+    }
+
+    if (screencastWebm) {
+      try {
+        await screencastWebm.finalize();
+      } catch (err) {
+        this.logger.warn(`screencast WebM finalize failed for ${runId}:`, err);
+      }
     }
 
     try {
@@ -192,11 +206,19 @@ export class RecordingService extends EventEmitter {
 
     this.sessions.delete(runId);
 
+    /** Staging file written by ffmpeg on the API host (same process as this service). */
     let rawVideoPath: string | null = null;
-    try {
-      rawVideoPath = video ? await video.path() : null;
-    } catch (err) {
-      this.logger.warn(`video.path() failed for ${runId}:`, err);
+    if (screencastWebm) {
+      try {
+        const st = await fs.stat(screencastWebm.outputPath);
+        if (st.size > 0) {
+          rawVideoPath = screencastWebm.outputPath;
+        } else {
+          this.logger.warn(`screencast WebM is empty for ${runId}, skipping copy`);
+        }
+      } catch {
+        this.logger.warn(`screencast WebM not found or unreadable for ${runId}`);
+      }
     }
 
     const base = getRecordingsBaseDir(this.configService);
@@ -226,8 +248,8 @@ export class RecordingService extends EventEmitter {
       this.logger.warn(`persist recording artifacts failed for ${runId}:`, err);
     }
 
-    if (videoTempDir) {
-      await removePathIfExists(videoTempDir).catch(() => {});
+    if (screencastWebm) {
+      await removePathIfExists(screencastWebm.outputPath).catch(() => {});
     }
 
     const started = (await this.prisma.run.findUnique({ where: { id: runId } }))!.startedAt!;
@@ -275,16 +297,16 @@ export class RecordingService extends EventEmitter {
     } catch (err) {
       this.logger.warn(`abortRecordingForDeletion ${runId} stopScreencast:`, err);
     }
-    const videoTempDir = session.videoTempDir;
+    if (session.screencastWebm) {
+      session.screencastWebm.kill();
+      await removePathIfExists(session.screencastWebm.outputPath).catch(() => {});
+    }
     try {
       await session.browser.close();
     } catch (err) {
       this.logger.warn(`abortRecordingForDeletion ${runId} browser.close:`, err);
     }
     this.sessions.delete(runId);
-    if (videoTempDir) {
-      await removePathIfExists(videoTempDir).catch(() => {});
-    }
     this.emit('status', runId, { status: 'cancelled', runId });
     this.logger.log(`Recording session aborted for delete: ${runId}`);
   }
@@ -664,6 +686,7 @@ export class RecordingService extends EventEmitter {
     cdpSession: CDPSession,
     latestFrameHolder: { latestFrame: Buffer | null },
     frameChannelId: string,
+    opts?: { onJpegFrame?: (jpeg: Buffer) => void },
   ) {
     await cdpSession.send('Page.startScreencast', {
       format: 'jpeg',
@@ -674,7 +697,9 @@ export class RecordingService extends EventEmitter {
     });
 
     cdpSession.on('Page.screencastFrame', async (params: any) => {
-      latestFrameHolder.latestFrame = Buffer.from(params.data, 'base64');
+      const buf = Buffer.from(params.data, 'base64');
+      latestFrameHolder.latestFrame = buf;
+      opts?.onJpegFrame?.(buf);
 
       await cdpSession.send('Page.screencastFrameAck', {
         sessionId: params.sessionId,
