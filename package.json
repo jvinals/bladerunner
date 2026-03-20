@@ -1,10 +1,11 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.2.25",
+  "version": "0.2.26",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
-    "dev": "pnpm --parallel -r run dev",
+    "dev": "concurrently -n api,worker,web -c auto \"pnpm run dev:api\" \"pnpm --filter @bladerunner/browser-worker dev\" \"pnpm run dev:web:delayed\"",
+    "dev:web:delayed": "wait-on tcp:127.0.0.1:3001 && pnpm run dev:web",
     "dev:web": "pnpm --filter @bladerunner/web dev",
     "dev:api": "pnpm --filter @bladerunner/api dev",
     "build": "pnpm -r run build",
@@ -35,6 +36,8 @@
     "@clerk/testing": "^2.0.5",
     "@playwright/test": "^1.58.2",
     "agentmail": "^0.4.10",
-    "dotenv": "^17.3.1"
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.3.1",
+    "wait-on": "^9.0.4"
   }
 }
