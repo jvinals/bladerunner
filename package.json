@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.2.30",
+  "version": "0.2.32",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "dev": "concurrently -n api,worker,web -c auto \"pnpm run dev:api\" \"pnpm --filter @bladerunner/browser-worker dev\" \"pnpm run dev:web:delayed\"",
@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
-    "agentmail:list-inboxes": "node scripts/agentmail-list-inboxes.mjs"
+    "agentmail:list-inboxes": "node scripts/agentmail-list-inboxes.mjs",
+    "repro:clerk-stale-token": "node --env-file=.env scripts/repro-clerk-stale-token.mjs"
   },
   "engines": {
     "node": ">=20.0.0",
