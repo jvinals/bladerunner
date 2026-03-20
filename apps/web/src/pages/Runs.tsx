@@ -210,26 +210,6 @@ export default function RunsPage() {
   );
 
   const handleStartPlaybackRuns = useCallback(async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        location: 'Runs.tsx:handleStartPlaybackRuns',
-        message: 'play_click',
-        hypothesisId: 'H2',
-        data: {
-          selectedRunId,
-          canPlaybackSelected,
-          stepsLength: steps.length,
-          isRecording,
-          selectedStatus: selectedRun?.status ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!selectedRunId || !canPlaybackSelected) return;
     try {
       const skipRaw = playbackSkipUntilSeq.trim();

@@ -193,28 +193,6 @@ export default function RunDetailPage() {
   }, [highlightSequence]);
 
   const handleStartPlayback = useCallback(async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        location: 'RunDetail.tsx:handleStartPlayback',
-        message: 'play_click',
-        hypothesisId: 'H1',
-        data: {
-          id: id ?? null,
-          canPlayback,
-          recordedStepsLength: recordedSteps.length,
-          runStatus: (run as { status?: string } | undefined)?.status ?? null,
-          runStepsCount,
-          stepsQueryPending,
-          stepsQueryError,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!id || !canPlayback) return;
     try {
       const skipRaw = playbackSkipUntilSeq.trim();
@@ -230,18 +208,7 @@ export default function RunDetailPage() {
     } catch (e) {
       console.error('Playback failed to start:', e);
     }
-  }, [
-    id,
-    canPlayback,
-    recordedSteps.length,
-    run,
-    runStepsCount,
-    startPlayback,
-    playbackAutoClerkMode,
-    playbackSkipUntilSeq,
-    stepsQueryPending,
-    stepsQueryError,
-  ]);
+  }, [id, canPlayback, startPlayback, playbackAutoClerkMode, playbackSkipUntilSeq]);
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
