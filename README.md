@@ -75,6 +75,8 @@ docker compose --profile local-db up -d postgres
 cd apps/api && pnpm exec prisma migrate deploy
 ```
 
+**After pulling new code:** always run **`pnpm migrate`** from `apps/api` (or `pnpm exec prisma migrate deploy`) so PostgreSQL matches `schema.prisma`. If the API logs **`invalid input value for enum "StepOrigin": "AUTOMATIC"`** (or recording shows **gaps** in step numbers like 1 → 6), pending migrations were not applied—run the command above against the same **`DATABASE_URL`** the API uses, then restart the API.
+
 Smoke check: `node scripts/verify-api-health.mjs` (expects HTTP 200 and `database: ok`).
 
 **Still seeing P1001 / `Can't reach database server` from your laptop (e.g. `*.proxy.rlwy.net`)?** That is **network reachability**, not “wrong password”. Check:
@@ -197,6 +199,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.2** — **Docs**: troubleshooting for **`StepOrigin` / `AUTOMATIC`** — run **`pnpm migrate`** in **`apps/api`** when the DB enum is behind **`schema.prisma`** (fixes `22P02` invalid enum + missing recording steps). **`apps/api`**: **`migrate`** script.
 - **0.7.1** — **Runs**: show **`role="alert"`** error when **Re-record step** fails. **`@bladerunner/web` `0.6.1`**.
 - **0.7.0** — **`StepOrigin.AUTOMATIC`** (Prisma migration): Clerk/MailSlurp-tagged steps use **`[MailSlurp automation]`** instruction prefix; playback behavior unchanged (**`metadata.clerkAuthPhase`** skip + single **`performClerkPasswordEmail2FA`**). **`POST /runs/:id/steps/:stepId/re-record`** re-captures a step by instruction during active recording; **Runs** step cards show **Re-record**. **`@bladerunner/web` `0.6.0`**, **`@bladerunner/api` `0.5.0`**, **`@bladerunner/types` `0.2.0`**.
 - **0.6.10** — Remove temporary debug ingest logging from **Run detail** / **Runs** playback handlers. **`@bladerunner/web` `0.5.6`**.

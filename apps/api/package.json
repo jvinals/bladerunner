@@ -1,11 +1,12 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
     "build": "nest build",
     "predev": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
+    "migrate": "prisma migrate deploy",
     "start": "nest start",
     "dev": "rm -f tsconfig.tsbuildinfo && nest start --watch",
     "start:dev": "pnpm run dev",
