@@ -2,28 +2,6 @@ import type { Logger } from '@nestjs/common';
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { Writable } from 'node:stream';
 
-// #region agent log
-function dbgLog(
-  location: string,
-  message: string,
-  data: Record<string, unknown>,
-  hypothesisId: string,
-) {
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-      hypothesisId,
-    }),
-  }).catch(() => {});
-}
-// #endregion
-
 function writeStdinChunk(stdin: Writable, buf: Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
     const ok = stdin.write(buf, (err: Error | null | undefined) => {
@@ -100,21 +78,8 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
   let pipeBroken = false;
 
   const exitPromise = new Promise<number | null>((resolve) => {
-    proc.once('close', (code, signal) => {
+    proc.once('close', (code) => {
       pipeBroken = true;
-      // #region agent log
-      dbgLog(
-        'recording-screencast-ffmpeg.ts:close',
-        'ffmpeg process closed',
-        {
-          exitCode: code,
-          signal: signal ?? null,
-          stderrTail: stderr.slice(-800),
-          outputPath,
-        },
-        'H1',
-      );
-      // #endregion
       resolve(code);
     });
   });
@@ -123,14 +88,6 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
   /** Must handle EPIPE or Node throws unhandled "error" on Socket and crashes the API. */
   stdin.on('error', (err: NodeJS.ErrnoException) => {
     pipeBroken = true;
-    // #region agent log
-    dbgLog(
-      'recording-screencast-ffmpeg.ts:stdin-error',
-      'ffmpeg stdin error',
-      { code: err.code, errno: err.errno, message: err.message, outputPath },
-      'H2',
-    );
-    // #endregion
     if (err.code !== 'EPIPE') {
       logger.warn(`ffmpeg stdin: ${err.message}`);
     }
@@ -142,26 +99,16 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
     if (pipeBroken) return;
     chain = chain
       .then(() => writeStdinChunk(stdin, jpeg))
-      .catch((err: NodeJS.ErrnoException) => {
+      .catch((err: unknown) => {
         pipeBroken = true;
-        // #region agent log
-        dbgLog(
-          'recording-screencast-ffmpeg.ts:push-reject',
-          'writeStdinChunk rejected',
-          { code: err?.code, message: err?.message, outputPath },
-          'H3',
-        );
-        // #endregion
-        if (err?.code !== 'EPIPE') {
-          logger.warn(`ffmpeg stdin write: ${err?.message ?? err}`);
+        const e = err as NodeJS.ErrnoException;
+        if (e?.code !== 'EPIPE') {
+          logger.warn(`ffmpeg stdin write: ${e?.message ?? err}`);
         }
       });
   };
 
   const finalize = async (): Promise<{ ok: boolean; exitCode: number | null; stderrTail: string }> => {
-    // #region agent log
-    dbgLog('recording-screencast-ffmpeg.ts:finalize-start', 'finalize entered', { pipeBroken, outputPath }, 'H4');
-    // #endregion
     await chain.catch(() => {});
     try {
       if (!pipeBroken && stdin.writable) {
@@ -177,14 +124,6 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
         `ffmpeg screencast encode exited ${exitCode}; stderr: ${stderr.slice(-1500)}`,
       );
     }
-    // #region agent log
-    dbgLog(
-      'recording-screencast-ffmpeg.ts:finalize-end',
-      'finalize done',
-      { exitCode, ok, stderrLen: stderr.length, outputPath },
-      'H4',
-    );
-    // #endregion
     return { ok, exitCode, stderrTail: stderr };
   };
 
@@ -198,20 +137,8 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
   };
 
   proc.once('error', (err) => {
-    // #region agent log
-    dbgLog('recording-screencast-ffmpeg.ts:proc-error', 'ffmpeg spawn error', { message: err.message }, 'H5');
-    // #endregion
     logger.warn(`ffmpeg process error: ${err.message}`);
   });
-
-  // #region agent log
-  dbgLog(
-    'recording-screencast-ffmpeg.ts:spawn',
-    'ffmpeg encoder started',
-    { pid: proc.pid, ffmpeg, args, outputPath },
-    'H1',
-  );
-  // #endregion
 
   return { outputPath, pushFrame, finalize, kill };
 }
