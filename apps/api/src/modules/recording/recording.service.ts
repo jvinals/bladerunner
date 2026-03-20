@@ -6,6 +6,7 @@ import {
   ConflictException,
   BadRequestException,
   HttpException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
@@ -177,6 +178,32 @@ export class RecordingService extends EventEmitter {
     this.emit('status', runId, { status: 'completed', runId });
     this.logger.log(`Recording stopped: ${runId}`);
     return run;
+  }
+
+  /**
+   * Closes browser + session without marking the run completed (used when deleting a RECORDING run).
+   */
+  async abortRecordingForDeletion(runId: string, userId: string): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (!session) {
+      return;
+    }
+    if (session.userId !== userId) {
+      throw new ForbiddenException('Not allowed to end this recording session');
+    }
+    try {
+      await session.cdpSession.send('Page.stopScreencast');
+    } catch (err) {
+      this.logger.warn(`abortRecordingForDeletion ${runId} stopScreencast:`, err);
+    }
+    try {
+      await session.browser.close();
+    } catch (err) {
+      this.logger.warn(`abortRecordingForDeletion ${runId} browser.close:`, err);
+    }
+    this.sessions.delete(runId);
+    this.emit('status', runId, { status: 'cancelled', runId });
+    this.logger.log(`Recording session aborted for delete: ${runId}`);
   }
 
   /**

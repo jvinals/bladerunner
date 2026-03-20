@@ -190,11 +190,11 @@ export function HomeRunsTable() {
 
   const handleDelete = useCallback(
     (run: HomeRunRow) => {
-      if (run.status === 'RECORDING') {
-        window.alert('Stop the recording from the Runs page before deleting.');
-        return;
-      }
-      if (!window.confirm(`Delete run “${run.name}”? This cannot be undone.`)) return;
+      const msg =
+        run.status === 'RECORDING'
+          ? `Delete “${run.name}”? This will end the active recording and remove the run permanently.`
+          : `Delete run “${run.name}”? This cannot be undone.`;
+      if (!window.confirm(msg)) return;
       deleteRunMutation.mutate(run.id);
     },
     [deleteRunMutation],

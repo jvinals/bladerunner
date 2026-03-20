@@ -1,10 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { RecordingService } from '../recording/recording.service';
 
 @Injectable()
 export class RunsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly recordingService: RecordingService,
+  ) {}
 
   async findAll(
     userId: string,
@@ -150,7 +154,7 @@ export class RunsService {
     const run = await this.prisma.run.findFirst({ where: { id, userId } });
     if (!run) throw new NotFoundException(`Run ${id} not found`);
     if (run.status === 'RECORDING') {
-      throw new BadRequestException('Stop the recording before deleting this run.');
+      await this.recordingService.abortRecordingForDeletion(id, userId);
     }
     await this.prisma.run.delete({ where: { id } });
   }

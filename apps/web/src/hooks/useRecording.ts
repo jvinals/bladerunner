@@ -42,6 +42,8 @@ interface UseRecordingReturn {
   loadRunSteps: (runId: string) => Promise<void>;
   /** Clear loaded run/steps when not actively recording (e.g. after delete). */
   clearLoadedRun: () => void;
+  /** Server deleted the run or aborted session; reset local recording state without calling stop API. */
+  resetRecordingAfterRemoteDelete: () => void;
   /** Forward pointer events to the remote Playwright page (requires active socket + run). */
   sendRemotePointer: (userId: string, payload: RemotePointerPayload) => void;
   /** Forward keyboard to the remote page (preview must be focused). */
@@ -122,7 +124,7 @@ export function useRecording(): UseRecordingReturn {
     socket.on('status', (data: { status: string; runId: string }) => {
       if (data.runId === recordRunId) {
         setStatus(data.status);
-        if (data.status === 'completed' || data.status === 'failed') {
+        if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
           setIsRecording(false);
         }
       }
@@ -186,6 +188,23 @@ export function useRecording(): UseRecordingReturn {
     setRunId(null);
     activeRunIdRef.current = null;
   }, [isRecording]);
+
+  const resetRecordingAfterRemoteDelete = useCallback(() => {
+    const id = activeRunIdRef.current ?? runId;
+    activeRunIdRef.current = null;
+    if (socketRef.current) {
+      if (id) socketRef.current.emit('leave', { runId: id });
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    setSocketConnected(false);
+    setIsRecording(false);
+    setStatus('idle');
+    setRunId(null);
+    setSteps([]);
+    setCurrentFrame(null);
+    setClerkAutoSignInError(null);
+  }, [runId]);
 
   const sendRemotePointer = useCallback((userId: string, payload: RemotePointerPayload) => {
     const id = activeRunIdRef.current ?? runId;
@@ -257,6 +276,7 @@ export function useRecording(): UseRecordingReturn {
     sendInstruction,
     loadRunSteps,
     clearLoadedRun,
+    resetRecordingAfterRemoteDelete,
     sendRemotePointer,
     sendRemoteKey,
     sendRemoteTouch,

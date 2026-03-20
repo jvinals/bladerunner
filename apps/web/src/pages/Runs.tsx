@@ -32,6 +32,8 @@ export default function RunsPage() {
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
   const stepsListScrollRef = useRef<HTMLDivElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
+  /** Latest recording run id for delete mutation (avoids stale closure in onSuccess). */
+  const recordingRunIdRef = useRef<string | null>(null);
 
   const {
     isRecording,
@@ -44,6 +46,7 @@ export default function RunsPage() {
     sendInstruction,
     loadRunSteps,
     clearLoadedRun,
+    resetRecordingAfterRemoteDelete,
     sendRemotePointer,
     sendRemoteKey,
     sendRemoteTouch,
@@ -53,6 +56,8 @@ export default function RunsPage() {
     clerkAutoSigningIn,
     clerkAutoSignInError,
   } = useRecording();
+
+  recordingRunIdRef.current = runId;
 
   const {
     playbackSessionId,
@@ -83,11 +88,14 @@ export default function RunsPage() {
 
   const deleteRunMutation = useMutation({
     mutationFn: (id: string) => runsApi.deleteRun(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['runs'] });
       queryClient.invalidateQueries({ queryKey: ['recent-runs'] });
       queryClient.invalidateQueries({ queryKey: ['home-runs-table'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+      if (recordingRunIdRef.current === deletedId) {
+        resetRecordingAfterRemoteDelete();
+      }
       setSelectedRunId(null);
       clearLoadedRun();
     },
@@ -157,8 +165,12 @@ export default function RunsPage() {
   }, [newUrl, newName, newRunProjectId, startRecording, refetch]);
 
   const handleDeleteSelectedRun = useCallback(() => {
-    if (!selectedRunId || !selectedRun || selectedRun.status === 'RECORDING') return;
-    if (!window.confirm(`Delete run “${selectedRun.name}”? This cannot be undone.`)) return;
+    if (!selectedRunId || !selectedRun) return;
+    const msg =
+      selectedRun.status === 'RECORDING'
+        ? `Delete “${selectedRun.name}”? This will end the active recording and remove the run permanently.`
+        : `Delete run “${selectedRun.name}”? This cannot be undone.`;
+    if (!window.confirm(msg)) return;
     deleteRunMutation.mutate(selectedRunId);
   }, [selectedRunId, selectedRun, deleteRunMutation]);
 
@@ -439,6 +451,7 @@ export default function RunsPage() {
                   ) : (
                     runs.map((r) => (
                       <option key={r.id} value={r.id}>
+                        {r.status === 'RECORDING' ? '* ' : ''}
                         {r.name} ({r.stepsCount} steps)
                       </option>
                     ))
@@ -446,10 +459,14 @@ export default function RunsPage() {
                 </select>
                 <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
-              {selectedRunId && selectedRun && selectedRun.status !== 'RECORDING' && (
+              {selectedRunId && selectedRun && (
                 <button
                   type="button"
-                  title="Delete this run"
+                  title={
+                    selectedRun.status === 'RECORDING'
+                      ? 'Delete run (ends recording)'
+                      : 'Delete this run'
+                  }
                   disabled={deleteRunMutation.isPending}
                   onClick={() => void handleDeleteSelectedRun()}
                   className="shrink-0 p-1.5 rounded-md border border-red-100 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
