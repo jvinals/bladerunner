@@ -189,9 +189,12 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 - **`RECORDINGS_DIR`** — Base directory for artifacts. Default: `os.tmpdir()/bladerunner-recordings` when unset. **Production:** mount a **persistent volume** (e.g. Railway) and set `RECORDINGS_DIR` to a path on that volume so recordings survive deploys.
 - **`FFMPEG_PATH`** (optional) — Path to the `ffmpeg` binary. **Required on PATH** for session WebM (and for extracting thumbnails from video). If `ffmpeg` is missing, the API falls back to storing only the last **screencast JPEG** as the run thumbnail (no `RunRecording` video). The API **Dockerfile** installs `ffmpeg`.
+- **`FFPROBE_PATH`** (optional) — Used to read encoded duration for **wall-clock timing sync** (fixes sped-up playback when MJPEG-from-pipe had the wrong implicit FPS).
+- **`RECORDING_SCREENCAST_INPUT_FPS`** (optional, default **8**) — Hint for ffmpeg’s MJPEG demuxer (CDP screencast is not 25 fps). The API also **re-times** the finished MP4 to match **run start → stop** when probe duration drifts.
 
 ## Changelog
 
+- **0.6.6** — **Session video timing**: MJPEG pipe had **wrong implicit FPS** (playback looked 2–3× fast). **`RECORDING_SCREENCAST_INPUT_FPS`** (default 8) + **post-encode `setpts`** vs **wall-clock** (`ffprobe` duration). **`@bladerunner/api` `0.4.5`**.
 - **0.6.5** — **Session recording = MP4 (H.264)**: Screencast ffmpeg pipeline uses **`libx264`** → **`recording.mp4`** (VP8/WebM was often missing on macOS ffmpeg → thumbnail-only runs). **`GET /runs/:id/recording/video`** serves MP4 or legacy WebM. **`@bladerunner/api` `0.4.4`**, **`@bladerunner/web` `0.5.2`** (copy text).
 - **0.6.4** — **Run detail session recording**: Load **WebM first** (probe `/recording/video`) even when `run.recordings` is empty but a thumbnail exists; **`<video>`** `onError` falls back to JPEG + Safari/WebM note. **`@bladerunner/web` `0.5.1`**.
 - **0.6.3** — Remove debug-session instrumentation from ffmpeg screencast encoder (behavior unchanged). **`@bladerunner/api` `0.4.3`**.

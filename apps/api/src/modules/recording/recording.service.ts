@@ -26,6 +26,7 @@ import {
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet } from './playback-skip.util';
 import {
+  adjustRecordingVideoDurationToWallClock,
   copyRecordingVideoToArtifacts,
   getRecordingsBaseDir,
   getRunArtifactDir,
@@ -227,10 +228,19 @@ export class RecordingService extends EventEmitter {
     let recordingUrl: string | null = null;
     let sizeBytes: number | null = null;
 
+    const runRow = await this.prisma.run.findUnique({ where: { id: runId } });
+    const wallClockSec =
+      runRow?.startedAt != null
+        ? Math.max(0.5, (Date.now() - runRow.startedAt.getTime()) / 1000)
+        : 0;
+
     try {
       if (rawVideoPath) {
         const { videoPath, sizeBytes: sz } = await copyRecordingVideoToArtifacts(rawVideoPath, artifactDir);
         sizeBytes = sz;
+        await adjustRecordingVideoDurationToWallClock(videoPath, wallClockSec, this.logger);
+        const stAfterTiming = await fs.stat(videoPath);
+        sizeBytes = stAfterTiming.size;
         const thumbPath = path.join(artifactDir, 'thumbnail.jpg');
         const ffmpegOk = await writeJpegThumbnailFromVideo(videoPath, thumbPath, this.logger);
         if (!ffmpegOk && latestFrame) {
@@ -252,13 +262,16 @@ export class RecordingService extends EventEmitter {
       await removePathIfExists(screencastVideo.outputPath).catch(() => {});
     }
 
-    const started = (await this.prisma.run.findUnique({ where: { id: runId } }))!.startedAt!;
+    const started = runRow?.startedAt;
+    if (!started) {
+      this.logger.warn(`stopRecording: run ${runId} missing startedAt; duration may be wrong`);
+    }
     const run = await this.prisma.run.update({
       where: { id: runId },
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
-        durationMs: Math.round(Date.now() - started.getTime()),
+        durationMs: started ? Math.round(Date.now() - started.getTime()) : 0,
         thumbnailUrl,
       },
       include: { steps: { orderBy: { sequence: 'asc' } } },

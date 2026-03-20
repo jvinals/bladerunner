@@ -26,11 +26,16 @@ export type ScreencastVideoEncoder = {
  */
 export function createScreencastVideoEncoder(outputPath: string, logger: Logger): ScreencastVideoEncoder | null {
   const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
+  /** CDP screencast is ~5–15 fps; default MJPEG demux assumes ~25 fps → sped-up output without this hint. */
+  const raw = Number.parseFloat(process.env.RECORDING_SCREENCAST_INPUT_FPS || '8');
+  const inputFps = Number.isFinite(raw) && raw > 0 && raw <= 60 ? raw : 8;
   const args = [
     '-hide_banner',
     '-loglevel',
     'error',
     '-y',
+    '-framerate',
+    String(inputFps),
     '-f',
     'mjpeg',
     '-i',
