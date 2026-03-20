@@ -121,7 +121,12 @@ export default function RunDetailPage() {
   });
 
   /** Same source as Runs page (`loadRunSteps`); `GET /runs/:id` may omit or empty `steps` in some responses. */
-  const { data: stepsFromApi } = useQuery({
+  const {
+    data: stepsFromApi,
+    isPending: stepsQueryPending,
+    isError: stepsQueryError,
+    error: stepsQueryErr,
+  } = useQuery({
     queryKey: ['run-steps', id],
     queryFn: () => runsApi.getSteps(id!),
     enabled: !!id,
@@ -147,8 +152,23 @@ export default function RunDetailPage() {
     return embedded;
   }, [run, stepsFromApi]);
 
+  const runStepsCount = (run as { stepsCount?: number } | undefined)?.stepsCount ?? 0;
+  /** Wait for parallel GET /steps when run payload had no steps but we expect some (avoids Play stuck disabled with pointer-events-none). */
+  const waitingForSteps =
+    !!run &&
+    recordedSteps.length === 0 &&
+    runStepsCount > 0 &&
+    stepsQueryPending &&
+    !stepsQueryError;
+
   const canPlayback =
-    !!run && recordedSteps.length > 0 && (run as { status: string }).status !== 'RECORDING';
+    !!run &&
+    recordedSteps.length > 0 &&
+    (run as { status: string }).status !== 'RECORDING' &&
+    !waitingForSteps;
+
+  const stepsQueryErrorMessage =
+    stepsQueryError && stepsQueryErr instanceof Error ? stepsQueryErr.message : null;
   const showReplayChrome =
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
@@ -173,6 +193,28 @@ export default function RunDetailPage() {
   }, [highlightSequence]);
 
   const handleStartPlayback = useCallback(async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        location: 'RunDetail.tsx:handleStartPlayback',
+        message: 'play_click',
+        hypothesisId: 'H1',
+        data: {
+          id: id ?? null,
+          canPlayback,
+          recordedStepsLength: recordedSteps.length,
+          runStatus: (run as { status?: string } | undefined)?.status ?? null,
+          runStepsCount,
+          stepsQueryPending,
+          stepsQueryError,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (!id || !canPlayback) return;
     try {
       const skipRaw = playbackSkipUntilSeq.trim();
@@ -188,7 +230,18 @@ export default function RunDetailPage() {
     } catch (e) {
       console.error('Playback failed to start:', e);
     }
-  }, [id, canPlayback, startPlayback, playbackAutoClerkMode, playbackSkipUntilSeq]);
+  }, [
+    id,
+    canPlayback,
+    recordedSteps.length,
+    run,
+    runStepsCount,
+    startPlayback,
+    playbackAutoClerkMode,
+    playbackSkipUntilSeq,
+    stepsQueryPending,
+    stepsQueryError,
+  ]);
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
@@ -330,18 +383,24 @@ export default function RunDetailPage() {
           <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={!canPlayback || isPlaying}
+            aria-disabled={!canPlayback || isPlaying}
             onClick={() => void handleStartPlayback()}
             title={
-              !canPlayback
-                ? r.status === 'RECORDING'
-                  ? 'Wait until recording finishes'
-                  : 'No recorded steps'
-                : 'Replay recorded steps in a live browser preview'
+              waitingForSteps
+                ? 'Loading steps…'
+                : !canPlayback
+                  ? r.status === 'RECORDING'
+                    ? 'Wait until recording finishes'
+                    : stepsQueryErrorMessage
+                      ? `Steps could not be loaded: ${stepsQueryErrorMessage}`
+                      : 'No recorded steps'
+                  : 'Replay recorded steps in a live browser preview'
             }
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            className={`flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors ${
+              !canPlayback || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
+            }`}
           >
-            <Play size={13} /> Play
+            <Play size={13} /> {waitingForSteps ? 'Loading…' : 'Play'}
           </button>
           {isPlaying && (
             <>
@@ -366,6 +425,12 @@ export default function RunDetailPage() {
           </div>
         </div>
       </div>
+
+      {stepsQueryErrorMessage && (
+        <p className="mb-4 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5" role="alert">
+          Could not load steps for playback: {stepsQueryErrorMessage}
+        </p>
+      )}
 
       {/* Metrics cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">

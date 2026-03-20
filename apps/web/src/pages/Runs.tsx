@@ -210,6 +210,26 @@ export default function RunsPage() {
   );
 
   const handleStartPlaybackRuns = useCallback(async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        location: 'Runs.tsx:handleStartPlaybackRuns',
+        message: 'play_click',
+        hypothesisId: 'H2',
+        data: {
+          selectedRunId,
+          canPlaybackSelected,
+          stepsLength: steps.length,
+          isRecording,
+          selectedStatus: selectedRun?.status ?? null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (!selectedRunId || !canPlaybackSelected) return;
     try {
       const skipRaw = playbackSkipUntilSeq.trim();
@@ -548,7 +568,7 @@ export default function RunsPage() {
               </div>
             <button
               type="button"
-              disabled={!canPlaybackSelected || isPlaying}
+              aria-disabled={!canPlaybackSelected || isPlaying}
               onClick={() => void handleStartPlaybackRuns()}
               title={
                 !selectedRunId
@@ -559,7 +579,9 @@ export default function RunsPage() {
                       ? 'This run has no steps yet'
                       : 'Replay this run in the preview'
               }
-              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#56A34A] text-white text-xs font-semibold rounded-md hover:bg-green-600 transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-sm"
+              className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#56A34A] text-white text-xs font-semibold rounded-md hover:bg-green-600 transition-colors shadow-sm ${
+                !canPlaybackSelected || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
+              }`}
             >
               <Play size={14} className="fill-white" />
               Play

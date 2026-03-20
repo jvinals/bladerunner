@@ -87,7 +87,7 @@ export class RunsService {
   }
 
   async findOne(id: string, userId: string) {
-    return this.prisma.run.findFirst({
+    const run = await this.prisma.run.findFirst({
       where: { id, userId },
       include: {
         steps: { orderBy: { sequence: 'asc' } },
@@ -95,6 +95,18 @@ export class RunsService {
         project: true,
       },
     });
+    if (!run) return null;
+    /** Match list DTO so Run detail metrics + playback gating can use `stepsCount` without a second round-trip. */
+    return {
+      ...run,
+      stepsCount: run.steps.length,
+      passedSteps: run.steps.length,
+      failedSteps: 0,
+      findingsCount: 0,
+      artifactsCount: 0,
+      tags: [] as string[],
+      triggeredBy: 'Manual',
+    };
   }
 
   async findSteps(runId: string, userId: string) {
