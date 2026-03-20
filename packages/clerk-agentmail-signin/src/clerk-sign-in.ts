@@ -2,28 +2,6 @@ import type { BrowserContext, Page } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
 import { waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
 
-// #region agent log
-function agentClerkLog(
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: Record<string, unknown>,
-): void {
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-}
-// #endregion
-
 /** Same query param as `@clerk/testing` Playwright route (see `@clerk/testing` chunk-M5YIJ3SE). */
 const CLERK_TESTING_TOKEN_PARAM = '__clerk_testing_token';
 
@@ -393,70 +371,21 @@ export async function performClerkPasswordEmail2FA(
 
   const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
 
-  // #region agent log
-  {
-    const urlBeforeOtpSubmit = page.url();
-    const btnSnapshot = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('button'))
-        .slice(0, 16)
-        .map((b) => (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80));
-    });
-    const continueCount = await page.getByRole('button', { name: /^Continue$/i }).count();
-    const verifyCount = await page.getByRole('button', { name: /^Verify$/i }).count();
-    agentClerkLog('H3', 'clerk-sign-in.ts:preOtpSubmitClick', 'state after OTP fill (before post-OTP navigation/click)', {
-      urlTail: urlBeforeOtpSubmit.slice(-120),
-      buttonTexts: btnSnapshot,
-      continueExactRoleCount: continueCount,
-      verifyExactRoleCount: verifyCount,
-    });
-  }
-  // #endregion
-
   // Fast path: Clerk may redirect to the app immediately after OTP. If not, avoid a single
   // Continue/Verify locator with Playwright's default ~30s timeout (blocks the API + feels like a frozen UI).
   try {
     await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 20_000 });
-    // #region agent log
-    agentClerkLog('H4', 'clerk-sign-in.ts:postOtpFastPath', 'already on app host after OTP — skipped submit click', {
-      urlTail: page.url().slice(-120),
-    });
-    // #endregion
   } catch {
-    // #region agent log
-    agentClerkLog(
-      'H5',
-      'clerk-sign-in.ts:postOtpNoFastRedirect',
-      'no redirect to app within 20s after OTP — trying short-timeout button clicks first',
-      { urlTail: page.url().slice(-120) },
-    );
-    // #endregion
     let clicked = await tryClickPostOtpSubmit(page);
-    // #region agent log
-    agentClerkLog('H5', 'clerk-sign-in.ts:postOtpTryFlexible', 'tryClickPostOtpSubmit result', { clicked });
-    // #endregion
     if (!clicked) {
       try {
         await locatorAfterOtpSubmit(page).first().click({ timeout: 5_000 });
         clicked = true;
-        // #region agent log
-        agentClerkLog('H3', 'clerk-sign-in.ts:postOtpLegacyClick', 'legacy Continue/Verify click ok', {
-          urlTail: page.url().slice(-120),
-        });
-        // #endregion
-      } catch (e) {
-        // #region agent log
-        agentClerkLog('H3', 'clerk-sign-in.ts:postOtpLegacyClickFail', 'legacy click failed after flexible scan', {
-          errPrefix: e instanceof Error ? e.message.slice(0, 160) : String(e).slice(0, 160),
-        });
-        // #endregion
+      } catch {
+        // Legacy Continue/Verify click failed; final waitForURL below may still succeed.
       }
     }
   }
 
   await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 120_000 });
-  // #region agent log
-  agentClerkLog('H2', 'clerk-sign-in.ts:postOtpFinalUrl', 'signed-in app URL reached', {
-    urlTail: page.url().slice(-120),
-  });
-  // #endregion
 }

@@ -1,10 +1,10 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.4.4",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
-    "dev": "concurrently -n api,worker,web -c auto \"pnpm run dev:api\" \"pnpm --filter @bladerunner/browser-worker dev\" \"pnpm run dev:web:delayed\"",
+    "dev": "node scripts/dev.mjs",
     "dev:web:delayed": "wait-on tcp:127.0.0.1:3001 && pnpm run dev:web",
     "dev:web": "pnpm --filter @bladerunner/web dev",
     "dev:api": "pnpm --filter @bladerunner/api dev",
@@ -40,6 +40,7 @@
     "mailslurp-client": "^17.0.0",
     "concurrently": "^9.2.1",
     "dotenv": "^17.3.1",
-    "wait-on": "^9.0.4"
+    "wait-on": "^9.0.4",
+    "tree-kill": "^1.2.2"
   }
 }

@@ -218,53 +218,10 @@ export function useRecording(): UseRecordingReturn {
       setClerkAutoSignInError(null);
       setClerkAutoSigningIn(true);
     });
-    const t0 = Date.now();
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        hypothesisId: 'H1',
-        location: 'useRecording.ts:clerkAutoSignIn',
-        message: 'browser awaiting clerkAutoSignInRecording (UI frozen until response)',
-        data: { runId },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     try {
       await runsApi.clerkAutoSignInRecording(runId);
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-        body: JSON.stringify({
-          sessionId: '5f6bd9',
-          hypothesisId: 'H1',
-          location: 'useRecording.ts:clerkAutoSignIn',
-          message: 'clerkAutoSignInRecording returned OK',
-          data: { runId, elapsedMs: Date.now() - t0 },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-        body: JSON.stringify({
-          sessionId: '5f6bd9',
-          hypothesisId: 'H1',
-          location: 'useRecording.ts:clerkAutoSignIn',
-          message: 'clerkAutoSignInRecording failed',
-          data: { runId, elapsedMs: Date.now() - t0, errorPrefix: msg.slice(0, 200) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setClerkAutoSignInError(msg);
     } finally {
       setClerkAutoSigningIn(false);

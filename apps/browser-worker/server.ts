@@ -96,10 +96,23 @@ console.log(`[browser-worker] Listening on ws://0.0.0.0:${PORT}`);
 
 async function gracefulShutdown() {
   console.log('[browser-worker] Shutting down...');
-  if (browserServer) {
-    await browserServer.close();
+  const deadline = setTimeout(() => {
+    console.warn('[browser-worker] Shutdown timed out; exiting.');
+    process.exit(0);
+  }, 4000);
+  try {
+    if (browserServer) {
+      await Promise.race([
+        browserServer.close(),
+        new Promise<void>((_, rej) =>
+          setTimeout(() => rej(new Error('browser close timeout')), 3500),
+        ),
+      ]).catch(() => {});
+    }
+    await new Promise<void>((resolve) => wss.close(() => resolve()));
+  } finally {
+    clearTimeout(deadline);
   }
-  wss.close();
   process.exit(0);
 }
 

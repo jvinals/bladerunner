@@ -5,6 +5,8 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // Close HTTP + WS cleanly on SIGINT/SIGTERM so `pnpm dev` does not leave a stuck Node on the port.
+  app.enableShutdownHooks();
 
   // Global validation pipe
   app.useGlobalPipes(

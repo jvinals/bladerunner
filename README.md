@@ -45,6 +45,8 @@ pnpm dev:web
 pnpm dev
 ```
 
+Stopping **`pnpm dev`**: the repo runs **`scripts/dev.mjs`**, which wraps **`concurrently`** and, after **`DEV_KILL_GRACE_MS`** (default **5000**), sends **SIGKILL** to the whole dev process tree if anything is still alive—so you rarely need **`kill -9`** manually. Override with e.g. `DEV_KILL_GRACE_MS=8000 pnpm dev`.
+
 ### Port 3001 already in use (`EADDRINUSE`)
 
 Only **one** process can listen on **3001**. If a previous `pnpm dev` / `pnpm dev:api` didn’t exit cleanly, the old Node process still holds the port.
@@ -179,6 +181,8 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 
 ## Changelog
 
+- **0.4.4** — **`pnpm dev` shutdown**: `scripts/dev.mjs` wraps **`concurrently`** and, after **`DEV_KILL_GRACE_MS`** (default 5s), **SIGKILL**s the dev tree via **tree-kill** if a child still runs (avoids stray Node/Vite/Nest/tsx after Ctrl+C). **`--kill-others-on-fail`** on concurrently. **API**: **`enableShutdownHooks()`** for clean HTTP/WS close. **browser-worker**: shutdown **timeout** so Playwright **`wss.close`** cannot hang forever. **`@bladerunner/api` `0.3.3`**, **`@bladerunner/browser-worker` `0.2.1`**.
+- **0.4.3** — Remove temporary debug-session HTTP logging from Clerk auto sign-in (`useRecording`, API `recording.service`, `@bladerunner/clerk-agentmail-signin` **0.3.6**). No behavior change.
 - **0.4.2** — **Clerk auto sign-in UX**: **`flushSync`** before the long `clerkAutoSignInRecording` fetch so “Signing in…” paints immediately; Runs **aria-live** note that the remote browser step can take 1–2 minutes. **Post-OTP**: **flexible** button clicks **first** (**5s** timeouts; **Complete** / **Enter**); **Continue/Verify** only as last resort (**5s**). Extends fast-path **`waitForURL`** to **20s**. **`@bladerunner/clerk-agentmail-signin` `0.3.5`**.
 - **0.4.1** — **Clerk auto sign-in**: debug logs (**H1**–**H4**); **fix** post-OTP step — **`waitForURL` to app host first** (Clerk often redirects without Continue/Verify), then legacy **Continue/Verify** click, then **fallback** button names (Submit/Done/Sign in/Next). Reduces **30s Playwright timeout** + long **HTTP wait** that froze the UI until the error toast. **`@bladerunner/clerk-agentmail-signin` `0.3.4`**.
 - **0.4.0** — **MailSlurp OTP**: use `waitForLatestEmail` with **`since`** + set **`otpWindowStartMs` after password submit** so old inbox codes are ignored. **Runs**: `DELETE /runs/:id`, delete UI on Runs + Home. **Projects**: Prisma `Project` model (WEB / IOS / ANDROID, `url`, `artifactUrl`), CRUD **`/projects`**, **Projects** page + sidebar; optional **`projectId`** on **`POST /runs/record/start`**; run list includes **project**. **Home**: full runs **table** (100 rows). **Detach preview/playback**: `window.open` uses **`window.location.origin`** for popups. DB migration: `projects`, `runs.project_id`.

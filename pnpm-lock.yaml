@@ -26,6 +26,9 @@ importers:
       mailslurp-client:
         specifier: ^17.0.0
         version: 17.0.0
+      tree-kill:
+        specifier: ^1.2.2
+        version: 1.2.2
       wait-on:
         specifier: ^9.0.4
         version: 9.0.4
