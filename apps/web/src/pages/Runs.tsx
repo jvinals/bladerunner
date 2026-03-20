@@ -29,6 +29,7 @@ export default function RunsPage() {
   const [isDetached, setIsDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const [reRecordBusyStepId, setReRecordBusyStepId] = useState<string | null>(null);
+  const [reRecordError, setReRecordError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
@@ -270,9 +271,12 @@ export default function RunsPage() {
   const handleReRecordStep = useCallback(
     async (stepId: string, instruction: string) => {
       setReRecordBusyStepId(stepId);
+      setReRecordError(null);
       try {
         await reRecordStep(stepId, instruction);
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setReRecordError(msg);
         console.error('Re-record step failed:', err);
       } finally {
         setReRecordBusyStepId(null);
@@ -718,6 +722,11 @@ export default function RunsPage() {
           {playbackError && (
             <p className="mb-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5">
               {playbackError}
+            </p>
+          )}
+          {reRecordError && (
+            <p className="mb-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5" role="alert">
+              {reRecordError}
             </p>
           )}
 

@@ -197,6 +197,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.1** — **Runs**: show **`role="alert"`** error when **Re-record step** fails. **`@bladerunner/web` `0.6.1`**.
 - **0.7.0** — **`StepOrigin.AUTOMATIC`** (Prisma migration): Clerk/MailSlurp-tagged steps use **`[MailSlurp automation]`** instruction prefix; playback behavior unchanged (**`metadata.clerkAuthPhase`** skip + single **`performClerkPasswordEmail2FA`**). **`POST /runs/:id/steps/:stepId/re-record`** re-captures a step by instruction during active recording; **Runs** step cards show **Re-record**. **`@bladerunner/web` `0.6.0`**, **`@bladerunner/api` `0.5.0`**, **`@bladerunner/types` `0.2.0`**.
 - **0.6.10** — Remove temporary debug ingest logging from **Run detail** / **Runs** playback handlers. **`@bladerunner/web` `0.5.6`**.
 - **0.6.9** — **Playback Play UX**: `disabled` + `pointer-events-none` blocked **all** clicks (no `startPlayback`, nothing in Network). **Run detail** + **Runs** use **`aria-disabled`** + visual opacity so clicks run; **Run detail** shows **Loading…** while **`GET /runs/:id/steps`** is pending when **`stepsCount` > 0** but steps not merged yet; step load errors surfaced. **`GET /runs/:id`** (`findOne`) now includes **`stepsCount`** (and list-style metrics) for reliable gating. **`@bladerunner/web` `0.5.5`**, **`@bladerunner/api` `0.4.6`**.
