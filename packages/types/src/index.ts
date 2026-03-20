@@ -275,6 +275,7 @@ export enum StepAction {
 export enum StepOrigin {
   Manual = 'MANUAL',
   AiDriven = 'AI_DRIVEN',
+  Automatic = 'AUTOMATIC',
 }
 
 export interface RecordingRun {

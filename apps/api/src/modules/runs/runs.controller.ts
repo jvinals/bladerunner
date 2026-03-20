@@ -28,6 +28,7 @@ import {
   StartPlaybackDto,
   StopPlaybackDto,
   InstructDto,
+  ReRecordStepDto,
   RunQueryDto,
 } from './runs.dto';
 import { Observable, Subject } from 'rxjs';
@@ -122,6 +123,24 @@ export class RunsController {
   ) {
     const userId = req.user.sub;
     const step = await this.recordingService.executeInstruction(id, userId, dto.instruction);
+    return { step };
+  }
+
+  @Post(':id/steps/:stepId/re-record')
+  @ApiOperation({
+    summary: 'Re-capture an existing step by instruction (active recording only)',
+    description: 'Executes the instruction like /instruct but updates the step row in place.',
+  })
+  @ApiResponse({ status: 200, description: 'Step updated' })
+  @ApiResponse({ status: 404, description: 'No session or step not found' })
+  async reRecordStep(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('stepId') stepId: string,
+    @Body() dto: ReRecordStepDto,
+  ) {
+    const userId = req.user.sub;
+    const step = await this.recordingService.reRecordStep(id, userId, stepId, dto.instruction);
     return { step };
   }
 

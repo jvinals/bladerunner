@@ -116,6 +116,7 @@ docker compose up
 | PATCH  | /settings           | Update workspace settings    |
 | GET    | /integrations       | List integrations            |
 | GET    | /agents             | List registered agents       |
+| POST   | /runs/:id/steps/:stepId/re-record | Re-capture one step by instruction (active recording) |
 
 ## Domain Model
 
@@ -167,7 +168,7 @@ Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests a
 When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSignIn: true`** on `POST /runs/:id/playback/start`), the API will:
 
 1. Use the **same env vars as E2E** (`E2E_CLERK_USER_EMAIL` / `E2E_CLERK_USER_USERNAME`, `E2E_CLERK_USER_PASSWORD`, `MAILSLURP_API_KEY`, `MAILSLURP_INBOX_ID` or `MAILSLURP_INBOX_EMAIL`, `CLERK_SECRET_KEY`, publishable key) to run **one** Clerk + MailSlurp OTP flow when the playback browser shows Clerk sign-in.
-2. **Skip** executing stored `playwrightCode` for steps whose **`metadata.clerkAuthPhase`** is true (set automatically during recording when the URL or UI looks like Clerk sign-in).
+2. **Skip** executing stored `playwrightCode` for steps whose **`metadata.clerkAuthPhase`** is true (set automatically during recording when the URL or UI looks like Clerk sign-in). Those steps are also stored with **`origin: AUTOMATIC`** and a **`[MailSlurp automation]`** instruction prefix for clarity in the UI. Playback does **not** replay each granular DOM line for that phase; it runs **one** `performClerkPasswordEmail2FA` call (same helper as **Sign in automatically** during recording), which matches the intended MailSlurp-backed flow.
 
 **Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off) and **Skip seq &lt;** next to **Play**.
 
@@ -196,6 +197,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.0** — **`StepOrigin.AUTOMATIC`** (Prisma migration): Clerk/MailSlurp-tagged steps use **`[MailSlurp automation]`** instruction prefix; playback behavior unchanged (**`metadata.clerkAuthPhase`** skip + single **`performClerkPasswordEmail2FA`**). **`POST /runs/:id/steps/:stepId/re-record`** re-captures a step by instruction during active recording; **Runs** step cards show **Re-record**. **`@bladerunner/web` `0.6.0`**, **`@bladerunner/api` `0.5.0`**, **`@bladerunner/types` `0.2.0`**.
 - **0.6.10** — Remove temporary debug ingest logging from **Run detail** / **Runs** playback handlers. **`@bladerunner/web` `0.5.6`**.
 - **0.6.9** — **Playback Play UX**: `disabled` + `pointer-events-none` blocked **all** clicks (no `startPlayback`, nothing in Network). **Run detail** + **Runs** use **`aria-disabled`** + visual opacity so clicks run; **Run detail** shows **Loading…** while **`GET /runs/:id/steps`** is pending when **`stepsCount` > 0** but steps not merged yet; step load errors surfaced. **`GET /runs/:id`** (`findOne`) now includes **`stepsCount`** (and list-style metrics) for reliable gating. **`@bladerunner/web` `0.5.5`**, **`@bladerunner/api` `0.4.6`**.
 - **0.6.8** — **Run detail live replay**: Load steps via **`GET /runs/:id/steps`** (same as Runs page) so **`recordedSteps`** / **Play** work when **`GET /runs/:id`** omits or returns an empty **`steps`** array. **`@bladerunner/web` `0.5.4`**.

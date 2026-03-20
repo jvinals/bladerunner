@@ -13,7 +13,7 @@ export interface RecordedStep {
   value?: string;
   instruction: string;
   playwrightCode: string;
-  origin: 'MANUAL' | 'AI_DRIVEN';
+  origin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC';
   timestamp: string;
 }
 
@@ -39,6 +39,8 @@ interface UseRecordingReturn {
   startRecording: (url: string, name: string, projectId?: string) => Promise<void>;
   stopRecording: () => Promise<void>;
   sendInstruction: (instruction: string) => Promise<RecordedStep | null>;
+  /** Replace an existing step by re-running a natural-language instruction (active recording only). */
+  reRecordStep: (stepId: string, instruction: string) => Promise<RecordedStep | null>;
   loadRunSteps: (runId: string) => Promise<void>;
   /** Clear loaded run/steps when not actively recording (e.g. after delete). */
   clearLoadedRun: () => void;
@@ -117,7 +119,15 @@ export function useRecording(): UseRecordingReturn {
 
     socket.on('step', (data: { runId: string; step: RecordedStep }) => {
       if (data.runId === recordRunId) {
-        setSteps((prev) => [...prev, data.step]);
+        setSteps((prev) => {
+          const idx = prev.findIndex((s) => s.id === data.step.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = data.step;
+            return next;
+          }
+          return [...prev, data.step];
+        });
       }
     });
 
@@ -173,6 +183,12 @@ export function useRecording(): UseRecordingReturn {
   const sendInstruction = useCallback(async (instruction: string): Promise<RecordedStep | null> => {
     if (!runId) return null;
     const result = await runsApi.instruct(runId, instruction);
+    return result.step as RecordedStep;
+  }, [runId]);
+
+  const reRecordStep = useCallback(async (stepId: string, instruction: string): Promise<RecordedStep | null> => {
+    if (!runId) return null;
+    const result = await runsApi.reRecordStep(runId, stepId, instruction);
     return result.step as RecordedStep;
   }, [runId]);
 
@@ -274,6 +290,7 @@ export function useRecording(): UseRecordingReturn {
     startRecording,
     stopRecording,
     sendInstruction,
+    reRecordStep,
     loadRunSteps,
     clearLoadedRun,
     resetRecordingAfterRemoteDelete,

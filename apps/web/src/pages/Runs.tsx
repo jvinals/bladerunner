@@ -28,6 +28,7 @@ export default function RunsPage() {
   const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);
   const [isDetached, setIsDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
+  const [reRecordBusyStepId, setReRecordBusyStepId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
@@ -45,6 +46,7 @@ export default function RunsPage() {
     startRecording,
     stopRecording,
     sendInstruction,
+    reRecordStep,
     loadRunSteps,
     clearLoadedRun,
     resetRecordingAfterRemoteDelete,
@@ -264,6 +266,20 @@ export default function RunsPage() {
       setIsSendingInstruction(false);
     }
   }, [instructionText, isSendingInstruction, sendInstruction]);
+
+  const handleReRecordStep = useCallback(
+    async (stepId: string, instruction: string) => {
+      setReRecordBusyStepId(stepId);
+      try {
+        await reRecordStep(stepId, instruction);
+      } catch (err) {
+        console.error('Re-record step failed:', err);
+      } finally {
+        setReRecordBusyStepId(null);
+      }
+    },
+    [reRecordStep],
+  );
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
@@ -736,6 +752,14 @@ export default function RunsPage() {
                     highlightSequence,
                     completedSequences,
                   )}
+                  reRecord={
+                    isRecording
+                      ? {
+                          busy: reRecordBusyStepId === step.id,
+                          onSubmit: (instr) => handleReRecordStep(step.id, instr),
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>

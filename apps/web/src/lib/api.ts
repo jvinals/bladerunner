@@ -155,6 +155,12 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ instruction }),
     }),
+  /** Active recording only: re-run LLM + Playwright for one step; updates the step row in place. */
+  reRecordStep: (runId: string, stepId: string, instruction: string) =>
+    apiFetch<{ step: unknown }>(`/runs/${runId}/steps/${stepId}/re-record`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction }),
+    }),
   startPlayback: (runId: string, opts?: StartPlaybackBody) =>
     apiFetch<{ playbackSessionId: string; sourceRunId: string }>(`/runs/${runId}/playback/start`, {
       method: 'POST',

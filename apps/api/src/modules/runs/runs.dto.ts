@@ -100,6 +100,12 @@ export class InstructDto {
   instruction!: string;
 }
 
+export class ReRecordStepDto {
+  @ApiProperty({ description: 'Natural language instruction to re-capture this step' })
+  @IsString()
+  instruction!: string;
+}
+
 export class CreateRunDto {
   @ApiProperty({ description: 'Name of the run' })
   @IsString()

@@ -388,7 +388,8 @@ export class RecordingService extends EventEmitter {
         action: 'CUSTOM',
         selector: null,
         value: null,
-        instruction: 'Clerk sign-in (automatic — server used test credentials + MailSlurp OTP)',
+        instruction:
+          'Clerk sign-in (automatic — server used test credentials + MailSlurp OTP from inbox)',
         playwrightCode: `await page.waitForLoadState('domcontentloaded').catch(() => {});`,
         origin: 'MANUAL',
       },
@@ -448,6 +449,90 @@ export class RecordingService extends EventEmitter {
     });
 
     this.emit('step', runId, step);
+    return step;
+  }
+
+  /**
+   * Re-capture a single step by natural-language instruction while recording (replaces row in place).
+   * Origin/metadata follow the same Clerk/MailSlurp rules as new steps.
+   */
+  async reRecordStep(runId: string, userId: string, stepId: string, instruction: string) {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      throw new NotFoundException('No active recording session for this run');
+    }
+    const trimmed = instruction?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('instruction is required');
+    }
+
+    const existing = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Step not found');
+    }
+
+    const pageUrl = session.page.url();
+    let accessibilityTree = '';
+    try {
+      const snapshot = await (session.page as any).accessibility?.snapshot();
+      accessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await session.page.title();
+    } catch {
+      accessibilityTree = 'Unable to capture accessibility tree';
+    }
+
+    let screenshotBase64: string | undefined;
+    try {
+      const buf = await session.page.screenshot({ type: 'jpeg', quality: 60 });
+      screenshotBase64 = buf.toString('base64');
+    } catch {
+      /* continue */
+    }
+
+    const llmResult = await this.llmService.instructionToAction({
+      instruction: trimmed,
+      pageUrl,
+      pageAccessibilityTree: accessibilityTree,
+      screenshotBase64,
+    });
+
+    try {
+      await this.executePwCode(session.page, llmResult.playwrightCode);
+    } catch (err) {
+      this.logger.error(`reRecordStep Playwright execution failed: ${err}`);
+      throw new BadRequestException(`Failed to execute action: ${err}`);
+    }
+
+    await session.page.waitForLoadState('domcontentloaded').catch(() => {});
+
+    const data = {
+      action: (llmResult.action?.toUpperCase() || 'CUSTOM') as string,
+      selector: llmResult.selector || null,
+      value: llmResult.value || null,
+      instruction: trimmed,
+      playwrightCode: llmResult.playwrightCode,
+      origin: 'AI_DRIVEN' as const,
+    };
+
+    const { metadata, origin, instruction: finalInstruction } = await this.buildStepPersistence(session, data);
+
+    const step = await this.prisma.runStep.update({
+      where: { id: stepId },
+      data: {
+        action: data.action as any,
+        selector: data.selector,
+        value: data.value,
+        instruction: finalInstruction,
+        playwrightCode: data.playwrightCode,
+        origin: origin as any,
+        metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+        timestamp: new Date(),
+      },
+    });
+
+    this.emit('step', runId, step);
+    this.logger.log(`Recording ${runId}: re-recorded step ${step.sequence} (${stepId})`);
     return step;
   }
 
@@ -635,6 +720,53 @@ export class RecordingService extends EventEmitter {
     return key;
   }
 
+  private static readonly MAILSLURP_INSTRUCTION_PREFIX = '[MailSlurp automation] ';
+
+  /** Prefix human-readable copy for Clerk/MailSlurp-tagged steps (idempotent). */
+  private applyMailSlurpInstructionPrefix(instruction: string): string {
+    const t = instruction.trim();
+    if (!t) return instruction;
+    if (/^\[MailSlurp automation\]/i.test(t)) return instruction;
+    if (/MailSlurp automation/i.test(t)) return instruction;
+    return `${RecordingService.MAILSLURP_INSTRUCTION_PREFIX}${instruction}`;
+  }
+
+  /**
+   * Computes metadata (clerkAuthPhase), final origin (AUTOMATIC vs caller), and instruction copy.
+   * Playback skip uses metadata.clerkAuthPhase; AUTOMATIC is for UI labeling only.
+   */
+  private async buildStepPersistence(
+    session: RecordingSession,
+    data: {
+      action: string;
+      selector: string | null;
+      value: string | null;
+      instruction: string;
+      playwrightCode: string;
+      origin: 'MANUAL' | 'AI_DRIVEN';
+    },
+    opts?: { syntheticClerkAutoSignIn?: boolean },
+  ): Promise<{
+    metadata: Record<string, unknown> | undefined;
+    origin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC';
+    instruction: string;
+  }> {
+    let metadata: Record<string, unknown> | undefined;
+    if (opts?.syntheticClerkAutoSignIn) {
+      metadata = { clerkAuthPhase: true, clerkAutoOneShot: true };
+    } else {
+      const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
+      metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
+    }
+    const isAutomatic = !!(
+      opts?.syntheticClerkAutoSignIn ||
+      (metadata && (metadata as { clerkAuthPhase?: boolean }).clerkAuthPhase === true)
+    );
+    const finalOrigin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC' = isAutomatic ? 'AUTOMATIC' : data.origin;
+    const finalInstruction = isAutomatic ? this.applyMailSlurpInstructionPrefix(data.instruction) : data.instruction;
+    return { metadata, origin: finalOrigin, instruction: finalInstruction };
+  }
+
   private async recordStep(
     session: RecordingSession,
     data: {
@@ -649,13 +781,7 @@ export class RecordingService extends EventEmitter {
   ) {
     session.stepSequence += 1;
 
-    let metadata: Record<string, unknown> | undefined;
-    if (opts?.syntheticClerkAutoSignIn) {
-      metadata = { clerkAuthPhase: true, clerkAutoOneShot: true };
-    } else {
-      const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
-      metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
-    }
+    const { metadata, origin, instruction } = await this.buildStepPersistence(session, data, opts);
 
     const step = await this.prisma.runStep.create({
       data: {
@@ -665,9 +791,9 @@ export class RecordingService extends EventEmitter {
         action: data.action as any,
         selector: data.selector,
         value: data.value,
-        instruction: data.instruction,
+        instruction,
         playwrightCode: data.playwrightCode,
-        origin: data.origin as any,
+        origin: origin as any,
         timestamp: new Date(),
         metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
       },

@@ -43,6 +43,7 @@ enum StepAction {
 enum StepOrigin {
   MANUAL
   AI_DRIVEN
+  AUTOMATIC
 }
 
 model Project {
