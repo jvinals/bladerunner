@@ -20,6 +20,19 @@ function envPublishableKey(): string | undefined {
   return k?.trim() || undefined;
 }
 
+/**
+ * Clerk **testing token** (`clerkSetup`) must use a **secret for the same Clerk instance** as the
+ * publishable key (often the **app under test**). Bladerunner’s API auth still uses `CLERK_SECRET_KEY`;
+ * when that instance differs, set **`PLAYBACK_CLERK_SECRET_KEY`** or **`E2E_CLERK_SECRET_KEY`**.
+ */
+function clerkSecretKeyForTesting(): string | undefined {
+  const playback = process.env.PLAYBACK_CLERK_SECRET_KEY?.trim();
+  if (playback) return playback;
+  const e2e = process.env.E2E_CLERK_SECRET_KEY?.trim();
+  if (e2e) return e2e;
+  return process.env.CLERK_SECRET_KEY?.trim();
+}
+
 async function readPublishableKeyFromPage(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const w = window as Window & {
@@ -142,12 +155,31 @@ function attachClerkFapi403DebugLogger(page: Page): () => void {
  * Refresh `CLERK_FAPI` + `CLERK_TESTING_TOKEN` for the given publishable key (always clears stale token first).
  */
 async function refreshClerkTestingCredentials(publishableKey: string): Promise<void> {
-  const secretKey = process.env.CLERK_SECRET_KEY;
+  const secretKey = clerkSecretKeyForTesting();
   if (!secretKey) {
     throw new Error(
-      'clerkSetup requires CLERK_SECRET_KEY so Clerk testing can mint CLERK_TESTING_TOKEN.',
+      'clerkSetup requires CLERK_SECRET_KEY, or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY when the target app uses a different Clerk instance than Bladerunner.',
     );
   }
+  const secretSource = process.env.PLAYBACK_CLERK_SECRET_KEY?.trim()
+    ? 'PLAYBACK_CLERK_SECRET_KEY'
+    : process.env.E2E_CLERK_SECRET_KEY?.trim()
+      ? 'E2E_CLERK_SECRET_KEY'
+      : 'CLERK_SECRET_KEY';
+  // #region agent log
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+    body: JSON.stringify({
+      sessionId: '5f6bd9',
+      hypothesisId: 'H6',
+      location: 'clerk-sign-in.ts:refreshClerkTestingCredentials',
+      message: 'Clerk secret source for clerkSetup (not the key value)',
+      data: { secretSource },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   const env = process.env as Record<string, string | undefined>;
   const hadFapi = Boolean(env.CLERK_FAPI);

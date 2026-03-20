@@ -21,11 +21,14 @@ const publishableKey =
   process.env.CLERK_PUBLISHABLE_KEY?.trim() ||
   process.env.VITE_CLERK_PUBLISHABLE_KEY?.trim() ||
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
-const secretKey = process.env.CLERK_SECRET_KEY?.trim();
+const secretKey =
+  process.env.PLAYBACK_CLERK_SECRET_KEY?.trim() ||
+  process.env.E2E_CLERK_SECRET_KEY?.trim() ||
+  process.env.CLERK_SECRET_KEY?.trim();
 
 if (!baseURL || !identifier || !password || !publishableKey || !secretKey) {
   console.error(
-    'Missing env or args. Pass app origin as argv[1] or REPRO_CLERK_BASE_URL. Need E2E_CLERK_USER_EMAIL (or USERNAME), E2E_CLERK_USER_PASSWORD, CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, AGENTMAIL + inbox (see README).',
+    'Missing env or args. Pass app origin as argv[1] or REPRO_CLERK_BASE_URL. Need E2E_CLERK_USER_EMAIL (or USERNAME), E2E_CLERK_USER_PASSWORD, CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY), CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, AGENTMAIL + inbox (see README).',
   );
   process.exit(1);
 }

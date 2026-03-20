@@ -181,7 +181,7 @@ export class RecordingService extends EventEmitter {
     }
     if (!this.playbackClerkEnvReady()) {
       throw new BadRequestException(
-        'Clerk + AgentMail is not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME, CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, AGENTMAIL_API_KEY, and E2E_AGENTMAIL_INBOX_ID or E2E_AGENTMAIL_INBOX_EMAIL (same as E2E).',
+        'Clerk + AgentMail is not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME, CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY for a different target Clerk app), CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, AGENTMAIL_API_KEY, and E2E_AGENTMAIL_INBOX_ID or E2E_AGENTMAIL_INBOX_EMAIL (same as E2E).',
       );
     }
     const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
@@ -808,7 +808,10 @@ export class RecordingService extends EventEmitter {
     const identifier =
       this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
       this.configService.get<string>('E2E_CLERK_USER_EMAIL')?.trim();
-    const secret = this.configService.get<string>('CLERK_SECRET_KEY')?.trim();
+    const secret =
+      this.configService.get<string>('PLAYBACK_CLERK_SECRET_KEY')?.trim() ||
+      this.configService.get<string>('E2E_CLERK_SECRET_KEY')?.trim() ||
+      this.configService.get<string>('CLERK_SECRET_KEY')?.trim();
     const pub =
       this.configService.get<string>('CLERK_PUBLISHABLE_KEY')?.trim() ||
       this.configService.get<string>('VITE_CLERK_PUBLISHABLE_KEY')?.trim();

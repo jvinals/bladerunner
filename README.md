@@ -165,10 +165,14 @@ When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSign
 
 Secrets stay on the **server**; the browser never receives test passwords.
 
-For **third-party targets** (e.g. Evocare on Vercel), **`CLERK_SECRET_KEY` must be for that product’s Clerk application** (not only Bladerunner’s). The server can take **`publishableKey` from the live page** when it differs from `VITE_CLERK_PUBLISHABLE_KEY`, but the **secret** cannot be inferred — set it in API env to match the app under test.
+For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **secret for that product’s Clerk instance**. You **cannot** set `CLERK_SECRET_KEY` twice in one `.env` (one name = one value). Instead:
+
+- Keep **`CLERK_SECRET_KEY`** = Bladerunner (for API JWT verification when you use Bladerunner with Clerk).
+- Set **`PLAYBACK_CLERK_SECRET_KEY`** (or **`E2E_CLERK_SECRET_KEY`**) = the **target app’s** Clerk secret for recording/playback auto sign-in and E2E when the publishable key comes from that app. The server can read **`publishableKey` from the live page**; the **secret** must still be configured explicitly.
 
 ## Changelog
 
+- **0.2.34** — **Two Clerk instances**: optional **`PLAYBACK_CLERK_SECRET_KEY`** or **`E2E_CLERK_SECRET_KEY`** for `clerkSetup` / testing tokens when the **target app** is not Bladerunner’s Clerk app; **`CLERK_SECRET_KEY`** remains for Bladerunner API auth. (You cannot assign `CLERK_SECRET_KEY` twice in one `.env`.)
 - **0.2.33** — **Clerk auto sign-in (recording / playback)**: read **`publishableKey` from the live page** (`window.Clerk` / `data-clerk-publishable-key`) when it differs from API env (e.g. recording **Evocare** while Bladerunner’s `.env` only had **Bladerunner’s** `VITE_CLERK_PUBLISHABLE_KEY`), then **`clerkSetup`** + testing token for **that** Clerk app. Replaced `setupClerkTestingToken` with a **single dynamic** Playwright route that reads **`CLERK_FAPI` per request** so FAPI updates apply without stacked handlers. **`CLERK_SECRET_KEY` must still belong to the same Clerk instance** as the app under test. Package **`tsconfig`**: add **`DOM`** lib for `page.evaluate` typings.
 - **0.2.32** — **`repro:clerk-stale-token`**: ignore pnpm’s forwarded **`--`** so the app origin argument parses correctly.
 - **0.2.31** — **Clerk + AgentMail auto sign-in**: always run **`clerkSetup`** before each flow so **`CLERK_TESTING_TOKEN`** is refreshed (long-lived API could keep **`CLERK_FAPI`** and a **stale token**, which surfaced as Clerk FAPI **403** at email OTP). **`setupClerkTestingToken`** only once per **Playwright `BrowserContext`** to avoid stacked **`context.route`** handlers. Repro: **`pnpm run repro:clerk-stale-token -- <app-origin>`** (loads `.env`).
