@@ -15,6 +15,13 @@ export interface PlaybackProgressPayload {
   error?: string;
 }
 
+type PlaybackStatusPayload = {
+  status: string;
+  runId: string;
+  sourceRunId?: string;
+  error?: string;
+};
+
 export interface UsePlaybackReturn {
   playbackSessionId: string | null;
   sourceRunId: string | null;
@@ -61,8 +68,23 @@ export function usePlayback(): UsePlaybackReturn {
     const socket = createRecordingSocket();
     socketRef.current = socket;
 
+    const teardownAfterSocketFailure = (message: string) => {
+      setPlaybackError(message);
+      setIsPlaying(false);
+      setStatus('idle');
+      disconnectSocket(socketRef, sessionId);
+      activeSessionRef.current = null;
+      setPlaybackSessionId(null);
+      setSourceRunId(null);
+    };
+
     socket.on('connect', () => {
       socket.emit('join', { runId: sessionId });
+    });
+
+    socket.on('connect_error', (err: Error) => {
+      const msg = err?.message ? `Playback stream: ${err.message}` : 'Playback stream failed to connect';
+      teardownAfterSocketFailure(msg);
     });
 
     socket.on('frame', (data: { runId: string; data: string }) => {
@@ -86,10 +108,13 @@ export function usePlayback(): UsePlaybackReturn {
       }
     });
 
-    socket.on('status', (data: { status: string; runId: string }) => {
+    socket.on('status', (data: PlaybackStatusPayload) => {
       if (data.runId !== sessionId) return;
       setStatus(data.status);
       if (data.status === 'failed') {
+        if (data.error) {
+          setPlaybackError(data.error);
+        }
         setIsPlaying(false);
         disconnectSocket(socketRef, sessionId);
         activeSessionRef.current = null;
@@ -120,12 +145,21 @@ export function usePlayback(): UsePlaybackReturn {
       setCompletedSequences(new Set());
       setHighlightSequence(null);
       setCurrentFrame(null);
-      const result = await runsApi.startPlayback(runId, opts);
-      setPlaybackSessionId(result.playbackSessionId);
-      setSourceRunId(result.sourceRunId);
-      setIsPlaying(true);
-      setStatus('playback');
-      bindSocket(result.playbackSessionId);
+      try {
+        const result = await runsApi.startPlayback(runId, opts);
+        setPlaybackSessionId(result.playbackSessionId);
+        setSourceRunId(result.sourceRunId);
+        setIsPlaying(true);
+        setStatus('playback');
+        bindSocket(result.playbackSessionId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setPlaybackError(msg);
+        setIsPlaying(false);
+        setStatus('idle');
+        setPlaybackSessionId(null);
+        setSourceRunId(null);
+      }
     },
     [bindSocket],
   );

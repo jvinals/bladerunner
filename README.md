@@ -160,6 +160,8 @@ Shared **Clerk + password + MailSlurp OTP** helpers live in **`@bladerunner/cler
 
 Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests assert **`/settings`** so the suite does not require the API or database.
 
+**`e2e/playback.spec.ts`** mocks **`GET /api/runs`**, **`GET /api/runs/:id/steps`**, and **`POST /api/runs/:id/playback/start`** so the **Runs** live replay path can be asserted without the API or browser worker; it still uses the same Clerk setup as other signed-in tests.
+
 ## Playback + Clerk + MailSlurp (API + UI)
 
 When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSignIn: true`** on `POST /runs/:id/playback/start`), the API will:
@@ -194,6 +196,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.6.7** — **Live replay preview**: `usePlayback` surfaces **`startPlayback`** failures, Socket.IO **`connect_error`**, and **`status.failed`** `error` from the server; **Runs** + **Run detail** preview panels show **Connecting to playback stream…** and **`role="alert"`** errors; **Runs** shows step load failures. **`e2e/playback.spec.ts`** (mocked API). **`@bladerunner/web` `0.5.3`**.
 - **0.6.6** — **Session video timing**: MJPEG pipe had **wrong implicit FPS** (playback looked 2–3× fast). **`RECORDING_SCREENCAST_INPUT_FPS`** (default 8) + **post-encode `setpts`** vs **wall-clock** (`ffprobe` duration). **`@bladerunner/api` `0.4.5`**.
 - **0.6.5** — **Session recording = MP4 (H.264)**: Screencast ffmpeg pipeline uses **`libx264`** → **`recording.mp4`** (VP8/WebM was often missing on macOS ffmpeg → thumbnail-only runs). **`GET /runs/:id/recording/video`** serves MP4 or legacy WebM. **`@bladerunner/api` `0.4.4`**, **`@bladerunner/web` `0.5.2`** (copy text).
 - **0.6.4** — **Run detail session recording**: Load **WebM first** (probe `/recording/video`) even when `run.recordings` is empty but a thumbnail exists; **`<video>`** `onError` falls back to JPEG + Safari/WebM note. **`@bladerunner/web` `0.5.1`**.

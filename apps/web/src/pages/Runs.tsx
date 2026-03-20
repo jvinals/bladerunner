@@ -25,6 +25,7 @@ export default function RunsPage() {
   const [instructionText, setInstructionText] = useState('');
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('default');
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
+  const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);
   const [isDetached, setIsDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,6 +98,7 @@ export default function RunsPage() {
         resetRecordingAfterRemoteDelete();
       }
       setSelectedRunId(null);
+      setStepsLoadError(null);
       clearLoadedRun();
     },
   });
@@ -265,7 +267,13 @@ export default function RunsPage() {
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
-    await loadRunSteps(id);
+    setStepsLoadError(null);
+    try {
+      await loadRunSteps(id);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setStepsLoadError(msg);
+    }
   }, [loadRunSteps]);
 
   const handleDetach = useCallback(() => {
@@ -326,29 +334,52 @@ export default function RunsPage() {
                 Detach
               </button>
             </>
-          ) : (isPlaying || playFrame) && !isDetached ? (
-            <>
-              <canvas
-                ref={canvasRef}
-                className="max-w-full max-h-full object-contain block bg-gray-50"
-                role="img"
-                aria-label="Playback preview — recorded run replay"
-              />
-              <p className="absolute bottom-2 left-2 right-2 text-center text-[10px] text-gray-400 pointer-events-none px-8">
-                Replaying saved steps — read-only preview. Use <strong>Stop</strong> to end playback.
-              </p>
-              {playbackSessionId && (
+          ) : (isPlaying || playFrame || playbackError) && !isDetached ? (
+            <div className="relative w-full h-full min-h-[200px] flex items-center justify-center">
+              {(isPlaying || playFrame) && (
+                <canvas
+                  ref={canvasRef}
+                  className="max-w-full max-h-full object-contain block bg-gray-50"
+                  role="img"
+                  aria-label="Playback preview — recorded run replay"
+                />
+              )}
+              {isPlaying && !playFrame && !playbackError && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <p className="text-sm text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                </div>
+              )}
+              {playbackError && (
+                <div
+                  className={`flex items-center justify-center p-6 z-[2] ${
+                    isPlaying || playFrame ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
+                  }`}
+                  role="alert"
+                >
+                  <p className="text-sm text-red-700 text-center max-w-md">{playbackError}</p>
+                </div>
+              )}
+              {(isPlaying || playFrame) && !playbackError && (
+                <p className="absolute bottom-2 left-2 right-2 text-center text-[10px] text-gray-400 pointer-events-none px-8 z-[3]">
+                  Replaying saved steps — read-only preview. Use <strong>Stop</strong> to end playback.
+                </p>
+              )}
+              {playbackSessionId && !playbackError && (
                 <button
                   type="button"
                   onClick={handleDetachPlaybackRuns}
-                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
+                  className="absolute top-3 right-3 z-[3] flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
                   title="Open playback in a new window"
                 >
                   <ExternalLink size={12} />
                   Detach
                 </button>
               )}
-            </>
+            </div>
           ) : isDetached ? (
             <div className="text-center">
               <ExternalLink size={32} className="mx-auto mb-3 text-gray-300" />
@@ -475,6 +506,12 @@ export default function RunsPage() {
                 </button>
               )}
             </div>
+          )}
+
+          {!isRecording && stepsLoadError && (
+            <p className="mb-2 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5">
+              Could not load steps: {stepsLoadError}
+            </p>
           )}
 
           {!isRecording && (

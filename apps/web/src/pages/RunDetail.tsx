@@ -399,26 +399,41 @@ export default function RunDetailPage() {
                 {playbackStatus === 'idle' ? 'Idle' : playbackStatus}
               </span>
             </div>
-            <div className="flex-1 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 min-h-[200px]">
-              {currentFrame || isPlaying ? (
+            <div className="relative flex-1 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 min-h-[200px] overflow-hidden">
+              {(currentFrame || isPlaying) && (
                 <canvas
                   ref={playbackCanvasRef}
                   className="max-w-full max-h-[min(420px,50vh)] object-contain"
                   role="img"
                   aria-label="Playback preview"
                 />
-              ) : (
+              )}
+              {isPlaying && !currentFrame && !playbackError && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                </div>
+              )}
+              {playbackError && (
+                <div
+                  className={`flex items-center justify-center p-4 z-[2] ${
+                    currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
+                  }`}
+                  role="alert"
+                >
+                  <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
+                </div>
+              )}
+              {!currentFrame && !isPlaying && !playbackError && (
                 <p className="text-xs text-gray-400 text-center px-6">
                   Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
                   session. Frames stream here in real time.
                 </p>
               )}
             </div>
-            {playbackError && (
-              <p className="mt-2 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5">
-                {playbackError}
-              </p>
-            )}
           </div>
           <div className="bg-white border border-gray-100 rounded-lg p-4 max-h-[min(520px,70vh)] flex flex-col">
             <p className="text-sm font-semibold text-gray-800 mb-3">
