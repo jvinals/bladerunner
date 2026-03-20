@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
-import { runsApi, buildStartPlaybackBody } from '@/lib/api';
+import { runsApi, buildStartPlaybackBody, projectsApi, type ProjectDto } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
@@ -11,7 +11,7 @@ import {
   type RemotePreviewBridge,
 } from '@/hooks/useRemotePreviewCanvas';
 import {
-  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn,
+  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -21,6 +21,7 @@ export default function RunsPage() {
   const [newPanelOpen, setNewPanelOpen] = useState(false);
   const [newUrl, setNewUrl] = useState('');
   const [newName, setNewName] = useState('');
+  const [newRunProjectId, setNewRunProjectId] = useState('');
   const [instructionText, setInstructionText] = useState('');
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('default');
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
@@ -28,7 +29,8 @@ export default function RunsPage() {
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
-  const stepsEndRef = useRef<HTMLDivElement>(null);
+  /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
+  const stepsListScrollRef = useRef<HTMLDivElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
 
   const {
@@ -41,6 +43,7 @@ export default function RunsPage() {
     stopRecording,
     sendInstruction,
     loadRunSteps,
+    clearLoadedRun,
     sendRemotePointer,
     sendRemoteKey,
     sendRemoteTouch,
@@ -66,9 +69,28 @@ export default function RunsPage() {
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const detachedPlaybackWindowRef = useRef<Window | null>(null);
 
+  const queryClient = useQueryClient();
+
   const { data: runsData, isLoading, error, refetch } = useQuery({
     queryKey: ['runs', search],
     queryFn: () => runsApi.list(search ? { search } : undefined),
+  });
+
+  const { data: projectsList = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+  });
+
+  const deleteRunMutation = useMutation({
+    mutationFn: (id: string) => runsApi.deleteRun(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['runs'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['home-runs-table'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+      setSelectedRunId(null);
+      clearLoadedRun();
+    },
   });
 
   const runs = (runsData?.data || []) as Array<{
@@ -78,6 +100,7 @@ export default function RunsPage() {
     status: string;
     stepsCount: number;
     createdAt: string;
+    project?: { id: string; name: string; kind: string } | null;
   }>;
 
   const selectedRun = selectedRunId ? runs.find((r) => r.id === selectedRunId) : undefined;
@@ -91,9 +114,9 @@ export default function RunsPage() {
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
   useEffect(() => {
-    if (stepsEndRef.current) {
-      stepsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const panel = stepsListScrollRef.current;
+    if (!panel || steps.length === 0) return;
+    panel.scrollTop = panel.scrollHeight;
   }, [steps.length]);
 
   useEffect(() => {
@@ -122,15 +145,22 @@ export default function RunsPage() {
   const handleStartRecording = useCallback(async () => {
     if (!newUrl || !newName) return;
     try {
-      await startRecording(newUrl, newName);
+      await startRecording(newUrl, newName, newRunProjectId || undefined);
       setNewPanelOpen(false);
       setNewUrl('');
       setNewName('');
+      setNewRunProjectId('');
       refetch();
     } catch (err) {
       console.error('Failed to start recording:', err);
     }
-  }, [newUrl, newName, startRecording, refetch]);
+  }, [newUrl, newName, newRunProjectId, startRecording, refetch]);
+
+  const handleDeleteSelectedRun = useCallback(() => {
+    if (!selectedRunId || !selectedRun || selectedRun.status === 'RECORDING') return;
+    if (!window.confirm(`Delete run “${selectedRun.name}”? This cannot be undone.`)) return;
+    deleteRunMutation.mutate(selectedRunId);
+  }, [selectedRunId, selectedRun, deleteRunMutation]);
 
   const handleStopRecording = useCallback(async () => {
     await stopRecording();
@@ -191,8 +221,9 @@ export default function RunsPage() {
 
   const handleDetachPlaybackRuns = useCallback(() => {
     if (!playbackSessionId) return;
+    const url = `${window.location.origin}/playback/${playbackSessionId}`;
     const w = window.open(
-      `/playback/${playbackSessionId}`,
+      url,
       'bladerunner-playback',
       'width=1320,height=780',
     );
@@ -227,7 +258,8 @@ export default function RunsPage() {
 
   const handleDetach = useCallback(() => {
     if (!runId) return;
-    const w = window.open(`/preview/${runId}`, 'bladerunner-preview', 'width=1320,height=780');
+    const url = `${window.location.origin}/preview/${runId}`;
+    const w = window.open(url, 'bladerunner-preview', 'width=1320,height=780');
     if (w) {
       detachedWindowRef.current = w;
       setIsDetached(true);
@@ -250,10 +282,10 @@ export default function RunsPage() {
   }, []);
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Preview Area */}
-      <div className="flex-1 flex flex-col min-w-0 p-4">
-        <div className="flex-1 relative bg-white border border-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+    <div className="flex flex-1 min-h-0 w-full overflow-hidden">
+      {/* Preview Area — min-h-0 so canvas area does not stretch with right column height */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 p-4 overflow-hidden">
+        <div className="flex-1 min-h-0 relative bg-white border border-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
           {isRecording && !isDetached ? (
             <>
               <div ref={previewFocusRef} {...previewProps}>
@@ -331,8 +363,8 @@ export default function RunsPage() {
         </div>
       </div>
 
-      {/* Right Column */}
-      <div className="w-96 flex-shrink-0 border-l border-gray-100 bg-white flex flex-col overflow-hidden">
+      {/* Right Column — bounded to viewport; steps scroll inside */}
+      <div className="w-96 flex-shrink-0 h-full min-h-0 border-l border-gray-100 bg-white flex flex-col overflow-hidden">
         {/* Header Controls */}
         <div className="p-4 border-b border-gray-50 space-y-3">
           <div className="flex items-center gap-2">
@@ -394,24 +426,37 @@ export default function RunsPage() {
 
           {/* Run Picker */}
           {!isRecording && (
-            <div className="relative">
-              <select
-                value={selectedRunId || ''}
-                onChange={(e) => e.target.value && handleSelectRun(e.target.value)}
-                className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF] bg-white"
-              >
-                <option value="">Select a run...</option>
-                {isLoading ? (
-                  <option disabled>Loading...</option>
-                ) : (
-                  runs.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} ({r.stepsCount} steps)
-                    </option>
-                  ))
-                )}
-              </select>
-              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1 min-w-0">
+                <select
+                  value={selectedRunId || ''}
+                  onChange={(e) => e.target.value && handleSelectRun(e.target.value)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF] bg-white"
+                >
+                  <option value="">Select a run...</option>
+                  {isLoading ? (
+                    <option disabled>Loading...</option>
+                  ) : (
+                    runs.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.stepsCount} steps)
+                      </option>
+                    ))
+                  )}
+                </select>
+                <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              {selectedRunId && selectedRun && selectedRun.status !== 'RECORDING' && (
+                <button
+                  type="button"
+                  title="Delete this run"
+                  disabled={deleteRunMutation.isPending}
+                  onClick={() => void handleDeleteSelectedRun()}
+                  className="shrink-0 p-1.5 rounded-md border border-red-100 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           )}
 
@@ -472,10 +517,35 @@ export default function RunsPage() {
         {/* New Run Sliding Panel */}
         <div
           className={`overflow-hidden transition-all duration-300 ease-out border-b border-gray-50 ${
-            newPanelOpen ? 'max-h-[220px] opacity-100' : 'max-h-0 opacity-0'
+            newPanelOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
           <div className="p-4 space-y-3">
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+                Project (optional)
+              </label>
+              <select
+                value={newRunProjectId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setNewRunProjectId(id);
+                  const p = (projectsList as ProjectDto[]).find((x) => x.id === id);
+                  if (p?.url) setNewUrl(p.url);
+                }}
+                className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+              >
+                <option value="">— None —</option>
+                {(projectsList as ProjectDto[]).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.kind})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[9px] text-gray-400 mt-1">
+                Manage projects under <span className="font-medium">Projects</span> in the sidebar. Selecting a web project fills the URL.
+              </p>
+            </div>
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
                 App URL
@@ -520,7 +590,7 @@ export default function RunsPage() {
         </div>
 
         {/* Steps List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div ref={stepsListScrollRef} className="flex-1 overflow-y-auto p-4">
           {isRecording && (
             <div className="space-y-2 mb-3">
               <div className="flex items-center gap-2">
@@ -543,6 +613,16 @@ export default function RunsPage() {
                 <LogIn size={12} />
                 {clerkAutoSigningIn ? 'Signing in…' : 'Sign in automatically'}
               </button>
+              {clerkAutoSigningIn && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded-md px-2 py-1.5 leading-snug"
+                >
+                  Running Clerk sign-in in the <strong>remote browser</strong> (server + Playwright). The Bladerunner UI
+                  stays responsive; this request can take <strong>1–2 minutes</strong> while MailSlurp receives the OTP.
+                </div>
+              )}
               {clerkAutoSignInError && (
                 <p className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5 leading-snug">
                   {clerkAutoSignInError}
@@ -602,7 +682,6 @@ export default function RunsPage() {
                   )}
                 />
               ))}
-              <div ref={stepsEndRef} />
             </div>
           )}
         </div>

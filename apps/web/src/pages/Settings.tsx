@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<string>('workspace');
 
   return (
-    <div className="px-6 lg:px-10 py-8 max-w-6xl">
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 max-w-6xl">
       {/* Header */}
       <div className="mb-8">
         <p className="ce-section-label mb-2">Settings</p>

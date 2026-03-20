@@ -1,6 +1,28 @@
-import type { BrowserContext, Page, Request, Response } from 'playwright-core';
+import type { BrowserContext, Page } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
 import { waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
+
+// #region agent log
+function agentClerkLog(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+): void {
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+    body: JSON.stringify({
+      sessionId: '5f6bd9',
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
 
 /** Same query param as `@clerk/testing` Playwright route (see `@clerk/testing` chunk-M5YIJ3SE). */
 const CLERK_TESTING_TOKEN_PARAM = '__clerk_testing_token';
@@ -26,7 +48,7 @@ function extraFapiHostsFromEnv(): Set<string> {
 
 /**
  * True when this URL should receive `__clerk_testing_token`.
- * Strict `hostname === CLERK_FAPI` misses satellite/proxy/custom Clerk domains (→ 403 with no H5 if the
+ * Strict `hostname === CLERK_FAPI` misses satellite/proxy/custom Clerk domains (→ 403 if the
  * browser never hits the configured host).
  */
 function shouldInterceptClerkFapiUrl(url: URL): boolean {
@@ -105,84 +127,18 @@ async function waitForClerkOrSignInUi(page: Page, timeoutMs: number): Promise<vo
 async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promise<void> {
   if (contextsWithDynamicClerkFapiRoute.has(context)) return;
   contextsWithDynamicClerkFapiRoute.add(context);
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H2',
-      location: 'clerk-sign-in.ts:installDynamicClerkFapiRouteOnce',
-      message: 'registered dynamic CLERK_FAPI /v1 route (reads env per request)',
-      data: { firstInstall: true },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
-  let interceptLogCount = 0;
-  let upstreamStatusLogCount = 0;
-  let routeFetchErrorLogCount = 0;
   await context.route(
     (url) => shouldInterceptClerkFapiUrl(url),
     async (route) => {
       const req = route.request();
       const u = new URL(req.url());
       const token = process.env.CLERK_TESTING_TOKEN;
-      const hadTestingToken = Boolean(token);
       if (token) {
         u.searchParams.set(CLERK_TESTING_TOKEN_PARAM, token);
       }
-      if (interceptLogCount < 8) {
-        interceptLogCount += 1;
-        const fapi = process.env.CLERK_FAPI ?? '';
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-          body: JSON.stringify({
-            sessionId: '5f6bd9',
-            hypothesisId: 'H8',
-            location: 'clerk-sign-in.ts:clerkFapiRoute',
-            message: 'intercepted Clerk FAPI request (appending testing token)',
-            data: {
-              requestHost: u.hostname,
-              configuredFapiTail: fapi ? fapi.slice(-24) : '',
-              hostEqFapi: u.hostname.toLowerCase() === fapi.toLowerCase(),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-      }
       try {
         const response = await route.fetch({ url: u.toString() });
-        const st = response.status();
-        // Always sample first N upstream statuses so "no H9" cannot mean "logger broken" — it means
-        // previously we only logged ≥400; all your intercepts returned <400 (Clerk accepted them).
-        if (upstreamStatusLogCount < 24) {
-          upstreamStatusLogCount += 1;
-          // #region agent log
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-            body: JSON.stringify({
-              sessionId: '5f6bd9',
-              hypothesisId: 'H9',
-              location: 'clerk-sign-in.ts:clerkFapiRoute',
-              message: 'upstream FAPI response after appending __clerk_testing_token',
-              data: {
-                status: st,
-                method: req.method(),
-                pathPrefix: u.pathname.slice(0, 72),
-                hadTestingToken,
-                atOrAbove400: st >= 400,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-        }
         const bodyText = await response.text();
         const headers = response.headers();
         let bodyOut = bodyText;
@@ -209,111 +165,11 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
           headers,
           body: bodyOut,
         });
-      } catch (err) {
-        if (routeFetchErrorLogCount < 12) {
-          routeFetchErrorLogCount += 1;
-          const msg = err instanceof Error ? err.message.slice(0, 160) : String(err).slice(0, 160);
-          // #region agent log
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-            body: JSON.stringify({
-              sessionId: '5f6bd9',
-              hypothesisId: 'H10',
-              location: 'clerk-sign-in.ts:clerkFapiRoute',
-              message: 'route.fetch failed; continuing without rewritten response (token may be lost)',
-              data: { errorPrefix: msg, hadTestingToken },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-        }
+      } catch {
         await route.continue({ url: u.toString() }).catch(() => {});
       }
     },
   );
-}
-
-function attachClerkFapiErrorDebugLogger(page: Page): () => void {
-  const handler = (res: Response) => {
-    const url = res.url();
-    const st = res.status();
-    if (st < 400) return;
-    if (!url.includes('/v1/') && !url.toLowerCase().includes('clerk')) return;
-    const fapi = process.env.CLERK_FAPI;
-    let host = '';
-    try {
-      host = new URL(url).hostname;
-    } catch {
-      /* ignore */
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        hypothesisId: 'H5',
-        location: 'clerk-sign-in.ts:response',
-        message: 'Clerk-related HTTP error response',
-        data: {
-          status: st,
-          responseHost: host,
-          configuredFapiTail: fapi ? fapi.slice(-24) : '',
-          hostMatchesFapi: !!(fapi && host.toLowerCase() === fapi.toLowerCase()),
-          pathPrefix: (() => {
-            try {
-              return new URL(url).pathname.slice(0, 48);
-            } catch {
-              return '';
-            }
-          })(),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  };
-  page.on('response', handler);
-  return () => page.off('response', handler);
-}
-
-/** Log hosts for /v1/ traffic so we can see FAPI hostname drift vs CLERK_FAPI. */
-function attachClerkV1RequestProbe(page: Page): () => void {
-  let n = 0;
-  const handler = (req: Request) => {
-    if (n >= 24) return;
-    const url = req.url();
-    if (!url.includes('/v1/')) return;
-    n += 1;
-    let host = '';
-    try {
-      host = new URL(url).hostname;
-    } catch {
-      /* ignore */
-    }
-    const fapi = process.env.CLERK_FAPI ?? '';
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        hypothesisId: 'H7',
-        location: 'clerk-sign-in.ts:request',
-        message: 'saw /v1/ request',
-        data: {
-          host,
-          hostEqFapi: !!(fapi && host.toLowerCase() === fapi.toLowerCase()),
-          wouldIntercept: shouldInterceptClerkFapiUrl(new URL(url)),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  };
-  page.on('request', handler);
-  return () => page.off('request', handler);
 }
 
 /**
@@ -326,45 +182,6 @@ async function refreshClerkTestingCredentials(publishableKey: string): Promise<v
       'clerkSetup requires CLERK_SECRET_KEY, or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY when the target app uses a different Clerk instance than Bladerunner.',
     );
   }
-  const secretSource = process.env.PLAYBACK_CLERK_SECRET_KEY?.trim()
-    ? 'PLAYBACK_CLERK_SECRET_KEY'
-    : process.env.E2E_CLERK_SECRET_KEY?.trim()
-      ? 'E2E_CLERK_SECRET_KEY'
-      : 'CLERK_SECRET_KEY';
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H6',
-      location: 'clerk-sign-in.ts:refreshClerkTestingCredentials',
-      message: 'Clerk secret source for clerkSetup (not the key value)',
-      data: { secretSource },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
-  const env = process.env as Record<string, string | undefined>;
-  const hadFapi = Boolean(env.CLERK_FAPI);
-  const hadToken = Boolean(env.CLERK_TESTING_TOKEN);
-  const tokenLenBefore = env.CLERK_TESTING_TOKEN?.length ?? 0;
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H1',
-      location: 'clerk-sign-in.ts:refreshClerkTestingCredentials',
-      message: 'before clerkSetup (refresh testing token)',
-      data: { hadFapi, hadToken, tokenLenBefore },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   delete process.env.CLERK_TESTING_TOKEN;
   const frontendApiUrl = process.env.CLERK_TESTING_FRONTEND_API_URL?.trim();
   await clerkSetup({
@@ -373,23 +190,6 @@ async function refreshClerkTestingCredentials(publishableKey: string): Promise<v
     dotenv: false,
     ...(frontendApiUrl ? { frontendApiUrl } : {}),
   });
-
-  const tokenLenAfter = env.CLERK_TESTING_TOKEN?.length ?? 0;
-  const fapiLen = env.CLERK_FAPI?.length ?? 0;
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H1',
-      location: 'clerk-sign-in.ts:refreshClerkTestingCredentials',
-      message: 'after clerkSetup',
-      data: { tokenLenAfter, fapiLen },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 }
 
 /**
@@ -414,6 +214,40 @@ function locatorAfterOtpSubmit(page: Page) {
   return page
     .getByRole('button', { name: /^Continue$/i })
     .or(page.getByRole('button', { name: /^Verify$/i }));
+}
+
+/** True when the page has navigated back to the app under test (not Clerk hosted UI). */
+function isAppHostUrl(url: URL, appHostname: string): boolean {
+  const h = url.hostname;
+  return h === appHostname || h === 'localhost' || h === '127.0.0.1';
+}
+
+/**
+ * Clerk sometimes advances immediately after OTP (no Continue/Verify), or uses different
+ * button labels. Try several role/name patterns; return whether a button was clicked.
+ */
+async function tryClickPostOtpSubmit(page: Page): Promise<boolean> {
+  const namePatterns = [
+    /^Continue$/i,
+    /^Verify$/i,
+    /^Submit$/i,
+    /^Done$/i,
+    /^Complete$/i,
+    /^Enter$/i,
+    /^Sign in$/i,
+    /^Next$/i,
+  ];
+  for (const pattern of namePatterns) {
+    const btn = page.getByRole('button', { name: pattern }).first();
+    try {
+      await btn.waitFor({ state: 'visible', timeout: 1_500 });
+      await btn.click({ timeout: 5_000 });
+      return true;
+    } catch {
+      /* try next */
+    }
+  }
+  return false;
 }
 
 /** Hosted Clerk / common dev patterns */
@@ -505,89 +339,124 @@ export async function performClerkPasswordEmail2FA(
     );
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H4',
-      location: 'clerk-sign-in.ts:performClerkPasswordEmail2FA',
-      message: 'publishable key source for clerkSetup',
-      data: {
-        hasPagePk: Boolean(pagePk),
-        pagePkTail: pagePk ? pagePk.slice(-12) : '',
-        envPkTail: envPk ? envPk.slice(-12) : '',
-        envDiffersFromPage: Boolean(pagePk && envPk && pagePk !== envPk),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   await refreshClerkTestingCredentials(publishableKey);
   await installDynamicClerkFapiRouteOnce(page.context());
 
-  const detachErrorLogger = attachClerkFapiErrorDebugLogger(page);
-  const detachV1Probe = attachClerkV1RequestProbe(page);
-  try {
-    const idField = page.locator('input[name="identifier"], #identifier-field').first();
-    await idField.waitFor({ state: 'visible', timeout: 60_000 });
-    await idField.fill(opts.identifier);
+  const idField = page.locator('input[name="identifier"], #identifier-field').first();
+  await idField.waitFor({ state: 'visible', timeout: 60_000 });
+  await idField.fill(opts.identifier);
 
-    const passwordAlready = page
-      .locator('input[name="password"][type="password"], input[type="password"]')
-      .first();
-    const combined = await passwordAlready.isVisible().catch(() => false);
+  const passwordAlready = page
+    .locator('input[name="password"][type="password"], input[type="password"]')
+    .first();
+  const combined = await passwordAlready.isVisible().catch(() => false);
 
-    if (!combined) {
-      await locatorAfterIdentifierContinue(page).first().click();
-    }
-
-    const passwordField = page
-      .locator('input[name="password"][type="password"], input[type="password"]')
-      .first();
-    await passwordField.waitFor({ state: 'visible', timeout: 60_000 });
-    const notBeforeMs = Date.now() - 5_000;
-    await passwordField.fill(opts.password);
-
-    await locatorAfterPasswordSubmit(page).first().click();
-
-    const otpSingle = page
-      .locator(
-        'input[inputmode="numeric"], input[name="code"], input[autocomplete="one-time-code"], [data-input-otp]',
-      )
-      .first();
-
-    try {
-      await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
-    } catch {
-      const anyOtp = page.locator('input[inputmode="numeric"]').first();
-      await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
-    }
-
-    const otp = await waitForClerkOtpFromMailSlurp({ notBeforeMs, timeoutMs: 120_000 });
-
-    const multi = page.locator('input[inputmode="numeric"]');
-    const count = await multi.count();
-    if (count >= 6) {
-      const digits = otp.split('');
-      for (let i = 0; i < Math.min(digits.length, count); i++) {
-        await multi.nth(i).fill(digits[i]!);
-      }
-    } else {
-      await otpSingle.fill(otp);
-    }
-
-    await locatorAfterOtpSubmit(page).first().click();
-
-    const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
-    await page.waitForURL(
-      (url) => url.hostname === host || url.hostname === 'localhost' || url.hostname === '127.0.0.1',
-      { timeout: 120_000 },
-    );
-  } finally {
-    detachErrorLogger();
-    detachV1Probe();
+  if (!combined) {
+    await locatorAfterIdentifierContinue(page).first().click();
   }
+
+  const passwordField = page
+    .locator('input[name="password"][type="password"], input[type="password"]')
+    .first();
+  await passwordField.waitFor({ state: 'visible', timeout: 60_000 });
+  await passwordField.fill(opts.password);
+
+  await locatorAfterPasswordSubmit(page).first().click();
+  /** Clerk sends the OTP email after this moment — only accept MailSlurp messages received after here. */
+  const otpWindowStartMs = Date.now();
+
+  const otpSingle = page
+    .locator(
+      'input[inputmode="numeric"], input[name="code"], input[autocomplete="one-time-code"], [data-input-otp]',
+    )
+    .first();
+
+  try {
+    await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
+  } catch {
+    const anyOtp = page.locator('input[inputmode="numeric"]').first();
+    await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
+  }
+
+  const otp = await waitForClerkOtpFromMailSlurp({ notBeforeMs: otpWindowStartMs, timeoutMs: 120_000 });
+
+  const multi = page.locator('input[inputmode="numeric"]');
+  const count = await multi.count();
+  if (count >= 6) {
+    const digits = otp.split('');
+    for (let i = 0; i < Math.min(digits.length, count); i++) {
+      await multi.nth(i).fill(digits[i]!);
+    }
+  } else {
+    await otpSingle.fill(otp);
+  }
+
+  const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
+
+  // #region agent log
+  {
+    const urlBeforeOtpSubmit = page.url();
+    const btnSnapshot = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('button'))
+        .slice(0, 16)
+        .map((b) => (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80));
+    });
+    const continueCount = await page.getByRole('button', { name: /^Continue$/i }).count();
+    const verifyCount = await page.getByRole('button', { name: /^Verify$/i }).count();
+    agentClerkLog('H3', 'clerk-sign-in.ts:preOtpSubmitClick', 'state after OTP fill (before post-OTP navigation/click)', {
+      urlTail: urlBeforeOtpSubmit.slice(-120),
+      buttonTexts: btnSnapshot,
+      continueExactRoleCount: continueCount,
+      verifyExactRoleCount: verifyCount,
+    });
+  }
+  // #endregion
+
+  // Fast path: Clerk may redirect to the app immediately after OTP. If not, avoid a single
+  // Continue/Verify locator with Playwright's default ~30s timeout (blocks the API + feels like a frozen UI).
+  try {
+    await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 20_000 });
+    // #region agent log
+    agentClerkLog('H4', 'clerk-sign-in.ts:postOtpFastPath', 'already on app host after OTP — skipped submit click', {
+      urlTail: page.url().slice(-120),
+    });
+    // #endregion
+  } catch {
+    // #region agent log
+    agentClerkLog(
+      'H5',
+      'clerk-sign-in.ts:postOtpNoFastRedirect',
+      'no redirect to app within 20s after OTP — trying short-timeout button clicks first',
+      { urlTail: page.url().slice(-120) },
+    );
+    // #endregion
+    let clicked = await tryClickPostOtpSubmit(page);
+    // #region agent log
+    agentClerkLog('H5', 'clerk-sign-in.ts:postOtpTryFlexible', 'tryClickPostOtpSubmit result', { clicked });
+    // #endregion
+    if (!clicked) {
+      try {
+        await locatorAfterOtpSubmit(page).first().click({ timeout: 5_000 });
+        clicked = true;
+        // #region agent log
+        agentClerkLog('H3', 'clerk-sign-in.ts:postOtpLegacyClick', 'legacy Continue/Verify click ok', {
+          urlTail: page.url().slice(-120),
+        });
+        // #endregion
+      } catch (e) {
+        // #region agent log
+        agentClerkLog('H3', 'clerk-sign-in.ts:postOtpLegacyClickFail', 'legacy click failed after flexible scan', {
+          errPrefix: e instanceof Error ? e.message.slice(0, 160) : String(e).slice(0, 160),
+        });
+        // #endregion
+      }
+    }
+  }
+
+  await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 120_000 });
+  // #region agent log
+  agentClerkLog('H2', 'clerk-sign-in.ts:postOtpFinalUrl', 'signed-in app URL reached', {
+    urlTail: page.url().slice(-120),
+  });
+  // #endregion
 }

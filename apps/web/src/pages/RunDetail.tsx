@@ -113,8 +113,9 @@ export default function RunDetailPage() {
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
+    const url = `${window.location.origin}/playback/${playbackSessionId}`;
     const w = window.open(
-      `/playback/${playbackSessionId}`,
+      url,
       'bladerunner-playback',
       'width=1320,height=780',
     );
@@ -185,7 +186,7 @@ export default function RunDetailPage() {
   const PlatformIcon = PLATFORM_ICONS[r.platform] || Monitor;
 
   return (
-    <div className="px-6 lg:px-10 py-8 max-w-6xl">
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 max-w-6xl">
       {/* Back link */}
       <Link to="/runs" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4B90FF] transition-colors mb-6">
         <ArrowLeft size={14} />

@@ -1,50 +1,53 @@
-import { Injectable } from '@nestjs/common';
-
-const MOCK_PROJECTS = [
-  {
-    id: 'proj_edgehealth_portal',
-    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4', // Default test user
-    workspaceId: 'ws_edgehealth',
-    name: 'Edgehealth Portal',
-    description: 'Main patient and provider portal — desktop web application',
-    repositoryUrl: 'https://github.com/edgehealth/portal',
-    defaultBranch: 'main',
-    createdAt: '2026-01-15T10:00:00Z',
-    updatedAt: '2026-03-18T10:00:00Z',
-  },
-  {
-    id: 'proj_edgehealth_mobile',
-    userId: 'user_2m19m7Zf6X4t5W8K9u0v1x2y3z4',
-    workspaceId: 'ws_edgehealth',
-    name: 'Edgehealth Mobile',
-    description: 'Patient-facing mobile app and PWA',
-    repositoryUrl: 'https://github.com/edgehealth/mobile',
-    defaultBranch: 'main',
-    createdAt: '2026-02-01T10:00:00Z',
-    updatedAt: '2026-03-18T10:00:00Z',
-  },
-  {
-    id: 'proj_edgehealth_admin',
-    userId: 'other_user',
-    workspaceId: 'ws_edgehealth',
-    name: 'Edgehealth Admin',
-    description: 'Internal admin panel for workspace and system management',
-    repositoryUrl: 'https://github.com/edgehealth/admin',
-    defaultBranch: 'develop',
-    createdAt: '2026-02-20T10:00:00Z',
-    updatedAt: '2026-03-15T10:00:00Z',
-  },
-];
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
 
 @Injectable()
 export class ProjectsService {
-  private projects = [...MOCK_PROJECTS];
+  constructor(private readonly prisma: PrismaService) {}
 
   findAll(userId: string) {
-    return this.projects.filter((p) => p.userId === userId);
+    return this.prisma.project.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  findOne(id: string, userId: string) {
-    return this.projects.find((p) => p.id === id && p.userId === userId) || null;
+  async findOne(id: string, userId: string) {
+    return this.prisma.project.findFirst({
+      where: { id, userId },
+    });
+  }
+
+  async create(userId: string, dto: CreateProjectDto) {
+    return this.prisma.project.create({
+      data: {
+        userId,
+        name: dto.name.trim(),
+        kind: dto.kind ?? 'WEB',
+        url: dto.url?.trim() || null,
+        artifactUrl: dto.artifactUrl?.trim() || null,
+      },
+    });
+  }
+
+  async update(id: string, userId: string, dto: UpdateProjectDto) {
+    const existing = await this.findOne(id, userId);
+    if (!existing) throw new NotFoundException(`Project ${id} not found`);
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        ...(dto.name != null ? { name: dto.name.trim() } : {}),
+        ...(dto.kind != null ? { kind: dto.kind } : {}),
+        ...(dto.url !== undefined ? { url: dto.url?.trim() || null } : {}),
+        ...(dto.artifactUrl !== undefined ? { artifactUrl: dto.artifactUrl?.trim() || null } : {}),
+      },
+    });
+  }
+
+  async remove(id: string, userId: string) {
+    const existing = await this.findOne(id, userId);
+    if (!existing) throw new NotFoundException(`Project ${id} not found`);
+    await this.prisma.project.delete({ where: { id } });
   }
 }

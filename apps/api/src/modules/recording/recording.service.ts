@@ -72,12 +72,21 @@ export class RecordingService extends EventEmitter {
     return this.sessions.get(runId)?.latestFrame ?? null;
   }
 
-  async startRecording(userId: string, name: string, url: string) {
+  async startRecording(userId: string, name: string, url: string, projectId?: string) {
+    const pid = projectId?.trim();
+    if (pid) {
+      const proj = await this.prisma.project.findFirst({ where: { id: pid, userId } });
+      if (!proj) {
+        throw new BadRequestException('Project not found');
+      }
+    }
+
     const run = await this.prisma.run.create({
       data: {
         userId,
         name,
         url,
+        projectId: pid || null,
         status: 'RECORDING',
         platform: 'DESKTOP',
         startedAt: new Date(),
@@ -193,6 +202,21 @@ export class RecordingService extends EventEmitter {
       this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
       this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
     const baseURL = this.playbackClerkBaseUrl(run.url);
+    const clerkAutoT0 = Date.now();
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        hypothesisId: 'H1',
+        location: 'recording.service.ts:clerkAutoSignInDuringRecording',
+        message: 'performClerkPasswordEmail2FA starting (HTTP blocks until done — UI waits)',
+        data: { runId },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     try {
       await performClerkPasswordEmail2FA(session.page, {
         baseURL,
@@ -200,8 +224,40 @@ export class RecordingService extends EventEmitter {
         password,
         skipInitialNavigate: true,
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+        body: JSON.stringify({
+          sessionId: '5f6bd9',
+          hypothesisId: 'H1',
+          location: 'recording.service.ts:clerkAutoSignInDuringRecording',
+          message: 'performClerkPasswordEmail2FA finished OK',
+          data: { runId, elapsedMs: Date.now() - clerkAutoT0 },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+        body: JSON.stringify({
+          sessionId: '5f6bd9',
+          hypothesisId: 'H1',
+          location: 'recording.service.ts:clerkAutoSignInDuringRecording',
+          message: 'performClerkPasswordEmail2FA threw',
+          data: {
+            runId,
+            elapsedMs: Date.now() - clerkAutoT0,
+            errorPrefix: msg.slice(0, 220),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
       throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
     }

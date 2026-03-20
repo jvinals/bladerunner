@@ -169,7 +169,7 @@ When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSign
 
 Secrets stay on the **server**; the browser never receives test passwords.
 
-**MailSlurp API errors:** verify **`MAILSLURP_API_KEY`** in **`apps/api/.env`** (overrides) and repo **`.env`**. **`pnpm mailslurp:list-inboxes`** loads both (same order as the list script). Clerk FAPI issues show as **H9** in debug logs; inbox polling uses **H11** (`mailslurp-otp.ts`).
+**MailSlurp API errors:** verify **`MAILSLURP_API_KEY`** in **`apps/api/.env`** (overrides) and repo **`.env`**. **`pnpm mailslurp:list-inboxes`** loads both (same order as the list script).
 
 For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **secret for that product’s Clerk instance**. You **cannot** set `CLERK_SECRET_KEY` twice in one `.env` (one name = one value). Instead:
 
@@ -179,6 +179,12 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 
 ## Changelog
 
+- **0.4.2** — **Clerk auto sign-in UX**: **`flushSync`** before the long `clerkAutoSignInRecording` fetch so “Signing in…” paints immediately; Runs **aria-live** note that the remote browser step can take 1–2 minutes. **Post-OTP**: **flexible** button clicks **first** (**5s** timeouts; **Complete** / **Enter**); **Continue/Verify** only as last resort (**5s**). Extends fast-path **`waitForURL`** to **20s**. **`@bladerunner/clerk-agentmail-signin` `0.3.5`**.
+- **0.4.1** — **Clerk auto sign-in**: debug logs (**H1**–**H4**); **fix** post-OTP step — **`waitForURL` to app host first** (Clerk often redirects without Continue/Verify), then legacy **Continue/Verify** click, then **fallback** button names (Submit/Done/Sign in/Next). Reduces **30s Playwright timeout** + long **HTTP wait** that froze the UI until the error toast. **`@bladerunner/clerk-agentmail-signin` `0.3.4`**.
+- **0.4.0** — **MailSlurp OTP**: use `waitForLatestEmail` with **`since`** + set **`otpWindowStartMs` after password submit** so old inbox codes are ignored. **Runs**: `DELETE /runs/:id`, delete UI on Runs + Home. **Projects**: Prisma `Project` model (WEB / IOS / ANDROID, `url`, `artifactUrl`), CRUD **`/projects`**, **Projects** page + sidebar; optional **`projectId`** on **`POST /runs/record/start`**; run list includes **project**. **Home**: full runs **table** (100 rows). **Detach preview/playback**: `window.open` uses **`window.location.origin`** for popups. DB migration: `projects`, `runs.project_id`.
+- **0.3.3** — Remove **debug-session** `fetch` instrumentation from **`@bladerunner/clerk-agentmail-signin`** (`clerk-sign-in.ts`, `mailslurp-otp.ts`); README troubleshooting no longer references **H9** / **H11** live logs.
+- **0.3.2** — **Runs layout**: **AppShell** main area uses **`min-h-0` + flex column** so the `/runs` row has a **viewport-bounded height**; the preview column no longer **stretches** when the steps list grows (only the right column scrolls). Other pages use **`flex-1 min-h-0 overflow-y-auto`** on their root for normal scrolling.
+- **0.3.1** — **Runs page**: when steps are appended, only the **right-hand steps list** scrolls (`scrollTop` on its panel). Removed `scrollIntoView` on the list sentinel so the **main preview** no longer shifts with each new step.
 - **0.3.0** — **MailSlurp replaces AgentMail** for Clerk email OTP (E2E + recording + playback). **`.env`:** `MAILSLURP_API_KEY`, `MAILSLURP_INBOX_ID` **or** `MAILSLURP_INBOX_EMAIL`. Script **`pnpm mailslurp:list-inboxes`**. Removed **`agentmail`** dependency; package **`@bladerunner/clerk-agentmail-signin`** still hosts **`performClerkPasswordEmail2FA`** (name unchanged).
 - **0.2.41** — README: **`npm run agentmail:list-inboxes`** vs invalid **`npm agentmail:list-inboxes`**; pnpm vs npm note under Quick Start.
 - **0.2.40** — **`pnpm agentmail:list-inboxes`**: load **`apps/api/.env`** with **override** after root `.env` (same as API); catch **403** and print setup hints.

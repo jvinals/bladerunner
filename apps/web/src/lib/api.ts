@@ -68,6 +68,33 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   return res.json();
 }
 
+/** DELETE/204 responses with no JSON body */
+export async function apiFetchVoid(path: string, options?: RequestInit): Promise<void> {
+  const auth = await authHeaders();
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const ct = res.headers.get('content-type');
+      if (ct?.includes('application/json')) {
+        const body = (await res.json()) as { message?: string | string[] };
+        if (Array.isArray(body.message)) detail = body.message.join(', ');
+        else if (typeof body.message === 'string') detail = body.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      detail
+        ? `API Error: ${res.status} ${res.statusText} — ${detail}`
+        : `API Error: ${res.status} ${res.statusText}`,
+    );
+  }
+}
+
 export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
   const auth = await authHeaders();
   return fetch(`${API_BASE}${path}`, {
@@ -103,10 +130,14 @@ export const runsApi = {
     runsTrend: number;
     passRateTrend: number;
   }>('/runs/dashboard'),
-  startRecording: (data: { name: string; url: string }) =>
+  startRecording: (data: { name: string; url: string; projectId?: string }) =>
     apiFetch<{ runId: string; status: string }>('/runs/record/start', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  deleteRun: (id: string) =>
+    apiFetchVoid(`/runs/${id}`, {
+      method: 'DELETE',
     }),
   stopRecording: (runId: string) =>
     apiFetch<unknown>('/runs/record/stop', {
@@ -137,9 +168,35 @@ export const runsApi = {
 };
 
 // ─── Projects ────────────────────────────────────────────────────────────────
+export type ProjectDto = {
+  id: string;
+  userId: string;
+  name: string;
+  kind: 'WEB' | 'IOS' | 'ANDROID';
+  url: string | null;
+  artifactUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateProjectBody = {
+  name: string;
+  kind?: 'WEB' | 'IOS' | 'ANDROID';
+  url?: string;
+  artifactUrl?: string;
+};
+
 export const projectsApi = {
-  list: () => apiFetch<unknown[]>('/projects'),
-  get: (id: string) => apiFetch<unknown>(`/projects/${id}`),
+  list: () => apiFetch<ProjectDto[]>('/projects'),
+  get: (id: string) => apiFetch<ProjectDto>(`/projects/${id}`),
+  create: (body: CreateProjectBody) =>
+    apiFetch<ProjectDto>('/projects', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<CreateProjectBody>) =>
+    apiFetch<ProjectDto>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (id: string) =>
+    apiFetchVoid(`/projects/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────

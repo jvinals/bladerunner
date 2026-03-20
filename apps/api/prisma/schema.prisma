@@ -20,6 +20,13 @@ enum Platform {
   PWA
 }
 
+/// Target for recording: web URL or mobile app reference.
+enum ProjectKind {
+  WEB
+  IOS
+  ANDROID
+}
+
 enum StepAction {
   NAVIGATE
   CLICK
@@ -38,9 +45,28 @@ enum StepOrigin {
   AI_DRIVEN
 }
 
+model Project {
+  id          String      @id @default(uuid())
+  userId      String      @map("user_id")
+  name        String
+  kind        ProjectKind @default(WEB)
+  /// Web app URL, or store / deeplink for mobile
+  url         String?
+  /// APK / IPA / build artifact URL or download link
+  artifactUrl String?     @map("artifact_url")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  runs Run[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
 model Run {
   id          String    @id @default(uuid())
   userId      String    @map("user_id")
+  projectId   String?   @map("project_id")
   name        String
   url         String
   status      RunStatus @default(RECORDING)
@@ -51,10 +77,12 @@ model Run {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  project    Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
   steps      RunStep[]
   recordings RunRecording[]
 
   @@index([userId])
+  @@index([projectId])
   @@map("runs")
 }
 

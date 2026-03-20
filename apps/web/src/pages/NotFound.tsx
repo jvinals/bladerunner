@@ -3,7 +3,7 @@ import { Home } from 'lucide-react';
 
 export default function NotFoundPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6">
+    <div className="flex flex-1 min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-12">
       <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
         <span className="text-2xl text-gray-300">404</span>
       </div>

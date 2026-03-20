@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Play, Settings, ChevronRight } from 'lucide-react';
+import { Home, Play, Settings, ChevronRight, FolderKanban } from 'lucide-react';
 import { UserButton, useUser } from '@clerk/react';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/runs', label: 'Runs', icon: Play },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

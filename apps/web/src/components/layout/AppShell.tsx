@@ -39,9 +39,9 @@ export function AppShell() {
           <span className="text-[#4B90FF] font-bold text-base tracking-tight">Bladerunner</span>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="page-enter">
+        {/* Page content — min-h-0 so /runs can fill viewport without growing with sidebar content */}
+        <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="page-enter flex-1 min-h-0 flex flex-col overflow-hidden">
             <Outlet />
           </div>
         </main>

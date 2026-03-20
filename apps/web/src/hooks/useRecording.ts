@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import type { Socket } from 'socket.io-client';
 import { runsApi } from '@/lib/api';
 import { createRecordingSocket } from '@/lib/recordingSocket';
@@ -35,10 +36,12 @@ interface UseRecordingReturn {
   currentFrame: string | null;
   steps: RecordedStep[];
   status: string;
-  startRecording: (url: string, name: string) => Promise<void>;
+  startRecording: (url: string, name: string, projectId?: string) => Promise<void>;
   stopRecording: () => Promise<void>;
   sendInstruction: (instruction: string) => Promise<RecordedStep | null>;
   loadRunSteps: (runId: string) => Promise<void>;
+  /** Clear loaded run/steps when not actively recording (e.g. after delete). */
+  clearLoadedRun: () => void;
   /** Forward pointer events to the remote Playwright page (requires active socket + run). */
   sendRemotePointer: (userId: string, payload: RemotePointerPayload) => void;
   /** Forward keyboard to the remote page (preview must be focused). */
@@ -128,8 +131,12 @@ export function useRecording(): UseRecordingReturn {
     socketRef.current = socket;
   }, []);
 
-  const startRecording = useCallback(async (url: string, name: string) => {
-    const result = await runsApi.startRecording({ name, url });
+  const startRecording = useCallback(async (url: string, name: string, projectId?: string) => {
+    const result = await runsApi.startRecording({
+      name,
+      url,
+      ...(projectId ? { projectId } : {}),
+    });
     activeRunIdRef.current = result.runId;
     connectSocket(result.runId);
     let initialSteps: RecordedStep[] = [];
@@ -173,6 +180,13 @@ export function useRecording(): UseRecordingReturn {
     setRunId(loadRunId);
   }, []);
 
+  const clearLoadedRun = useCallback(() => {
+    if (isRecording) return;
+    setSteps([]);
+    setRunId(null);
+    activeRunIdRef.current = null;
+  }, [isRecording]);
+
   const sendRemotePointer = useCallback((userId: string, payload: RemotePointerPayload) => {
     const id = activeRunIdRef.current ?? runId;
     const s = socketRef.current;
@@ -199,12 +213,58 @@ export function useRecording(): UseRecordingReturn {
 
   const clerkAutoSignIn = useCallback(async () => {
     if (!runId) return;
-    setClerkAutoSignInError(null);
-    setClerkAutoSigningIn(true);
+    /** Paint loading state before the long server+Playwright await (H1: avoids perceived UI freeze). */
+    flushSync(() => {
+      setClerkAutoSignInError(null);
+      setClerkAutoSigningIn(true);
+    });
+    const t0 = Date.now();
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        hypothesisId: 'H1',
+        location: 'useRecording.ts:clerkAutoSignIn',
+        message: 'browser awaiting clerkAutoSignInRecording (UI frozen until response)',
+        data: { runId },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     try {
       await runsApi.clerkAutoSignInRecording(runId);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+        body: JSON.stringify({
+          sessionId: '5f6bd9',
+          hypothesisId: 'H1',
+          location: 'useRecording.ts:clerkAutoSignIn',
+          message: 'clerkAutoSignInRecording returned OK',
+          data: { runId, elapsedMs: Date.now() - t0 },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+        body: JSON.stringify({
+          sessionId: '5f6bd9',
+          hypothesisId: 'H1',
+          location: 'useRecording.ts:clerkAutoSignIn',
+          message: 'clerkAutoSignInRecording failed',
+          data: { runId, elapsedMs: Date.now() - t0, errorPrefix: msg.slice(0, 200) },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       setClerkAutoSignInError(msg);
     } finally {
       setClerkAutoSigningIn(false);
@@ -239,6 +299,7 @@ export function useRecording(): UseRecordingReturn {
     stopRecording,
     sendInstruction,
     loadRunSteps,
+    clearLoadedRun,
     sendRemotePointer,
     sendRemoteKey,
     sendRemoteTouch,

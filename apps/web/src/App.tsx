@@ -7,6 +7,7 @@ import HomePage from './pages/Home';
 import RunsPage from './pages/Runs';
 import RunDetailPage from './pages/RunDetail';
 import SettingsPage from './pages/Settings';
+import ProjectsPage from './pages/Projects';
 import DetachedPreview from './pages/DetachedPreview';
 import DetachedPlayback from './pages/DetachedPlayback';
 import NotFoundPage from './pages/NotFound';
@@ -29,6 +30,7 @@ export default function App() {
             <Route index element={<HomePage />} />
             <Route path="runs" element={<RunsPage />} />
             <Route path="runs/:id" element={<RunDetailPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

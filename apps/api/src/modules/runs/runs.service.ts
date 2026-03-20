@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -42,6 +42,7 @@ export class RunsService {
         take: pageSize,
         include: {
           _count: { select: { steps: true } },
+          project: { select: { id: true, name: true, kind: true } },
         },
       }),
       this.prisma.run.count({ where }),
@@ -57,6 +58,7 @@ export class RunsService {
         artifactsCount: 0,
         tags: [],
         triggeredBy: 'Manual',
+        project: run.project,
       })),
       total,
       page,
@@ -71,6 +73,7 @@ export class RunsService {
       include: {
         steps: { orderBy: { sequence: 'asc' } },
         recordings: true,
+        project: true,
       },
     });
   }
@@ -126,5 +129,14 @@ export class RunsService {
       runsTrend: 0,
       passRateTrend: 0,
     };
+  }
+
+  async deleteOne(id: string, userId: string): Promise<void> {
+    const run = await this.prisma.run.findFirst({ where: { id, userId } });
+    if (!run) throw new NotFoundException(`Run ${id} not found`);
+    if (run.status === 'RECORDING') {
+      throw new BadRequestException('Stop the recording before deleting this run.');
+    }
+    await this.prisma.run.delete({ where: { id } });
   }
 }

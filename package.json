@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.2",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "dev": "concurrently -n api,worker,web -c auto \"pnpm run dev:api\" \"pnpm --filter @bladerunner/browser-worker dev\" \"pnpm run dev:web:delayed\"",

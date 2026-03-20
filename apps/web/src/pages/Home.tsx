@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { runsApi } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -6,7 +6,7 @@ import { LoadingState, ErrorState } from '@/components/ui/States';
 import { formatDuration, formatRelativeTime } from '@/lib/utils';
 import {
   Activity, Zap, Clock, Bot, AlertTriangle, TrendingUp,
-  Play, ArrowRight, CheckCircle, Monitor, Smartphone, Globe
+  Play, ArrowRight, CheckCircle, Monitor, Smartphone, Globe, Trash2, FolderKanban,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -16,14 +16,26 @@ const PLATFORM_ICONS: Record<string, typeof Monitor> = {
 };
 
 export default function HomePage() {
+  const queryClient = useQueryClient();
+
   const { data: kpis, isLoading: kpisLoading, error: kpisError } = useQuery({
     queryKey: ['dashboard-kpis'],
     queryFn: runsApi.getDashboard,
   });
 
   const { data: runsData, isLoading: runsLoading } = useQuery({
-    queryKey: ['recent-runs'],
-    queryFn: () => runsApi.list({ pageSize: '5' }),
+    queryKey: ['home-runs-table'],
+    queryFn: () => runsApi.list({ pageSize: '100' }),
+  });
+
+  const deleteRunMutation = useMutation({
+    mutationFn: (id: string) => runsApi.deleteRun(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-runs-table'] });
+      queryClient.invalidateQueries({ queryKey: ['runs'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+    },
   });
 
   if (kpisLoading) return <LoadingState message="Loading dashboard..." />;
@@ -34,14 +46,25 @@ export default function HomePage() {
     name: string;
     status: string;
     platform: string;
+    url: string;
     durationMs?: number;
     triggeredBy: string;
     createdAt: string;
-    tags: string[];
+    stepsCount: number;
+    project?: { id: string; name: string; kind: string } | null;
   }>;
 
+  const handleDelete = (run: { id: string; name: string; status: string }) => {
+    if (run.status === 'RECORDING') {
+      window.alert('Stop the recording from the Runs page before deleting.');
+      return;
+    }
+    if (!window.confirm(`Delete run “${run.name}”? This cannot be undone.`)) return;
+    deleteRunMutation.mutate(run.id);
+  };
+
   return (
-    <div className="px-6 lg:px-10 py-8 max-w-6xl">
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 max-w-6xl">
       {/* Header */}
       <div className="mb-8">
         <p className="ce-section-label mb-2">Dashboard</p>
@@ -76,48 +99,100 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Runs */}
-        <div className="lg:col-span-2 bg-white border border-gray-100 rounded-lg p-5">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-gray-800">Recent Runs</p>
+        {/* Runs table */}
+        <div className="lg:col-span-2 bg-white border border-gray-100 rounded-lg overflow-hidden flex flex-col min-h-0">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-800">Runs</p>
             <Link to="/runs" className="text-xs text-[#4B90FF] font-medium hover:underline flex items-center gap-1">
-              View all <ArrowRight size={12} />
+              Open recording <ArrowRight size={12} />
             </Link>
           </div>
           {runsLoading ? (
-            <LoadingState message="Loading runs..." />
+            <div className="p-8">
+              <LoadingState message="Loading runs..." />
+            </div>
           ) : (
-            <div className="space-y-3">
-              {runs.map((run) => {
-                const PlatformIcon = PLATFORM_ICONS[run.platform] || Monitor;
-                return (
-                  <Link
-                    key={run.id}
-                    to={`/runs/${run.id}`}
-                    className="flex items-center justify-between py-2.5 px-3 rounded-md hover:bg-gray-50/80 transition-colors -mx-1 group"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <PlatformIcon size={14} className="text-gray-400 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm text-gray-700 font-medium truncate group-hover:text-[#4B90FF] transition-colors">
-                          {run.name}
-                        </p>
-                        <p className="text-[11px] text-gray-400 truncate">
-                          {run.triggeredBy} · {formatRelativeTime(run.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 ml-3">
-                      {run.durationMs && (
-                        <span className="text-[11px] text-gray-400 ce-mono">
-                          {formatDuration(run.durationMs)}
-                        </span>
-                      )}
-                      <StatusBadge status={run.status} size="sm" />
-                    </div>
-                  </Link>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/80 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Project</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Platform</th>
+                    <th className="px-4 py-3">Steps</th>
+                    <th className="px-4 py-3">Duration</th>
+                    <th className="px-4 py-3">Created</th>
+                    <th className="px-4 py-3 w-24" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
+                        No runs yet. Start one from <Link to="/runs" className="text-[#4B90FF] font-medium">Runs</Link>.
+                      </td>
+                    </tr>
+                  ) : (
+                    runs.map((run) => {
+                      const PlatformIcon = PLATFORM_ICONS[run.platform] || Monitor;
+                      return (
+                        <tr key={run.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-4 py-3">
+                            <Link
+                              to={`/runs/${run.id}`}
+                              className="font-medium text-gray-800 hover:text-[#4B90FF] line-clamp-2"
+                            >
+                              {run.name}
+                            </Link>
+                            <p className="text-[10px] text-gray-400 truncate max-w-[220px]" title={run.url}>
+                              {run.url}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 text-xs">
+                            {run.project?.name ?? '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={run.status} size="sm" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 text-gray-500 text-xs">
+                              <PlatformIcon size={12} />
+                              {run.platform}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 tabular-nums">{run.stepsCount}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {run.durationMs != null ? formatDuration(run.durationMs) : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                            {formatRelativeTime(run.createdAt)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <Link
+                                to={`/runs/${run.id}`}
+                                className="p-1.5 rounded-md text-[#4B90FF] hover:bg-blue-50 text-xs font-medium"
+                              >
+                                View
+                              </Link>
+                              <button
+                                type="button"
+                                title="Delete run"
+                                disabled={deleteRunMutation.isPending}
+                                onClick={() => handleDelete(run)}
+                                className="p-1.5 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-40"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -134,6 +209,13 @@ export default function HomePage() {
               >
                 <Play size={13} className="text-[#4B90FF]" />
                 Start a New Run
+              </Link>
+              <Link
+                to="/projects"
+                className="flex items-center gap-2.5 px-3 py-2.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
+              >
+                <FolderKanban size={13} className="text-[#4B90FF]" />
+                Manage Projects
               </Link>
               <Link
                 to="/settings"

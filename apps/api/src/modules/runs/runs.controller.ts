@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   Body,
@@ -58,8 +59,17 @@ export class RunsController {
   @ApiResponse({ status: 201, description: 'Recording started' })
   async startRecording(@Req() req: any, @Body() dto: StartRecordingDto) {
     const userId = req.user.sub;
-    const run = await this.recordingService.startRecording(userId, dto.name, dto.url);
+    const run = await this.recordingService.startRecording(userId, dto.name, dto.url, dto.projectId);
     return { runId: run.id, status: 'recording' };
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a run and its steps' })
+  @ApiResponse({ status: 204, description: 'Run deleted' })
+  @ApiResponse({ status: 400, description: 'Cannot delete while recording' })
+  async remove(@Req() req: any, @Param('id') id: string) {
+    await this.runsService.deleteOne(id, req.user.sub);
   }
 
   @Post('record/stop')

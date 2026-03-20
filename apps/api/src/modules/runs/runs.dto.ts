@@ -32,6 +32,11 @@ export class StartRecordingDto {
   @ApiProperty({ description: 'URL to record against' })
   @IsString()
   url!: string;
+
+  @ApiPropertyOptional({ description: 'Optional project this run belongs to' })
+  @IsOptional()
+  @IsString()
+  projectId?: string;
 }
 
 export class StopRecordingDto {
