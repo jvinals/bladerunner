@@ -51,6 +51,11 @@ export interface RecordingSession {
   stepSequence: number;
   latestFrame: Buffer | null;
   /**
+   * After server Clerk+MailSlurp sign-in completes, the next in-app verification OTP type (if any) is labeled AUTOMATIC for UI.
+   * Does not set `clerkAuthPhase` (playback must still execute that step).
+   */
+  pendingPostClerkVerificationAutomaticUi: boolean;
+  /**
    * Encodes CDP screencast JPEGs to WebM on the API host (required when the browser is remote — Playwright
    * `recordVideo` files are not readable from this process).
    */
@@ -134,6 +139,7 @@ export class RecordingService extends EventEmitter {
         cdpSession,
         stepSequence: 0,
         latestFrame: null,
+        pendingPostClerkVerificationAutomaticUi: false,
         screencastVideo,
       };
 
