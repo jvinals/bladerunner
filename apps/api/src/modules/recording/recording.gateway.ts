@@ -33,6 +33,13 @@ export class RecordingGateway implements OnGatewayInit {
       this.server.to(`run:${runId}`).emit('status', status);
     });
 
+    this.recordingService.on('playbackProgress', (playbackSessionId: string, payload: Record<string, unknown>) => {
+      this.server.to(`run:${playbackSessionId}`).emit('playbackProgress', {
+        runId: playbackSessionId,
+        ...payload,
+      });
+    });
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 

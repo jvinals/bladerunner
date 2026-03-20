@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, IsOptional, IsEnum, IsArray, IsInt, Min } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, IsInt, Min, Max } from 'class-validator';
 
 enum RunStatusDto {
   RECORDING = 'RECORDING',
@@ -29,6 +29,26 @@ export class StopRecordingDto {
   @ApiProperty({ description: 'Run ID to stop' })
   @IsString()
   runId!: string;
+}
+
+export class StartPlaybackDto {
+  @ApiPropertyOptional({
+    description: 'Delay between steps in milliseconds (0–5000, default 600)',
+    minimum: 0,
+    maximum: 5000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  delayMs?: number;
+}
+
+export class StopPlaybackDto {
+  @ApiProperty({ description: 'Playback session ID returned from start playback' })
+  @IsString()
+  playbackSessionId!: string;
 }
 
 export class InstructDto {

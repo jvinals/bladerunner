@@ -1,14 +1,30 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useRef, useEffect, useCallback } from 'react';
 import { runsApi } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
+import { StepCard, type PlaybackHighlight } from '@/components/ui/StepCard';
+import { usePlayback } from '@/hooks/usePlayback';
+import type { RecordedStep } from '@/hooks/useRecording';
 import { formatDuration, formatRelativeTime } from '@/lib/utils';
 import {
   ArrowLeft, RotateCcw, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
-  Camera, FileText, Activity
+  Camera, FileText, Activity, Play, Square, ExternalLink,
 } from 'lucide-react';
+
+function playbackToneForStep(
+  sequence: number,
+  showReplayChrome: boolean,
+  highlightSequence: number | null,
+  completed: Set<number>,
+): PlaybackHighlight | undefined {
+  if (!showReplayChrome) return undefined;
+  if (highlightSequence !== null && sequence === highlightSequence) return 'current';
+  if (completed.has(sequence)) return 'past';
+  return 'future';
+}
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
   desktop: Monitor,
@@ -25,6 +41,21 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: typeof A
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
+  const stepRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
+  const detachedPlaybackWindowRef = useRef<Window | null>(null);
+
+  const {
+    playbackSessionId,
+    currentFrame,
+    status: playbackStatus,
+    isPlaying,
+    highlightSequence,
+    completedSequences,
+    playbackError,
+    startPlayback,
+    stopPlayback,
+  } = usePlayback();
 
   const { data: run, isLoading, error } = useQuery({
     queryKey: ['run', id],
@@ -37,6 +68,59 @@ export default function RunDetailPage() {
     queryFn: () => runsApi.getFindings(id!),
     enabled: !!id,
   });
+
+  const recordedSteps = ((run as { steps?: RecordedStep[] } | undefined)?.steps ?? []) as RecordedStep[];
+  const canPlayback =
+    !!run && recordedSteps.length > 0 && (run as { status: string }).status !== 'RECORDING';
+  const showReplayChrome =
+    isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
+
+  useEffect(() => {
+    if (!currentFrame || !playbackCanvasRef.current) return;
+    const canvas = playbackCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = `data:image/jpeg;base64,${currentFrame}`;
+  }, [currentFrame]);
+
+  useEffect(() => {
+    if (highlightSequence == null) return;
+    const el = stepRefs.current.get(highlightSequence);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightSequence]);
+
+  const handleStartPlayback = useCallback(async () => {
+    if (!id || !canPlayback) return;
+    try {
+      await startPlayback(id);
+    } catch (e) {
+      console.error('Playback failed to start:', e);
+    }
+  }, [id, canPlayback, startPlayback]);
+
+  const handleDetachPlayback = useCallback(() => {
+    if (!playbackSessionId) return;
+    const w = window.open(
+      `/playback/${playbackSessionId}`,
+      'bladerunner-playback',
+      'width=1320,height=780',
+    );
+    if (w) {
+      detachedPlaybackWindowRef.current = w;
+      const check = setInterval(() => {
+        if (w.closed) {
+          detachedPlaybackWindowRef.current = null;
+          clearInterval(check);
+        }
+      }, 500);
+    }
+  }, [playbackSessionId]);
 
   if (isLoading) return <LoadingState message="Loading run details..." />;
   if (error || !run) return <ErrorState message="Run not found" />;
@@ -67,6 +151,7 @@ export default function RunDetailPage() {
       status: string;
     }>;
     createdAt: string;
+    steps?: RecordedStep[];
   };
 
   const findingsArr = (findings || []) as Array<{
@@ -109,10 +194,42 @@ export default function RunDetailPage() {
             <span>{formatRelativeTime(r.createdAt)}</span>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors">
-            <RotateCcw size={13} /> Rerun
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!canPlayback || isPlaying}
+            onClick={handleStartPlayback}
+            title={
+              !canPlayback
+                ? r.status === 'RECORDING'
+                  ? 'Wait until recording finishes'
+                  : 'No recorded steps'
+                : 'Replay recorded steps in a live browser preview'
+            }
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <RotateCcw size={13} /> Play back
           </button>
+          {isPlaying && (
+            <>
+              <button
+                type="button"
+                onClick={() => void stopPlayback()}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-md hover:bg-red-50 transition-colors"
+              >
+                <Square size={13} /> Stop
+              </button>
+              {playbackSessionId && (
+                <button
+                  type="button"
+                  onClick={handleDetachPlayback}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
+                >
+                  <ExternalLink size={13} /> Detach preview
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -147,6 +264,72 @@ export default function RunDetailPage() {
           <p className="text-lg font-bold text-[#4B90FF]">{r.artifactsCount}</p>
         </div>
       </div>
+
+      {/* Playback preview + recorded steps */}
+      {recordedSteps.length > 0 && (
+        <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white border border-gray-100 rounded-lg p-4 min-h-[240px] flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <Play size={14} className="text-[#4B90FF]" />
+                Live replay preview
+              </p>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+                {playbackStatus === 'idle' ? 'Idle' : playbackStatus}
+              </span>
+            </div>
+            <div className="flex-1 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 min-h-[200px]">
+              {currentFrame || isPlaying ? (
+                <canvas
+                  ref={playbackCanvasRef}
+                  className="max-w-full max-h-[min(420px,50vh)] object-contain"
+                  role="img"
+                  aria-label="Playback preview"
+                />
+              ) : (
+                <p className="text-xs text-gray-400 text-center px-6">
+                  Press <span className="font-medium text-gray-600">Play back</span> to run your saved steps in a new browser
+                  session. Frames stream here in real time.
+                </p>
+              )}
+            </div>
+            {playbackError && (
+              <p className="mt-2 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5">
+                {playbackError}
+              </p>
+            )}
+          </div>
+          <div className="bg-white border border-gray-100 rounded-lg p-4 max-h-[min(520px,70vh)] flex flex-col">
+            <p className="text-sm font-semibold text-gray-800 mb-3">
+              Recorded steps
+              <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
+            </p>
+            <div className="overflow-y-auto flex-1 pr-1 -mr-1">
+              {recordedSteps.map((step) => (
+                <StepCard
+                  key={step.id}
+                  ref={(el) => {
+                    if (el) stepRefs.current.set(step.sequence, el);
+                    else stepRefs.current.delete(step.sequence);
+                  }}
+                  sequence={step.sequence}
+                  action={step.action}
+                  instruction={step.instruction}
+                  playwrightCode={step.playwrightCode}
+                  origin={step.origin}
+                  timestamp={step.timestamp}
+                  playbackHighlight={playbackToneForStep(
+                    step.sequence,
+                    showReplayChrome,
+                    highlightSequence,
+                    completedSequences,
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Targets & Timeline */}

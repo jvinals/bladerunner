@@ -1,6 +1,17 @@
 import {
-  Controller, Get, Post, Param, Query, Body,
-  NotFoundException, UseGuards, Req, Res, Sse, Header,
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  NotFoundException,
+  UseGuards,
+  Req,
+  Res,
+  Sse,
+  Header,
+  HttpCode,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
@@ -8,7 +19,12 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { RunsService } from './runs.service';
 import { RecordingService } from '../recording/recording.service';
 import {
-  StartRecordingDto, StopRecordingDto, InstructDto, RunQueryDto,
+  StartRecordingDto,
+  StopRecordingDto,
+  StartPlaybackDto,
+  StopPlaybackDto,
+  InstructDto,
+  RunQueryDto,
 } from './runs.dto';
 import { Observable, Subject } from 'rxjs';
 
@@ -56,6 +72,17 @@ export class RunsController {
     return run;
   }
 
+  @Post('playback/stop')
+  @ApiOperation({ summary: 'Stop an in-progress playback session' })
+  @ApiResponse({ status: 200, description: 'Playback stopped' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async stopPlayback(@Req() req: any, @Body() dto: StopPlaybackDto) {
+    const userId = req.user.sub;
+    const ok = await this.recordingService.stopPlayback(dto.playbackSessionId, userId);
+    if (!ok) throw new NotFoundException('Playback session not found');
+    return { ok: true };
+  }
+
   @Post(':id/instruct')
   @ApiOperation({ summary: 'Send a natural language instruction to the active recording' })
   @ApiResponse({ status: 200, description: 'Instruction executed, step returned' })
@@ -67,6 +94,19 @@ export class RunsController {
     const userId = req.user.sub;
     const step = await this.recordingService.executeInstruction(id, userId, dto.instruction);
     return { step };
+  }
+
+  @Post(':id/playback/start')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Start replaying a completed run in a new browser session (preview)' })
+  @ApiResponse({ status: 201, description: 'Playback started; join socket room run:<playbackSessionId>' })
+  async startPlayback(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: StartPlaybackDto,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.startPlayback(userId, id, { delayMs: dto.delayMs });
   }
 
   @Get(':id')

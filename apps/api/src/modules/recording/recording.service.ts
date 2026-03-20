@@ -1,6 +1,16 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  HttpException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
+import type { RunStep } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
@@ -16,10 +26,22 @@ export interface RecordingSession {
   latestFrame: Buffer | null;
 }
 
+/** Live replay session — keyed by playbackSessionId (socket room), not source run id */
+export interface PlaybackSession {
+  playbackSessionId: string;
+  sourceRunId: string;
+  userId: string;
+  browser: Browser;
+  page: Page;
+  cdpSession: CDPSession;
+  latestFrame: Buffer | null;
+}
+
 @Injectable()
 export class RecordingService extends EventEmitter {
   private readonly logger = new Logger(RecordingService.name);
   private sessions = new Map<string, RecordingSession>();
+  private playbackSessions = new Map<string, PlaybackSession>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -72,7 +94,7 @@ export class RecordingService extends EventEmitter {
 
       this.sessions.set(run.id, session);
 
-      await this.setupScreencast(session);
+      await this.attachScreencast(session.cdpSession, session, session.runId);
       await this.setupEventCapture(session);
 
       await page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -402,8 +424,13 @@ export class RecordingService extends EventEmitter {
     return step;
   }
 
-  private async setupScreencast(session: RecordingSession) {
-    await session.cdpSession.send('Page.startScreencast', {
+  /** CDP screencast → `emit('frame', frameChannelId, base64Jpeg)` */
+  private async attachScreencast(
+    cdpSession: CDPSession,
+    latestFrameHolder: { latestFrame: Buffer | null },
+    frameChannelId: string,
+  ) {
+    await cdpSession.send('Page.startScreencast', {
       format: 'jpeg',
       quality: 60,
       maxWidth: 1280,
@@ -411,16 +438,218 @@ export class RecordingService extends EventEmitter {
       everyNthFrame: 3,
     });
 
-    session.cdpSession.on('Page.screencastFrame', async (params: any) => {
-      const frameBuffer = Buffer.from(params.data, 'base64');
-      session.latestFrame = frameBuffer;
+    cdpSession.on('Page.screencastFrame', async (params: any) => {
+      latestFrameHolder.latestFrame = Buffer.from(params.data, 'base64');
 
-      await session.cdpSession.send('Page.screencastFrameAck', {
+      await cdpSession.send('Page.screencastFrameAck', {
         sessionId: params.sessionId,
       });
 
-      this.emit('frame', session.runId, params.data);
+      this.emit('frame', frameChannelId, params.data);
     });
+  }
+
+  /**
+   * Replay stored steps in a new browser session; returns immediately while playback runs async.
+   * Clients join socket room `run:<playbackSessionId>`.
+   */
+  async startPlayback(
+    userId: string,
+    sourceRunId: string,
+    opts?: { delayMs?: number },
+  ): Promise<{ playbackSessionId: string; sourceRunId: string }> {
+    const run = await this.prisma.run.findFirst({
+      where: { id: sourceRunId, userId },
+      include: { steps: { orderBy: { sequence: 'asc' } } },
+    });
+
+    if (!run) {
+      throw new NotFoundException(`Run ${sourceRunId} not found`);
+    }
+    if (run.status === 'RECORDING') {
+      throw new ConflictException('Run is still recording; wait until it completes before playback');
+    }
+    if (!run.steps.length) {
+      throw new BadRequestException('This run has no recorded steps to play back');
+    }
+
+    const playbackSessionId = randomUUID();
+    const delayMs = Math.min(5000, Math.max(0, opts?.delayMs ?? 600));
+    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+
+    let wsEndpoint: string;
+    let browser: Browser;
+    try {
+      wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
+      browser = await chromium.connect(wsEndpoint);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new ServiceUnavailableException(
+        `Playback could not start (browser worker / Playwright). ${detail}`,
+      );
+    }
+
+    try {
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+      });
+      const page = await context.newPage();
+      const cdpSession = await context.newCDPSession(page);
+
+      const session: PlaybackSession = {
+        playbackSessionId,
+        sourceRunId,
+        userId,
+        browser,
+        page,
+        cdpSession,
+        latestFrame: null,
+      };
+
+      this.playbackSessions.set(playbackSessionId, session);
+      await this.attachScreencast(cdpSession, session, playbackSessionId);
+
+      const steps = run.steps;
+      const first = steps[0];
+      const firstLooksLikeNavigate =
+        first.action === 'NAVIGATE' ||
+        new RegExp('page\\.goto\\s*\\(', 'i').test(first.playwrightCode || '');
+      if (!firstLooksLikeNavigate) {
+        await page.goto(run.url, { waitUntil: 'domcontentloaded' });
+      }
+
+      void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId);
+
+      this.logger.log(`Playback started: ${playbackSessionId} (source ${sourceRunId})`);
+      return { playbackSessionId, sourceRunId };
+    } catch (err) {
+      try {
+        await browser.close();
+      } catch {
+        /* ignore */
+      }
+      this.playbackSessions.delete(playbackSessionId);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new ServiceUnavailableException(`Playback setup failed. ${detail}`);
+    }
+  }
+
+  async stopPlayback(playbackSessionId: string, userId: string): Promise<boolean> {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return false;
+    }
+    await this.cleanupPlaybackSession(playbackSessionId, session);
+    this.emit('status', playbackSessionId, {
+      status: 'stopped',
+      runId: playbackSessionId,
+      sourceRunId: session.sourceRunId,
+    });
+    return true;
+  }
+
+  private async runPlaybackLoop(
+    playbackSessionId: string,
+    session: PlaybackSession,
+    steps: RunStep[],
+    delayMs: number,
+    sourceRunId: string,
+  ) {
+    try {
+      this.emit('status', playbackSessionId, {
+        status: 'playback',
+        runId: playbackSessionId,
+        sourceRunId,
+      });
+
+      for (const step of steps) {
+        const stepPayload = {
+          id: step.id,
+          sequence: step.sequence,
+          action: step.action,
+          instruction: step.instruction,
+        };
+
+        this.emit('playbackProgress', playbackSessionId, {
+          playbackSessionId,
+          sourceRunId,
+          step: stepPayload,
+          phase: 'before',
+        });
+
+        try {
+          await this.executePwCode(session.page, step.playwrightCode);
+        } catch (execErr) {
+          const msg = execErr instanceof Error ? execErr.message : String(execErr);
+          this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);
+          this.emit('playbackProgress', playbackSessionId, {
+            playbackSessionId,
+            sourceRunId,
+            step: stepPayload,
+            phase: 'error',
+            error: msg,
+          });
+          this.emit('status', playbackSessionId, {
+            status: 'failed',
+            runId: playbackSessionId,
+            sourceRunId,
+            error: msg,
+          });
+          await this.cleanupPlaybackSession(playbackSessionId, session);
+          return;
+        }
+
+        await session.page.waitForLoadState('domcontentloaded').catch(() => {});
+        await this.sleep(delayMs);
+        this.emit('playbackProgress', playbackSessionId, {
+          playbackSessionId,
+          sourceRunId,
+          step: stepPayload,
+          phase: 'after',
+        });
+      }
+
+      this.emit('status', playbackSessionId, {
+        status: 'completed',
+        runId: playbackSessionId,
+        sourceRunId,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`Playback loop error: ${msg}`);
+      this.emit('status', playbackSessionId, {
+        status: 'failed',
+        runId: playbackSessionId,
+        sourceRunId,
+        error: msg,
+      });
+    } finally {
+      const still = this.playbackSessions.get(playbackSessionId);
+      if (still) {
+        await this.cleanupPlaybackSession(playbackSessionId, still);
+      }
+    }
+  }
+
+  private async cleanupPlaybackSession(playbackSessionId: string, session: PlaybackSession) {
+    this.playbackSessions.delete(playbackSessionId);
+    try {
+      await session.cdpSession.send('Page.stopScreencast').catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    try {
+      await session.browser.close();
+    } catch (err) {
+      this.logger.warn('Error closing playback browser', err);
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve();
   }
 
   private async setupEventCapture(session: RecordingSession) {

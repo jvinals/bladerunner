@@ -88,6 +88,16 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ instruction }),
     }),
+  startPlayback: (runId: string, opts?: { delayMs?: number }) =>
+    apiFetch<{ playbackSessionId: string; sourceRunId: string }>(`/runs/${runId}/playback/start`, {
+      method: 'POST',
+      body: JSON.stringify(opts?.delayMs != null ? { delayMs: opts.delayMs } : {}),
+    }),
+  stopPlayback: (playbackSessionId: string) =>
+    apiFetch<{ ok: boolean }>('/runs/playback/stop', {
+      method: 'POST',
+      body: JSON.stringify({ playbackSessionId }),
+    }),
 };
 
 // ─── Projects ────────────────────────────────────────────────────────────────

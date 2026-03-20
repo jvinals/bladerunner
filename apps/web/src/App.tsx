@@ -8,6 +8,7 @@ import RunsPage from './pages/Runs';
 import RunDetailPage from './pages/RunDetail';
 import SettingsPage from './pages/Settings';
 import DetachedPreview from './pages/DetachedPreview';
+import DetachedPlayback from './pages/DetachedPlayback';
 import NotFoundPage from './pages/NotFound';
 
 function AuthTokenSync() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route path="preview/:runId" element={<DetachedPreview />} />
+          <Route path="playback/:playbackSessionId" element={<DetachedPlayback />} />
         </Routes>
       </Show>
       <Show when="signed-out">

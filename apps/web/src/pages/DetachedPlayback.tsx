@@ -1,0 +1,84 @@
+import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import type { Socket } from 'socket.io-client';
+import { createRecordingSocket } from '@/lib/recordingSocket';
+
+/**
+ * Detached window for live test replay preview.
+ * Open with `/playback/:playbackSessionId` after starting playback from run detail.
+ */
+export default function DetachedPlayback() {
+  const { playbackSessionId } = useParams<{ playbackSessionId: string }>();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState<string>('connecting');
+
+  useEffect(() => {
+    if (!playbackSessionId) return;
+
+    const socket: Socket = createRecordingSocket();
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setConnected(true);
+      setStatus('connected');
+      socket.emit('join', { runId: playbackSessionId });
+    });
+
+    socket.on('disconnect', () => {
+      setConnected(false);
+      setStatus('disconnected');
+    });
+
+    socket.on('frame', (data: { runId: string; data: string }) => {
+      if (data.runId !== playbackSessionId || !canvasRef.current) return;
+      const ctx = canvasRef.current.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.onload = () => {
+        canvasRef.current!.width = img.width;
+        canvasRef.current!.height = img.height;
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = `data:image/jpeg;base64,${data.data}`;
+    });
+
+    socket.on('status', (data: { status: string }) => {
+      setStatus(data.status);
+    });
+
+    return () => {
+      socket.emit('leave', { runId: playbackSessionId });
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [playbackSessionId]);
+
+  return (
+    <div className="w-screen h-screen bg-gray-900 flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center gap-3">
+          <span className="text-[#4B90FF] font-bold text-sm">Bladerunner</span>
+          <span className="text-gray-400 text-xs">Playback preview</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
+          <span className="text-xs text-gray-400 capitalize">{status}</span>
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center overflow-auto p-4">
+        <canvas
+          ref={canvasRef}
+          className="max-w-full max-h-full object-contain rounded shadow-2xl block bg-black/40"
+          role="img"
+          aria-label="Playback browser preview"
+        />
+        <p className="text-[10px] text-gray-500 text-center max-w-md px-4 mt-3">
+          Read-only replay of your recorded steps. Close this window when finished.
+        </p>
+      </div>
+    </div>
+  );
+}

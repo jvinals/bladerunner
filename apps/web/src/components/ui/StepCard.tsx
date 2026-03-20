@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { ChevronDown, ChevronRight, Mouse, Type, Navigation, ScrollText, Pointer, Eye, Camera, CheckCircle, Clock, Sparkles, Hand } from 'lucide-react';
+
+export type PlaybackHighlight = 'past' | 'current' | 'future';
 
 interface StepCardProps {
   sequence: number;
@@ -8,6 +10,8 @@ interface StepCardProps {
   playwrightCode: string;
   origin: 'MANUAL' | 'AI_DRIVEN';
   timestamp: string;
+  /** During test replay: visual emphasis synced with playback progress */
+  playbackHighlight?: PlaybackHighlight;
 }
 
 const ACTION_ICONS: Record<string, typeof Mouse> = {
@@ -28,16 +32,28 @@ function formatTime(ts: string): string {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export function StepCard({ sequence, action, instruction, playwrightCode, origin, timestamp }: StepCardProps) {
+const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
+  current: 'ring-2 ring-[#4B90FF] ring-offset-2 ring-offset-white shadow-md',
+  past: 'opacity-55',
+  future: 'opacity-90',
+};
+
+export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepCard(
+  { sequence, action, instruction, playwrightCode, origin, timestamp, playbackHighlight },
+  ref,
+) {
   const [expanded, setExpanded] = useState(false);
   const Icon = ACTION_ICONS[action] || Hand;
   const isAI = origin === 'AI_DRIVEN';
 
+  const highlightClass = playbackHighlight ? HIGHLIGHT_RING[playbackHighlight] : '';
+
   return (
     <div
+      ref={ref}
       className={`group relative border-l-3 rounded-r-lg bg-white border border-gray-100 mb-2 transition-all duration-200 hover:shadow-sm ${
         isAI ? 'border-l-[#4D65FF]' : 'border-l-gray-300'
-      }`}
+      } ${highlightClass}`}
     >
       <div className="flex items-start gap-2.5 px-3 py-2.5">
         <div
@@ -85,4 +101,4 @@ export function StepCard({ sequence, action, instruction, playwrightCode, origin
       )}
     </div>
   );
-}
+});
