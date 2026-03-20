@@ -7,43 +7,7 @@ import { waitForClerkOtpFromAgentMail } from './agentmail-otp';
  * E2E global.setup does this; Nest API must do it per-process before any `setupClerkTestingToken`.
  */
 async function ensureClerkTestingPlaywrightReady(): Promise<void> {
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H1',
-      location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
-      message: 'before clerkSetup gate',
-      data: {
-        hasClerkFapi: !!process.env.CLERK_FAPI,
-        hasTestingToken: !!process.env.CLERK_TESTING_TOKEN,
-        hasPublishableKey: !!(
-          process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY
-        ),
-        hasSecretKey: !!process.env.CLERK_SECRET_KEY,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   if (process.env.CLERK_FAPI) {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        hypothesisId: 'H1',
-        location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
-        message: 'skip clerkSetup — CLERK_FAPI already set',
-        data: {},
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return;
   }
 
@@ -63,24 +27,30 @@ async function ensureClerkTestingPlaywrightReady(): Promise<void> {
     secretKey,
     dotenv: false,
   });
+}
 
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-    body: JSON.stringify({
-      sessionId: '5f6bd9',
-      hypothesisId: 'H2',
-      location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
-      message: 'after clerkSetup',
-      data: {
-        hasClerkFapi: !!process.env.CLERK_FAPI,
-        hasTestingToken: !!process.env.CLERK_TESTING_TOKEN,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
+/**
+ * After entering the identifier, Clerk shows "Continue" — but OAuth rows often use
+ * "Continue with Apple" which also matches /continue/i and must NOT be clicked.
+ */
+function locatorAfterIdentifierContinue(page: Page) {
+  return page
+    .getByRole('button', { name: /^Continue$/i })
+    .or(page.getByRole('button', { name: /^Next$/i }));
+}
+
+/** Submit password step (avoid broad /continue/ that matches social buttons). */
+function locatorAfterPasswordSubmit(page: Page) {
+  return page
+    .getByRole('button', { name: /^Sign in$/i })
+    .or(page.getByRole('button', { name: /^Log in$/i }))
+    .or(page.getByRole('button', { name: /^Continue$/i }));
+}
+
+function locatorAfterOtpSubmit(page: Page) {
+  return page
+    .getByRole('button', { name: /^Continue$/i })
+    .or(page.getByRole('button', { name: /^Verify$/i }));
 }
 
 /** Hosted Clerk / common dev patterns */
@@ -170,7 +140,7 @@ export async function performClerkPasswordEmail2FA(
   const combined = await passwordAlready.isVisible().catch(() => false);
 
   if (!combined) {
-    await page.getByRole('button', { name: /continue/i }).first().click();
+    await locatorAfterIdentifierContinue(page).first().click();
   }
 
   const passwordField = page
@@ -180,7 +150,7 @@ export async function performClerkPasswordEmail2FA(
   const notBeforeMs = Date.now() - 5_000;
   await passwordField.fill(opts.password);
 
-  await page.getByRole('button', { name: /continue|sign in|log in/i }).first().click();
+  await locatorAfterPasswordSubmit(page).first().click();
 
   const otpSingle = page
     .locator(
@@ -208,7 +178,7 @@ export async function performClerkPasswordEmail2FA(
     await otpSingle.fill(otp);
   }
 
-  await page.getByRole('button', { name: /continue|verify/i }).first().click();
+  await locatorAfterOtpSubmit(page).first().click();
 
   const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
   await page.waitForURL(

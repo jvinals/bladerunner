@@ -167,6 +167,7 @@ Secrets stay on the **server**; the browser never receives test passwords.
 
 ## Changelog
 
+- **0.2.30** — **Clerk auto sign-in**: use **anchored** button names (`/^Continue$/i`, etc.) so automation does not click **“Continue with Apple”** (substring match on `/continue/i` used to start Apple OAuth and looked like a manual Apple step in the recording).
 - **0.2.29** — **Clerk testing in API**: call **`clerkSetup`** when **`CLERK_FAPI`** is unset before **`setupClerkTestingToken`** (fixes “Frontend API URL is required” for recording/playback auto sign-in outside Playwright global setup).
 - **0.2.28** — **Recording**: **`POST /runs/:id/recording/clerk-auto-sign-in`** + **Runs** sidebar **Sign in automatically** (one-shot Clerk + AgentMail on the live session; synthetic tagged step).
 - **0.2.27** — **`@bladerunner/clerk-agentmail-signin`**: shared **Clerk + AgentMail OTP** for **E2E** and **API playback**; recording tags **`metadata.clerkAuthPhase`** on Clerk sign-in URLs/UI; playback **`PLAYBACK_AUTO_CLERK_SIGNIN`**, DTO **`autoClerkSignIn` / `skipUntilSequence` / `skipStepIds`**; UI playback options on **Runs** and **Run detail**.
