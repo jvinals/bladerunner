@@ -1,6 +1,87 @@
 import type { Page } from 'playwright-core';
-import { setupClerkTestingToken } from '@clerk/testing/playwright';
+import { clerkSetup, setupClerkTestingToken } from '@clerk/testing/playwright';
 import { waitForClerkOtpFromAgentMail } from './agentmail-otp';
+
+/**
+ * Playwright testing helpers expect `clerkSetup` to run first (sets `CLERK_FAPI` + `CLERK_TESTING_TOKEN`).
+ * E2E global.setup does this; Nest API must do it per-process before any `setupClerkTestingToken`.
+ */
+async function ensureClerkTestingPlaywrightReady(): Promise<void> {
+  // #region agent log
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+    body: JSON.stringify({
+      sessionId: '5f6bd9',
+      hypothesisId: 'H1',
+      location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
+      message: 'before clerkSetup gate',
+      data: {
+        hasClerkFapi: !!process.env.CLERK_FAPI,
+        hasTestingToken: !!process.env.CLERK_TESTING_TOKEN,
+        hasPublishableKey: !!(
+          process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY
+        ),
+        hasSecretKey: !!process.env.CLERK_SECRET_KEY,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  if (process.env.CLERK_FAPI) {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        hypothesisId: 'H1',
+        location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
+        message: 'skip clerkSetup — CLERK_FAPI already set',
+        data: {},
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    return;
+  }
+
+  const publishableKey =
+    process.env.CLERK_PUBLISHABLE_KEY ||
+    process.env.VITE_CLERK_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!publishableKey || !secretKey) {
+    throw new Error(
+      'clerkSetup requires CLERK_PUBLISHABLE_KEY (or VITE_CLERK_PUBLISHABLE_KEY) and CLERK_SECRET_KEY so Clerk testing can set CLERK_FAPI.',
+    );
+  }
+
+  await clerkSetup({
+    publishableKey,
+    secretKey,
+    dotenv: false,
+  });
+
+  // #region agent log
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+    body: JSON.stringify({
+      sessionId: '5f6bd9',
+      hypothesisId: 'H2',
+      location: 'clerk-sign-in.ts:ensureClerkTestingPlaywrightReady',
+      message: 'after clerkSetup',
+      data: {
+        hasClerkFapi: !!process.env.CLERK_FAPI,
+        hasTestingToken: !!process.env.CLERK_TESTING_TOKEN,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
 
 /** Hosted Clerk / common dev patterns */
 const CLERK_HOST_SUBSTR = ['clerk.', 'accounts.'];
@@ -71,6 +152,7 @@ export async function performClerkPasswordEmail2FA(
   page: Page,
   opts: PerformClerkPasswordEmail2FAOpts,
 ): Promise<void> {
+  await ensureClerkTestingPlaywrightReady();
   await setupClerkTestingToken({ page });
 
   const base = opts.baseURL.replace(/\/$/, '');
