@@ -12,20 +12,19 @@ function writeStdinChunk(stdin: Writable, buf: Buffer): Promise<void> {
   });
 }
 
-export type ScreencastWebmEncoder = {
-  /** Temp file ffmpeg writes to (API-local). */
+export type ScreencastVideoEncoder = {
+  /** Temp file ffmpeg writes to (API-local), usually `.mp4`. */
   outputPath: string;
   pushFrame: (jpeg: Buffer) => void;
-  /** End stdin and wait for ffmpeg to finish writing `outputPath`. */
   finalize: () => Promise<{ ok: boolean; exitCode: number | null; stderrTail: string }>;
   kill: () => void;
 };
 
 /**
- * Encodes a live MJPEG stream (CDP screencast JPEGs) to WebM on **this** machine.
- * Use this when Playwright `recordVideo` cannot be read from the API process (e.g. `chromium.connect()` to a remote worker).
+ * Encodes CDP screencast JPEGs to **H.264 MP4** on this machine (broad ffmpeg support; VP8 WebM often
+ * missing on stock macOS/Homebrew builds, which yielded thumbnails-only runs).
  */
-export function createScreencastWebmEncoder(outputPath: string, logger: Logger): ScreencastWebmEncoder | null {
+export function createScreencastVideoEncoder(outputPath: string, logger: Logger): ScreencastVideoEncoder | null {
   const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
   const args = [
     '-hide_banner',
@@ -37,15 +36,15 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
     '-i',
     'pipe:0',
     '-c:v',
-    'libvpx-vp8',
-    '-crf',
-    '32',
-    '-b:v',
-    '0',
-    '-deadline',
-    'realtime',
-    '-cpu-used',
-    '8',
+    'libx264',
+    '-preset',
+    'ultrafast',
+    '-tune',
+    'zerolatency',
+    '-pix_fmt',
+    'yuv420p',
+    '-movflags',
+    '+faststart',
     '-an',
     outputPath,
   ];
@@ -74,7 +73,6 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
     if (stderr.length > 32_000) stderr = stderr.slice(-16_000);
   });
 
-  /** When true, ffmpeg stdin is broken or process ended — must not write (avoids EPIPE + crash). */
   let pipeBroken = false;
 
   const exitPromise = new Promise<number | null>((resolve) => {
@@ -85,7 +83,6 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
   });
 
   const stdin = proc.stdin;
-  /** Must handle EPIPE or Node throws unhandled "error" on Socket and crashes the API. */
   stdin.on('error', (err: NodeJS.ErrnoException) => {
     pipeBroken = true;
     if (err.code !== 'EPIPE') {
@@ -120,9 +117,7 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
     const exitCode = await exitPromise;
     const ok = exitCode === 0;
     if (!ok) {
-      logger.warn(
-        `ffmpeg screencast encode exited ${exitCode}; stderr: ${stderr.slice(-1500)}`,
-      );
+      logger.warn(`ffmpeg screencast encode exited ${exitCode}; stderr: ${stderr.slice(-1500)}`);
     }
     return { ok, exitCode, stderrTail: stderr };
   };
@@ -142,3 +137,8 @@ export function createScreencastWebmEncoder(outputPath: string, logger: Logger):
 
   return { outputPath, pushFrame, finalize, kill };
 }
+
+/** @deprecated Use {@link createScreencastVideoEncoder} */
+export const createScreencastWebmEncoder = createScreencastVideoEncoder;
+/** @deprecated Use {@link ScreencastVideoEncoder} */
+export type ScreencastWebmEncoder = ScreencastVideoEncoder;

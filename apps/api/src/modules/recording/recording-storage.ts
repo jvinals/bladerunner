@@ -20,12 +20,16 @@ export async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
 }
 
-export async function copyWebmToArtifacts(sourcePath: string, destDir: string): Promise<{ webmPath: string; sizeBytes: number }> {
+/** Persists the staged session video as `recording.mp4` (H.264). */
+export async function copyRecordingVideoToArtifacts(
+  sourcePath: string,
+  destDir: string,
+): Promise<{ videoPath: string; sizeBytes: number }> {
   await ensureDir(destDir);
-  const webmPath = path.join(destDir, 'recording.webm');
-  await fs.copyFile(sourcePath, webmPath);
-  const stat = await fs.stat(webmPath);
-  return { webmPath, sizeBytes: stat.size };
+  const videoPath = path.join(destDir, 'recording.mp4');
+  await fs.copyFile(sourcePath, videoPath);
+  const stat = await fs.stat(videoPath);
+  return { videoPath, sizeBytes: stat.size };
 }
 
 export async function writeJpegThumbnailFromVideo(

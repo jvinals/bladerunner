@@ -26,13 +26,13 @@ import {
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet } from './playback-skip.util';
 import {
-  copyWebmToArtifacts,
+  copyRecordingVideoToArtifacts,
   getRecordingsBaseDir,
   getRunArtifactDir,
   removePathIfExists,
   writeJpegThumbnailFromVideo,
 } from './recording-storage';
-import { createScreencastWebmEncoder, type ScreencastWebmEncoder } from './recording-screencast-ffmpeg';
+import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './recording-screencast-ffmpeg';
 
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
@@ -53,7 +53,7 @@ export interface RecordingSession {
    * Encodes CDP screencast JPEGs to WebM on the API host (required when the browser is remote — Playwright
    * `recordVideo` files are not readable from this process).
    */
-  screencastWebm: ScreencastWebmEncoder | null;
+  screencastVideo: ScreencastVideoEncoder | null;
 }
 
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
@@ -112,13 +112,13 @@ export class RecordingService extends EventEmitter {
 
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
 
-    let screencastWebm: ScreencastWebmEncoder | null = null;
-    const ffmpegStagingPath = path.join(os.tmpdir(), `br-screencast-${run.id}-${randomUUID()}.webm`);
+    let screencastVideo: ScreencastVideoEncoder | null = null;
+    const ffmpegStagingPath = path.join(os.tmpdir(), `br-screencast-${run.id}-${randomUUID()}.mp4`);
     try {
       const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
       const browser = await chromium.connect(wsEndpoint);
       const viewport = { width: 1280, height: 720 };
-      screencastWebm = createScreencastWebmEncoder(ffmpegStagingPath, this.logger);
+      screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
       const context = await browser.newContext({
         viewport,
       });
@@ -133,13 +133,13 @@ export class RecordingService extends EventEmitter {
         cdpSession,
         stepSequence: 0,
         latestFrame: null,
-        screencastWebm,
+        screencastVideo,
       };
 
       this.sessions.set(run.id, session);
 
       await this.attachScreencast(session.cdpSession, session, session.runId, {
-        onJpegFrame: (jpeg) => screencastWebm?.pushFrame(jpeg),
+        onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
       });
       await this.setupEventCapture(session);
 
@@ -160,8 +160,8 @@ export class RecordingService extends EventEmitter {
       this.logger.log(`Recording started: ${run.id} -> ${url}`);
       return run;
     } catch (err) {
-      if (screencastWebm) {
-        screencastWebm.kill();
+      if (screencastVideo) {
+        screencastVideo.kill();
         await removePathIfExists(ffmpegStagingPath).catch(() => {});
       }
       await this.prisma.run.update({
@@ -182,7 +182,7 @@ export class RecordingService extends EventEmitter {
     }
 
     const latestFrame = session.latestFrame;
-    const screencastWebm = session.screencastWebm;
+    const screencastVideo = session.screencastVideo;
 
     try {
       await session.cdpSession.send('Page.stopScreencast');
@@ -190,11 +190,11 @@ export class RecordingService extends EventEmitter {
       this.logger.warn('stopScreencast', err);
     }
 
-    if (screencastWebm) {
+    if (screencastVideo) {
       try {
-        await screencastWebm.finalize();
+        await screencastVideo.finalize();
       } catch (err) {
-        this.logger.warn(`screencast WebM finalize failed for ${runId}:`, err);
+        this.logger.warn(`screencast video finalize failed for ${runId}:`, err);
       }
     }
 
@@ -208,16 +208,16 @@ export class RecordingService extends EventEmitter {
 
     /** Staging file written by ffmpeg on the API host (same process as this service). */
     let rawVideoPath: string | null = null;
-    if (screencastWebm) {
+    if (screencastVideo) {
       try {
-        const st = await fs.stat(screencastWebm.outputPath);
+        const st = await fs.stat(screencastVideo.outputPath);
         if (st.size > 0) {
-          rawVideoPath = screencastWebm.outputPath;
+          rawVideoPath = screencastVideo.outputPath;
         } else {
-          this.logger.warn(`screencast WebM is empty for ${runId}, skipping copy`);
+          this.logger.warn(`screencast video is empty for ${runId}, skipping copy`);
         }
       } catch {
-        this.logger.warn(`screencast WebM not found or unreadable for ${runId}`);
+        this.logger.warn(`screencast video not found or unreadable for ${runId}`);
       }
     }
 
@@ -229,10 +229,10 @@ export class RecordingService extends EventEmitter {
 
     try {
       if (rawVideoPath) {
-        const { webmPath, sizeBytes: sz } = await copyWebmToArtifacts(rawVideoPath, artifactDir);
+        const { videoPath, sizeBytes: sz } = await copyRecordingVideoToArtifacts(rawVideoPath, artifactDir);
         sizeBytes = sz;
         const thumbPath = path.join(artifactDir, 'thumbnail.jpg');
-        const ffmpegOk = await writeJpegThumbnailFromVideo(webmPath, thumbPath, this.logger);
+        const ffmpegOk = await writeJpegThumbnailFromVideo(videoPath, thumbPath, this.logger);
         if (!ffmpegOk && latestFrame) {
           await fs.writeFile(thumbPath, latestFrame);
         }
@@ -248,8 +248,8 @@ export class RecordingService extends EventEmitter {
       this.logger.warn(`persist recording artifacts failed for ${runId}:`, err);
     }
 
-    if (screencastWebm) {
-      await removePathIfExists(screencastWebm.outputPath).catch(() => {});
+    if (screencastVideo) {
+      await removePathIfExists(screencastVideo.outputPath).catch(() => {});
     }
 
     const started = (await this.prisma.run.findUnique({ where: { id: runId } }))!.startedAt!;
@@ -269,7 +269,7 @@ export class RecordingService extends EventEmitter {
         data: {
           runId,
           userId,
-          format: 'webm',
+          format: 'mp4',
           url: recordingUrl,
           sizeBytes,
         },
@@ -297,9 +297,9 @@ export class RecordingService extends EventEmitter {
     } catch (err) {
       this.logger.warn(`abortRecordingForDeletion ${runId} stopScreencast:`, err);
     }
-    if (session.screencastWebm) {
-      session.screencastWebm.kill();
-      await removePathIfExists(session.screencastWebm.outputPath).catch(() => {});
+    if (session.screencastVideo) {
+      session.screencastVideo.kill();
+      await removePathIfExists(session.screencastVideo.outputPath).catch(() => {});
     }
     try {
       await session.browser.close();
@@ -313,14 +313,18 @@ export class RecordingService extends EventEmitter {
 
   getRunArtifactFilePaths(runId: string, userId: string): {
     artifactDir: string;
-    videoPath: string;
+    /** Preferred: H.264 MP4 (current encoder). */
+    recordingVideoMp4: string;
+    /** Legacy VP8 WebM from older runs. */
+    recordingVideoWebm: string;
     thumbnailPath: string;
   } {
     const base = getRecordingsBaseDir(this.configService);
     const artifactDir = getRunArtifactDir(base, userId, runId);
     return {
       artifactDir,
-      videoPath: path.join(artifactDir, 'recording.webm'),
+      recordingVideoMp4: path.join(artifactDir, 'recording.mp4'),
+      recordingVideoWebm: path.join(artifactDir, 'recording.webm'),
       thumbnailPath: path.join(artifactDir, 'thumbnail.jpg'),
     };
   }

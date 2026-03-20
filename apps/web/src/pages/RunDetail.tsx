@@ -56,7 +56,7 @@ function SessionRecordingCard({ runId }: { runId: string }) {
         <Film size={14} className="text-[#4B90FF]" />
         <p className="text-sm font-semibold text-gray-800">Session recording</p>
         <span className="text-[10px] font-normal text-gray-400 uppercase tracking-wider">
-          {showVideo ? 'WebM' : 'Preview'}
+          {showVideo ? 'Video' : 'Preview'}
         </span>
       </div>
       <div className="rounded-md border border-gray-100 bg-gray-900/5 min-h-[200px] flex items-center justify-center overflow-hidden">
@@ -82,12 +82,12 @@ function SessionRecordingCard({ runId }: { runId: string }) {
       </div>
       {videoDecodeFailed && (
         <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5">
-          This browser could not play the WebM file inline. Showing a preview frame instead.
+          This browser could not play the video inline. Showing a preview frame instead.
         </p>
       )}
       {!videoDecodeFailed && kind === 'image' && (
         <p className="mt-2 text-[11px] text-gray-400">
-          Preview frame from the session (no WebM file was stored for this run).
+          Preview frame from the session (no video file was stored for this run).
         </p>
       )}
     </div>

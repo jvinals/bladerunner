@@ -144,23 +144,35 @@ export class RunsController {
   }
 
   @Get(':id/recording/video')
-  @ApiOperation({ summary: 'Stream the WebM screen recording for a completed run' })
-  @ApiResponse({ status: 200, description: 'video/webm stream' })
-  @Header('Content-Type', 'video/webm')
+  @ApiOperation({ summary: 'Stream the session screen recording (MP4 preferred, WebM legacy)' })
+  @ApiResponse({ status: 200, description: 'video/mp4 or video/webm stream' })
   @Header('Cache-Control', 'private, max-age=3600')
   async getRecordingVideo(@Req() req: any, @Param('id') id: string): Promise<StreamableFile> {
     const userId = req.user.sub;
     const run = await this.runsService.findOne(id, userId);
     if (!run) throw new NotFoundException(`Run ${id} not found`);
     const paths = this.recordingService.getRunArtifactFilePaths(id, userId);
+    let filePath: string;
+    let mime: string;
+    let filename: string;
     try {
-      await access(paths.videoPath);
+      await access(paths.recordingVideoMp4);
+      filePath = paths.recordingVideoMp4;
+      mime = 'video/mp4';
+      filename = `run-${id}.mp4`;
     } catch {
-      throw new NotFoundException('Recording video not available for this run');
+      try {
+        await access(paths.recordingVideoWebm);
+        filePath = paths.recordingVideoWebm;
+        mime = 'video/webm';
+        filename = `run-${id}.webm`;
+      } catch {
+        throw new NotFoundException('Recording video not available for this run');
+      }
     }
-    return new StreamableFile(createReadStream(paths.videoPath), {
-      type: 'video/webm',
-      disposition: `inline; filename="run-${id}.webm"`,
+    return new StreamableFile(createReadStream(filePath), {
+      type: mime,
+      disposition: `inline; filename="${filename}"`,
     });
   }
 

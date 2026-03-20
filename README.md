@@ -107,7 +107,7 @@ docker compose up
 | GET    | /runs               | List runs (with filtering)   |
 | GET    | /runs/dashboard     | Dashboard KPI metrics        |
 | GET    | /runs/:id           | Get run details              |
-| GET    | /runs/:id/recording/video | Stream WebM session recording (auth) |
+| GET    | /runs/:id/recording/video | Stream session recording MP4 or legacy WebM (auth) |
 | GET    | /runs/:id/recording/thumbnail | JPEG thumbnail from recording (auth) |
 | GET    | /runs/:id/findings  | Get findings for a run       |
 | POST   | /runs               | Create a new run             |
@@ -185,13 +185,14 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 
 After each completed **screen recording**, the API stores a **WebM** file and optional **JPEG thumbnail** on local disk (layout: `${RECORDINGS_DIR}/<userId>/<runId>/recording.webm` and `thumbnail.jpg`). The browser UI loads video/thumbnails via **authenticated** `fetch` → `blob:` URLs (same pattern as other protected assets).
 
-**How the WebM is produced:** The recorder uses a **remote** Playwright browser (`chromium.connect` to the browser-worker). Playwright’s **`recordVideo`** file is written on the **worker** host, so the API cannot reliably read it. Instead, the API pipes the same **CDP screencast** JPEG stream into **ffmpeg** (MJPEG → VP8 WebM) so the video file always exists on the **API** machine next to `RECORDINGS_DIR`.
+**How the video is produced:** The recorder uses a **remote** Playwright browser (`chromium.connect` to the browser-worker). Playwright’s **`recordVideo`** file is written on the **worker** host, so the API cannot reliably read it. Instead, the API pipes the **CDP screencast** JPEG stream into **ffmpeg** as **MJPEG → H.264 MP4** (`recording.mp4`) so the file exists on the **API** machine. Older runs may still have **`recording.webm`**; **`GET /runs/:id/recording/video`** serves MP4 when present, otherwise WebM.
 
 - **`RECORDINGS_DIR`** — Base directory for artifacts. Default: `os.tmpdir()/bladerunner-recordings` when unset. **Production:** mount a **persistent volume** (e.g. Railway) and set `RECORDINGS_DIR` to a path on that volume so recordings survive deploys.
 - **`FFMPEG_PATH`** (optional) — Path to the `ffmpeg` binary. **Required on PATH** for session WebM (and for extracting thumbnails from video). If `ffmpeg` is missing, the API falls back to storing only the last **screencast JPEG** as the run thumbnail (no `RunRecording` video). The API **Dockerfile** installs `ffmpeg`.
 
 ## Changelog
 
+- **0.6.5** — **Session recording = MP4 (H.264)**: Screencast ffmpeg pipeline uses **`libx264`** → **`recording.mp4`** (VP8/WebM was often missing on macOS ffmpeg → thumbnail-only runs). **`GET /runs/:id/recording/video`** serves MP4 or legacy WebM. **`@bladerunner/api` `0.4.4`**, **`@bladerunner/web` `0.5.2`** (copy text).
 - **0.6.4** — **Run detail session recording**: Load **WebM first** (probe `/recording/video`) even when `run.recordings` is empty but a thumbnail exists; **`<video>`** `onError` falls back to JPEG + Safari/WebM note. **`@bladerunner/web` `0.5.1`**.
 - **0.6.3** — Remove debug-session instrumentation from ffmpeg screencast encoder (behavior unchanged). **`@bladerunner/api` `0.4.3`**.
 - **0.6.2** — **Recording stability**: Handle **EPIPE** on ffmpeg stdin (handler + stop writes when encoder exits) so a failed/ended encoder cannot crash the API process. **`@bladerunner/api` `0.4.2`**.
