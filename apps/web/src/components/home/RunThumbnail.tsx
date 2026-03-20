@@ -1,5 +1,6 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { useAuthenticatedBlobUrl } from '@/hooks/useAuthenticatedBlobUrl';
 
 function hostnameFromUrl(url: string): string | null {
   try {
@@ -11,18 +12,32 @@ function hostnameFromUrl(url: string): string | null {
 }
 
 type RunThumbnailProps = {
+  runId: string;
   url: string;
   status: string;
+  /** When set (e.g. after a completed recording), load JPEG from the API instead of favicon-only. */
+  thumbnailUrl?: string | null;
   className?: string;
 };
 
-/** Small site favicon preview; live recording gets a pulse ring + dot. */
-export const RunThumbnail = memo(function RunThumbnail({ url, status, className }: RunThumbnailProps) {
+/** Site favicon preview, or session thumbnail when available; live recording gets a pulse ring + dot. */
+export const RunThumbnail = memo(function RunThumbnail({
+  runId,
+  url,
+  status,
+  thumbnailUrl,
+  className,
+}: RunThumbnailProps) {
   const host = hostnameFromUrl(url);
   const favicon = host
     ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`
     : null;
   const live = status === 'RECORDING';
+  const thumbPath = useMemo(() => {
+    if (!thumbnailUrl || live) return null;
+    return `/runs/${runId}/recording/thumbnail`;
+  }, [thumbnailUrl, live, runId]);
+  const thumbBlobUrl = useAuthenticatedBlobUrl(thumbPath, !!thumbPath);
 
   return (
     <div
@@ -33,7 +48,15 @@ export const RunThumbnail = memo(function RunThumbnail({ url, status, className 
       )}
       title={host ?? undefined}
     >
-      {favicon ? (
+      {thumbBlobUrl ? (
+        <img
+          src={thumbBlobUrl}
+          alt=""
+          className="size-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : favicon ? (
         <img
           src={favicon}
           alt=""

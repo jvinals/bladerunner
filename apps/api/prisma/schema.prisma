@@ -74,6 +74,8 @@ model Run {
   durationMs  Int?      @map("duration_ms")
   startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
+  /// API path for list thumbnails, e.g. `/api/runs/:id/recording/thumbnail` (set when session video is saved).
+  thumbnailUrl String?  @map("thumbnail_url")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 

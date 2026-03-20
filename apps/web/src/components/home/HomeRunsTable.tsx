@@ -37,6 +37,8 @@ export type HomeRunRow = {
   status: string;
   platform: string;
   url: string;
+  /** Populated after a completed recording when a JPEG thumbnail exists on disk. */
+  thumbnailUrl?: string | null;
   durationMs?: number | null;
   triggeredBy: string;
   createdAt: string;
@@ -206,7 +208,13 @@ export function HomeRunsTable() {
         id: 'thumb',
         header: () => <span className="sr-only">Preview</span>,
         cell: ({ row }) => (
-          <RunThumbnail url={row.original.url} status={row.original.status} className="size-7 rounded" />
+          <RunThumbnail
+            runId={row.original.id}
+            url={row.original.url}
+            status={row.original.status}
+            thumbnailUrl={row.original.thumbnailUrl}
+            className="size-7 rounded"
+          />
         ),
         enableSorting: false,
         size: 44,

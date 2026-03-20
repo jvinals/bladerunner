@@ -10,6 +10,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import type { RunStep, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
@@ -22,6 +25,13 @@ import {
   performClerkPasswordEmail2FA,
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet } from './playback-skip.util';
+import {
+  copyWebmToArtifacts,
+  getRecordingsBaseDir,
+  getRunArtifactDir,
+  removePathIfExists,
+  writeJpegThumbnailFromVideo,
+} from './recording-storage';
 
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
@@ -38,6 +48,8 @@ export interface RecordingSession {
   cdpSession: CDPSession;
   stepSequence: number;
   latestFrame: Buffer | null;
+  /** Temp dir used by Playwright `recordVideo` (cleaned up after stop or abort). */
+  videoTempDir: string;
 }
 
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
@@ -96,11 +108,16 @@ export class RecordingService extends EventEmitter {
 
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
 
+    let videoTempDir: string | undefined;
     try {
       const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
       const browser = await chromium.connect(wsEndpoint);
+      videoTempDir = path.join(os.tmpdir(), `br-rec-${run.id}-${randomUUID()}`);
+      await fs.mkdir(videoTempDir, { recursive: true });
+      const viewport = { width: 1280, height: 720 };
       const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
+        viewport,
+        recordVideo: { dir: videoTempDir, size: viewport },
       });
       const page = await context.newPage();
       const cdpSession = await context.newCDPSession(page);
@@ -113,6 +130,7 @@ export class RecordingService extends EventEmitter {
         cdpSession,
         stepSequence: 0,
         latestFrame: null,
+        videoTempDir,
       };
 
       this.sessions.set(run.id, session);
@@ -137,6 +155,7 @@ export class RecordingService extends EventEmitter {
       this.logger.log(`Recording started: ${run.id} -> ${url}`);
       return run;
     } catch (err) {
+      if (videoTempDir) await removePathIfExists(videoTempDir);
       await this.prisma.run.update({
         where: { id: run.id },
         data: { status: 'FAILED', completedAt: new Date() },
@@ -154,8 +173,18 @@ export class RecordingService extends EventEmitter {
       return null;
     }
 
+    const latestFrame = session.latestFrame;
+    const videoTempDir = session.videoTempDir;
+    const page = session.page;
+    const video = page.video();
+
     try {
       await session.cdpSession.send('Page.stopScreencast');
+    } catch (err) {
+      this.logger.warn('stopScreencast', err);
+    }
+
+    try {
       await session.browser.close();
     } catch (err) {
       this.logger.warn('Error closing browser', err);
@@ -163,17 +192,67 @@ export class RecordingService extends EventEmitter {
 
     this.sessions.delete(runId);
 
+    let rawVideoPath: string | null = null;
+    try {
+      rawVideoPath = video ? await video.path() : null;
+    } catch (err) {
+      this.logger.warn(`video.path() failed for ${runId}:`, err);
+    }
+
+    const base = getRecordingsBaseDir(this.configService);
+    const artifactDir = getRunArtifactDir(base, userId, runId);
+    let thumbnailUrl: string | null = null;
+    let recordingUrl: string | null = null;
+    let sizeBytes: number | null = null;
+
+    try {
+      if (rawVideoPath) {
+        const { webmPath, sizeBytes: sz } = await copyWebmToArtifacts(rawVideoPath, artifactDir);
+        sizeBytes = sz;
+        const thumbPath = path.join(artifactDir, 'thumbnail.jpg');
+        const ffmpegOk = await writeJpegThumbnailFromVideo(webmPath, thumbPath, this.logger);
+        if (!ffmpegOk && latestFrame) {
+          await fs.writeFile(thumbPath, latestFrame);
+        }
+        thumbnailUrl = `/api/runs/${runId}/recording/thumbnail`;
+        recordingUrl = `/api/runs/${runId}/recording/video`;
+      } else if (latestFrame) {
+        await fs.mkdir(artifactDir, { recursive: true });
+        const thumbPath = path.join(artifactDir, 'thumbnail.jpg');
+        await fs.writeFile(thumbPath, latestFrame);
+        thumbnailUrl = `/api/runs/${runId}/recording/thumbnail`;
+      }
+    } catch (err) {
+      this.logger.warn(`persist recording artifacts failed for ${runId}:`, err);
+    }
+
+    if (videoTempDir) {
+      await removePathIfExists(videoTempDir).catch(() => {});
+    }
+
+    const started = (await this.prisma.run.findUnique({ where: { id: runId } }))!.startedAt!;
     const run = await this.prisma.run.update({
       where: { id: runId },
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
-        durationMs: Math.round(
-          Date.now() - (await this.prisma.run.findUnique({ where: { id: runId } }))!.startedAt!.getTime(),
-        ),
+        durationMs: Math.round(Date.now() - started.getTime()),
+        thumbnailUrl,
       },
       include: { steps: { orderBy: { sequence: 'asc' } } },
     });
+
+    if (recordingUrl && sizeBytes != null) {
+      await this.prisma.runRecording.create({
+        data: {
+          runId,
+          userId,
+          format: 'webm',
+          url: recordingUrl,
+          sizeBytes,
+        },
+      });
+    }
 
     this.emit('status', runId, { status: 'completed', runId });
     this.logger.log(`Recording stopped: ${runId}`);
@@ -196,14 +275,37 @@ export class RecordingService extends EventEmitter {
     } catch (err) {
       this.logger.warn(`abortRecordingForDeletion ${runId} stopScreencast:`, err);
     }
+    const videoTempDir = session.videoTempDir;
     try {
       await session.browser.close();
     } catch (err) {
       this.logger.warn(`abortRecordingForDeletion ${runId} browser.close:`, err);
     }
     this.sessions.delete(runId);
+    if (videoTempDir) {
+      await removePathIfExists(videoTempDir).catch(() => {});
+    }
     this.emit('status', runId, { status: 'cancelled', runId });
     this.logger.log(`Recording session aborted for delete: ${runId}`);
+  }
+
+  getRunArtifactFilePaths(runId: string, userId: string): {
+    artifactDir: string;
+    videoPath: string;
+    thumbnailPath: string;
+  } {
+    const base = getRecordingsBaseDir(this.configService);
+    const artifactDir = getRunArtifactDir(base, userId, runId);
+    return {
+      artifactDir,
+      videoPath: path.join(artifactDir, 'recording.webm'),
+      thumbnailPath: path.join(artifactDir, 'thumbnail.jpg'),
+    };
+  }
+
+  async deleteRunArtifactsFromDisk(runId: string, userId: string): Promise<void> {
+    const { artifactDir } = this.getRunArtifactFilePaths(runId, userId);
+    await removePathIfExists(artifactDir);
   }
 
   /**

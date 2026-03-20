@@ -13,7 +13,10 @@ import {
   Sse,
   Header,
   HttpCode,
+  StreamableFile,
 } from '@nestjs/common';
+import { createReadStream } from 'fs';
+import { access } from 'fs/promises';
 import { Response } from 'express';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
@@ -137,6 +140,47 @@ export class RunsController {
       autoClerkSignIn: dto.autoClerkSignIn,
       skipUntilSequence: dto.skipUntilSequence,
       skipStepIds: dto.skipStepIds,
+    });
+  }
+
+  @Get(':id/recording/video')
+  @ApiOperation({ summary: 'Stream the WebM screen recording for a completed run' })
+  @ApiResponse({ status: 200, description: 'video/webm stream' })
+  @Header('Content-Type', 'video/webm')
+  @Header('Cache-Control', 'private, max-age=3600')
+  async getRecordingVideo(@Req() req: any, @Param('id') id: string): Promise<StreamableFile> {
+    const userId = req.user.sub;
+    const run = await this.runsService.findOne(id, userId);
+    if (!run) throw new NotFoundException(`Run ${id} not found`);
+    const paths = this.recordingService.getRunArtifactFilePaths(id, userId);
+    try {
+      await access(paths.videoPath);
+    } catch {
+      throw new NotFoundException('Recording video not available for this run');
+    }
+    return new StreamableFile(createReadStream(paths.videoPath), {
+      type: 'video/webm',
+      disposition: `inline; filename="run-${id}.webm"`,
+    });
+  }
+
+  @Get(':id/recording/thumbnail')
+  @ApiOperation({ summary: 'JPEG thumbnail extracted from the session recording' })
+  @ApiResponse({ status: 200, description: 'image/jpeg' })
+  @Header('Content-Type', 'image/jpeg')
+  @Header('Cache-Control', 'private, max-age=86400')
+  async getRecordingThumbnail(@Req() req: any, @Param('id') id: string): Promise<StreamableFile> {
+    const userId = req.user.sub;
+    const run = await this.runsService.findOne(id, userId);
+    if (!run) throw new NotFoundException(`Run ${id} not found`);
+    const paths = this.recordingService.getRunArtifactFilePaths(id, userId);
+    try {
+      await access(paths.thumbnailPath);
+    } catch {
+      throw new NotFoundException('Thumbnail not available for this run');
+    }
+    return new StreamableFile(createReadStream(paths.thumbnailPath), {
+      type: 'image/jpeg',
     });
   }
 

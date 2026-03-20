@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { runsApi, buildStartPlaybackBody } from '@/lib/api';
+import { useAuthenticatedBlobUrl } from '@/hooks/useAuthenticatedBlobUrl';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
@@ -13,6 +14,7 @@ import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
   Camera, FileText, Activity, Play, Square, ExternalLink,
+  Film,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -27,6 +29,52 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: typeof A
   info: { bg: 'bg-blue-50', text: 'text-[#4B90FF]', icon: Eye },
   suggestion: { bg: 'bg-gray-50', text: 'text-gray-500', icon: Eye },
 };
+
+function SessionRecordingCard({
+  runId,
+  variant,
+}: {
+  runId: string;
+  variant: 'video' | 'thumbnail';
+}) {
+  const path =
+    variant === 'video' ? `/runs/${runId}/recording/video` : `/runs/${runId}/recording/thumbnail`;
+  const src = useAuthenticatedBlobUrl(path, true);
+  return (
+    <div className="bg-white border border-gray-100 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Film size={14} className="text-[#4B90FF]" />
+        <p className="text-sm font-semibold text-gray-800">Session recording</p>
+        <span className="text-[10px] font-normal text-gray-400 uppercase tracking-wider">
+          {variant === 'video' ? 'WebM' : 'Preview'}
+        </span>
+      </div>
+      <div className="rounded-md border border-gray-100 bg-gray-900/5 min-h-[200px] flex items-center justify-center overflow-hidden">
+        {!src ? (
+          <p className="text-xs text-gray-400 px-4 py-8 text-center">Loading recording…</p>
+        ) : variant === 'video' ? (
+          <video
+            controls
+            className="w-full max-h-[min(480px,60vh)] bg-black"
+            src={src}
+            playsInline
+          />
+        ) : (
+          <img
+            src={src}
+            alt="Session thumbnail"
+            className="max-w-full max-h-[min(480px,60vh)] object-contain"
+          />
+        )}
+      </div>
+      {variant === 'thumbnail' && (
+        <p className="mt-2 text-[11px] text-gray-400">
+          Preview frame from the session (no WebM file was stored for this run).
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -160,7 +208,14 @@ export default function RunDetailPage() {
     }>;
     createdAt: string;
     steps?: RecordedStep[];
+    recordings?: Array<{ id: string; format: string; url: string; sizeBytes: number }>;
+    thumbnailUrl?: string | null;
   };
+
+  const recordings = r.recordings ?? [];
+  const thumbnailUrl = r.thumbnailUrl ?? null;
+  const hasRecordingVideo = recordings.length > 0;
+  const hasThumbnailOnly = !hasRecordingVideo && !!thumbnailUrl;
 
   const targets = r.targets ?? [];
   const tags = r.tags ?? [];
@@ -376,6 +431,15 @@ export default function RunDetailPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {(hasRecordingVideo || hasThumbnailOnly) && (
+        <div className="mb-8">
+          <SessionRecordingCard
+            runId={r.id}
+            variant={hasRecordingVideo ? 'video' : 'thumbnail'}
+          />
         </div>
       )}
 

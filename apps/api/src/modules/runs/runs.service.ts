@@ -157,5 +157,6 @@ export class RunsService {
       await this.recordingService.abortRecordingForDeletion(id, userId);
     }
     await this.prisma.run.delete({ where: { id } });
+    await this.recordingService.deleteRunArtifactsFromDisk(id, userId);
   }
 }

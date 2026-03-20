@@ -107,6 +107,8 @@ docker compose up
 | GET    | /runs               | List runs (with filtering)   |
 | GET    | /runs/dashboard     | Dashboard KPI metrics        |
 | GET    | /runs/:id           | Get run details              |
+| GET    | /runs/:id/recording/video | Stream WebM session recording (auth) |
+| GET    | /runs/:id/recording/thumbnail | JPEG thumbnail from recording (auth) |
 | GET    | /runs/:id/findings  | Get findings for a run       |
 | POST   | /runs               | Create a new run             |
 | GET    | /projects           | List projects                |
@@ -179,8 +181,16 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 - Set **`PLAYBACK_CLERK_SECRET_KEY`** (or **`E2E_CLERK_SECRET_KEY`**) = the **target app’s** Clerk secret for recording/playback auto sign-in and E2E when the publishable key comes from that app. The server can read **`publishableKey` from the live page**; the **secret** must still be configured explicitly.
 - If DevTools shows Clerk API calls to a **different host** than `CLERK_FAPI`, set **`CLERK_FAPI_EXTRA_HOSTS`** (comma-separated hostnames) and/or **`CLERK_TESTING_FRONTEND_API_URL`** (hostname only, no `https://`) so testing tokens and route interception align with that Frontend API.
 
+## Session recordings (disk)
+
+After each completed **screen recording**, the API stores a **WebM** file and optional **JPEG thumbnail** on local disk (layout: `${RECORDINGS_DIR}/<userId>/<runId>/recording.webm` and `thumbnail.jpg`). The browser UI loads video/thumbnails via **authenticated** `fetch` → `blob:` URLs (same pattern as other protected assets).
+
+- **`RECORDINGS_DIR`** — Base directory for artifacts. Default: `os.tmpdir()/bladerunner-recordings` when unset. **Production:** mount a **persistent volume** (e.g. Railway) and set `RECORDINGS_DIR` to a path on that volume so recordings survive deploys.
+- **`FFMPEG_PATH`** (optional) — Path to the `ffmpeg` binary. If `ffmpeg` is on `PATH`, thumbnails are extracted at ~1s into the WebM; if unavailable, the API falls back to the last **screencast JPEG** from the session.
+
 ## Changelog
 
+- **0.6.0** — **Parallel session recording**: Playwright **`recordVideo`** alongside live CDP screencast; persist **WebM** + **thumbnail** under **`RECORDINGS_DIR`**; **`runs.thumbnail_url`**; **`RunRecording`** rows; **`GET /runs/:id/recording/video`** and **`GET /runs/:id/recording/thumbnail`** (Clerk auth + ownership); disk cleanup on **delete run**; Run detail **Session recording** player; home table uses **API thumbnail** when present (favicon fallback). **`@bladerunner/api` `0.4.0`**, **`@bladerunner/web` `0.5.0`**.
 - **0.5.2** — **Delete recording runs**: API **`abortRecordingForDeletion`** closes Playwright session before DB delete; **`resetRecordingAfterRemoteDelete`** in `useRecording` when the deleted run is the active one. **Runs** dropdown **`*`** prefix for **RECORDING** runs. Home + Runs delete allow recording with a stronger confirm. **`@bladerunner/api` `0.3.5`**, **`@bladerunner/web` `0.4.2`**.
 - **0.5.1** — **Dashboard / home runs table UX**: home **`w-full max-w-[min(100%,90rem)]`**, **`min-w-0`**, **`overflow-x-hidden`**; **`Table`** wrapper **`min-w-0`** (no **`overflow-auto`**) + comment; **HomeRunsTable** **`w-full min-w-0`**, **`table-fixed`** + relaxed name column (**`max-w-none`**, wider share); grid **`lg:col-span-8` / `4`**. **`@bladerunner/web` `0.4.1`**.
 - **0.5.0** — **Home runs table**: TanStack Table + shadcn-style UI — **filters** (status, platform), **debounced search**, **server sort** (`sortBy` / `sortOrder` on `GET /runs`), **pagination** (10/20/50). **Compact rows** with status-tinted borders, project/platform chips, **favicon thumbnail** column (site preview; live recording gets pulse). **Delete** preserved. **`@bladerunner/web` `0.4.0`**, **`@bladerunner/api` `0.3.4`**.
