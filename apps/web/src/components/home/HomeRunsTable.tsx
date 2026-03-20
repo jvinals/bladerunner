@@ -75,6 +75,32 @@ function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
   return <ArrowUpDown className="size-3 opacity-40" />;
 }
 
+/** Column widths for `table-fixed` — fits the viewport without horizontal scroll. */
+function columnWidthClass(columnId: string): string {
+  switch (columnId) {
+    case 'thumb':
+      return 'w-10 shrink-0 px-1';
+    case 'name':
+      return 'min-w-0 max-w-none w-[36%]';
+    case 'project':
+      return 'min-w-0 w-[10%]';
+    case 'status':
+      return 'min-w-0 w-[10%]';
+    case 'platform':
+      return 'min-w-0 w-[8%]';
+    case 'steps':
+      return 'w-[5%] min-w-0';
+    case 'duration':
+      return 'min-w-0 w-[8%]';
+    case 'created':
+      return 'min-w-0 w-[10%]';
+    case 'actions':
+      return 'w-16 shrink-0 text-right';
+    default:
+      return 'min-w-0';
+  }
+}
+
 function SortHeader({
   label,
   column,
@@ -89,10 +115,10 @@ function SortHeader({
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-1 font-semibold text-foreground hover:text-[var(--ce-primary)]"
+      className="inline-flex max-w-full min-w-0 items-center gap-1 text-left font-semibold text-foreground hover:text-[var(--ce-primary)]"
       onClick={() => column.toggleSorting()}
     >
-      {label}
+      <span className="truncate">{label}</span>
       <SortIcon sorted={sorted} />
     </button>
   );
@@ -190,10 +216,10 @@ export function HomeRunsTable() {
         id: 'name',
         header: ({ column }) => <SortHeader label="Run" column={column} />,
         cell: ({ row }) => (
-          <div className="min-w-0 max-w-[200px]">
+          <div className="min-w-0 max-w-full">
             <Link
               to={`/runs/${row.original.id}`}
-              className="font-medium text-foreground hover:text-[var(--ce-primary)] line-clamp-1 text-xs leading-tight"
+              className="block font-medium text-foreground hover:text-[var(--ce-primary)] line-clamp-1 text-xs leading-tight"
             >
               {row.original.name}
             </Link>
@@ -310,7 +336,7 @@ export function HomeRunsTable() {
   });
 
   return (
-    <div className="flex flex-col min-h-0 rounded-xl border border-border/80 bg-card shadow-sm overflow-hidden">
+    <div className="flex w-full min-w-0 flex-col min-h-0 rounded-xl border border-border/80 bg-card shadow-sm overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-border/60 bg-gradient-to-r from-slate-50/80 via-white to-sky-50/40 dark:from-slate-900/40 dark:via-card dark:to-sky-950/20 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">Runs</p>
@@ -318,14 +344,14 @@ export function HomeRunsTable() {
             {total} total · filter, sort, paginate
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="relative min-w-0 max-w-full flex-1 sm:flex-initial sm:min-w-[180px]">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search name or URL…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="h-8 w-[200px] pl-8 text-xs md:w-[240px]"
+              className="h-8 w-full min-w-0 max-w-full pl-8 text-xs sm:w-[min(100%,240px)]"
             />
           </div>
           <select
@@ -371,18 +397,14 @@ export function HomeRunsTable() {
         </div>
       ) : (
         <>
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
                 <TableRow key={hg.id} className="hover:bg-transparent border-b border-border/80 bg-muted/30">
                   {hg.headers.map((header) => (
                     <TableHead
                       key={header.id}
-                      className={cn(
-                        'py-2',
-                        header.column.id === 'thumb' && 'w-12 max-w-12',
-                        header.column.id === 'actions' && 'w-[72px]',
-                      )}
+                      className={cn('py-2', columnWidthClass(header.column.id))}
                     >
                       {header.isPlaceholder
                         ? null
@@ -409,7 +431,7 @@ export function HomeRunsTable() {
                     className={cn('h-11', rowAccent(row.original.status))}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-1.5">
+                      <TableCell key={cell.id} className={cn('py-1.5', columnWidthClass(cell.column.id))}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}

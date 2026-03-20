@@ -19,7 +19,7 @@ export default function HomePage() {
   if (kpisError) return <ErrorState message="Failed to load dashboard data" />;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 max-w-6xl">
+    <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-6 lg:px-10 py-8 w-full max-w-[min(100%,90rem)] mx-auto">
       {/* Header */}
       <div className="mb-8">
         <p className="ce-section-label mb-2">Dashboard</p>
@@ -53,9 +53,9 @@ export default function HomePage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Runs table */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Runs table — wider column so the table never needs horizontal scroll */}
+        <div className="lg:col-span-8 flex flex-col min-h-0 min-w-0">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] text-muted-foreground uppercase tracking-wider">Recent activity</span>
             <Link to="/runs" className="text-xs text-[#4B90FF] font-medium hover:underline flex items-center gap-1">
@@ -66,7 +66,7 @@ export default function HomePage() {
         </div>
 
         {/* Right column */}
-        <div className="space-y-6">
+        <div className="lg:col-span-4 space-y-6 min-w-0">
           {/* Quick Start */}
           <div className="bg-white border border-gray-100 rounded-lg p-5">
             <p className="text-sm font-semibold text-gray-800 mb-4">Quick Start</p>
