@@ -139,8 +139,17 @@ Built on the **Edgehealth Style Guide**:
 | Monorepo  | pnpm workspaces                                     |
 | Infra     | Docker Compose                                      |
 
+## E2E tests (Playwright + Clerk)
+
+1. Install browser binaries once: `pnpm test:e2e:install`
+2. In **`.env`** (repo root): `VITE_CLERK_PUBLISHABLE_KEY`, **`CLERK_SECRET_KEY`** (same Clerk dev app), and either **`E2E_CLERK_USER_EMAIL`** (ticket sign-in via `@clerk/testing`) **or** **`E2E_CLERK_USER_USERNAME`** + **`E2E_CLERK_USER_PASSWORD`** (password strategy).
+3. Run: **`pnpm test:e2e`** (starts Vite on **5173**, runs setup auth, then signed-in specs).
+
+Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests assert **`/settings`** so the suite does not require the API or database.
+
 ## Changelog
 
+- **0.2.19** — **E2E**: `@playwright/test` + `@clerk/testing`, `e2e/global.setup.ts` (Clerk testing token + storage state), `e2e/signed-in.spec.ts`, `pnpm test:e2e` / `test:e2e:install`.
 - **0.2.18** — **Playback in preview**: `POST /runs/:id/playback/start` + `POST /runs/playback/stop`, Socket.IO `playbackProgress` on `/recording`, run detail **Play back** with live canvas + step highlights, detached **`/playback/:playbackSessionId`** route; initial-navigate detection uses `RegExp` (valid TS) instead of a broken `/.../i` literal.
 - **0.2.17** — Remove **`DevVerboseExceptionFilter`** (dev-only raw exception text in JSON); Nest default handler applies for unhandled errors.
 - **0.2.16** — Remove **`dbError`** from **`GET /health`** (no Prisma message in JSON); align `verify-api-health.mjs` (instrumentation / leak cleanup).

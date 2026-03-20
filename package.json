@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "dev": "pnpm --parallel -r run dev",
@@ -13,7 +13,10 @@
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r run clean",
     "typecheck": "pnpm -r run typecheck",
-    "check:db-tcp": "node --env-file=.env scripts/check-db-tcp.mjs"
+    "check:db-tcp": "node --env-file=.env scripts/check-db-tcp.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -21,6 +24,15 @@
   },
   "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/engines", "prisma", "@prisma/client"]
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "prisma",
+      "@prisma/client"
+    ]
+  },
+  "devDependencies": {
+    "@clerk/testing": "^2.0.5",
+    "@playwright/test": "^1.58.2",
+    "dotenv": "^17.3.1"
   }
 }

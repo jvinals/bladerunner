@@ -6,3 +6,6 @@ apps/api/.env
 .DS_Store
 .vite
 *.tsbuildinfo
+playwright/.clerk/
+playwright-report/
+test-results/
