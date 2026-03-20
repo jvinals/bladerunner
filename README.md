@@ -196,6 +196,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.6.8** — **Run detail live replay**: Load steps via **`GET /runs/:id/steps`** (same as Runs page) so **`recordedSteps`** / **Play** work when **`GET /runs/:id`** omits or returns an empty **`steps`** array. **`@bladerunner/web` `0.5.4`**.
 - **0.6.7** — **Live replay preview**: `usePlayback` surfaces **`startPlayback`** failures, Socket.IO **`connect_error`**, and **`status.failed`** `error` from the server; **Runs** + **Run detail** preview panels show **Connecting to playback stream…** and **`role="alert"`** errors; **Runs** shows step load failures. **`e2e/playback.spec.ts`** (mocked API). **`@bladerunner/web` `0.5.3`**.
 - **0.6.6** — **Session video timing**: MJPEG pipe had **wrong implicit FPS** (playback looked 2–3× fast). **`RECORDING_SCREENCAST_INPUT_FPS`** (default 8) + **post-encode `setpts`** vs **wall-clock** (`ffprobe` duration). **`@bladerunner/api` `0.4.5`**.
 - **0.6.5** — **Session recording = MP4 (H.264)**: Screencast ffmpeg pipeline uses **`libx264`** → **`recording.mp4`** (VP8/WebM was often missing on macOS ffmpeg → thumbnail-only runs). **`GET /runs/:id/recording/video`** serves MP4 or legacy WebM. **`@bladerunner/api` `0.4.4`**, **`@bladerunner/web` `0.5.2`** (copy text).

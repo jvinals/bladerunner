@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { runsApi, buildStartPlaybackBody } from '@/lib/api';
 import {
   useSessionRecordingPlayback,
@@ -120,6 +120,13 @@ export default function RunDetailPage() {
     enabled: !!id,
   });
 
+  /** Same source as Runs page (`loadRunSteps`); `GET /runs/:id` may omit or empty `steps` in some responses. */
+  const { data: stepsFromApi } = useQuery({
+    queryKey: ['run-steps', id],
+    queryFn: () => runsApi.getSteps(id!),
+    enabled: !!id,
+  });
+
   const { data: findings } = useQuery({
     queryKey: ['run-findings', id],
     queryFn: async () => {
@@ -133,7 +140,13 @@ export default function RunDetailPage() {
     enabled: !!id,
   });
 
-  const recordedSteps = ((run as { steps?: RecordedStep[] } | undefined)?.steps ?? []) as RecordedStep[];
+  const recordedSteps = useMemo(() => {
+    const embedded = ((run as { steps?: RecordedStep[] } | undefined)?.steps ?? []) as RecordedStep[];
+    const fetched = stepsFromApi as RecordedStep[] | undefined;
+    if (fetched && fetched.length > 0) return fetched;
+    return embedded;
+  }, [run, stepsFromApi]);
+
   const canPlayback =
     !!run && recordedSteps.length > 0 && (run as { status: string }).status !== 'RECORDING';
   const showReplayChrome =
@@ -318,7 +331,7 @@ export default function RunDetailPage() {
           <button
             type="button"
             disabled={!canPlayback || isPlaying}
-            onClick={handleStartPlayback}
+            onClick={() => void handleStartPlayback()}
             title={
               !canPlayback
                 ? r.status === 'RECORDING'
