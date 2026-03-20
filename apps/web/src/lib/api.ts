@@ -1,5 +1,35 @@
 const API_BASE = '/api';
 
+/** Body for `POST /runs/:id/playback/start` */
+export type StartPlaybackBody = {
+  delayMs?: number;
+  autoClerkSignIn?: boolean;
+  skipUntilSequence?: number;
+  skipStepIds?: string[];
+};
+
+export type AutoClerkPlaybackMode = 'default' | 'on' | 'off';
+
+export function buildStartPlaybackBody(params: {
+  delayMs?: number;
+  autoClerkMode?: AutoClerkPlaybackMode;
+  /** Skip steps with sequence strictly less than this (legacy runs). */
+  skipUntilSequence?: number;
+}): StartPlaybackBody {
+  const out: StartPlaybackBody = {};
+  if (params.delayMs != null) out.delayMs = params.delayMs;
+  if (params.autoClerkMode === 'on') out.autoClerkSignIn = true;
+  if (params.autoClerkMode === 'off') out.autoClerkSignIn = false;
+  if (
+    typeof params.skipUntilSequence === 'number' &&
+    Number.isFinite(params.skipUntilSequence) &&
+    params.skipUntilSequence >= 0
+  ) {
+    out.skipUntilSequence = Math.floor(params.skipUntilSequence);
+  }
+  return out;
+}
+
 let _getToken: (() => Promise<string | null>) | null = null;
 
 export function setTokenProvider(fn: () => Promise<string | null>) {
@@ -88,10 +118,10 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ instruction }),
     }),
-  startPlayback: (runId: string, opts?: { delayMs?: number }) =>
+  startPlayback: (runId: string, opts?: StartPlaybackBody) =>
     apiFetch<{ playbackSessionId: string; sourceRunId: string }>(`/runs/${runId}/playback/start`, {
       method: 'POST',
-      body: JSON.stringify(opts?.delayMs != null ? { delayMs: opts.delayMs } : {}),
+      body: JSON.stringify(opts && Object.keys(opts).length > 0 ? opts : {}),
     }),
   stopPlayback: (playbackSessionId: string) =>
     apiFetch<{ ok: boolean }>('/runs/playback/stop', {

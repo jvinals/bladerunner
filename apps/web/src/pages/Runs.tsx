@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
-import { runsApi } from '@/lib/api';
+import { runsApi, buildStartPlaybackBody } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
@@ -22,6 +22,8 @@ export default function RunsPage() {
   const [newUrl, setNewUrl] = useState('');
   const [newName, setNewName] = useState('');
   const [instructionText, setInstructionText] = useState('');
+  const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('default');
+  const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const [isDetached, setIsDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -163,11 +165,26 @@ export default function RunsPage() {
   const handleStartPlaybackRuns = useCallback(async () => {
     if (!selectedRunId || !canPlaybackSelected) return;
     try {
-      await startPlayback(selectedRunId);
+      const skipRaw = playbackSkipUntilSeq.trim();
+      const skipNum = skipRaw === '' ? undefined : Number.parseInt(skipRaw, 10);
+      await startPlayback(
+        selectedRunId,
+        buildStartPlaybackBody({
+          autoClerkMode: playbackAutoClerkMode,
+          skipUntilSequence:
+            skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
+        }),
+      );
     } catch (err) {
       console.error('Playback failed to start:', err);
     }
-  }, [selectedRunId, canPlaybackSelected, startPlayback]);
+  }, [
+    selectedRunId,
+    canPlaybackSelected,
+    startPlayback,
+    playbackAutoClerkMode,
+    playbackSkipUntilSeq,
+  ]);
 
   const handleDetachPlaybackRuns = useCallback(() => {
     if (!playbackSessionId) return;
@@ -396,6 +413,37 @@ export default function RunsPage() {
           )}
 
           {!isRecording && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                <label htmlFor="runs-playback-clerk" className="whitespace-nowrap">
+                  Clerk auto sign-in
+                </label>
+                <select
+                  id="runs-playback-clerk"
+                  value={playbackAutoClerkMode}
+                  onChange={(e) => setPlaybackAutoClerkMode(e.target.value as 'default' | 'on' | 'off')}
+                  disabled={isPlaying}
+                  className="flex-1 min-w-[120px] border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
+                >
+                  <option value="default">Server default</option>
+                  <option value="on">Force on</option>
+                  <option value="off">Force off</option>
+                </select>
+                <label htmlFor="runs-playback-skip" className="whitespace-nowrap">
+                  Skip seq &lt;
+                </label>
+                <input
+                  id="runs-playback-skip"
+                  type="number"
+                  min={0}
+                  placeholder="—"
+                  value={playbackSkipUntilSeq}
+                  onChange={(e) => setPlaybackSkipUntilSeq(e.target.value)}
+                  disabled={isPlaying}
+                  className="w-14 border border-gray-200 rounded-md px-1.5 py-1 text-[11px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
+                  title="Skip steps with sequence strictly less than this"
+                />
+              </div>
             <button
               type="button"
               disabled={!canPlaybackSelected || isPlaying}
@@ -414,6 +462,7 @@ export default function RunsPage() {
               <Play size={14} className="fill-white" />
               Play
             </button>
+            </div>
           )}
         </div>
 

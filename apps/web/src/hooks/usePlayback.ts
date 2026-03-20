@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { Socket } from 'socket.io-client';
-import { runsApi } from '@/lib/api';
+import { runsApi, type StartPlaybackBody } from '@/lib/api';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 
-export type PlaybackProgressPhase = 'before' | 'after' | 'error';
+export type PlaybackProgressPhase = 'before' | 'after' | 'error' | 'skipped';
 
 export interface PlaybackProgressPayload {
   runId: string;
@@ -24,7 +24,7 @@ export interface UsePlaybackReturn {
   highlightSequence: number | null;
   completedSequences: Set<number>;
   playbackError: string | null;
-  startPlayback: (runId: string, opts?: { delayMs?: number }) => Promise<void>;
+  startPlayback: (runId: string, opts?: StartPlaybackBody) => Promise<void>;
   stopPlayback: () => Promise<void>;
 }
 
@@ -77,7 +77,7 @@ export function usePlayback(): UsePlaybackReturn {
       if (payload.phase === 'before' || payload.phase === 'error') {
         setHighlightSequence(payload.step.sequence);
       }
-      if (payload.phase === 'after') {
+      if (payload.phase === 'after' || payload.phase === 'skipped') {
         setCompletedSequences((prev) => new Set(prev).add(payload.step.sequence));
         setHighlightSequence(payload.step.sequence);
       }
@@ -115,7 +115,7 @@ export function usePlayback(): UsePlaybackReturn {
   }, []);
 
   const startPlayback = useCallback(
-    async (runId: string, opts?: { delayMs?: number }) => {
+    async (runId: string, opts?: StartPlaybackBody) => {
       setPlaybackError(null);
       setCompletedSequences(new Set());
       setHighlightSequence(null);

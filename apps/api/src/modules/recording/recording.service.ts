@@ -15,6 +15,19 @@ import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { EventEmitter } from 'events';
+import {
+  clerkSignInUrlLooksLike,
+  detectClerkSignInUi,
+  performClerkPasswordEmail2FA,
+} from '@bladerunner/clerk-agentmail-signin';
+import { buildPlaybackSkipSet } from './playback-skip.util';
+
+export type StartPlaybackServiceOpts = {
+  delayMs?: number;
+  autoClerkSignIn?: boolean;
+  skipUntilSequence?: number;
+  skipStepIds?: string[];
+};
 
 export interface RecordingSession {
   runId: string;
@@ -406,6 +419,9 @@ export class RecordingService extends EventEmitter {
   ) {
     session.stepSequence += 1;
 
+    const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
+    const metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
+
     const step = await this.prisma.runStep.create({
       data: {
         runId: session.runId,
@@ -418,10 +434,33 @@ export class RecordingService extends EventEmitter {
         playwrightCode: data.playwrightCode,
         origin: data.origin as any,
         timestamp: new Date(),
+        metadata: metadata ?? undefined,
       },
     });
 
     return step;
+  }
+
+  /** True while URL or visible UI looks like Clerk sign-in (tags step for playback skip + auto auth). */
+  private async computeClerkAuthPhaseForRecording(
+    session: RecordingSession,
+    data: { action: string; value: string | null },
+  ): Promise<boolean> {
+    if (data.action === 'NAVIGATE' && data.value && clerkSignInUrlLooksLike(String(data.value))) {
+      return true;
+    }
+    try {
+      if (clerkSignInUrlLooksLike(session.page.url())) {
+        return true;
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      return await detectClerkSignInUi(session.page);
+    } catch {
+      return false;
+    }
   }
 
   /** CDP screencast → `emit('frame', frameChannelId, base64Jpeg)` */
@@ -456,7 +495,7 @@ export class RecordingService extends EventEmitter {
   async startPlayback(
     userId: string,
     sourceRunId: string,
-    opts?: { delayMs?: number },
+    opts?: StartPlaybackServiceOpts,
   ): Promise<{ playbackSessionId: string; sourceRunId: string }> {
     const run = await this.prisma.run.findFirst({
       where: { id: sourceRunId, userId },
@@ -475,6 +514,16 @@ export class RecordingService extends EventEmitter {
 
     const playbackSessionId = randomUUID();
     const delayMs = Math.min(5000, Math.max(0, opts?.delayMs ?? 600));
+    const envAutoRaw = this.configService.get<string>('PLAYBACK_AUTO_CLERK_SIGNIN', '').toLowerCase();
+    const envAutoOn = envAutoRaw === 'true' || envAutoRaw === '1' || envAutoRaw === 'yes';
+    const wantAutoClerkSignIn =
+      opts?.autoClerkSignIn !== undefined ? opts.autoClerkSignIn : envAutoOn;
+    const skipSet = buildPlaybackSkipSet({
+      steps: run.steps.map((s) => ({ id: s.id, sequence: s.sequence, metadata: s.metadata })),
+      wantAutoClerkSkip: wantAutoClerkSignIn,
+      skipUntilSequence: opts?.skipUntilSequence,
+      skipStepIds: opts?.skipStepIds,
+    });
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
 
     let wsEndpoint: string;
@@ -518,7 +567,10 @@ export class RecordingService extends EventEmitter {
         await page.goto(run.url, { waitUntil: 'domcontentloaded' });
       }
 
-      void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId);
+      void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId, run.url, {
+        wantAutoClerkSignIn,
+        skipSet,
+      });
 
       this.logger.log(`Playback started: ${playbackSessionId} (source ${sourceRunId})`);
       return { playbackSessionId, sourceRunId };
@@ -557,13 +609,29 @@ export class RecordingService extends EventEmitter {
     steps: RunStep[],
     delayMs: number,
     sourceRunId: string,
+    runUrl: string,
+    ctx: { wantAutoClerkSignIn: boolean; skipSet: Set<string> },
   ) {
+    let clerkAutoSignInDone = false;
+
     try {
       this.emit('status', playbackSessionId, {
         status: 'playback',
         runId: playbackSessionId,
         sourceRunId,
       });
+
+      if (ctx.wantAutoClerkSignIn && this.playbackClerkEnvReady()) {
+        try {
+          if (await detectClerkSignInUi(session.page)) {
+            await this.runPlaybackClerkAutoSignIn(session.page, runUrl);
+            clerkAutoSignInDone = true;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.logger.warn(`Playback Clerk auto sign-in (pre-loop) failed: ${msg}`);
+        }
+      }
 
       for (const step of steps) {
         const stepPayload = {
@@ -573,12 +641,25 @@ export class RecordingService extends EventEmitter {
           instruction: step.instruction,
         };
 
+        const skipped = ctx.skipSet.has(step.id);
+
         this.emit('playbackProgress', playbackSessionId, {
           playbackSessionId,
           sourceRunId,
           step: stepPayload,
           phase: 'before',
         });
+
+        if (skipped) {
+          this.emit('playbackProgress', playbackSessionId, {
+            playbackSessionId,
+            sourceRunId,
+            step: stepPayload,
+            phase: 'skipped',
+          });
+          await this.sleep(delayMs);
+          continue;
+        }
 
         try {
           await this.executePwCode(session.page, step.playwrightCode);
@@ -600,6 +681,18 @@ export class RecordingService extends EventEmitter {
           });
           await this.cleanupPlaybackSession(playbackSessionId, session);
           return;
+        }
+
+        if (ctx.wantAutoClerkSignIn && !clerkAutoSignInDone && this.playbackClerkEnvReady()) {
+          try {
+            if (await detectClerkSignInUi(session.page)) {
+              await this.runPlaybackClerkAutoSignIn(session.page, runUrl);
+              clerkAutoSignInDone = true;
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            this.logger.warn(`Playback Clerk auto sign-in (post-step) failed: ${msg}`);
+          }
         }
 
         await session.page.waitForLoadState('domcontentloaded').catch(() => {});
@@ -650,6 +743,45 @@ export class RecordingService extends EventEmitter {
 
   private sleep(ms: number): Promise<void> {
     return ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve();
+  }
+
+  private playbackClerkEnvReady(): boolean {
+    const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')?.trim();
+    const identifier =
+      this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
+      this.configService.get<string>('E2E_CLERK_USER_EMAIL')?.trim();
+    const secret = this.configService.get<string>('CLERK_SECRET_KEY')?.trim();
+    const pub =
+      this.configService.get<string>('CLERK_PUBLISHABLE_KEY')?.trim() ||
+      this.configService.get<string>('VITE_CLERK_PUBLISHABLE_KEY')?.trim();
+    const agentmail = this.configService.get<string>('AGENTMAIL_API_KEY')?.trim();
+    const inbox =
+      this.configService.get<string>('E2E_AGENTMAIL_INBOX_ID')?.trim() ||
+      this.configService.get<string>('E2E_AGENTMAIL_INBOX_EMAIL')?.trim();
+    return !!(password && identifier && secret && pub && agentmail && inbox);
+  }
+
+  private playbackClerkBaseUrl(runUrl: string): string {
+    try {
+      return new URL(runUrl).origin;
+    } catch {
+      return runUrl.replace(/\/$/, '');
+    }
+  }
+
+  private async runPlaybackClerkAutoSignIn(page: Page, runUrl: string): Promise<void> {
+    const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')!.trim();
+    const identifier =
+      this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
+      this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
+    const baseURL = this.playbackClerkBaseUrl(runUrl);
+    await performClerkPasswordEmail2FA(page, {
+      baseURL,
+      identifier,
+      password,
+      skipInitialNavigate: true,
+    });
+    this.logger.log('Playback: Clerk + AgentMail auto sign-in completed');
   }
 
   private async setupEventCapture(session: RecordingSession) {

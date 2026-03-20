@@ -106,7 +106,12 @@ export class RunsController {
     @Body() dto: StartPlaybackDto,
   ) {
     const userId = req.user.sub;
-    return this.recordingService.startPlayback(userId, id, { delayMs: dto.delayMs });
+    return this.recordingService.startPlayback(userId, id, {
+      delayMs: dto.delayMs,
+      autoClerkSignIn: dto.autoClerkSignIn,
+      skipUntilSequence: dto.skipUntilSequence,
+      skipStepIds: dto.skipStepIds,
+    });
   }
 
   @Get(':id')

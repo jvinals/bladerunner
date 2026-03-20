@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, IsOptional, IsEnum, IsArray, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+} from 'class-validator';
 
 enum RunStatusDto {
   RECORDING = 'RECORDING',
@@ -43,6 +52,34 @@ export class StartPlaybackDto {
   @Min(0)
   @Max(5000)
   delayMs?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Use server env (Clerk + AgentMail) to sign in once when Clerk UI is shown; skip steps tagged clerkAuthPhase',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  autoClerkSignIn?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Skip executing steps with sequence strictly less than this (legacy runs without metadata tags)',
+    minimum: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  skipUntilSequence?: number;
+
+  @ApiPropertyOptional({
+    description: 'Step IDs to skip during playback (always applied)',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skipStepIds?: string[];
 }
 
 export class StopPlaybackDto {

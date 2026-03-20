@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "dev": "concurrently -n api,worker,web -c auto \"pnpm run dev:api\" \"pnpm --filter @bladerunner/browser-worker dev\" \"pnpm run dev:web:delayed\"",
@@ -33,6 +33,7 @@
     ]
   },
   "devDependencies": {
+    "@bladerunner/clerk-agentmail-signin": "workspace:*",
     "@clerk/testing": "^2.0.5",
     "@playwright/test": "^1.58.2",
     "agentmail": "^0.4.10",

@@ -141,6 +141,8 @@ Built on the **Edgehealth Style Guide**:
 
 ## E2E tests (Playwright + Clerk)
 
+Shared **Clerk + password + AgentMail OTP** helpers live in **`@bladerunner/clerk-agentmail-signin`** (`packages/clerk-agentmail-signin`). E2E imports the thin wrappers under `e2e/helpers/`; the **API playback** feature uses the same package for server-side auto sign-in.
+
 1. Install browser binaries once: `pnpm test:e2e:install`
 2. In **`.env`** (repo root): `VITE_CLERK_PUBLISHABLE_KEY`, **`CLERK_SECRET_KEY`** (same Clerk dev app), then one of:
    - **Ticket sign-in:** **`E2E_CLERK_USER_EMAIL`** only (no password) — `@clerk/testing` signs in via Clerk’s backend.
@@ -150,8 +152,20 @@ Built on the **Edgehealth Style Guide**:
 
 Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests assert **`/settings`** so the suite does not require the API or database.
 
+## Playback + Clerk + AgentMail (API + UI)
+
+When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSignIn: true`** on `POST /runs/:id/playback/start`), the API will:
+
+1. Use the **same env vars as E2E** (`E2E_CLERK_USER_EMAIL` / `E2E_CLERK_USER_USERNAME`, `E2E_CLERK_USER_PASSWORD`, `AGENTMAIL_API_KEY`, inbox id/email, `CLERK_SECRET_KEY`, publishable key) to run **one** Clerk + AgentMail OTP flow when the playback browser shows Clerk sign-in.
+2. **Skip** executing stored `playwrightCode` for steps whose **`metadata.clerkAuthPhase`** is true (set automatically during recording when the URL or UI looks like Clerk sign-in).
+
+**Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off) and **Skip seq &lt;** next to **Play**.
+
+Secrets stay on the **server**; the browser never receives test passwords.
+
 ## Changelog
 
+- **0.2.27** — **`@bladerunner/clerk-agentmail-signin`**: shared **Clerk + AgentMail OTP** for **E2E** and **API playback**; recording tags **`metadata.clerkAuthPhase`** on Clerk sign-in URLs/UI; playback **`PLAYBACK_AUTO_CLERK_SIGNIN`**, DTO **`autoClerkSignIn` / `skipUntilSequence` / `skipStepIds`**; UI playback options on **Runs** and **Run detail**.
 - **0.2.26** — **`pnpm dev`**: run **API** + **browser-worker** in parallel, **`wait-on tcp:127.0.0.1:3001`** then start **Vite** so the `/api` proxy does not hit **ECONNREFUSED** while Nest is still booting. (Default port **3001**; if you use **`API_PORT`**, start **`dev:web`** manually after the API is up or adjust the wait target.)
 - **0.2.25** — **Run detail**: tolerate missing **`targets`** / **`tags`** from API (no `.length` crash); findings query **404** → empty list; safe defaults for counts / **`artifactsCount`**.
 - **0.2.24** — **Runs** page: green **Play** button (replay selected run in preview), playback canvas + step highlights, **Stop** / **Detach** while playing; run detail primary action label **Play**; shared **`playbackStepTone`** helper.

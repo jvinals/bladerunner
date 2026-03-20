@@ -1,18 +1,22 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "private": true,
   "scripts": {
+    "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
     "build": "nest build",
+    "predev": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
     "start": "nest start",
     "dev": "rm -f tsconfig.tsbuildinfo && nest start --watch",
     "start:dev": "pnpm run dev",
     "start:prod": "node dist/main",
     "typecheck": "tsc --noEmit",
+    "test:playback-skip": "tsx src/modules/recording/playback-skip.selftest.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@bladerunner/clerk-agentmail-signin": "workspace:*",
     "@clerk/clerk-sdk-node": "^5.1.6",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.3",
@@ -37,6 +41,7 @@
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
     "prisma": "^6.19.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   }
 }

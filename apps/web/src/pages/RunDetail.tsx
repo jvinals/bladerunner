@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useEffect, useCallback } from 'react';
-import { runsApi } from '@/lib/api';
+import { useRef, useEffect, useCallback, useState } from 'react';
+import { runsApi, buildStartPlaybackBody } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
@@ -30,6 +30,8 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: typeof A
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('default');
+  const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const stepRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const detachedPlaybackWindowRef = useRef<Window | null>(null);
@@ -94,11 +96,20 @@ export default function RunDetailPage() {
   const handleStartPlayback = useCallback(async () => {
     if (!id || !canPlayback) return;
     try {
-      await startPlayback(id);
+      const skipRaw = playbackSkipUntilSeq.trim();
+      const skipNum = skipRaw === '' ? undefined : Number.parseInt(skipRaw, 10);
+      await startPlayback(
+        id,
+        buildStartPlaybackBody({
+          autoClerkMode: playbackAutoClerkMode,
+          skipUntilSequence:
+            skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
+        }),
+      );
     } catch (e) {
       console.error('Playback failed to start:', e);
     }
-  }, [id, canPlayback, startPlayback]);
+  }, [id, canPlayback, startPlayback, playbackAutoClerkMode, playbackSkipUntilSeq]);
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
@@ -198,7 +209,38 @@ export default function RunDetailPage() {
             <span>{formatRelativeTime(r.createdAt)}</span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 items-end">
+          {canPlayback && !isPlaying && (
+            <div className="flex flex-wrap items-center gap-2 justify-end text-[11px] text-gray-500 max-w-md">
+              <label htmlFor="run-playback-clerk" className="whitespace-nowrap">
+                Clerk auto sign-in
+              </label>
+              <select
+                id="run-playback-clerk"
+                value={playbackAutoClerkMode}
+                onChange={(e) => setPlaybackAutoClerkMode(e.target.value as 'default' | 'on' | 'off')}
+                className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+              >
+                <option value="default">Server default</option>
+                <option value="on">Force on</option>
+                <option value="off">Force off</option>
+              </select>
+              <label htmlFor="run-playback-skip" className="whitespace-nowrap">
+                Skip seq &lt;
+              </label>
+              <input
+                id="run-playback-skip"
+                type="number"
+                min={0}
+                placeholder="—"
+                value={playbackSkipUntilSeq}
+                onChange={(e) => setPlaybackSkipUntilSeq(e.target.value)}
+                className="w-16 border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                title="Skip steps with sequence strictly less than this (legacy runs)"
+              />
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={!canPlayback || isPlaying}
@@ -234,6 +276,7 @@ export default function RunDetailPage() {
               )}
             </>
           )}
+          </div>
         </div>
       </div>
 
