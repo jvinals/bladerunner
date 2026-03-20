@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { clerk, clerkSetup } from '@clerk/testing/playwright';
 import { test as setup, expect } from '@playwright/test';
+import { clerkSignInWithPasswordAndEmail2FA } from './helpers/clerk-sign-in-password-email-2fa';
 
 setup.describe.configure({ mode: 'serial' });
 
@@ -24,27 +25,41 @@ setup('authenticate and save storage state', async ({ page }) => {
 
   if (!(password && identifier) && !email) {
     throw new Error(
-      'E2E auth: set E2E_CLERK_USER_EMAIL (ticket sign-in via Clerk API) or E2E_CLERK_USER_PASSWORD plus E2E_CLERK_USER_USERNAME (or email as identifier). See README → E2E tests.',
+      'E2E auth: set E2E_CLERK_USER_EMAIL (ticket sign-in), or email/username + E2E_CLERK_USER_PASSWORD; for email OTP add AGENTMAIL_API_KEY + E2E_AGENTMAIL_INBOX_ID. See README → E2E tests.',
     );
   }
 
   fs.mkdirSync(authDir, { recursive: true });
 
-  await page.goto(`${baseURL}/`);
+  const useAgentMail2Fa =
+    !!process.env.AGENTMAIL_API_KEY &&
+    !!process.env.E2E_AGENTMAIL_INBOX_ID &&
+    !!password &&
+    !!identifier;
 
-  if (password && identifier) {
-    await clerk.signIn({
-      page,
-      signInParams: {
-        strategy: 'password',
-        identifier,
-        password,
-      },
+  if (useAgentMail2Fa) {
+    await clerkSignInWithPasswordAndEmail2FA(page, {
+      baseURL,
+      identifier,
+      password,
     });
-  } else if (email) {
-    await clerk.signIn({ page, emailAddress: email });
   } else {
-    throw new Error('E2E auth: invalid credential combination.');
+    await page.goto(`${baseURL}/`);
+
+    if (password && identifier) {
+      await clerk.signIn({
+        page,
+        signInParams: {
+          strategy: 'password',
+          identifier,
+          password,
+        },
+      });
+    } else if (email) {
+      await clerk.signIn({ page, emailAddress: email });
+    } else {
+      throw new Error('E2E auth: invalid credential combination.');
+    }
   }
 
   // Home hits the dashboard API; /settings is static and works with only Vite + Clerk.

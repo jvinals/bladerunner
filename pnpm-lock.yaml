@@ -14,6 +14,9 @@ importers:
       '@playwright/test':
         specifier: ^1.58.2
         version: 1.58.2
+      agentmail:
+        specifier: ^0.4.10
+        version: 0.4.10
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -1845,6 +1848,10 @@ packages:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  agentmail@0.4.10:
+    resolution: {integrity: sha512-LXk2muMmXM58D5pSuDdGl2H2uoE72NEGTfPsJ1du4C53DRaxUL0yuA9tFInGvEm5E2MkdiG7Q3MMqjGHlj5vBw==}
+    engines: {node: '>=18.0.0'}
 
   ajv-formats@2.1.1:
     resolution: {integrity: sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==}
@@ -4931,6 +4938,13 @@ snapshots:
       acorn: 8.16.0
 
   acorn@8.16.0: {}
+
+  agentmail@0.4.10:
+    dependencies:
+      ws: 8.19.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   ajv-formats@2.1.1(ajv@8.18.0):
     optionalDependencies:
