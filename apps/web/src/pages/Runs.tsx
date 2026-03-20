@@ -4,6 +4,8 @@ import { useUser } from '@clerk/react';
 import { runsApi } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { useRecording } from '@/hooks/useRecording';
+import { usePlayback } from '@/hooks/usePlayback';
+import { playbackToneForStep } from '@/lib/playbackStepTone';
 import {
   useRemotePreviewCanvas,
   type RemotePreviewBridge,
@@ -30,7 +32,7 @@ export default function RunsPage() {
   const {
     isRecording,
     runId,
-    currentFrame,
+    currentFrame: recordFrame,
     steps,
     status,
     startRecording,
@@ -43,6 +45,21 @@ export default function RunsPage() {
     sendRemoteClipboard,
     socketConnected,
   } = useRecording();
+
+  const {
+    playbackSessionId,
+    currentFrame: playFrame,
+    status: playbackStatus,
+    isPlaying,
+    highlightSequence,
+    completedSequences,
+    playbackError,
+    startPlayback,
+    stopPlayback,
+  } = usePlayback();
+
+  const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
+  const detachedPlaybackWindowRef = useRef<Window | null>(null);
 
   const { data: runsData, isLoading, error, refetch } = useQuery({
     queryKey: ['runs', search],
@@ -58,6 +75,16 @@ export default function RunsPage() {
     createdAt: string;
   }>;
 
+  const selectedRun = selectedRunId ? runs.find((r) => r.id === selectedRunId) : undefined;
+  const canPlaybackSelected =
+    !!selectedRunId &&
+    steps.length > 0 &&
+    !!selectedRun &&
+    selectedRun.status !== 'RECORDING' &&
+    !isRecording;
+  const showReplayChrome =
+    isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
+
   useEffect(() => {
     if (stepsEndRef.current) {
       stepsEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -65,7 +92,9 @@ export default function RunsPage() {
   }, [steps.length]);
 
   useEffect(() => {
-    if (!currentFrame || !canvasRef.current || isDetached) return;
+    if (isDetached) return;
+    const frame = isRecording ? recordFrame : playFrame;
+    if (!frame || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -76,8 +105,14 @@ export default function RunsPage() {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
     };
-    img.src = `data:image/jpeg;base64,${currentFrame}`;
-  }, [currentFrame, isDetached]);
+    img.src = `data:image/jpeg;base64,${frame}`;
+  }, [recordFrame, playFrame, isRecording, isDetached]);
+
+  useEffect(() => {
+    if (highlightSequence == null) return;
+    const el = stepRefsPlayback.current.get(highlightSequence);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightSequence]);
 
   const handleStartRecording = useCallback(async () => {
     if (!newUrl || !newName) return;
@@ -122,8 +157,35 @@ export default function RunsPage() {
     canvasRef,
     previewFocusRef,
     previewBridge,
-    { isActive: isRecording && !isDetached },
+    { isActive: isRecording && !isDetached && !isPlaying },
   );
+
+  const handleStartPlaybackRuns = useCallback(async () => {
+    if (!selectedRunId || !canPlaybackSelected) return;
+    try {
+      await startPlayback(selectedRunId);
+    } catch (err) {
+      console.error('Playback failed to start:', err);
+    }
+  }, [selectedRunId, canPlaybackSelected, startPlayback]);
+
+  const handleDetachPlaybackRuns = useCallback(() => {
+    if (!playbackSessionId) return;
+    const w = window.open(
+      `/playback/${playbackSessionId}`,
+      'bladerunner-playback',
+      'width=1320,height=780',
+    );
+    if (w) {
+      detachedPlaybackWindowRef.current = w;
+      const check = setInterval(() => {
+        if (w.closed) {
+          detachedPlaybackWindowRef.current = null;
+          clearInterval(check);
+        }
+      }, 500);
+    }
+  }, [playbackSessionId]);
 
   const handleSendInstruction = useCallback(async () => {
     if (!instructionText.trim() || isSendingInstruction) return;
@@ -200,6 +262,29 @@ export default function RunsPage() {
                 Detach
               </button>
             </>
+          ) : (isPlaying || playFrame) && !isDetached ? (
+            <>
+              <canvas
+                ref={canvasRef}
+                className="max-w-full max-h-full object-contain block bg-gray-50"
+                role="img"
+                aria-label="Playback preview — recorded run replay"
+              />
+              <p className="absolute bottom-2 left-2 right-2 text-center text-[10px] text-gray-400 pointer-events-none px-8">
+                Replaying saved steps — read-only preview. Use <strong>Stop</strong> to end playback.
+              </p>
+              {playbackSessionId && (
+                <button
+                  type="button"
+                  onClick={handleDetachPlaybackRuns}
+                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
+                  title="Open playback in a new window"
+                >
+                  <ExternalLink size={12} />
+                  Detach
+                </button>
+              )}
+            </>
           ) : isDetached ? (
             <div className="text-center">
               <ExternalLink size={32} className="mx-auto mb-3 text-gray-300" />
@@ -212,12 +297,15 @@ export default function RunsPage() {
               </button>
             </div>
           ) : (
-            <div className="text-center">
+            <div className="text-center px-6">
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#4B90FF]/10 to-[#4D65FF]/10 flex items-center justify-center">
                 <Play size={24} className="text-[#4B90FF]" />
               </div>
               <p className="text-sm font-medium text-gray-700 mb-1">No active recording</p>
-              <p className="text-xs text-gray-400">Click "New" to start recording a test run</p>
+              <p className="text-xs text-gray-400 max-w-xs mx-auto">
+                Click <strong>New</strong> to record, or select a run and press <strong>Play</strong> to replay its steps
+                in the preview.
+              </p>
             </div>
           )}
         </div>
@@ -252,6 +340,27 @@ export default function RunsPage() {
                 <Square size={12} />
                 Stop
               </button>
+            ) : isPlaying ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void stopPlayback()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
+                >
+                  <Square size={12} />
+                  Stop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPanelOpen(!newPanelOpen)}
+                  disabled={isPlaying}
+                  className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-50"
+                  title="Stop playback before starting a new recording"
+                >
+                  <Plus size={12} />
+                  New
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => setNewPanelOpen(!newPanelOpen)}
@@ -284,6 +393,27 @@ export default function RunsPage() {
               </select>
               <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
+          )}
+
+          {!isRecording && (
+            <button
+              type="button"
+              disabled={!canPlaybackSelected || isPlaying}
+              onClick={() => void handleStartPlaybackRuns()}
+              title={
+                !selectedRunId
+                  ? 'Select a run first'
+                  : selectedRun?.status === 'RECORDING'
+                    ? 'Wait until recording finishes'
+                    : steps.length === 0
+                      ? 'This run has no steps yet'
+                      : 'Replay this run in the preview'
+              }
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#56A34A] text-white text-xs font-semibold rounded-md hover:bg-green-600 transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-sm"
+            >
+              <Play size={14} className="fill-white" />
+              Play
+            </button>
           )}
         </div>
 
@@ -348,10 +478,29 @@ export default function RunsPage() {
             </div>
           )}
 
+          {!isRecording && isPlaying && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-[#56A34A] animate-pulse" />
+              <span className="text-[10px] font-semibold text-[#56A34A] uppercase tracking-wider">
+                Playing back — {steps.length} steps
+              </span>
+            </div>
+          )}
+
+          {playbackError && (
+            <p className="mb-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5">
+              {playbackError}
+            </p>
+          )}
+
           {steps.length === 0 ? (
             <div className="flex items-center justify-center h-32">
               <p className="text-xs text-gray-400">
-                {isRecording ? 'Waiting for actions...' : 'No steps to display'}
+                {isRecording
+                  ? 'Waiting for actions...'
+                  : selectedRunId
+                    ? 'No steps for this run — pick another run or record a new one'
+                    : 'Select a run to see steps, or start a new recording'}
               </p>
             </div>
           ) : (
@@ -359,12 +508,22 @@ export default function RunsPage() {
               {steps.map((step) => (
                 <StepCard
                   key={step.id}
+                  ref={(el) => {
+                    if (el) stepRefsPlayback.current.set(step.sequence, el);
+                    else stepRefsPlayback.current.delete(step.sequence);
+                  }}
                   sequence={step.sequence}
                   action={step.action}
                   instruction={step.instruction}
                   playwrightCode={step.playwrightCode}
                   origin={step.origin}
                   timestamp={step.timestamp}
+                  playbackHighlight={playbackToneForStep(
+                    step.sequence,
+                    showReplayChrome,
+                    highlightSequence,
+                    completedSequences,
+                  )}
                 />
               ))}
               <div ref={stepsEndRef} />

@@ -4,27 +4,16 @@ import { useRef, useEffect, useCallback } from 'react';
 import { runsApi } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
-import { StepCard, type PlaybackHighlight } from '@/components/ui/StepCard';
+import { StepCard } from '@/components/ui/StepCard';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
+import { playbackToneForStep } from '@/lib/playbackStepTone';
 import { formatDuration, formatRelativeTime } from '@/lib/utils';
 import {
-  ArrowLeft, RotateCcw, Monitor, Smartphone, Globe,
+  ArrowLeft, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
   Camera, FileText, Activity, Play, Square, ExternalLink,
 } from 'lucide-react';
-
-function playbackToneForStep(
-  sequence: number,
-  showReplayChrome: boolean,
-  highlightSequence: number | null,
-  completed: Set<number>,
-): PlaybackHighlight | undefined {
-  if (!showReplayChrome) return undefined;
-  if (highlightSequence !== null && sequence === highlightSequence) return 'current';
-  if (completed.has(sequence)) return 'past';
-  return 'future';
-}
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
   desktop: Monitor,
@@ -208,7 +197,7 @@ export default function RunDetailPage() {
             }
             className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:pointer-events-none"
           >
-            <RotateCcw size={13} /> Play back
+            <Play size={13} /> Play
           </button>
           {isPlaying && (
             <>
@@ -288,7 +277,7 @@ export default function RunDetailPage() {
                 />
               ) : (
                 <p className="text-xs text-gray-400 text-center px-6">
-                  Press <span className="font-medium text-gray-600">Play back</span> to run your saved steps in a new browser
+                  Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
                   session. Frames stream here in real time.
                 </p>
               )}
