@@ -152,6 +152,7 @@ Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests a
 
 ## Changelog
 
+- **0.2.22** — API startup: on **EADDRINUSE** (port **3001** busy), print **`lsof` / `kill` / `API_PORT`** hints instead of a raw stack-only exit.
 - **0.2.21** — **E2E / AgentMail**: resolve inbox by **`E2E_AGENTMAIL_INBOX_EMAIL`** when **`E2E_AGENTMAIL_INBOX_ID`** isn’t shown in the dashboard; **`pnpm agentmail:list-inboxes`**; OTP matcher includes “verification code” (non-Clerk branded mail).
 - **0.2.20** — **E2E**: password + **email 2FA** via **AgentMail** (`agentmail` SDK): `AGENTMAIL_API_KEY` + `E2E_AGENTMAIL_INBOX_ID` + tester email/password; helpers poll inbox for Clerk OTP.
 - **0.2.19** — **E2E**: `@playwright/test` + `@clerk/testing`, `e2e/global.setup.ts` (Clerk testing token + storage state), `e2e/signed-in.spec.ts`, `pnpm test:e2e` / `test:e2e:install`.
