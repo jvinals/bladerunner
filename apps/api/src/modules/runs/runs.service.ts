@@ -14,6 +14,8 @@ export class RunsService {
       search?: string;
       page?: number;
       pageSize?: number;
+      sortBy?: string;
+      sortOrder?: string;
     },
   ) {
     const where: Prisma.RunWhereInput = { userId };
@@ -34,10 +36,23 @@ export class RunsService {
     const page = query?.page || 1;
     const pageSize = query?.pageSize || 20;
 
+    const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc';
+    const sortBy = query?.sortBy || 'createdAt';
+    const orderBy: Prisma.RunOrderByWithRelationInput =
+      sortBy === 'name'
+        ? { name: sortOrder }
+        : sortBy === 'durationMs'
+          ? { durationMs: sortOrder }
+          : sortBy === 'status'
+            ? { status: sortOrder }
+            : sortBy === 'updatedAt'
+              ? { updatedAt: sortOrder }
+              : { createdAt: sortOrder };
+
     const [data, total] = await Promise.all([
       this.prisma.run.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {

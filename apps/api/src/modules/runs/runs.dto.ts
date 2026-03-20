@@ -9,6 +9,7 @@ import {
   Min,
   Max,
   IsBoolean,
+  IsIn,
 } from 'class-validator';
 
 enum RunStatusDto {
@@ -154,4 +155,17 @@ export class RunQueryDto {
   @IsInt()
   @Min(1)
   pageSize?: number;
+
+  @ApiPropertyOptional({
+    enum: ['createdAt', 'name', 'durationMs', 'status', 'updatedAt'],
+    description: 'Sort field',
+  })
+  @IsOptional()
+  @IsIn(['createdAt', 'name', 'durationMs', 'status', 'updatedAt'])
+  sortBy?: 'createdAt' | 'name' | 'durationMs' | 'status' | 'updatedAt';
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], description: 'Sort direction' })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }
