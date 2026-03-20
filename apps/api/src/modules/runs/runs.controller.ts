@@ -159,7 +159,20 @@ export class RunsController {
       autoClerkSignIn: dto.autoClerkSignIn,
       skipUntilSequence: dto.skipUntilSequence,
       skipStepIds: dto.skipStepIds,
+      playThroughSequence: dto.playThroughSequence,
     });
+  }
+
+  @Get(':id/checkpoints')
+  @ApiOperation({
+    summary: 'List app-state checkpoints (storage snapshots after each recorded step)',
+    description:
+      'Checkpoints are written while recording when `RECORDING_CHECKPOINTS` is enabled (default). Prefix replay remains the deterministic way to reach a step.',
+  })
+  @ApiResponse({ status: 200, description: 'Checkpoint rows for the run' })
+  async runCheckpoints(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    return this.runsService.findCheckpoints(id, userId);
   }
 
   @Get(':id/recording/video')

@@ -14,6 +14,7 @@ import {
   Sparkles,
   Hand,
   RotateCcw,
+  Play,
 } from 'lucide-react';
 
 export type PlaybackHighlight = 'past' | 'current' | 'future';
@@ -31,6 +32,12 @@ interface StepCardProps {
   reRecord?: {
     onSubmit: (instruction: string) => Promise<void>;
     busy: boolean;
+  };
+  /** Completed-run playback: start live replay from this step, or only this step */
+  stepPlayback?: {
+    onPlayFromHere: () => void;
+    onPlayThisStepOnly: () => void;
+    disabled?: boolean;
   };
 }
 
@@ -59,7 +66,7 @@ const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
 };
 
 export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepCard(
-  { sequence, action, instruction, playwrightCode, origin, timestamp, playbackHighlight, reRecord },
+  { sequence, action, instruction, playwrightCode, origin, timestamp, playbackHighlight, reRecord, stepPlayback },
   ref,
 ) {
   const [expanded, setExpanded] = useState(false);
@@ -71,17 +78,17 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   const highlightClass = playbackHighlight ? HIGHLIGHT_RING[playbackHighlight] : '';
 
   const originBorder = isAutomatic
-    ? 'border-l-teal-500'
+    ? 'border-l-[#4B90FF]'
     : isAI
       ? 'border-l-[#4D65FF]'
       : 'border-l-gray-300';
   const originBadgeBg = isAutomatic
-    ? 'bg-teal-500/10 text-teal-700'
+    ? 'rounded-full px-2 py-0.5 bg-[#4B90FF] text-white shadow-sm'
     : isAI
-      ? 'bg-[#4D65FF]/10 text-[#4D65FF]'
-      : 'bg-gray-100 text-gray-400';
+      ? 'rounded-full px-2 py-0.5 bg-[#4D65FF]/10 text-[#4D65FF]'
+      : 'rounded-full px-2 py-0.5 bg-gray-100 text-gray-400';
   const originCircle = isAutomatic
-    ? 'bg-teal-500/10 text-teal-700'
+    ? 'bg-[#4B90FF]/15 text-[#2563EB]'
     : isAI
       ? 'bg-[#4D65FF]/10 text-[#4D65FF]'
       : 'bg-gray-100 text-gray-500';
@@ -103,11 +110,34 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
           <div className="flex items-center gap-1.5 mb-0.5">
             <Icon size={12} className="text-gray-400 flex-shrink-0" />
             <span className="text-[10px] text-gray-400 ce-mono">{formatTime(timestamp)}</span>
-            <span className={`px-1.5 py-0 text-[9px] font-semibold rounded uppercase tracking-wider ${originBadgeBg}`}>
+            <span className={`text-[9px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
               {originLabel}
             </span>
           </div>
           <p className="text-xs text-gray-700 leading-relaxed">{instruction}</p>
+          {stepPlayback && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                disabled={stepPlayback.disabled}
+                onClick={() => stepPlayback.onPlayFromHere()}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#4B90FF]/40 bg-[#4B90FF]/5 text-[10px] font-medium text-[#2563EB] hover:bg-[#4B90FF]/10 disabled:opacity-40 disabled:pointer-events-none"
+                title="Live replay: skip earlier steps and run from this one"
+              >
+                <Play size={12} />
+                Play from here
+              </button>
+              <button
+                type="button"
+                disabled={stepPlayback.disabled}
+                onClick={() => stepPlayback.onPlayThisStepOnly()}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                title="Live replay: run only this step’s Playwright code"
+              >
+                This step only
+              </button>
+            </div>
+          )}
           {reRecord && (
             <div className="mt-2 flex flex-col gap-1.5">
               <input

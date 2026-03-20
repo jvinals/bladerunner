@@ -80,13 +80,34 @@ model Run {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  project    Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  steps      RunStep[]
-  recordings RunRecording[]
+  project     Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  steps       RunStep[]
+  recordings  RunRecording[]
+  checkpoints RunCheckpoint[]
 
   @@index([userId])
   @@index([projectId])
   @@map("runs")
+}
+
+/// Captured browser storage (cookies / localStorage) after a step — optional aid for “app state” restore; prefix replay remains the source of truth for determinism.
+model RunCheckpoint {
+  id                 String   @id @default(uuid())
+  runId              String   @map("run_id")
+  userId             String   @map("user_id")
+  /// State snapshot after this step sequence (before the next step).
+  afterStepSequence  Int      @map("after_step_sequence")
+  label              String   @default("")
+  pageUrl            String?  @map("page_url")
+  /// File name under the run artifact dir, e.g. `checkpoint-3.json`
+  storageStatePath   String?  @map("storage_state_path")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([userId])
+  @@map("run_checkpoints")
 }
 
 model RunStep {

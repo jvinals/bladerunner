@@ -167,6 +167,32 @@ export default function RunDetailPage() {
     (run as { status: string }).status !== 'RECORDING' &&
     !waitingForSteps;
 
+  const handleStepPlayback = useCallback(
+    async (sequence: number, mode: 'from' | 'only') => {
+      if (!id || !canPlayback) return;
+      if (isPlaying) await stopPlayback();
+      try {
+        await startPlayback(
+          id,
+          buildStartPlaybackBody({
+            autoClerkMode: playbackAutoClerkMode,
+            skipUntilSequence: sequence,
+            ...(mode === 'only' ? { playThroughSequence: sequence } : {}),
+          }),
+        );
+      } catch (e) {
+        console.error('Step playback failed:', e);
+      }
+    },
+    [id, canPlayback, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
+  );
+
+  const { data: runCheckpoints = [] } = useQuery({
+    queryKey: ['run-checkpoints', id],
+    queryFn: () => runsApi.getCheckpoints(id!),
+    enabled: !!id && !!canPlayback,
+  });
+
   const stepsQueryErrorMessage =
     stepsQueryError && stepsQueryErr instanceof Error ? stepsQueryErr.message : null;
   const showReplayChrome =
@@ -485,6 +511,12 @@ export default function RunDetailPage() {
               Recorded steps
               <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
             </p>
+            {runCheckpoints.length > 0 && (
+              <p className="text-[10px] text-gray-500 mb-2">
+                {runCheckpoints.length} app-state checkpoint{runCheckpoints.length === 1 ? '' : 's'} (browser storage
+                after each step). Prefix replay remains the reliable way to reach a step.
+              </p>
+            )}
             <div className="overflow-y-auto flex-1 pr-1 -mr-1">
               {recordedSteps.map((step) => (
                 <StepCard
@@ -505,6 +537,15 @@ export default function RunDetailPage() {
                     highlightSequence,
                     completedSequences,
                   )}
+                  stepPlayback={
+                    canPlayback
+                      ? {
+                          onPlayFromHere: () => void handleStepPlayback(step.sequence, 'from'),
+                          onPlayThisStepOnly: () => void handleStepPlayback(step.sequence, 'only'),
+                          disabled: isPlaying,
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>

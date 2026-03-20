@@ -40,6 +40,8 @@ export type StartPlaybackServiceOpts = {
   autoClerkSignIn?: boolean;
   skipUntilSequence?: number;
   skipStepIds?: string[];
+  /** Stop playback after this step sequence completes (inclusive). Omit = run all steps. */
+  playThroughSequence?: number;
 };
 
 export interface RecordingSession {
@@ -537,6 +539,10 @@ export class RecordingService extends EventEmitter {
       },
     });
 
+    void this.persistCheckpointAfterStep(session, step).catch((err) => {
+      this.logger.warn(`Checkpoint after re-record step ${step.sequence}: ${err}`);
+    });
+
     this.emit('step', runId, step);
     this.logger.log(`Recording ${runId}: re-recorded step ${step.sequence} (${stepId})`);
     return step;
@@ -805,7 +811,54 @@ export class RecordingService extends EventEmitter {
       },
     });
 
+    void this.persistCheckpointAfterStep(session, step).catch((err) => {
+      this.logger.warn(`Checkpoint after step ${step.sequence}: ${err}`);
+    });
+
     return step;
+  }
+
+  /**
+   * Saves Playwright `storageState` + DB row for “app state” labels (best-effort; prefix replay is still authoritative).
+   * Disabled when `RECORDING_CHECKPOINTS=false`.
+   */
+  private async persistCheckpointAfterStep(session: RecordingSession, step: RunStep): Promise<void> {
+    const raw = this.configService.get<string>('RECORDING_CHECKPOINTS', 'true').toLowerCase();
+    if (raw === 'false' || raw === '0' || raw === 'no') return;
+
+    const base = getRecordingsBaseDir(this.configService);
+    const artifactDir = getRunArtifactDir(base, session.userId, session.runId);
+    await fs.mkdir(artifactDir, { recursive: true });
+
+    const fileName = `checkpoint-${step.sequence}.json`;
+    const absPath = path.join(artifactDir, fileName);
+    try {
+      await session.page.context().storageState({ path: absPath });
+    } catch (err) {
+      this.logger.warn(`storageState failed for step ${step.sequence}: ${err}`);
+      return;
+    }
+
+    let pageUrl: string | undefined;
+    try {
+      pageUrl = session.page.url();
+    } catch {
+      /* ignore */
+    }
+
+    await this.prisma.runCheckpoint.deleteMany({
+      where: { runId: session.runId, afterStepSequence: step.sequence },
+    });
+    await this.prisma.runCheckpoint.create({
+      data: {
+        runId: session.runId,
+        userId: session.userId,
+        afterStepSequence: step.sequence,
+        label: `After step ${step.sequence}`,
+        pageUrl: pageUrl ?? null,
+        storageStatePath: fileName,
+      },
+    });
   }
 
   /** True while URL or visible UI looks like Clerk sign-in (tags step for playback skip + auto auth). */
@@ -940,6 +993,7 @@ export class RecordingService extends EventEmitter {
       void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId, run.url, {
         wantAutoClerkSignIn,
         skipSet,
+        playThroughSequence: opts?.playThroughSequence,
       });
 
       this.logger.log(`Playback started: ${playbackSessionId} (source ${sourceRunId})`);
@@ -980,7 +1034,7 @@ export class RecordingService extends EventEmitter {
     delayMs: number,
     sourceRunId: string,
     runUrl: string,
-    ctx: { wantAutoClerkSignIn: boolean; skipSet: Set<string> },
+    ctx: { wantAutoClerkSignIn: boolean; skipSet: Set<string>; playThroughSequence?: number },
   ) {
     let clerkAutoSignInDone = false;
 
@@ -1004,6 +1058,10 @@ export class RecordingService extends EventEmitter {
       }
 
       for (const step of steps) {
+        if (ctx.playThroughSequence != null && step.sequence > ctx.playThroughSequence) {
+          break;
+        }
+
         const stepPayload = {
           id: step.id,
           sequence: step.sequence,

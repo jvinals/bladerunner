@@ -236,6 +236,32 @@ export default function RunsPage() {
     playbackSkipUntilSeq,
   ]);
 
+  const handleStepPlaybackRuns = useCallback(
+    async (sequence: number, mode: 'from' | 'only') => {
+      if (!selectedRunId || !canPlaybackSelected) return;
+      if (isPlaying) await stopPlayback();
+      try {
+        await startPlayback(
+          selectedRunId,
+          buildStartPlaybackBody({
+            autoClerkMode: playbackAutoClerkMode,
+            skipUntilSequence: sequence,
+            ...(mode === 'only' ? { playThroughSequence: sequence } : {}),
+          }),
+        );
+      } catch (err) {
+        console.error('Step playback failed:', err);
+      }
+    },
+    [selectedRunId, canPlaybackSelected, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
+  );
+
+  const { data: runCheckpointsRuns = [] } = useQuery({
+    queryKey: ['run-checkpoints', selectedRunId],
+    queryFn: () => runsApi.getCheckpoints(selectedRunId!),
+    enabled: !!selectedRunId && canPlaybackSelected,
+  });
+
   const handleDetachPlaybackRuns = useCallback(() => {
     if (!playbackSessionId) return;
     const url = `${window.location.origin}/playback/${playbackSessionId}`;
@@ -729,6 +755,12 @@ export default function RunsPage() {
               {reRecordError}
             </p>
           )}
+          {!isRecording && canPlaybackSelected && runCheckpointsRuns.length > 0 && (
+            <p className="mb-2 text-[10px] text-gray-500">
+              {runCheckpointsRuns.length} app-state checkpoint{runCheckpointsRuns.length === 1 ? '' : 's'} (browser
+              storage after each step).
+            </p>
+          )}
 
           {steps.length === 0 ? (
             <div className="flex items-center justify-center h-32">
@@ -766,6 +798,15 @@ export default function RunsPage() {
                       ? {
                           busy: reRecordBusyStepId === step.id,
                           onSubmit: (instr) => handleReRecordStep(step.id, instr),
+                        }
+                      : undefined
+                  }
+                  stepPlayback={
+                    !isRecording && canPlaybackSelected
+                      ? {
+                          onPlayFromHere: () => void handleStepPlaybackRuns(step.sequence, 'from'),
+                          onPlayThisStepOnly: () => void handleStepPlaybackRuns(step.sequence, 'only'),
+                          disabled: isPlaying,
                         }
                       : undefined
                   }

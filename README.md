@@ -119,6 +119,8 @@ docker compose up
 | GET    | /integrations       | List integrations            |
 | GET    | /agents             | List registered agents       |
 | POST   | /runs/:id/steps/:stepId/re-record | Re-capture one step by instruction (active recording) |
+| GET    | /runs/:id/checkpoints | List **app state checkpoints** (after-step browser storage + metadata) for a run |
+| POST   | /runs/:id/playback/start | Start live playback; body may include **`skipUntilSequence`**, **`playThroughSequence`** (stop after that step), **`skipStepIds`**, Clerk options |
 
 ## Domain Model
 
@@ -174,6 +176,8 @@ When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSign
 
 **Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off) and **Skip seq &lt;** next to **Play**.
 
+**Step-scoped playback:** **`skipUntilSequence: N`** runs stored steps starting at sequence **N** (skips earlier steps). **`playThroughSequence: M`** stops playback after executing step **M** (use with the same **`skipUntilSequence`** for “this step only”). **Runs** and **Run detail** step cards expose **Play from here** / **This step only** when playback is available.
+
 **While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk + MailSlurp flow once on the remote browser and appends a tagged **CUSTOM** step (`clerkAuthPhase` + `clerkAutoOneShot`) so playback can skip it when auto sign-in is enabled.
 
 Secrets stay on the **server**; the browser never receives test passwords.
@@ -185,6 +189,17 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 - Keep **`CLERK_SECRET_KEY`** = Bladerunner (for API JWT verification when you use Bladerunner with Clerk).
 - Set **`PLAYBACK_CLERK_SECRET_KEY`** (or **`E2E_CLERK_SECRET_KEY`**) = the **target app’s** Clerk secret for recording/playback auto sign-in and E2E when the publishable key comes from that app. The server can read **`publishableKey` from the live page**; the **secret** must still be configured explicitly.
 - If DevTools shows Clerk API calls to a **different host** than `CLERK_FAPI`, set **`CLERK_FAPI_EXTRA_HOSTS`** (comma-separated hostnames) and/or **`CLERK_TESTING_FRONTEND_API_URL`** (hostname only, no `https://`) so testing tokens and route interception align with that Frontend API.
+
+## App state checkpoints (restore strategy)
+
+Bladerunner persists **checkpoints** after each recorded step (best-effort **Playwright `storageState`** JSON under **`RECORDINGS_DIR`**, plus DB rows via **`GET /runs/:id/checkpoints`**). **Hybrid model:**
+
+- **Source of truth for “being at step K”** — **Prefix replay**: run steps **1…K−1** in order (what **Play from here** does via **`skipUntilSequence`**). This matches how automation is stored and is the most deterministic way to align with a stored step.
+- **Session-oriented restore** — Checkpoints help with **cookies / `localStorage`** (e.g. auth) but **do not** capture full SPA in-memory state; use them as a supplement, not a full “restore DOM” guarantee.
+
+Set **`RECORDING_CHECKPOINTS=false`** in **`apps/api`** env to disable writing checkpoint files/rows during recording (default **on**).
+
+**Re-record (AI) after a run is completed** still requires an **active recording session** today; use **Re-record** on the **Runs** page while that run is recording. A future “edit completed run” flow would combine **prefix replay or checkpoint** + the same LLM re-record path.
 
 ## Session recordings (disk)
 
@@ -199,6 +214,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.3** — **App state checkpoints** (`RunCheckpoint`, migration): optional **`storageState`** snapshots after each step; **`GET /runs/:id/checkpoints`**. **Playback**: **`playThroughSequence`** stops after a given step; UI **Play from here** / **This step only** on **Runs** + **Run detail**. README: restore strategy (hybrid: prefix replay + checkpoints). **`RECORDING_CHECKPOINTS`** env. **`@bladerunner/web` `0.6.2`**, **`@bladerunner/api` `0.5.2`**.
 - **0.7.2** — **Docs**: troubleshooting for **`StepOrigin` / `AUTOMATIC`** — run **`pnpm migrate`** in **`apps/api`** when the DB enum is behind **`schema.prisma`** (fixes `22P02` invalid enum + missing recording steps). **`apps/api`**: **`migrate`** script.
 - **0.7.1** — **Runs**: show **`role="alert"`** error when **Re-record step** fails. **`@bladerunner/web` `0.6.1`**.
 - **0.7.0** — **`StepOrigin.AUTOMATIC`** (Prisma migration): Clerk/MailSlurp-tagged steps use **`[MailSlurp automation]`** instruction prefix; playback behavior unchanged (**`metadata.clerkAuthPhase`** skip + single **`performClerkPasswordEmail2FA`**). **`POST /runs/:id/steps/:stepId/re-record`** re-captures a step by instruction during active recording; **Runs** step cards show **Re-record**. **`@bladerunner/web` `0.6.0`**, **`@bladerunner/api` `0.5.0`**, **`@bladerunner/types` `0.2.0`**.

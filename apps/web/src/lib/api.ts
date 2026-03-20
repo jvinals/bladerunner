@@ -6,6 +6,8 @@ export type StartPlaybackBody = {
   autoClerkSignIn?: boolean;
   skipUntilSequence?: number;
   skipStepIds?: string[];
+  /** Stop after this step sequence (inclusive). Pair with `skipUntilSequence` to play one step only. */
+  playThroughSequence?: number;
 };
 
 export type AutoClerkPlaybackMode = 'default' | 'on' | 'off';
@@ -15,6 +17,8 @@ export function buildStartPlaybackBody(params: {
   autoClerkMode?: AutoClerkPlaybackMode;
   /** Skip steps with sequence strictly less than this (legacy runs). */
   skipUntilSequence?: number;
+  /** Stop playback after this step sequence (inclusive). */
+  playThroughSequence?: number;
 }): StartPlaybackBody {
   const out: StartPlaybackBody = {};
   if (params.delayMs != null) out.delayMs = params.delayMs;
@@ -26,6 +30,13 @@ export function buildStartPlaybackBody(params: {
     params.skipUntilSequence >= 0
   ) {
     out.skipUntilSequence = Math.floor(params.skipUntilSequence);
+  }
+  if (
+    typeof params.playThroughSequence === 'number' &&
+    Number.isFinite(params.playThroughSequence) &&
+    params.playThroughSequence >= 0
+  ) {
+    out.playThroughSequence = Math.floor(params.playThroughSequence);
   }
   return out;
 }
@@ -171,6 +182,18 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ playbackSessionId }),
     }),
+  /** App-state checkpoints (storage snapshots after each step while recording). */
+  getCheckpoints: (runId: string) =>
+    apiFetch<
+      Array<{
+        id: string;
+        afterStepSequence: number;
+        label: string;
+        pageUrl: string | null;
+        storageStatePath: string | null;
+        createdAt: string;
+      }>
+    >(`/runs/${runId}/checkpoints`),
 };
 
 // ─── Projects ────────────────────────────────────────────────────────────────

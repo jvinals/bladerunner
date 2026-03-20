@@ -116,6 +116,24 @@ export class RunsService {
     });
   }
 
+  /** App-state checkpoints (Playwright `storageState` snapshots after each step while recording). */
+  async findCheckpoints(runId: string, userId: string) {
+    const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
+    if (!run) throw new NotFoundException(`Run ${runId} not found`);
+    return this.prisma.runCheckpoint.findMany({
+      where: { runId, userId },
+      orderBy: { afterStepSequence: 'asc' },
+      select: {
+        id: true,
+        afterStepSequence: true,
+        label: true,
+        pageUrl: true,
+        storageStatePath: true,
+        createdAt: true,
+      },
+    });
+  }
+
   async getRunStatus(runId: string, userId: string) {
     const run = await this.prisma.run.findFirst({
       where: { id: runId, userId },

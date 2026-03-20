@@ -86,6 +86,17 @@ export class StartPlaybackDto {
   @IsArray()
   @IsString({ each: true })
   skipStepIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Stop playback after this step sequence completes (inclusive). Use with skipUntilSequence to play a single step (e.g. skipUntilSequence: 3, playThroughSequence: 3).',
+    minimum: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  playThroughSequence?: number;
 }
 
 export class StopPlaybackDto {
