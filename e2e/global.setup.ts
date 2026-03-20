@@ -33,7 +33,7 @@ setup('authenticate and save storage state', async ({ page }) => {
 
   const useAgentMail2Fa =
     !!process.env.AGENTMAIL_API_KEY &&
-    !!process.env.E2E_AGENTMAIL_INBOX_ID &&
+    !!(process.env.E2E_AGENTMAIL_INBOX_ID?.trim() || process.env.E2E_AGENTMAIL_INBOX_EMAIL?.trim()) &&
     !!password &&
     !!identifier;
 

@@ -24,6 +24,61 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
 }
 
+function inboxEmail(inv: Record<string, unknown>): string {
+  const v =
+    inv.email ??
+    inv.address ??
+    inv.inboxAddress ??
+    inv.inbox_email ??
+    inv.username;
+  return String(v ?? '').trim().toLowerCase();
+}
+
+function inboxIdField(inv: Record<string, unknown>): string | undefined {
+  const id = inv.inboxId ?? inv.inbox_id ?? inv.id;
+  return id != null && String(id).length > 0 ? String(id) : undefined;
+}
+
+/**
+ * Resolve the AgentMail inbox id from env:
+ * - `E2E_AGENTMAIL_INBOX_ID` if set, else
+ * - lookup by `E2E_AGENTMAIL_INBOX_EMAIL` (e.g. evocare@agentmail.to) via `inboxes.list()`.
+ */
+export async function resolveAgentMailInboxId(apiKey: string): Promise<string> {
+  const explicit = process.env.E2E_AGENTMAIL_INBOX_ID?.trim();
+  if (explicit) return explicit;
+
+  const needle = process.env.E2E_AGENTMAIL_INBOX_EMAIL?.trim().toLowerCase();
+  if (!needle) {
+    throw new Error(
+      'Set E2E_AGENTMAIL_INBOX_ID or E2E_AGENTMAIL_INBOX_EMAIL (your inbox address). Run: pnpm agentmail:list-inboxes',
+    );
+  }
+
+  const client = new AgentMailClient({ apiKey });
+  const res = await client.inboxes.list();
+  const top = asRecord(res) ?? {};
+  const data = asRecord(top.data);
+  const rows = (data?.inboxes ?? data?.items ?? top.inboxes ?? top.items) as unknown;
+  if (!Array.isArray(rows)) {
+    throw new Error(
+      'AgentMail inboxes.list() returned an unexpected shape. Run: pnpm agentmail:list-inboxes',
+    );
+  }
+
+  for (const row of rows) {
+    const inv = asRecord(row as unknown) ?? {};
+    if (inboxEmail(inv) === needle) {
+      const id = inboxIdField(inv);
+      if (id) return id;
+    }
+  }
+
+  throw new Error(
+    `No AgentMail inbox matched E2E_AGENTMAIL_INBOX_EMAIL="${needle}". Run: pnpm agentmail:list-inboxes`,
+  );
+}
+
 async function listMessageSummaries(
   client: AgentMailClient,
   inboxId: string,
@@ -59,11 +114,11 @@ export async function waitForClerkOtpFromAgentMail(options: {
   pollMs?: number;
 }): Promise<string> {
   const apiKey = process.env.AGENTMAIL_API_KEY;
-  const inboxId = process.env.E2E_AGENTMAIL_INBOX_ID;
-  if (!apiKey || !inboxId) {
-    throw new Error('AGENTMAIL_API_KEY and E2E_AGENTMAIL_INBOX_ID are required for email 2FA.');
+  if (!apiKey) {
+    throw new Error('AGENTMAIL_API_KEY is required for email 2FA.');
   }
 
+  const inboxId = await resolveAgentMailInboxId(apiKey);
   const client = new AgentMailClient({ apiKey });
   const deadline = Date.now() + (options.timeoutMs ?? 120_000);
   const pollMs = options.pollMs ?? 2_500;
@@ -93,6 +148,7 @@ export async function waitForClerkOtpFromAgentMail(options: {
         /clerk/i.test(blob) ||
         /clerk/i.test(fromJoined) ||
         /verification/i.test(subject) ||
+        /verification code/i.test(blob) ||
         /one-time/i.test(blob) ||
         /sign-?in/i.test(subject);
 

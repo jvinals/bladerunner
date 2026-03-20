@@ -145,13 +145,14 @@ Built on the **Edgehealth Style Guide**:
 2. In **`.env`** (repo root): `VITE_CLERK_PUBLISHABLE_KEY`, **`CLERK_SECRET_KEY`** (same Clerk dev app), then one of:
    - **Ticket sign-in:** **`E2E_CLERK_USER_EMAIL`** only (no password) — `@clerk/testing` signs in via Clerk’s backend.
    - **Password, no 2FA:** **`E2E_CLERK_USER_EMAIL`** (or **`E2E_CLERK_USER_USERNAME`**) + **`E2E_CLERK_USER_PASSWORD`** — do **not** set **`AGENTMAIL_API_KEY`** / **`E2E_AGENTMAIL_INBOX_ID`**.
-   - **Password + email OTP (e.g. Clerk → AgentMail):** same password vars **plus** **`AGENTMAIL_API_KEY`** and **`E2E_AGENTMAIL_INBOX_ID`**. The setup flow fills the OTP from the AgentMail inbox (Clerk verification email).
+   - **Password + email OTP (e.g. Clerk → AgentMail):** same password vars **plus** **`AGENTMAIL_API_KEY`** and either **`E2E_AGENTMAIL_INBOX_EMAIL`** (e.g. `evocare@agentmail.to`) **or** **`E2E_AGENTMAIL_INBOX_ID`**. The UI often doesn’t show the raw id — run **`pnpm agentmail:list-inboxes`** to print **id + email** for each inbox. The copy icon next to the address in the AgentMail dashboard may also copy the inbox id (paste into a note to check).
 3. Run: **`pnpm test:e2e`** (starts Vite on **5173**, runs setup auth, then signed-in specs).
 
 Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests assert **`/settings`** so the suite does not require the API or database.
 
 ## Changelog
 
+- **0.2.21** — **E2E / AgentMail**: resolve inbox by **`E2E_AGENTMAIL_INBOX_EMAIL`** when **`E2E_AGENTMAIL_INBOX_ID`** isn’t shown in the dashboard; **`pnpm agentmail:list-inboxes`**; OTP matcher includes “verification code” (non-Clerk branded mail).
 - **0.2.20** — **E2E**: password + **email 2FA** via **AgentMail** (`agentmail` SDK): `AGENTMAIL_API_KEY` + `E2E_AGENTMAIL_INBOX_ID` + tester email/password; helpers poll inbox for Clerk OTP.
 - **0.2.19** — **E2E**: `@playwright/test` + `@clerk/testing`, `e2e/global.setup.ts` (Clerk testing token + storage state), `e2e/signed-in.spec.ts`, `pnpm test:e2e` / `test:e2e:install`.
 - **0.2.18** — **Playback in preview**: `POST /runs/:id/playback/start` + `POST /runs/playback/stop`, Socket.IO `playbackProgress` on `/recording`, run detail **Play back** with live canvas + step highlights, detached **`/playback/:playbackSessionId`** route; initial-navigate detection uses `RegExp` (valid TS) instead of a broken `/.../i` literal.
