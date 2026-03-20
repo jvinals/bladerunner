@@ -54,7 +54,14 @@ export default function RunDetailPage() {
 
   const { data: findings } = useQuery({
     queryKey: ['run-findings', id],
-    queryFn: () => runsApi.getFindings(id!),
+    queryFn: async () => {
+      try {
+        return await runsApi.getFindings(id!);
+      } catch {
+        /* API may not expose GET /runs/:id/findings yet — avoid breaking the page */
+        return [];
+      }
+    },
     enabled: !!id,
   });
 
@@ -127,10 +134,10 @@ export default function RunDetailPage() {
     stepsCount: number;
     passedSteps: number;
     failedSteps: number;
-    findingsCount: number;
-    artifactsCount: number;
-    tags: string[];
-    targets: Array<{
+    findingsCount?: number;
+    artifactsCount?: number;
+    tags?: string[];
+    targets?: Array<{
       id: string;
       platform: string;
       deviceName: string;
@@ -142,6 +149,14 @@ export default function RunDetailPage() {
     createdAt: string;
     steps?: RecordedStep[];
   };
+
+  const targets = r.targets ?? [];
+  const tags = r.tags ?? [];
+  const artifactsCount = r.artifactsCount ?? 0;
+  const stepsCount = r.stepsCount ?? 0;
+  const passedSteps = r.passedSteps ?? 0;
+  const failedSteps = r.failedSteps ?? 0;
+  const findingsCount = r.findingsCount ?? 0;
 
   const findingsArr = (findings || []) as Array<{
     id: string;
@@ -233,24 +248,24 @@ export default function RunDetailPage() {
         <div className="bg-white border border-gray-100 rounded-lg p-4">
           <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Steps</p>
           <p className="text-lg font-bold text-gray-800">
-            {r.passedSteps}/{r.stepsCount}
+            {passedSteps}/{stepsCount}
           </p>
         </div>
         <div className="bg-white border border-gray-100 rounded-lg p-4">
           <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Failures</p>
-          <p className={`text-lg font-bold ${r.failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-800'}`}>
-            {r.failedSteps}
+          <p className={`text-lg font-bold ${failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-800'}`}>
+            {failedSteps}
           </p>
         </div>
         <div className="bg-white border border-gray-100 rounded-lg p-4">
           <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Findings</p>
-          <p className={`text-lg font-bold ${r.findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-800'}`}>
-            {r.findingsCount}
+          <p className={`text-lg font-bold ${findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-800'}`}>
+            {findingsCount}
           </p>
         </div>
         <div className="bg-white border border-gray-100 rounded-lg p-4">
           <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Artifacts</p>
-          <p className="text-lg font-bold text-[#4B90FF]">{r.artifactsCount}</p>
+          <p className="text-lg font-bold text-[#4B90FF]">{artifactsCount}</p>
         </div>
       </div>
 
@@ -324,11 +339,11 @@ export default function RunDetailPage() {
         {/* Left: Targets & Timeline */}
         <div className="lg:col-span-2 space-y-6">
           {/* Targets */}
-          {r.targets.length > 0 && (
+          {targets.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-lg p-5">
               <p className="text-sm font-semibold text-gray-800 mb-4">Targets</p>
               <div className="space-y-3">
-                {r.targets.map((t) => (
+                {targets.map((t) => (
                   <div key={t.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div className="flex items-center gap-3">
                       <Monitor size={14} className="text-gray-400" />
@@ -374,7 +389,7 @@ export default function RunDetailPage() {
           <div className="bg-white border border-gray-100 rounded-lg p-5">
             <p className="text-sm font-semibold text-gray-800 mb-4">Artifacts</p>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              {Array.from({ length: Math.min(r.artifactsCount, 6) }).map((_, i) => (
+              {Array.from({ length: Math.min(artifactsCount, 6) }).map((_, i) => (
                 <div key={i} className="border border-gray-100 rounded-md p-3 hover:border-[#4B90FF]/30 transition-colors cursor-pointer">
                   <div className="flex items-center gap-2 mb-2">
                     {i % 3 === 0 ? <Camera size={13} className="text-[#4B90FF]" /> : <FileText size={13} className="text-gray-400" />}
@@ -440,11 +455,11 @@ export default function RunDetailPage() {
           </div>
 
           {/* Tags */}
-          {r.tags.length > 0 && (
+          {tags.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-lg p-5">
               <p className="text-sm font-semibold text-gray-800 mb-3">Tags</p>
               <div className="flex flex-wrap gap-1.5">
-                {r.tags.map((tag) => (
+                {tags.map((tag) => (
                   <span key={tag} className="px-2.5 py-1 text-xs text-gray-500 bg-gray-50 rounded-full border border-gray-100 font-medium">
                     {tag}
                   </span>

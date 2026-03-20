@@ -152,6 +152,7 @@ Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests a
 
 ## Changelog
 
+- **0.2.25** — **Run detail**: tolerate missing **`targets`** / **`tags`** from API (no `.length` crash); findings query **404** → empty list; safe defaults for counts / **`artifactsCount`**.
 - **0.2.24** — **Runs** page: green **Play** button (replay selected run in preview), playback canvas + step highlights, **Stop** / **Detach** while playing; run detail primary action label **Play**; shared **`playbackStepTone`** helper.
 - **0.2.23** — Remove API **`listen` EADDRINUSE** try/catch block (no extra startup instrumentation); port conflict steps remain in README (**Port 3001 already in use**).
 - **0.2.22** — API startup: on **EADDRINUSE** (port **3001** busy), print **`lsof` / `kill` / `API_PORT`** hints instead of a raw stack-only exit.
