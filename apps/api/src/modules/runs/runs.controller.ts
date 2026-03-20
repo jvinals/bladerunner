@@ -72,6 +72,22 @@ export class RunsController {
     return run;
   }
 
+  @Post(':id/recording/clerk-auto-sign-in')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'During recording: run Clerk + AgentMail sign-in once on the remote browser',
+    description:
+      'Uses API env (same as E2E). Appends a tagged CUSTOM step for playback skip. Requires an active recording session.',
+  })
+  @ApiResponse({ status: 200, description: 'Sign-in completed; synthetic step returned' })
+  @ApiResponse({ status: 400, description: 'Clerk / AgentMail env not configured' })
+  @ApiResponse({ status: 404, description: 'No active recording session' })
+  @ApiResponse({ status: 503, description: 'Sign-in flow failed' })
+  async clerkAutoSignInRecording(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    return this.recordingService.clerkAutoSignInDuringRecording(id, userId);
+  }
+
   @Post('playback/stop')
   @ApiOperation({ summary: 'Stop an in-progress playback session' })
   @ApiResponse({ status: 200, description: 'Playback stopped' })

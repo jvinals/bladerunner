@@ -11,7 +11,7 @@ import {
   type RemotePreviewBridge,
 } from '@/hooks/useRemotePreviewCanvas';
 import {
-  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown,
+  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -46,6 +46,9 @@ export default function RunsPage() {
     sendRemoteTouch,
     sendRemoteClipboard,
     socketConnected,
+    clerkAutoSignIn,
+    clerkAutoSigningIn,
+    clerkAutoSignInError,
   } = useRecording();
 
   const {
@@ -519,11 +522,35 @@ export default function RunsPage() {
         {/* Steps List */}
         <div className="flex-1 overflow-y-auto p-4">
           {isRecording && (
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">
-                Recording — {steps.length} steps
-              </span>
+            <div className="space-y-2 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">
+                  Recording — {steps.length} steps
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={clerkAutoSigningIn || !socketConnected}
+                onClick={() => void clerkAutoSignIn()}
+                title={
+                  !socketConnected
+                    ? 'Wait for preview connection'
+                    : 'Run Clerk + AgentMail sign-in once using API credentials (same as E2E)'
+                }
+                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 border border-[#4B90FF]/40 bg-[#4B90FF]/5 text-[#4D65FF] text-[11px] font-medium rounded-md hover:bg-[#4B90FF]/10 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <LogIn size={12} />
+                {clerkAutoSigningIn ? 'Signing in…' : 'Sign in automatically'}
+              </button>
+              {clerkAutoSignInError && (
+                <p className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1.5 leading-snug">
+                  {clerkAutoSignInError}
+                </p>
+              )}
+              <p className="text-[9px] text-gray-400 leading-snug">
+                Uses server env (test user + AgentMail). Navigate to Clerk sign-in in the preview, then click here.
+              </p>
             </div>
           )}
 

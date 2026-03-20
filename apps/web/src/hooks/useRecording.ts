@@ -56,6 +56,10 @@ interface UseRecordingReturn {
   ) => Promise<string | undefined>;
   /** True when the recording socket is connected (for UI / clipboard). */
   socketConnected: boolean;
+  /** One-shot Clerk + AgentMail sign-in on the remote page (API env). */
+  clerkAutoSignIn: () => Promise<void>;
+  clerkAutoSigningIn: boolean;
+  clerkAutoSignInError: string | null;
 }
 
 export function useRecording(): UseRecordingReturn {
@@ -65,6 +69,8 @@ export function useRecording(): UseRecordingReturn {
   const [steps, setSteps] = useState<RecordedStep[]>([]);
   const [status, setStatus] = useState<string>('idle');
   const [socketConnected, setSocketConnected] = useState(false);
+  const [clerkAutoSigningIn, setClerkAutoSigningIn] = useState(false);
+  const [clerkAutoSignInError, setClerkAutoSignInError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   /** Set synchronously when a recording starts so pointer/key work before React re-renders. */
   const activeRunIdRef = useRef<string | null>(null);
@@ -137,6 +143,7 @@ export function useRecording(): UseRecordingReturn {
     setCurrentFrame(null);
     setIsRecording(true);
     setStatus('recording');
+    setClerkAutoSignInError(null);
   }, [connectSocket]);
 
   const stopRecording = useCallback(async () => {
@@ -190,6 +197,20 @@ export function useRecording(): UseRecordingReturn {
     [runId],
   );
 
+  const clerkAutoSignIn = useCallback(async () => {
+    if (!runId) return;
+    setClerkAutoSignInError(null);
+    setClerkAutoSigningIn(true);
+    try {
+      await runsApi.clerkAutoSignInRecording(runId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setClerkAutoSignInError(msg);
+    } finally {
+      setClerkAutoSigningIn(false);
+    }
+  }, [runId]);
+
   const sendRemoteClipboard = useCallback(
     (userId: string, action: 'paste' | 'pull' | 'cut', text?: string): Promise<string | undefined> => {
       const id = activeRunIdRef.current ?? runId;
@@ -223,5 +244,8 @@ export function useRecording(): UseRecordingReturn {
     sendRemoteTouch,
     sendRemoteClipboard,
     socketConnected,
+    clerkAutoSignIn,
+    clerkAutoSigningIn,
+    clerkAutoSignInError,
   };
 }

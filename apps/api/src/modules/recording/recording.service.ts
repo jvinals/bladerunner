@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
-import type { RunStep } from '@prisma/client';
+import type { RunStep, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
@@ -168,6 +168,58 @@ export class RecordingService extends EventEmitter {
     this.emit('status', runId, { status: 'completed', runId });
     this.logger.log(`Recording stopped: ${runId}`);
     return run;
+  }
+
+  /**
+   * One-shot Clerk + AgentMail sign-in on the recording browser (server env credentials).
+   * Appends a CUSTOM step tagged for playback skip (`clerkAuthPhase` + `clerkAutoOneShot`).
+   */
+  async clerkAutoSignInDuringRecording(runId: string, userId: string) {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      throw new NotFoundException('No active recording session for this run');
+    }
+    if (!this.playbackClerkEnvReady()) {
+      throw new BadRequestException(
+        'Clerk + AgentMail is not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME, CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, AGENTMAIL_API_KEY, and E2E_AGENTMAIL_INBOX_ID or E2E_AGENTMAIL_INBOX_EMAIL (same as E2E).',
+      );
+    }
+    const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
+    if (!run) {
+      throw new NotFoundException('Run not found');
+    }
+    const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')!.trim();
+    const identifier =
+      this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
+      this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
+    const baseURL = this.playbackClerkBaseUrl(run.url);
+    try {
+      await performClerkPasswordEmail2FA(session.page, {
+        baseURL,
+        identifier,
+        password,
+        skipInitialNavigate: true,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
+      throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
+    }
+    const step = await this.recordStep(
+      session,
+      {
+        action: 'CUSTOM',
+        selector: null,
+        value: null,
+        instruction: 'Clerk sign-in (automatic — server used test credentials + AgentMail OTP)',
+        playwrightCode: `await page.waitForLoadState('domcontentloaded').catch(() => {});`,
+        origin: 'MANUAL',
+      },
+      { syntheticClerkAutoSignIn: true },
+    );
+    this.emit('step', runId, step);
+    this.logger.log(`Recording ${runId}: clerk auto sign-in completed, step ${step.sequence}`);
+    return { ok: true as const, step };
   }
 
   async executeInstruction(runId: string, userId: string, instruction: string) {
@@ -416,11 +468,17 @@ export class RecordingService extends EventEmitter {
       playwrightCode: string;
       origin: 'MANUAL' | 'AI_DRIVEN';
     },
+    opts?: { syntheticClerkAutoSignIn?: boolean },
   ) {
     session.stepSequence += 1;
 
-    const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
-    const metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
+    let metadata: Record<string, unknown> | undefined;
+    if (opts?.syntheticClerkAutoSignIn) {
+      metadata = { clerkAuthPhase: true, clerkAutoOneShot: true };
+    } else {
+      const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
+      metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
+    }
 
     const step = await this.prisma.runStep.create({
       data: {
@@ -434,7 +492,7 @@ export class RecordingService extends EventEmitter {
         playwrightCode: data.playwrightCode,
         origin: data.origin as any,
         timestamp: new Date(),
-        metadata: metadata ?? undefined,
+        metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
 

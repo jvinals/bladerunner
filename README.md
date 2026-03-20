@@ -161,10 +161,13 @@ When **`PLAYBACK_AUTO_CLERK_SIGNIN=true`** (or the client sends **`autoClerkSign
 
 **Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off) and **Skip seq &lt;** next to **Play**.
 
+**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk + AgentMail flow once on the remote browser and appends a tagged **CUSTOM** step (`clerkAuthPhase` + `clerkAutoOneShot`) so playback can skip it when auto sign-in is enabled.
+
 Secrets stay on the **server**; the browser never receives test passwords.
 
 ## Changelog
 
+- **0.2.28** — **Recording**: **`POST /runs/:id/recording/clerk-auto-sign-in`** + **Runs** sidebar **Sign in automatically** (one-shot Clerk + AgentMail on the live session; synthetic tagged step).
 - **0.2.27** — **`@bladerunner/clerk-agentmail-signin`**: shared **Clerk + AgentMail OTP** for **E2E** and **API playback**; recording tags **`metadata.clerkAuthPhase`** on Clerk sign-in URLs/UI; playback **`PLAYBACK_AUTO_CLERK_SIGNIN`**, DTO **`autoClerkSignIn` / `skipUntilSequence` / `skipStepIds`**; UI playback options on **Runs** and **Run detail**.
 - **0.2.26** — **`pnpm dev`**: run **API** + **browser-worker** in parallel, **`wait-on tcp:127.0.0.1:3001`** then start **Vite** so the `/api` proxy does not hit **ECONNREFUSED** while Nest is still booting. (Default port **3001**; if you use **`API_PORT`**, start **`dev:web`** manually after the API is up or adjust the wait target.)
 - **0.2.25** — **Run detail**: tolerate missing **`targets`** / **`tags`** from API (no `.length` crash); findings query **404** → empty list; safe defaults for counts / **`artifactsCount`**.
