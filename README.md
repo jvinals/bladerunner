@@ -192,6 +192,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.6.4** — **Run detail session recording**: Load **WebM first** (probe `/recording/video`) even when `run.recordings` is empty but a thumbnail exists; **`<video>`** `onError` falls back to JPEG + Safari/WebM note. **`@bladerunner/web` `0.5.1`**.
 - **0.6.3** — Remove debug-session instrumentation from ffmpeg screencast encoder (behavior unchanged). **`@bladerunner/api` `0.4.3`**.
 - **0.6.2** — **Recording stability**: Handle **EPIPE** on ffmpeg stdin (handler + stop writes when encoder exits) so a failed/ended encoder cannot crash the API process. **`@bladerunner/api` `0.4.2`**.
 - **0.6.1** — **Session WebM from screencast + ffmpeg**: Encode CDP screencast to **WebM on the API host** so playback works with a **remote** browser worker (Playwright `recordVideo` alone is not usable across `connect`). **`@bladerunner/api` `0.4.1`** (API Dockerfile: **`ffmpeg`**).
