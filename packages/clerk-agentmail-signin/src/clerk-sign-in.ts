@@ -1,4 +1,4 @@
-import type { BrowserContext, Page, Response } from 'playwright-core';
+import type { BrowserContext, Page, Request, Response } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
 import { waitForClerkOtpFromAgentMail } from './agentmail-otp';
 
@@ -11,6 +11,41 @@ const CLERK_TESTING_TOKEN_PARAM = '__clerk_testing_token';
  * incompatible `RegExp` handlers from `setupClerkTestingToken`.
  */
 const contextsWithDynamicClerkFapiRoute = new WeakSet<BrowserContext>();
+
+/** Optional comma-separated extra Frontend API hostnames (no protocol) if the app uses a proxy/satellite domain. */
+function extraFapiHostsFromEnv(): Set<string> {
+  const raw = process.env.CLERK_FAPI_EXTRA_HOSTS;
+  const out = new Set<string>();
+  if (!raw) return out;
+  for (const part of raw.split(',')) {
+    const h = part.trim().toLowerCase();
+    if (h) out.add(h);
+  }
+  return out;
+}
+
+/**
+ * True when this URL should receive `__clerk_testing_token`.
+ * Strict `hostname === CLERK_FAPI` misses satellite/proxy/custom Clerk domains (→ 403 with no H5 if the
+ * browser never hits the configured host).
+ */
+function shouldInterceptClerkFapiUrl(url: URL): boolean {
+  const proto = url.protocol.toLowerCase();
+  if (proto !== 'https:' && proto !== 'http:') return false;
+  if (!url.pathname.startsWith('/v1/')) return false;
+  const fapi = process.env.CLERK_FAPI;
+  if (!fapi) return false;
+  const h = url.hostname.toLowerCase();
+  const f = fapi.toLowerCase();
+  if (h === f) return true;
+  if (extraFapiHostsFromEnv().has(h)) return true;
+  const fSlug = f.split('.')[0] ?? '';
+  const hSlug = h.split('.')[0] ?? '';
+  if (fSlug && hSlug && fSlug === hSlug && f.includes('clerk')) {
+    if (h.includes('clerk') || h.includes('accounts.dev') || h.endsWith('.lcl.dev')) return true;
+  }
+  return false;
+}
 
 function envPublishableKey(): string | undefined {
   const k =
@@ -85,12 +120,9 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
   }).catch(() => {});
   // #endregion
 
+  let interceptLogCount = 0;
   await context.route(
-    (url) => {
-      const fapi = process.env.CLERK_FAPI;
-      if (!fapi) return false;
-      return url.protocol === 'https:' && url.hostname === fapi && url.pathname.startsWith('/v1/');
-    },
+    (url) => shouldInterceptClerkFapiUrl(url),
     async (route) => {
       const req = route.request();
       const u = new URL(req.url());
@@ -98,22 +130,56 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
       if (token) {
         u.searchParams.set(CLERK_TESTING_TOKEN_PARAM, token);
       }
+      if (interceptLogCount < 8) {
+        interceptLogCount += 1;
+        const fapi = process.env.CLERK_FAPI ?? '';
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+          body: JSON.stringify({
+            sessionId: '5f6bd9',
+            hypothesisId: 'H8',
+            location: 'clerk-sign-in.ts:clerkFapiRoute',
+            message: 'intercepted Clerk FAPI request (appending testing token)',
+            data: {
+              requestHost: u.hostname,
+              configuredFapiTail: fapi ? fapi.slice(-24) : '',
+              hostEqFapi: u.hostname.toLowerCase() === fapi.toLowerCase(),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+      }
       try {
         const response = await route.fetch({ url: u.toString() });
-        const json: unknown = await response.json();
-        if (json && typeof json === 'object') {
-          const o = json as {
-            response?: { captcha_bypass?: boolean };
-            client?: { captcha_bypass?: boolean };
-          };
-          if (o.response && typeof o.response === 'object' && o.response.captcha_bypass === false) {
-            o.response.captcha_bypass = true;
+        const bodyText = await response.text();
+        const headers = response.headers();
+        let bodyOut = bodyText;
+        try {
+          const json = JSON.parse(bodyText) as unknown;
+          if (json && typeof json === 'object') {
+            const o = json as {
+              response?: { captcha_bypass?: boolean };
+              client?: { captcha_bypass?: boolean };
+            };
+            if (o.response && typeof o.response === 'object' && o.response.captcha_bypass === false) {
+              o.response.captcha_bypass = true;
+            }
+            if (o.client && typeof o.client === 'object' && o.client.captcha_bypass === false) {
+              o.client.captcha_bypass = true;
+            }
+            bodyOut = JSON.stringify(json);
           }
-          if (o.client && typeof o.client === 'object' && o.client.captcha_bypass === false) {
-            o.client.captcha_bypass = true;
-          }
+        } catch {
+          /* not JSON — pass raw body */
         }
-        await route.fulfill({ response, json });
+        await route.fulfill({
+          status: response.status(),
+          headers,
+          body: bodyOut,
+        });
       } catch {
         await route.continue({ url: u.toString() }).catch(() => {});
       }
@@ -121,10 +187,12 @@ async function installDynamicClerkFapiRouteOnce(context: BrowserContext): Promis
   );
 }
 
-function attachClerkFapi403DebugLogger(page: Page): () => void {
+function attachClerkFapiErrorDebugLogger(page: Page): () => void {
   const handler = (res: Response) => {
     const url = res.url();
-    if (res.status() !== 403 || !url.includes('/v1/')) return;
+    const st = res.status();
+    if (st < 400) return;
+    if (!url.includes('/v1/') && !url.toLowerCase().includes('clerk')) return;
     const fapi = process.env.CLERK_FAPI;
     let host = '';
     try {
@@ -140,8 +208,20 @@ function attachClerkFapi403DebugLogger(page: Page): () => void {
         sessionId: '5f6bd9',
         hypothesisId: 'H5',
         location: 'clerk-sign-in.ts:response',
-        message: 'Clerk FAPI 403 response',
-        data: { responseHost: host, configuredFapi: fapi ?? '', hostMatchesFapi: !!(fapi && host === fapi) },
+        message: 'Clerk-related HTTP error response',
+        data: {
+          status: st,
+          responseHost: host,
+          configuredFapiTail: fapi ? fapi.slice(-24) : '',
+          hostMatchesFapi: !!(fapi && host.toLowerCase() === fapi.toLowerCase()),
+          pathPrefix: (() => {
+            try {
+              return new URL(url).pathname.slice(0, 48);
+            } catch {
+              return '';
+            }
+          })(),
+        },
         timestamp: Date.now(),
       }),
     }).catch(() => {});
@@ -149,6 +229,44 @@ function attachClerkFapi403DebugLogger(page: Page): () => void {
   };
   page.on('response', handler);
   return () => page.off('response', handler);
+}
+
+/** Log hosts for /v1/ traffic so we can see FAPI hostname drift vs CLERK_FAPI. */
+function attachClerkV1RequestProbe(page: Page): () => void {
+  let n = 0;
+  const handler = (req: Request) => {
+    if (n >= 24) return;
+    const url = req.url();
+    if (!url.includes('/v1/')) return;
+    n += 1;
+    let host = '';
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      /* ignore */
+    }
+    const fapi = process.env.CLERK_FAPI ?? '';
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        hypothesisId: 'H7',
+        location: 'clerk-sign-in.ts:request',
+        message: 'saw /v1/ request',
+        data: {
+          host,
+          hostEqFapi: !!(fapi && host.toLowerCase() === fapi.toLowerCase()),
+          wouldIntercept: shouldInterceptClerkFapiUrl(new URL(url)),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  };
+  page.on('request', handler);
+  return () => page.off('request', handler);
 }
 
 /**
@@ -201,10 +319,12 @@ async function refreshClerkTestingCredentials(publishableKey: string): Promise<v
   // #endregion
 
   delete process.env.CLERK_TESTING_TOKEN;
+  const frontendApiUrl = process.env.CLERK_TESTING_FRONTEND_API_URL?.trim();
   await clerkSetup({
     publishableKey,
     secretKey,
     dotenv: false,
+    ...(frontendApiUrl ? { frontendApiUrl } : {}),
   });
 
   const tokenLenAfter = env.CLERK_TESTING_TOKEN?.length ?? 0;
@@ -361,7 +481,8 @@ export async function performClerkPasswordEmail2FA(
   await refreshClerkTestingCredentials(publishableKey);
   await installDynamicClerkFapiRouteOnce(page.context());
 
-  const detach403Logger = attachClerkFapi403DebugLogger(page);
+  const detachErrorLogger = attachClerkFapiErrorDebugLogger(page);
+  const detachV1Probe = attachClerkV1RequestProbe(page);
   try {
     const idField = page.locator('input[name="identifier"], #identifier-field').first();
     await idField.waitFor({ state: 'visible', timeout: 60_000 });
@@ -419,6 +540,7 @@ export async function performClerkPasswordEmail2FA(
       { timeout: 120_000 },
     );
   } finally {
-    detach403Logger();
+    detachErrorLogger();
+    detachV1Probe();
   }
 }
