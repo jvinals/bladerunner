@@ -29,6 +29,7 @@ import {
   type ClerkOtpMode,
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
+import { filterStepsForPlaybackExecutionChain } from './playback-execution-chain.util';
 import { escapeLocatorCssInPlaywrightSnippet } from './playback-css-escape.util';
 import { CLERK_CANONICAL_SIGN_IN_STEPS } from './recording-clerk-canonical-steps';
 import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
@@ -827,7 +828,12 @@ export class RecordingService extends EventEmitter {
   }> {
     let metadata: Record<string, unknown> | undefined;
     if (opts?.syntheticClerkAutoSignIn) {
-      metadata = { clerkAuthPhase: true, clerkAutoOneShot: true };
+      metadata = {
+        clerkAuthPhase: true,
+        clerkAutoOneShot: true,
+        /** Never mixed into Playwright execution loop — audit/UI only when auto Clerk runs server-side. */
+        clerkAutomationCanonical: true,
+      };
     } else {
       const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
       metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
@@ -1098,11 +1104,17 @@ export class RecordingService extends EventEmitter {
       await this.attachScreencast(cdpSession, session, playbackSessionId);
 
       const steps = run.steps;
+      const playbackExecutionSteps = filterStepsForPlaybackExecutionChain(steps, wantAutoClerkSignIn);
+      if (playbackExecutionSteps.length !== steps.length) {
+        this.logger.log(
+          `Playback: ${playbackExecutionSteps.length} step(s) in execution chain (${steps.length - playbackExecutionSteps.length} Clerk/MailSlurp row(s) excluded from Playwright loop)`,
+        );
+      }
       /** Zero-state load — aligns with recording; redundant first NAVIGATE is skipped via `skipSet`. */
       await page.goto(run.url, { waitUntil: 'domcontentloaded' });
 
       const clerkOtpMode = this.resolveClerkOtpMode(opts);
-      void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId, run.url, {
+      void this.runPlaybackLoop(playbackSessionId, session, playbackExecutionSteps, delayMs, sourceRunId, run.url, {
         wantAutoClerkSignIn,
         clerkOtpMode,
         skipSet,
@@ -1176,6 +1188,9 @@ export class RecordingService extends EventEmitter {
     return true;
   }
 
+  /**
+   * @param steps Steps that run `executePwCode` (excludes Clerk/MailSlurp metadata rows when auto Clerk is on).
+   */
   private async runPlaybackLoop(
     playbackSessionId: string,
     session: PlaybackSession,
