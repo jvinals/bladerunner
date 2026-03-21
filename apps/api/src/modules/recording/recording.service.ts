@@ -1697,6 +1697,7 @@ export class RecordingService extends EventEmitter {
           if (!target || !window.__bladerunnerRecordAction) return;
           clearTimeout(target.__brDebounce);
           target.__brDebounce = setTimeout(function() {
+            if (window.__bladerunnerPauseRecording) return;
             window.__bladerunnerRecordAction(
               JSON.stringify({
                 type: 'type',
