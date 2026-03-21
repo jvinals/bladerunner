@@ -1,9 +1,14 @@
 const API_BASE = '/api';
 
+/** Clerk email OTP automation during auto sign-in (playback + recording). */
+export type ClerkOtpMode = 'clerk_test_email' | 'mailslurp';
+
 /** Body for `POST /runs/:id/playback/start` */
 export type StartPlaybackBody = {
   delayMs?: number;
   autoClerkSignIn?: boolean;
+  /** Omit to use server `PLAYBACK_CLERK_OTP_MODE` (default clerk_test_email). */
+  clerkOtpMode?: ClerkOtpMode;
   skipUntilSequence?: number;
   skipStepIds?: string[];
   /** Stop after this step sequence (inclusive). Pair with `skipUntilSequence` to play one step only. */
@@ -12,9 +17,13 @@ export type StartPlaybackBody = {
 
 export type AutoClerkPlaybackMode = 'default' | 'on' | 'off';
 
+/** UI: which OTP path to request; `default` = omit body, use server env. */
+export type AutoClerkOtpUiMode = 'default' | ClerkOtpMode;
+
 export function buildStartPlaybackBody(params: {
   delayMs?: number;
   autoClerkMode?: AutoClerkPlaybackMode;
+  clerkOtpMode?: AutoClerkOtpUiMode;
   /** Skip steps with sequence strictly less than this (legacy runs). */
   skipUntilSequence?: number;
   /** Stop playback after this step sequence (inclusive). */
@@ -24,6 +33,9 @@ export function buildStartPlaybackBody(params: {
   if (params.delayMs != null) out.delayMs = params.delayMs;
   if (params.autoClerkMode === 'on') out.autoClerkSignIn = true;
   if (params.autoClerkMode === 'off') out.autoClerkSignIn = false;
+  if (params.clerkOtpMode && params.clerkOtpMode !== 'default') {
+    out.clerkOtpMode = params.clerkOtpMode;
+  }
   if (
     typeof params.skipUntilSequence === 'number' &&
     Number.isFinite(params.skipUntilSequence) &&
@@ -155,11 +167,11 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ runId }),
     }),
-  /** Active recording only: server runs Clerk + MailSlurp OTP on the remote browser; appends a tagged step. */
-  clerkAutoSignInRecording: (runId: string) =>
+  /** Active recording only: server runs Clerk auto sign-in on the remote browser; appends a tagged step. */
+  clerkAutoSignInRecording: (runId: string, body?: { clerkOtpMode?: ClerkOtpMode }) =>
     apiFetch<{ ok: boolean; step: unknown }>(`/runs/${runId}/recording/clerk-auto-sign-in`, {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify(body ?? {}),
     }),
   instruct: (runId: string, instruction: string) =>
     apiFetch<{ step: unknown }>(`/runs/${runId}/instruct`, {

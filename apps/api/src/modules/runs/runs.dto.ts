@@ -61,12 +61,21 @@ export class StartPlaybackDto {
 
   @ApiPropertyOptional({
     description:
-      'Use server env (Clerk + MailSlurp) to sign in when Clerk UI is shown; skip clerkAuthPhase steps and AUTOMATIC-origin steps (no stored code replay for those).',
+      'Use server env to sign in when Clerk UI is shown; skip clerkAuthPhase steps and AUTOMATIC-origin steps (no stored code replay for those).',
   })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   autoClerkSignIn?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['clerk_test_email', 'mailslurp'],
+    description:
+      'How to complete email OTP during auto sign-in. `clerk_test_email` (default): identifier must include +clerk_test, fixed code 424242. `mailslurp`: read OTP from MailSlurp (requires MAILSLURP_* env). Server default: PLAYBACK_CLERK_OTP_MODE.',
+  })
+  @IsOptional()
+  @IsIn(['clerk_test_email', 'mailslurp'])
+  clerkOtpMode?: 'clerk_test_email' | 'mailslurp';
 
   @ApiPropertyOptional({
     description: 'Skip executing steps with sequence strictly less than this (legacy runs without metadata tags)',
@@ -97,6 +106,17 @@ export class StartPlaybackDto {
   @IsInt()
   @Min(0)
   playThroughSequence?: number;
+}
+
+export class ClerkAutoSignInRecordingDto {
+  @ApiPropertyOptional({
+    enum: ['clerk_test_email', 'mailslurp'],
+    description:
+      'Same as playback `clerkOtpMode`. Default follows PLAYBACK_CLERK_OTP_MODE or clerk_test_email.',
+  })
+  @IsOptional()
+  @IsIn(['clerk_test_email', 'mailslurp'])
+  clerkOtpMode?: 'clerk_test_email' | 'mailslurp';
 }
 
 export class StopPlaybackDto {

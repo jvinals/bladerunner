@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import type { Socket } from 'socket.io-client';
-import { runsApi } from '@/lib/api';
+import { runsApi, type AutoClerkOtpUiMode } from '@/lib/api';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 
 export interface RecordedStep {
@@ -63,8 +63,8 @@ interface UseRecordingReturn {
   ) => Promise<string | undefined>;
   /** True when the recording socket is connected (for UI / clipboard). */
   socketConnected: boolean;
-  /** One-shot Clerk + MailSlurp sign-in on the remote page (API env). */
-  clerkAutoSignIn: () => Promise<void>;
+  /** One-shot Clerk auto sign-in on the remote page (API env). Pass OTP mode or `default` for server env. */
+  clerkAutoSignIn: (otpMode?: AutoClerkOtpUiMode) => Promise<void>;
   clerkAutoSigningIn: boolean;
   clerkAutoSignInError: string | null;
 }
@@ -255,7 +255,7 @@ export function useRecording(): UseRecordingReturn {
     [runId],
   );
 
-  const clerkAutoSignIn = useCallback(async () => {
+  const clerkAutoSignIn = useCallback(async (otpMode: AutoClerkOtpUiMode = 'default') => {
     if (!runId) return;
     /** Paint loading state before the long server+Playwright await (H1: avoids perceived UI freeze). */
     flushSync(() => {
@@ -263,7 +263,9 @@ export function useRecording(): UseRecordingReturn {
       setClerkAutoSigningIn(true);
     });
     try {
-      await runsApi.clerkAutoSignInRecording(runId);
+      const body =
+        otpMode === 'default' ? {} : { clerkOtpMode: otpMode as 'clerk_test_email' | 'mailslurp' };
+      await runsApi.clerkAutoSignInRecording(runId, body);
       try {
         const synced = (await runsApi.getSteps(runId)) as RecordedStep[];
         setSteps(synced);

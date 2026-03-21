@@ -23,8 +23,10 @@ import {
   clerkSignInUrlLooksLike,
   detectClerkSignInUi,
   detectClerkOtpInputVisible,
+  fillClerkOtpFromClerkTestEmail,
   fillClerkOtpFromMailSlurp,
   performClerkPasswordEmail2FA,
+  type ClerkOtpMode,
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
 import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
@@ -41,6 +43,11 @@ import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './rec
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
   autoClerkSignIn?: boolean;
+  /**
+   * How to obtain the email OTP during Clerk auto sign-in.
+   * Default / server env `PLAYBACK_CLERK_OTP_MODE`: `clerk_test_email` (fixed code `424242`, identifier must include `+clerk_test`).
+   */
+  clerkOtpMode?: ClerkOtpMode;
   skipUntilSequence?: number;
   skipStepIds?: string[];
   /** Stop playback after this step sequence completes (inclusive). Omit = run all steps. */
@@ -365,14 +372,24 @@ export class RecordingService extends EventEmitter {
    * One-shot Clerk + MailSlurp sign-in on the recording browser (server env credentials).
    * Appends a CUSTOM step tagged for playback skip (`clerkAuthPhase` + `clerkAutoOneShot`).
    */
-  async clerkAutoSignInDuringRecording(runId: string, userId: string) {
+  async clerkAutoSignInDuringRecording(
+    runId: string,
+    userId: string,
+    opts?: { clerkOtpMode?: ClerkOtpMode },
+  ) {
     const session = this.sessions.get(runId);
     if (!session || session.userId !== userId) {
       throw new NotFoundException('No active recording session for this run');
     }
-    if (!this.playbackClerkEnvReady()) {
+    const otpMode = opts?.clerkOtpMode ?? this.resolveClerkOtpMode(undefined);
+    if (!this.playbackClerkAssistAvailable(otpMode)) {
+      if (!this.playbackClerkCoreEnvReady()) {
+        throw new BadRequestException(
+          'Clerk test credentials are not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME (use +clerk_test in the email for test-email OTP mode), CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY), and CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY.',
+        );
+      }
       throw new BadRequestException(
-        'Clerk + MailSlurp is not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME, CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY for a different target Clerk app), CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY, MAILSLURP_API_KEY, and MAILSLURP_INBOX_ID or MAILSLURP_INBOX_EMAIL (same as E2E).',
+        'MailSlurp OTP mode requires MAILSLURP_API_KEY and MAILSLURP_INBOX_ID or MAILSLURP_INBOX_EMAIL.',
       );
     }
     const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
@@ -390,20 +407,24 @@ export class RecordingService extends EventEmitter {
         identifier,
         password,
         skipInitialNavigate: true,
+        otpMode,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
       throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
     }
+    const instruction =
+      otpMode === 'mailslurp'
+        ? 'Clerk sign-in (automatic — server used test credentials + MailSlurp OTP from inbox)'
+        : 'Clerk sign-in (automatic — server used test credentials + Clerk test email OTP 424242)';
     const step = await this.recordStep(
       session,
       {
         action: 'CUSTOM',
         selector: null,
         value: null,
-        instruction:
-          'Clerk sign-in (automatic — server used test credentials + MailSlurp OTP from inbox)',
+        instruction,
         playwrightCode: `await page.waitForLoadState('domcontentloaded').catch(() => {});`,
         origin: 'MANUAL',
       },
@@ -1053,8 +1074,10 @@ export class RecordingService extends EventEmitter {
       /** Zero-state load — aligns with recording; redundant first NAVIGATE is skipped via `skipSet`. */
       await page.goto(run.url, { waitUntil: 'domcontentloaded' });
 
+      const clerkOtpMode = this.resolveClerkOtpMode(opts);
       void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId, run.url, {
         wantAutoClerkSignIn,
+        clerkOtpMode,
         skipSet,
         playThroughSequence: opts?.playThroughSequence,
       });
@@ -1133,7 +1156,12 @@ export class RecordingService extends EventEmitter {
     delayMs: number,
     sourceRunId: string,
     runUrl: string,
-    ctx: { wantAutoClerkSignIn: boolean; skipSet: Set<string>; playThroughSequence?: number },
+    ctx: {
+      wantAutoClerkSignIn: boolean;
+      clerkOtpMode: ClerkOtpMode;
+      skipSet: Set<string>;
+      playThroughSequence?: number;
+    },
   ) {
     const clerkPlaybackState = { clerkFullSignInDone: false };
 
@@ -1144,7 +1172,13 @@ export class RecordingService extends EventEmitter {
         sourceRunId,
       });
 
-      await this.maybePlaybackClerkMailSlurpAssist(session, runUrl, ctx.wantAutoClerkSignIn, clerkPlaybackState);
+      await this.maybePlaybackClerkAuthAssist(
+        session,
+        runUrl,
+        ctx.wantAutoClerkSignIn,
+        ctx.clerkOtpMode,
+        clerkPlaybackState,
+      );
 
       for (const step of steps) {
         if (ctx.playThroughSequence != null && step.sequence > ctx.playThroughSequence) {
@@ -1190,10 +1224,11 @@ export class RecordingService extends EventEmitter {
             step: stepPayload,
             phase: 'skipped',
           });
-          await this.maybePlaybackClerkMailSlurpAssist(
+          await this.maybePlaybackClerkAuthAssist(
             session,
             runUrl,
             ctx.wantAutoClerkSignIn,
+            ctx.clerkOtpMode,
             clerkPlaybackState,
           );
           await this.sleepWithPause(session, delayMs);
@@ -1222,7 +1257,13 @@ export class RecordingService extends EventEmitter {
           return;
         }
 
-        await this.maybePlaybackClerkMailSlurpAssist(session, runUrl, ctx.wantAutoClerkSignIn, clerkPlaybackState);
+        await this.maybePlaybackClerkAuthAssist(
+          session,
+          runUrl,
+          ctx.wantAutoClerkSignIn,
+          ctx.clerkOtpMode,
+          clerkPlaybackState,
+        );
 
         await session.page.waitForLoadState('domcontentloaded').catch(() => {});
         await this.sleepWithPause(session, delayMs);
@@ -1302,7 +1343,8 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  private playbackClerkEnvReady(): boolean {
+  /** Clerk user + keys (no MailSlurp). */
+  private playbackClerkCoreEnvReady(): boolean {
     const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')?.trim();
     const identifier =
       this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
@@ -1314,11 +1356,28 @@ export class RecordingService extends EventEmitter {
     const pub =
       this.configService.get<string>('CLERK_PUBLISHABLE_KEY')?.trim() ||
       this.configService.get<string>('VITE_CLERK_PUBLISHABLE_KEY')?.trim();
+    return !!(password && identifier && secret && pub);
+  }
+
+  private playbackClerkMailSlurpEnvReady(): boolean {
     const mailslurp = this.configService.get<string>('MAILSLURP_API_KEY')?.trim();
     const inbox =
       this.configService.get<string>('MAILSLURP_INBOX_ID')?.trim() ||
       this.configService.get<string>('MAILSLURP_INBOX_EMAIL')?.trim();
-    return !!(password && identifier && secret && pub && mailslurp && inbox);
+    return !!(mailslurp && inbox);
+  }
+
+  private playbackClerkAssistAvailable(mode: ClerkOtpMode): boolean {
+    if (!this.playbackClerkCoreEnvReady()) return false;
+    if (mode === 'mailslurp') return this.playbackClerkMailSlurpEnvReady();
+    return true;
+  }
+
+  private resolveClerkOtpMode(opts?: StartPlaybackServiceOpts): ClerkOtpMode {
+    if (opts?.clerkOtpMode) return opts.clerkOtpMode;
+    const raw = this.configService.get<string>('PLAYBACK_CLERK_OTP_MODE', '').trim().toLowerCase();
+    if (raw === 'mailslurp' || raw === 'mail_slurp') return 'mailslurp';
+    return 'clerk_test_email';
   }
 
   private playbackClerkBaseUrl(runUrl: string): string {
@@ -1329,7 +1388,11 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  private async runPlaybackClerkAutoSignIn(page: Page, runUrl: string): Promise<void> {
+  private async runPlaybackClerkAutoSignIn(
+    page: Page,
+    runUrl: string,
+    otpMode: ClerkOtpMode,
+  ): Promise<void> {
     const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')!.trim();
     const identifier =
       this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
@@ -1340,20 +1403,22 @@ export class RecordingService extends EventEmitter {
       identifier,
       password,
       skipInitialNavigate: true,
+      otpMode,
     });
-    this.logger.log('Playback: Clerk + MailSlurp auto sign-in completed');
+    this.logger.log(`Playback: Clerk auto sign-in completed (otpMode=${otpMode})`);
   }
 
   /**
-   * Match recording: MailSlurp + Clerk when UI shows full sign-in or OTP-only (after skipped AUTOMATIC steps too).
+   * Clerk sign-in assist: test email (+clerk_test, code 424242) or MailSlurp inbox, when UI shows sign-in or OTP-only.
    */
-  private async maybePlaybackClerkMailSlurpAssist(
+  private async maybePlaybackClerkAuthAssist(
     session: PlaybackSession,
     runUrl: string,
     wantAuto: boolean,
+    otpMode: ClerkOtpMode,
     state: { clerkFullSignInDone: boolean },
   ): Promise<void> {
-    if (!wantAuto || !this.playbackClerkEnvReady()) return;
+    if (!wantAuto || !this.playbackClerkAssistAvailable(otpMode)) return;
     try {
       const page = session.page;
       const identifier = page.locator('input[name="identifier"], #identifier-field').first();
@@ -1361,20 +1426,24 @@ export class RecordingService extends EventEmitter {
       const otpVisible = await detectClerkOtpInputVisible(page);
 
       if (otpVisible && !idVisible) {
-        await fillClerkOtpFromMailSlurp(page, {
-          runUrl,
-          notBeforeMs: Date.now() - 5_000,
-        });
+        if (otpMode === 'mailslurp') {
+          await fillClerkOtpFromMailSlurp(page, {
+            runUrl,
+            notBeforeMs: Date.now() - 5_000,
+          });
+        } else {
+          await fillClerkOtpFromClerkTestEmail(page, { runUrl });
+        }
         return;
       }
 
       if (!state.clerkFullSignInDone && (await detectClerkSignInUi(page))) {
-        await this.runPlaybackClerkAutoSignIn(page, runUrl);
+        await this.runPlaybackClerkAutoSignIn(page, runUrl, otpMode);
         state.clerkFullSignInDone = true;
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.logger.warn(`Playback Clerk/MailSlurp assist failed: ${msg}`);
+      this.logger.warn(`Playback Clerk auth assist failed: ${msg}`);
     }
   }
 

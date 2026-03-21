@@ -167,18 +167,21 @@ Auth state is written to **`playwright/.clerk/user.json`** (gitignored). Tests a
 
 **`e2e/playback.spec.ts`** mocks **`GET /api/runs`**, **`GET /api/runs/:id/steps`**, and **`POST /api/runs/:id/playback/start`** so the **Runs** live replay path can be asserted without the API or browser worker; it still uses the same Clerk setup as other signed-in tests.
 
-## Playback + Clerk + MailSlurp (API + UI)
+## Playback + Clerk OTP (API + UI)
 
 When **Clerk auto playback is enabled** — the client sends **`autoClerkSignIn: true`**, or **`PLAYBACK_AUTO_CLERK_SIGNIN`** is unset/empty (defaults **on**), or the env is **`true`/`1`/`yes`** — and not explicitly **`false`/`0`/`no`** — the API will:
 
-1. Use the **same env vars as E2E** (`E2E_CLERK_USER_EMAIL` / `E2E_CLERK_USER_USERNAME`, `E2E_CLERK_USER_PASSWORD`, `MAILSLURP_API_KEY`, `MAILSLURP_INBOX_ID` or `MAILSLURP_INBOX_EMAIL`, `CLERK_SECRET_KEY`, publishable key) to run **one** Clerk + MailSlurp OTP flow when the playback browser shows Clerk sign-in.
-2. **Skip** executing stored `playwrightCode` for steps whose **`metadata.clerkAuthPhase`** is true (set automatically during recording when the URL or UI looks like Clerk sign-in). Those steps are also stored with **`origin: AUTOMATIC`** and a **`[MailSlurp automation]`** instruction prefix for clarity in the UI. Playback does **not** replay each granular DOM line for that phase; it runs **one** `performClerkPasswordEmail2FA` call (same helper as **Sign in automatically** during recording), which matches the intended MailSlurp-backed flow.
+1. Run **one** Clerk password + email OTP flow when the playback browser shows Clerk sign-in. **How the OTP is obtained** is controlled by **`clerkOtpMode`** on **`POST /runs/:id/playback/start`**, the **Runs / Run detail** **Clerk OTP** dropdown, and server env **`PLAYBACK_CLERK_OTP_MODE`** (default **`clerk_test_email`**):
+   - **`clerk_test_email`** — [Clerk test emails](https://clerk.com/docs/testing/test-emails-and-phones): set **`E2E_CLERK_USER_EMAIL`** (or username) to an address with **`+clerk_test`** in the local part (e.g. `jane+clerk_test@gmail.com`). Clerk does **not** send a real email; the verification code is always **`424242`** and does **not** count against the dev **100-email** limit. **No** **`MAILSLURP_*`** required.
+   - **`mailslurp`** — read the code from a **MailSlurp** inbox (**`MAILSLURP_API_KEY`** + **`MAILSLURP_INBOX_ID`** or **`MAILSLURP_INBOX_EMAIL`**), same as before.
+   Core Clerk env (**`E2E_CLERK_USER_PASSWORD`**, identifier, **`CLERK_SECRET_KEY`** / **`PLAYBACK_CLERK_SECRET_KEY`**, publishable key) is required in both modes.
+2. **Skip** executing stored `playwrightCode` for steps whose **`metadata.clerkAuthPhase`** is true (set automatically during recording when the URL or UI looks like Clerk sign-in). Those steps are also stored with **`origin: AUTOMATIC`** and a **`[MailSlurp automation]`** instruction prefix for clarity in the UI. Playback does **not** replay each granular DOM line for that phase; it runs **one** `performClerkPasswordEmail2FA` call (same helper as **Sign in automatically** during recording).
 
-**Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off) and **Skip seq &lt;** next to **Play**.
+**Legacy runs** without tags: pass **`skipUntilSequence`** and/or **`skipStepIds`** in the POST body. The web app exposes **Clerk auto sign-in** (server default / force on / force off), **Clerk OTP** (test email vs MailSlurp vs server default), and **Skip seq &lt;** next to **Play**.
 
 **Step-scoped playback:** **`skipUntilSequence: N`** runs stored steps starting at sequence **N** (skips earlier steps). **`playThroughSequence: M`** stops playback after executing step **M** (use with the same **`skipUntilSequence`** for “this step only”). **Runs** and **Run detail** step cards expose **Play from here** / **This step only** when playback is available.
 
-**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk + MailSlurp flow once on the remote browser and appends a tagged **CUSTOM** step (`clerkAuthPhase` + `clerkAutoOneShot`) so playback can skip it when auto sign-in is enabled.
+**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk flow once on the remote browser (OTP mode chosen next to the button) and appends a tagged **CUSTOM** step (`clerkAuthPhase` + `clerkAutoOneShot`) so playback can skip it when auto sign-in is enabled.
 
 Secrets stay on the **server**; the browser never receives test passwords.
 
@@ -214,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.17** — **Clerk OTP**: default to **[Clerk test emails](https://clerk.com/docs/testing/test-emails-and-phones)** — identifier must include **`+clerk_test`**, fixed code **`424242`**, no MailSlurp / no dev email quota. **`PLAYBACK_CLERK_OTP_MODE`** (`clerk_test_email` \| `mailslurp`) + API **`clerkOtpMode`** + UI **Clerk OTP** dropdown (Runs / Run detail + recording). **`@bladerunner/clerk-agentmail-signin` `0.4.0`**, **`@bladerunner/api` `0.5.15`**, **`@bladerunner/web` `0.6.11`**.
 - **0.7.16** — **Playback**: removed temporary **debug ingest** / **NDJSON** probes for `td` timeouts (post-fix cleanup). **`@bladerunner/api` `0.5.14`**, **`@bladerunner/web` `0.6.10`**.
 - **0.7.15** — **Recording**: when the LLM returns a **bare tag** `page.locator('span')` (etc.) but the injected **`getSelector`** value is a **concrete CSS** path (`span.ml-2…`, `td.px-6.py-4`), **merge** stored **`playwrightCode`** to use **`page.locator(<recorded selector>)`** so playback does not use **`.first()`** on the wrong node (fixes misaligned URLs before table clicks). **`actionToInstruction`** prompt updated to prefer the **Selector** field when specific. **`@bladerunner/api` `0.5.13`**, **`@bladerunner/web` `0.6.10`**.
 - **0.7.14** — **Playback (debug)**: before each non-skipped step, probe **`td` / `td.px-6.py-4`** counts + first-cell visibility when stored code references table classes; on step failure, log again — NDJSON to **`.cursor/debug-5f6bd9.log`** + ingest (diagnose **`locator.click` Timeout** vs missing DOM). **`@bladerunner/api` `0.5.12`**, **`@bladerunner/web` `0.6.10`**.

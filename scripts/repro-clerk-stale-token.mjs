@@ -49,7 +49,12 @@ process.env.CLERK_TESTING_TOKEN = 'stale-invalid-token-on-purpose';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 try {
-  await performClerkPasswordEmail2FA(page, { baseURL, identifier, password });
+  await performClerkPasswordEmail2FA(page, {
+    baseURL,
+    identifier,
+    password,
+    otpMode: 'mailslurp',
+  });
   console.log('OK: sign-in completed (stale token was refreshed inside performClerkPasswordEmail2FA)');
   process.exit(0);
 } catch (e) {

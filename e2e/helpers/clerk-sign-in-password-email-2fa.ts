@@ -9,5 +9,10 @@ export async function clerkSignInWithPasswordAndEmail2FA(
   page: Page,
   opts: { baseURL: string; identifier: string; password: string },
 ): Promise<void> {
-  await performClerkPasswordEmail2FA(page, { ...opts, skipInitialNavigate: false });
+  await performClerkPasswordEmail2FA(page, {
+    ...opts,
+    skipInitialNavigate: false,
+    /** E2E `.env` typically uses a real MailSlurp inbox, not `+clerk_test`. */
+    otpMode: 'mailslurp',
+  });
 }

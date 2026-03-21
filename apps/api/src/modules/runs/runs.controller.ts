@@ -26,8 +26,9 @@ import {
   StartRecordingDto,
   StopRecordingDto,
   StartPlaybackDto,
+  ClerkAutoSignInRecordingDto,
   StopPlaybackDto,
-  InstructDto,
+    InstructDto,
   ReRecordStepDto,
   RunQueryDto,
 } from './runs.dto';
@@ -97,9 +98,15 @@ export class RunsController {
   @ApiResponse({ status: 400, description: 'Clerk / MailSlurp env not configured' })
   @ApiResponse({ status: 404, description: 'No active recording session' })
   @ApiResponse({ status: 503, description: 'Sign-in flow failed' })
-  async clerkAutoSignInRecording(@Req() req: any, @Param('id') id: string) {
+  async clerkAutoSignInRecording(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: ClerkAutoSignInRecordingDto,
+  ) {
     const userId = req.user.sub;
-    return this.recordingService.clerkAutoSignInDuringRecording(id, userId);
+    return this.recordingService.clerkAutoSignInDuringRecording(id, userId, {
+      clerkOtpMode: dto?.clerkOtpMode,
+    });
   }
 
   @Post('playback/stop')
@@ -179,6 +186,7 @@ export class RunsController {
     return this.recordingService.startPlayback(userId, id, {
       delayMs: dto.delayMs,
       autoClerkSignIn: dto.autoClerkSignIn,
+      clerkOtpMode: dto.clerkOtpMode,
       skipUntilSequence: dto.skipUntilSequence,
       skipStepIds: dto.skipStepIds,
       playThroughSequence: dto.playThroughSequence,

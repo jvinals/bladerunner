@@ -312,20 +312,12 @@ export type FillClerkOtpFromMailSlurpOpts = {
   notBeforeMs: number;
 };
 
-/**
- * Fill visible OTP field(s) using MailSlurp — use when identifier field is not shown (post-password / OTP-only).
- */
-export async function fillClerkOtpFromMailSlurp(
-  page: Page,
-  opts: FillClerkOtpFromMailSlurpOpts,
-): Promise<void> {
-  const pagePk = await readPublishableKeyFromPage(page);
-  const publishableKey = (pagePk ?? envPublishableKey())?.trim();
-  if (publishableKey) {
-    await refreshClerkTestingCredentials(publishableKey);
-    await installDynamicClerkFapiRouteOnce(page.context());
-  }
+/** Clerk dev test emails: append `+clerk_test` to the local part; OTP is always this (no real email). */
+export const CLERK_TEST_EMAIL_OTP = '424242';
 
+export type ClerkOtpMode = 'clerk_test_email' | 'mailslurp';
+
+async function ensureOtpInputsVisible(page: Page): Promise<ReturnType<typeof otpInputLocator>> {
   const otpSingle = otpInputLocator(page);
   try {
     await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
@@ -333,11 +325,12 @@ export async function fillClerkOtpFromMailSlurp(
     const anyOtp = page.locator('input[inputmode="numeric"]').first();
     await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
   }
+  return otpSingle;
+}
 
-  const otp = await waitForClerkOtpFromMailSlurp({
-    notBeforeMs: opts.notBeforeMs,
-    timeoutMs: 120_000,
-  });
+/** Shared: fill OTP digits and wait for return to app host (after MailSlurp or fixed test code). */
+async function applyClerkOtpDigitsAndWaitForApp(page: Page, otp: string, runUrl: string): Promise<void> {
+  const otpSingle = await ensureOtpInputsVisible(page);
 
   const multi = page.locator('input[inputmode="numeric"]');
   const count = await multi.count();
@@ -350,9 +343,7 @@ export async function fillClerkOtpFromMailSlurp(
     await otpSingle.fill(otp);
   }
 
-  const host = new URL(
-    opts.runUrl.includes('://') ? opts.runUrl : `https://${opts.runUrl}`,
-  ).hostname;
+  const host = new URL(runUrl.includes('://') ? runUrl : `https://${runUrl}`).hostname;
 
   try {
     await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 20_000 });
@@ -371,12 +362,63 @@ export async function fillClerkOtpFromMailSlurp(
   await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 120_000 });
 }
 
+export type FillClerkOtpFromClerkTestEmailOpts = {
+  runUrl: string;
+};
+
+/**
+ * Fill OTP using Clerk **test email** mode (`+clerk_test` in the identifier): fixed code `424242`, no inbox.
+ * @see https://clerk.com/docs/testing/test-emails-and-phones
+ */
+export async function fillClerkOtpFromClerkTestEmail(
+  page: Page,
+  opts: FillClerkOtpFromClerkTestEmailOpts,
+): Promise<void> {
+  const pagePk = await readPublishableKeyFromPage(page);
+  const publishableKey = (pagePk ?? envPublishableKey())?.trim();
+  if (publishableKey) {
+    await refreshClerkTestingCredentials(publishableKey);
+    await installDynamicClerkFapiRouteOnce(page.context());
+  }
+
+  await applyClerkOtpDigitsAndWaitForApp(page, CLERK_TEST_EMAIL_OTP, opts.runUrl);
+}
+
+/**
+ * Fill visible OTP field(s) using MailSlurp — use when identifier field is not shown (post-password / OTP-only).
+ */
+export async function fillClerkOtpFromMailSlurp(
+  page: Page,
+  opts: FillClerkOtpFromMailSlurpOpts,
+): Promise<void> {
+  const pagePk = await readPublishableKeyFromPage(page);
+  const publishableKey = (pagePk ?? envPublishableKey())?.trim();
+  if (publishableKey) {
+    await refreshClerkTestingCredentials(publishableKey);
+    await installDynamicClerkFapiRouteOnce(page.context());
+  }
+
+  await ensureOtpInputsVisible(page);
+
+  const otp = await waitForClerkOtpFromMailSlurp({
+    notBeforeMs: opts.notBeforeMs,
+    timeoutMs: 120_000,
+  });
+
+  await applyClerkOtpDigitsAndWaitForApp(page, otp, opts.runUrl);
+}
+
 export type PerformClerkPasswordEmail2FAOpts = {
   baseURL: string;
   identifier: string;
   password: string;
   /** When true, do not navigate — already on sign-in (e.g. playback after recorded goto). */
   skipInitialNavigate?: boolean;
+  /**
+   * `clerk_test_email` (default): use `+clerk_test` in identifier and fixed OTP `424242` (no real email, no MailSlurp).
+   * `mailslurp`: read OTP from MailSlurp inbox (requires env).
+   */
+  otpMode?: ClerkOtpMode;
 };
 
 /**
@@ -430,9 +472,22 @@ export async function performClerkPasswordEmail2FA(
   await passwordField.fill(opts.password);
 
   await locatorAfterPasswordSubmit(page).first().click();
-  /** Clerk sends the OTP email after this moment — only accept MailSlurp messages received after here. */
-  const otpWindowStartMs = Date.now();
 
+  const mode: ClerkOtpMode = opts.otpMode ?? 'clerk_test_email';
+
+  if (mode === 'clerk_test_email') {
+    const id = opts.identifier.trim().toLowerCase();
+    if (!id.includes('+clerk_test')) {
+      throw new Error(
+        'Clerk test-email OTP mode requires the identifier to include +clerk_test (e.g. user+clerk_test@gmail.com). Set E2E_CLERK_USER_EMAIL accordingly, or use otpMode: "mailslurp". See Clerk test emails docs.',
+      );
+    }
+    await fillClerkOtpFromClerkTestEmail(page, { runUrl: opts.baseURL });
+    return;
+  }
+
+  /** MailSlurp: only accept messages received after password submit. */
+  const otpWindowStartMs = Date.now();
   await fillClerkOtpFromMailSlurp(page, {
     runUrl: opts.baseURL,
     notBeforeMs: otpWindowStartMs,

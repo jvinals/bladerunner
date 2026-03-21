@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
-import { runsApi, buildStartPlaybackBody, projectsApi, type ProjectDto } from '@/lib/api';
+import {
+  runsApi,
+  buildStartPlaybackBody,
+  projectsApi,
+  type ProjectDto,
+  type AutoClerkOtpUiMode,
+} from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { CheckpointDivider } from '@/components/ui/CheckpointDivider';
 import { useRecording } from '@/hooks/useRecording';
@@ -25,6 +31,8 @@ export default function RunsPage() {
   const [newRunProjectId, setNewRunProjectId] = useState('');
   const [instructionText, setInstructionText] = useState('');
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
+  const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('clerk_test_email');
+  const [recordingClerkOtpMode, setRecordingClerkOtpMode] = useState<AutoClerkOtpUiMode>('clerk_test_email');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);
@@ -231,6 +239,7 @@ export default function RunsPage() {
         buildStartPlaybackBody({
           delayMs: playbackDelayMs,
           autoClerkMode: playbackAutoClerkMode,
+          clerkOtpMode: playbackClerkOtpMode,
           skipUntilSequence:
             skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
         }),
@@ -243,6 +252,7 @@ export default function RunsPage() {
     canPlaybackSelected,
     startPlayback,
     playbackAutoClerkMode,
+    playbackClerkOtpMode,
     playbackSkipUntilSeq,
     playbackDelayMs,
   ]);
@@ -257,6 +267,7 @@ export default function RunsPage() {
           buildStartPlaybackBody({
             delayMs: playbackDelayMs,
             autoClerkMode: playbackAutoClerkMode,
+            clerkOtpMode: playbackClerkOtpMode,
             skipUntilSequence: sequence,
             ...(mode === 'only' ? { playThroughSequence: sequence } : {}),
           }),
@@ -272,6 +283,7 @@ export default function RunsPage() {
       stopPlayback,
       startPlayback,
       playbackAutoClerkMode,
+      playbackClerkOtpMode,
       playbackDelayMs,
     ],
   );
@@ -619,6 +631,21 @@ export default function RunsPage() {
                   <option value="on">Force on</option>
                   <option value="off">Force off</option>
                 </select>
+                <label htmlFor="runs-playback-clerk-otp" className="whitespace-nowrap">
+                  Clerk OTP
+                </label>
+                <select
+                  id="runs-playback-clerk-otp"
+                  value={playbackClerkOtpMode}
+                  onChange={(e) => setPlaybackClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
+                  disabled={isPlaying}
+                  title="How to complete email verification when Clerk auto sign-in runs"
+                  className="flex-1 min-w-[140px] border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
+                >
+                  <option value="default">OTP: server default</option>
+                  <option value="clerk_test_email">OTP: test email (424242)</option>
+                  <option value="mailslurp">OTP: MailSlurp inbox</option>
+                </select>
                 <label htmlFor="runs-playback-skip" className="whitespace-nowrap">
                   Skip seq &lt;
                 </label>
@@ -762,11 +789,11 @@ export default function RunsPage() {
               <button
                 type="button"
                 disabled={clerkAutoSigningIn || !socketConnected}
-                onClick={() => void clerkAutoSignIn()}
+                onClick={() => void clerkAutoSignIn(recordingClerkOtpMode)}
                 title={
                   !socketConnected
                     ? 'Wait for preview connection'
-                    : 'Run Clerk + MailSlurp sign-in once using API credentials (same as E2E)'
+                    : 'Run Clerk auto sign-in using API credentials (test email or MailSlurp)'
                 }
                 className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 border border-[#4B90FF]/40 bg-[#4B90FF]/5 text-[#4D65FF] text-[11px] font-medium rounded-md hover:bg-[#4B90FF]/10 transition-colors disabled:opacity-40 disabled:pointer-events-none"
               >
@@ -779,8 +806,9 @@ export default function RunsPage() {
                   aria-live="polite"
                   className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded-md px-2 py-1.5 leading-snug"
                 >
-                  Running Clerk sign-in in the <strong>remote browser</strong> (server + Playwright). The Bladerunner UI
-                  stays responsive; this request can take <strong>1–2 minutes</strong> while MailSlurp receives the OTP.
+                  Running Clerk sign-in in the <strong>remote browser</strong> (server + Playwright). Test-email mode uses
+                  code <strong>424242</strong> (no inbox). MailSlurp mode can take <strong>1–2 minutes</strong> waiting for
+                  email.
                 </div>
               )}
               {clerkAutoSignInError && (
@@ -788,8 +816,25 @@ export default function RunsPage() {
                   {clerkAutoSignInError}
                 </p>
               )}
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                <label htmlFor="runs-recording-clerk-otp" className="whitespace-nowrap">
+                  Clerk OTP
+                </label>
+                <select
+                  id="runs-recording-clerk-otp"
+                  value={recordingClerkOtpMode}
+                  onChange={(e) => setRecordingClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
+                  disabled={clerkAutoSigningIn}
+                  className="flex-1 min-w-[140px] border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
+                >
+                  <option value="default">Server default</option>
+                  <option value="clerk_test_email">Test email (424242)</option>
+                  <option value="mailslurp">MailSlurp inbox</option>
+                </select>
+              </div>
               <p className="text-[9px] text-gray-400 leading-snug">
-                Uses server env (test user + MailSlurp). Navigate to Clerk sign-in in the preview, then click here.
+                Set <span className="font-mono">E2E_CLERK_USER_EMAIL</span> with <span className="font-mono">+clerk_test</span>{' '}
+                for test-email mode (no real email). Navigate to Clerk sign-in in the preview, then click above.
               </p>
             </div>
           )}

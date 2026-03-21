@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import { runsApi, buildStartPlaybackBody } from '@/lib/api';
+import { runsApi, buildStartPlaybackBody, type AutoClerkOtpUiMode } from '@/lib/api';
 import {
   useSessionRecordingPlayback,
   useSessionRecordingThumbnailOnly,
@@ -98,6 +98,7 @@ function SessionRecordingCard({ runId }: { runId: string }) {
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
+  const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('clerk_test_email');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -186,6 +187,7 @@ export default function RunDetailPage() {
           buildStartPlaybackBody({
             delayMs: playbackDelayMs,
             autoClerkMode: playbackAutoClerkMode,
+            clerkOtpMode: playbackClerkOtpMode,
             skipUntilSequence: sequence,
             ...(mode === 'only' ? { playThroughSequence: sequence } : {}),
           }),
@@ -194,7 +196,16 @@ export default function RunDetailPage() {
         console.error('Step playback failed:', e);
       }
     },
-    [id, canPlayback, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode, playbackDelayMs],
+    [
+      id,
+      canPlayback,
+      isPlaying,
+      stopPlayback,
+      startPlayback,
+      playbackAutoClerkMode,
+      playbackClerkOtpMode,
+      playbackDelayMs,
+    ],
   );
 
   const { data: runCheckpoints = [] } = useQuery({
@@ -240,6 +251,7 @@ export default function RunDetailPage() {
         buildStartPlaybackBody({
           delayMs: playbackDelayMs,
           autoClerkMode: playbackAutoClerkMode,
+          clerkOtpMode: playbackClerkOtpMode,
           skipUntilSequence:
             skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
         }),
@@ -247,7 +259,15 @@ export default function RunDetailPage() {
     } catch (e) {
       console.error('Playback failed to start:', e);
     }
-  }, [id, canPlayback, startPlayback, playbackAutoClerkMode, playbackSkipUntilSeq, playbackDelayMs]);
+  }, [
+    id,
+    canPlayback,
+    startPlayback,
+    playbackAutoClerkMode,
+    playbackClerkOtpMode,
+    playbackSkipUntilSeq,
+    playbackDelayMs,
+  ]);
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
@@ -370,6 +390,20 @@ export default function RunDetailPage() {
                 <option value="default">Server default</option>
                 <option value="on">Force on</option>
                 <option value="off">Force off</option>
+              </select>
+              <label htmlFor="run-playback-clerk-otp" className="whitespace-nowrap">
+                Clerk OTP
+              </label>
+              <select
+                id="run-playback-clerk-otp"
+                value={playbackClerkOtpMode}
+                onChange={(e) => setPlaybackClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
+                title="How to complete email verification when Clerk auto sign-in runs"
+                className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+              >
+                <option value="default">OTP: server default</option>
+                <option value="clerk_test_email">OTP: test email (424242)</option>
+                <option value="mailslurp">OTP: MailSlurp inbox</option>
               </select>
               <label htmlFor="run-playback-skip" className="whitespace-nowrap">
                 Skip seq &lt;
