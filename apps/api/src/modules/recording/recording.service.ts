@@ -523,7 +523,9 @@ export class RecordingService extends EventEmitter {
       origin: 'AI_DRIVEN' as const,
     };
 
-    const { metadata, origin, instruction: finalInstruction } = await this.buildStepPersistence(session, data);
+    const { metadata, origin, instruction: finalInstruction } = await this.buildStepPersistence(session, data, {
+      stepSequenceHint: existing.sequence,
+    });
 
     const step = await this.prisma.runStep.update({
       where: { id: stepId },
@@ -757,7 +759,11 @@ export class RecordingService extends EventEmitter {
       playwrightCode: string;
       origin: 'MANUAL' | 'AI_DRIVEN';
     },
-    opts?: { syntheticClerkAutoSignIn?: boolean },
+    opts?: {
+      syntheticClerkAutoSignIn?: boolean;
+      /** Re-record path: use the DB step’s sequence (session.stepSequence may not match). */
+      stepSequenceHint?: number;
+    },
   ): Promise<{
     metadata: Record<string, unknown> | undefined;
     origin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC';
@@ -774,8 +780,14 @@ export class RecordingService extends EventEmitter {
       opts?.syntheticClerkAutoSignIn ||
       (metadata && (metadata as { clerkAuthPhase?: boolean }).clerkAuthPhase === true)
     );
-    const finalOrigin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC' = isAutomatic ? 'AUTOMATIC' : data.origin;
-    const finalInstruction = isAutomatic ? this.applyMailSlurpInstructionPrefix(data.instruction) : data.instruction;
+    const sequenceForOrigin = opts?.stepSequenceHint ?? session.stepSequence;
+    /** First step “load the app” — always AUTOMATIC for UI; does not set clerkAuthPhase (playback unchanged). */
+    const isInitialAppNavigate = sequenceForOrigin === 1 && data.action === 'NAVIGATE';
+    const originAutomatic = isAutomatic || isInitialAppNavigate;
+    const finalOrigin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC' = originAutomatic ? 'AUTOMATIC' : data.origin;
+    const finalInstruction = isAutomatic
+      ? this.applyMailSlurpInstructionPrefix(data.instruction)
+      : data.instruction;
     return { metadata, origin: finalOrigin, instruction: finalInstruction };
   }
 
@@ -789,7 +801,10 @@ export class RecordingService extends EventEmitter {
       playwrightCode: string;
       origin: 'MANUAL' | 'AI_DRIVEN';
     },
-    opts?: { syntheticClerkAutoSignIn?: boolean },
+    opts?: {
+      syntheticClerkAutoSignIn?: boolean;
+      stepSequenceHint?: number;
+    },
   ) {
     session.stepSequence += 1;
 
