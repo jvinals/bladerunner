@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
 import * as fs from 'node:fs/promises';
+import { appendFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { RunStep, Prisma } from '@prisma/client';
@@ -39,6 +40,20 @@ import {
   writeJpegThumbnailFromVideo,
 } from './recording-storage';
 import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './recording-screencast-ffmpeg';
+
+// #region agent log
+const AGENT_DEBUG_LOG = '/Users/jvinals/code/bladerunner/.cursor/debug-5cf234.log';
+function dbgPlayback(payload: Record<string, unknown>) {
+  try {
+    appendFileSync(
+      AGENT_DEBUG_LOG,
+      `${JSON.stringify({ sessionId: '5cf234', timestamp: Date.now(), ...payload })}\n`,
+    );
+  } catch {
+    /* ignore */
+  }
+}
+// #endregion
 
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
@@ -1182,6 +1197,17 @@ export class RecordingService extends EventEmitter {
 
       for (const step of steps) {
         if (ctx.playThroughSequence != null && step.sequence > ctx.playThroughSequence) {
+          // #region agent log
+          dbgPlayback({
+            hypothesisId: 'H3',
+            location: 'recording.service.ts:runPlaybackLoop',
+            message: 'break_playThroughSequence',
+            data: {
+              playThroughSequence: ctx.playThroughSequence,
+              stepSequence: step.sequence,
+            },
+          });
+          // #endregion
           break;
         }
 
@@ -1210,6 +1236,20 @@ export class RecordingService extends EventEmitter {
             ctx.wantAutoClerkSignIn,
           );
 
+        // #region agent log
+        dbgPlayback({
+          hypothesisId: 'H4',
+          location: 'recording.service.ts:runPlaybackLoop',
+          message: 'step_tick',
+          data: {
+            sequence: step.sequence,
+            skipped,
+            playThroughSequence: ctx.playThroughSequence ?? null,
+            action: step.action,
+          },
+        });
+        // #endregion
+
         this.emit('playbackProgress', playbackSessionId, {
           playbackSessionId,
           sourceRunId,
@@ -1236,7 +1276,23 @@ export class RecordingService extends EventEmitter {
         }
 
         try {
+          // #region agent log
+          dbgPlayback({
+            hypothesisId: 'H1',
+            location: 'recording.service.ts:runPlaybackLoop',
+            message: 'executePwCode_start',
+            data: { sequence: step.sequence },
+          });
+          // #endregion
           await this.executePwCode(session.page, step.playwrightCode);
+          // #region agent log
+          dbgPlayback({
+            hypothesisId: 'H1',
+            location: 'recording.service.ts:runPlaybackLoop',
+            message: 'executePwCode_done',
+            data: { sequence: step.sequence },
+          });
+          // #endregion
         } catch (execErr) {
           const msg = execErr instanceof Error ? execErr.message : String(execErr);
           this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);
@@ -1275,6 +1331,14 @@ export class RecordingService extends EventEmitter {
         });
       }
 
+      // #region agent log
+      dbgPlayback({
+        hypothesisId: 'H4',
+        location: 'recording.service.ts:runPlaybackLoop',
+        message: 'emit_completed',
+        data: { sourceRunId, stepCount: steps.length },
+      });
+      // #endregion
       this.emit('status', playbackSessionId, {
         status: 'completed',
         runId: playbackSessionId,
@@ -1283,6 +1347,14 @@ export class RecordingService extends EventEmitter {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.error(`Playback loop error: ${msg}`);
+      // #region agent log
+      dbgPlayback({
+        hypothesisId: 'H4',
+        location: 'recording.service.ts:runPlaybackLoop',
+        message: 'playback_loop_catch',
+        data: { error: msg },
+      });
+      // #endregion
       this.emit('status', playbackSessionId, {
         status: 'failed',
         runId: playbackSessionId,
@@ -1419,14 +1491,47 @@ export class RecordingService extends EventEmitter {
     otpMode: ClerkOtpMode,
     state: { clerkFullSignInDone: boolean },
   ): Promise<void> {
-    if (!wantAuto || !this.playbackClerkAssistAvailable(otpMode)) return;
+    const assistOk = this.playbackClerkAssistAvailable(otpMode);
+    if (!wantAuto || !assistOk) {
+      // #region agent log
+      dbgPlayback({
+        hypothesisId: 'H5',
+        location: 'recording.service.ts:maybePlaybackClerkAuthAssist',
+        message: 'assist_skipped',
+        data: { wantAuto, assistOk, otpMode },
+      });
+      // #endregion
+      return;
+    }
     try {
       const page = session.page;
       const identifier = page.locator('input[name="identifier"], #identifier-field').first();
       const idVisible = await identifier.isVisible().catch(() => false);
       const otpVisible = await detectClerkOtpInputVisible(page);
 
+      // #region agent log
+      dbgPlayback({
+        hypothesisId: 'H2',
+        location: 'recording.service.ts:maybePlaybackClerkAuthAssist',
+        message: 'visibility',
+        data: {
+          otpVisible,
+          idVisible,
+          clerkFullSignInDone: state.clerkFullSignInDone,
+          otpMode,
+        },
+      });
+      // #endregion
+
       if (otpVisible && !idVisible) {
+        // #region agent log
+        dbgPlayback({
+          hypothesisId: 'H2',
+          location: 'recording.service.ts:maybePlaybackClerkAuthAssist',
+          message: 'branch_otp_fill_start',
+          data: { otpMode },
+        });
+        // #endregion
         if (otpMode === 'mailslurp') {
           await fillClerkOtpFromMailSlurp(page, {
             runUrl,
@@ -1435,10 +1540,26 @@ export class RecordingService extends EventEmitter {
         } else {
           await fillClerkOtpFromClerkTestEmail(page, { runUrl });
         }
+        // #region agent log
+        dbgPlayback({
+          hypothesisId: 'H2',
+          location: 'recording.service.ts:maybePlaybackClerkAuthAssist',
+          message: 'branch_otp_fill_done',
+          data: {},
+        });
+        // #endregion
         return;
       }
 
       if (!state.clerkFullSignInDone && (await detectClerkSignInUi(page))) {
+        // #region agent log
+        dbgPlayback({
+          hypothesisId: 'H5',
+          location: 'recording.service.ts:maybePlaybackClerkAuthAssist',
+          message: 'branch_full_signin_start',
+          data: {},
+        });
+        // #endregion
         await this.runPlaybackClerkAutoSignIn(page, runUrl, otpMode);
         state.clerkFullSignInDone = true;
       }
