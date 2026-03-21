@@ -1,7 +1,7 @@
 /**
- * Canonical Clerk password + email OTP flow labels + safe no-op codegen for recording after
- * `performClerkPasswordEmail2FA` completes. Steps are skipped during playback when Clerk auto
- * is on (server runs one `performClerkPasswordEmail2FA`); stored Playwright is not relied on.
+ * Legacy (pre–single-step `clerk_auto_sign_in`): six synthetic rows some older runs still have
+ * (`metadata.clerkAutomationCanonical`). New recordings persist one `CUSTOM` step instead.
+ * Playback still filters these out of the execution chain when auto Clerk is on.
  */
 export const CLERK_CANONICAL_SIGN_IN_STEPS: Array<{
   action: 'TYPE' | 'CLICK';

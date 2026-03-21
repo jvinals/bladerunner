@@ -28,10 +28,17 @@ import {
   performClerkPasswordEmail2FA,
   type ClerkOtpMode,
 } from '@bladerunner/clerk-agentmail-signin';
-import { buildPlaybackSkipSet, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
+import { buildPlaybackSkipSet, normalizePlaybackUrl, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
 import { filterStepsForPlaybackExecutionChain } from './playback-execution-chain.util';
 import { escapeLocatorCssInPlaywrightSnippet } from './playback-css-escape.util';
-import { CLERK_CANONICAL_SIGN_IN_STEPS } from './recording-clerk-canonical-steps';
+import {
+  buildClerkAutoSignInInstruction,
+  CLERK_AUTO_SIGN_IN_KIND,
+  CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+  clerkAutoSignInSentinelPlaywrightCode,
+  isClerkAutoSignInMetadata,
+  postAuthUrlsRoughlyMatch,
+} from './clerk-auto-sign-in-step-metadata';
 import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -390,8 +397,8 @@ export class RecordingService extends EventEmitter {
 
   /**
    * One-shot Clerk + MailSlurp sign-in on the recording browser (server env credentials).
-   * Appends **six** canonical TYPE/CLICK steps (labeled like the real flow) for playback skip
-   * (`clerkAuthPhase` + `clerkAutoOneShot`); playback still runs one `performClerkPasswordEmail2FA`.
+   * Persists **one** `CUSTOM` step with `metadata.kind === clerk_auto_sign_in` (otpMode + post-auth URL);
+   * playback runs `performClerkPasswordEmail2FA` once from that metadata.
    */
   async clerkAutoSignInDuringRecording(
     runId: string,
@@ -426,7 +433,7 @@ export class RecordingService extends EventEmitter {
     session.recordingDomCapturePaused = true;
     session.clerkDomCaptureBarrier += 1;
     try {
-      /** Do not record debounced `input` events from automated fill — canonical steps cover them. */
+      /** Do not record debounced `input` events from automated fill — a single CUSTOM step is persisted after. */
       await session.page.evaluate(() => {
         (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
           true;
@@ -455,7 +462,25 @@ export class RecordingService extends EventEmitter {
       }
     }
 
-    /** Drop sloppy manual captures (clicks/types) after navigate so canonical Clerk steps replace them. */
+    let postAuthPageUrl = '';
+    try {
+      postAuthPageUrl = normalizePlaybackUrl(session.page.url());
+    } catch {
+      try {
+        postAuthPageUrl = session.page.url();
+      } catch {
+        postAuthPageUrl = '';
+      }
+    }
+    if (!postAuthPageUrl.trim()) {
+      try {
+        postAuthPageUrl = normalizePlaybackUrl(run.url);
+      } catch {
+        postAuthPageUrl = run.url;
+      }
+    }
+
+    /** Drop sloppy manual captures (clicks/types) after navigate so the single auto sign-in step replaces them. */
     const removed = await this.prisma.runStep.deleteMany({
       where: { runId, userId, sequence: { gt: 1 } },
     });
@@ -465,35 +490,34 @@ export class RecordingService extends EventEmitter {
     session.stepSequence = 1;
     if (removed.count > 0) {
       this.logger.log(
-        `Recording ${runId}: removed ${removed.count} manual step(s) after navigate before canonical Clerk steps`,
+        `Recording ${runId}: removed ${removed.count} manual step(s) after navigate before automatic Clerk sign-in step`,
       );
     }
 
-    let lastStep: RunStep | undefined;
-    for (const row of CLERK_CANONICAL_SIGN_IN_STEPS) {
-      const step = await this.recordStep(
-        session,
-        {
-          action: row.action,
-          selector: null,
-          value: null,
-          instruction: row.instruction,
-          playwrightCode: row.playwrightCode,
-          origin: 'MANUAL',
+    const step = await this.recordStep(
+      session,
+      {
+        action: 'CUSTOM',
+        selector: null,
+        value: null,
+        instruction: buildClerkAutoSignInInstruction(otpMode),
+        playwrightCode: clerkAutoSignInSentinelPlaywrightCode(),
+        origin: 'MANUAL',
+      },
+      {
+        clerkAutoSignInBlock: {
+          otpMode,
+          postAuthPageUrl,
         },
-        { syntheticClerkAutoSignIn: true },
-      );
-      this.emit('step', runId, step);
-      lastStep = step;
-    }
-    /** Belt-and-suspenders: if a debounced OTP `input` still fires after unpause, drop one matching TYPE. */
-    session.skipDuplicateClerkOtpDomCaptureOnce = true;
-    /** Canonical steps already include Clerk OTP (TYPE); do not auto-tag the next DOM TYPE (would duplicate step 6). */
-    const seqLo = lastStep!.sequence - CLERK_CANONICAL_SIGN_IN_STEPS.length + 1;
-    this.logger.log(
-      `Recording ${runId}: clerk auto sign-in completed, canonical steps ${seqLo}–${lastStep!.sequence}`,
+      },
     );
-    return { ok: true as const, step: lastStep! };
+    this.emit('step', runId, step);
+    /** If a debounced OTP `input` still fires after unpause, drop one matching TYPE. */
+    session.skipDuplicateClerkOtpDomCaptureOnce = true;
+    this.logger.log(
+      `Recording ${runId}: clerk auto sign-in completed, single step sequence ${step.sequence}`,
+    );
+    return { ok: true as const, step };
   }
 
   async executeInstruction(runId: string, userId: string, instruction: string) {
@@ -849,6 +873,8 @@ export class RecordingService extends EventEmitter {
     },
     opts?: {
       syntheticClerkAutoSignIn?: boolean;
+      /** Single-step automatic Clerk sign-in (recorded otpMode + post-auth URL for playback). */
+      clerkAutoSignInBlock?: { otpMode: ClerkOtpMode; postAuthPageUrl: string };
       /** Re-record path: use the DB step’s sequence (session.stepSequence may not match). */
       stepSequenceHint?: number;
     },
@@ -858,6 +884,16 @@ export class RecordingService extends EventEmitter {
     instruction: string;
   }> {
     let metadata: Record<string, unknown> | undefined;
+    if (opts?.clerkAutoSignInBlock) {
+      const { otpMode, postAuthPageUrl } = opts.clerkAutoSignInBlock;
+      metadata = {
+        kind: CLERK_AUTO_SIGN_IN_KIND,
+        schemaVersion: CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+        otpMode,
+        postAuthPageUrl,
+      };
+      return { metadata, origin: 'MANUAL', instruction: data.instruction };
+    }
     if (opts?.syntheticClerkAutoSignIn) {
       metadata = {
         clerkAuthPhase: true,
@@ -896,6 +932,7 @@ export class RecordingService extends EventEmitter {
     },
     opts?: {
       syntheticClerkAutoSignIn?: boolean;
+      clerkAutoSignInBlock?: { otpMode: ClerkOtpMode; postAuthPageUrl: string };
       stepSequenceHint?: number;
     },
   ) {
@@ -1211,7 +1248,8 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
-   * @param steps Steps that run `executePwCode` (excludes Clerk/MailSlurp metadata rows when auto Clerk is on).
+   * @param steps Playback execution chain (legacy `clerkAutomationCanonical` rows omitted when auto Clerk is on;
+   * `clerk_auto_sign_in` is included and handled via `playbackClerkAutoSignInFromRecordedStep`).
    */
   private async runPlaybackLoop(
     playbackSessionId: string,
@@ -1236,13 +1274,17 @@ export class RecordingService extends EventEmitter {
         sourceRunId,
       });
 
-      await this.maybePlaybackClerkAuthAssist(
-        session,
-        runUrl,
-        ctx.wantAutoClerkSignIn,
-        ctx.clerkOtpMode,
-        clerkPlaybackState,
-      );
+      /** Avoid double sign-in: recorded `clerk_auto_sign_in` step runs `performClerkPasswordEmail2FA` explicitly. */
+      const hasRecordedClerkAutoSignIn = steps.some((s) => isClerkAutoSignInMetadata(s.metadata));
+      if (!hasRecordedClerkAutoSignIn) {
+        await this.maybePlaybackClerkAuthAssist(
+          session,
+          runUrl,
+          ctx.wantAutoClerkSignIn,
+          ctx.clerkOtpMode,
+          clerkPlaybackState,
+        );
+      }
 
       for (const step of steps) {
         if (ctx.playThroughSequence != null && step.sequence > ctx.playThroughSequence) {
@@ -1280,6 +1322,47 @@ export class RecordingService extends EventEmitter {
           step: stepPayload,
           phase: 'before',
         });
+
+        if (isClerkAutoSignInMetadata(step.metadata) && !ctx.skipSet.has(step.id)) {
+          try {
+            await this.playbackClerkAutoSignInFromRecordedStep(session, step, runUrl);
+            clerkPlaybackState.clerkFullSignInDone = true;
+          } catch (execErr) {
+            const msg = execErr instanceof Error ? execErr.message : String(execErr);
+            this.logger.warn(`Playback clerk_auto_sign_in step ${step.sequence} failed: ${msg}`);
+            this.emit('playbackProgress', playbackSessionId, {
+              playbackSessionId,
+              sourceRunId,
+              step: stepPayload,
+              phase: 'error',
+              error: msg,
+            });
+            this.emit('status', playbackSessionId, {
+              status: 'failed',
+              runId: playbackSessionId,
+              sourceRunId,
+              error: msg,
+            });
+            await this.cleanupPlaybackSession(playbackSessionId, session);
+            return;
+          }
+          await this.maybePlaybackClerkAuthAssist(
+            session,
+            runUrl,
+            ctx.wantAutoClerkSignIn,
+            ctx.clerkOtpMode,
+            clerkPlaybackState,
+          );
+          await session.page.waitForLoadState('domcontentloaded').catch(() => {});
+          await this.sleepWithPause(session, delayMs);
+          this.emit('playbackProgress', playbackSessionId, {
+            playbackSessionId,
+            sourceRunId,
+            step: stepPayload,
+            phase: 'after',
+          });
+          continue;
+        }
 
         if (skipped) {
           this.emit('playbackProgress', playbackSessionId, {
@@ -1471,6 +1554,30 @@ export class RecordingService extends EventEmitter {
       otpMode,
     });
     this.logger.log(`Playback: Clerk auto sign-in completed (otpMode=${otpMode})`);
+  }
+
+  /** Replays a recorded single-step `clerk_auto_sign_in` row using **metadata.otpMode** (not playback UI defaults). */
+  private async playbackClerkAutoSignInFromRecordedStep(
+    session: PlaybackSession,
+    step: RunStep,
+    runUrl: string,
+  ): Promise<void> {
+    const meta = step.metadata;
+    if (!isClerkAutoSignInMetadata(meta)) {
+      throw new Error('Invalid clerk_auto_sign_in step metadata');
+    }
+    await this.runPlaybackClerkAutoSignIn(session.page, runUrl, meta.otpMode);
+    let current = '';
+    try {
+      current = session.page.url();
+    } catch {
+      /* ignore */
+    }
+    if (current && !postAuthUrlsRoughlyMatch(meta.postAuthPageUrl, current)) {
+      this.logger.warn(
+        `Playback: post-auth URL differs from recorded (${meta.postAuthPageUrl} vs ${current})`,
+      );
+    }
   }
 
   /**

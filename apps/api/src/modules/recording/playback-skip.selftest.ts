@@ -3,6 +3,10 @@
  */
 import assert from 'node:assert/strict';
 import {
+  CLERK_AUTO_SIGN_IN_KIND,
+  CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+} from './clerk-auto-sign-in-step-metadata';
+import {
   buildPlaybackSkipSet,
   normalizePlaybackUrl,
   shouldSkipStoredPlaywrightForClerk,
@@ -110,5 +114,23 @@ const manualUnrelated = {
   playwrightCode: `await page.getByLabel('Name').fill('x');`,
 };
 assert.equal(shouldSkipStoredPlaywrightForClerk(manualUnrelated, true), false);
+
+const clerkAutoSignInStep = {
+  id: 'cas',
+  sequence: 2,
+  metadata: {
+    kind: CLERK_AUTO_SIGN_IN_KIND,
+    schemaVersion: CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+    otpMode: 'mailslurp' as const,
+    postAuthPageUrl: 'https://example.com/app/home',
+  },
+  action: 'CUSTOM',
+  origin: 'MANUAL' as const,
+  instruction: 'Automatic Clerk sign-in (MailSlurp OTP)',
+  playwrightCode: '/* clerk_auto_sign_in */',
+};
+assert.equal(shouldSkipStoredPlaywrightForClerk(clerkAutoSignInStep, true), false);
+s = buildPlaybackSkipSet({ steps: [clerkAutoSignInStep], wantAutoClerkSkip: true });
+assert.equal(s.has('cas'), false);
 
 console.log('playback-skip.selftest: ok');

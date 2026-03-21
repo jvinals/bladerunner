@@ -1,3 +1,5 @@
+import { isClerkAutoSignInMetadata } from './clerk-auto-sign-in-step-metadata';
+
 export interface PlaybackSkipStepLike {
   id: string;
   sequence: number;
@@ -59,6 +61,8 @@ export function shouldSkipStoredPlaywrightForClerk(
   wantAutoClerk: boolean,
 ): boolean {
   if (!wantAutoClerk) return false;
+  /** Single-step `clerk_auto_sign_in` is executed explicitly in the playback loop — never skip via heuristic. */
+  if (isClerkAutoSignInMetadata(step.metadata)) return false;
   if (step.origin === 'AUTOMATIC') return true;
   const m = step.metadata as { clerkAuthPhase?: boolean } | null | undefined;
   if (m && m.clerkAuthPhase === true) return true;

@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import {
+  CLERK_AUTO_SIGN_IN_KIND,
+  CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+} from './clerk-auto-sign-in-step-metadata';
 import { filterStepsForPlaybackExecutionChain, stepInPlaybackExecutionChain } from './playback-execution-chain.util';
 
 const mk = (id: string, seq: number, meta?: Record<string, unknown>) =>
@@ -16,6 +20,18 @@ assert.equal(stepInPlaybackExecutionChain(mk('a', 1, { clerkAutomationCanonical:
 assert.equal(stepInPlaybackExecutionChain(mk('b', 2, { clerkAuthPhase: true }), true), false);
 assert.equal(stepInPlaybackExecutionChain(mk('c', 3, { clerkAuthPhase: true }), false), true);
 assert.equal(stepInPlaybackExecutionChain(mk('d', 4, undefined), true), true);
+assert.equal(
+  stepInPlaybackExecutionChain(
+    mk('e', 5, {
+      kind: CLERK_AUTO_SIGN_IN_KIND,
+      schemaVersion: CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+      otpMode: 'mailslurp',
+      postAuthPageUrl: 'https://x.com/',
+    }),
+    true,
+  ),
+  true,
+);
 
 const all = [
   mk('1', 1, undefined),
