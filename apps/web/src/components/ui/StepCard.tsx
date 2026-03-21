@@ -69,7 +69,8 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   { sequence, action, instruction, playwrightCode, origin, timestamp, playbackHighlight, reRecord, stepPlayback },
   ref,
 ) {
-  const [expanded, setExpanded] = useState(false);
+  /** Collapsed by default: playback actions, re-record, Playwright code */
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [reDraft, setReDraft] = useState('');
   const Icon = ACTION_ICONS[action] || Hand;
   const isAI = origin === 'AI_DRIVEN';
@@ -115,8 +116,31 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
             </span>
           </div>
           <p className="text-xs text-gray-700 leading-relaxed">{instruction}</p>
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((v) => !v)}
+            aria-expanded={detailsOpen}
+            className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-[#4D65FF] hover:text-[#3d54e8] hover:underline"
+          >
+            {detailsOpen ? (
+              <>
+                <ChevronDown size={12} className="flex-shrink-0" />
+                Hide step details
+              </>
+            ) : (
+              <>
+                <ChevronRight size={12} className="flex-shrink-0" />
+                Show step details
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {detailsOpen && (
+        <div className="px-3 pb-2.5 pt-0 border-t border-gray-50">
           {stepPlayback && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mb-2 flex flex-wrap gap-1.5">
               <button
                 type="button"
                 disabled={stepPlayback.disabled}
@@ -139,7 +163,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
             </div>
           )}
           {reRecord && (
-            <div className="mt-2 flex flex-col gap-1.5">
+            <div className="mb-2 flex flex-col gap-1.5">
               <input
                 type="text"
                 value={reDraft}
@@ -159,19 +183,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
               </button>
             </div>
           )}
-        </div>
-
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex-shrink-0 p-1 rounded hover:bg-gray-50 text-gray-300 hover:text-gray-500 transition-colors"
-          title={expanded ? 'Hide code' : 'Show code'}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="px-3 pb-2.5 pt-0">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Playwright code</p>
           <pre className="text-[11px] ce-mono bg-gray-50 rounded-md p-2.5 text-gray-600 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
             {playwrightCode}
           </pre>
