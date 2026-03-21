@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.26** — **Recording**: **Pause DOM capture** during **`performClerkPasswordEmail2FA`** so debounced `input` events from the automated OTP fill are not persisted as an extra TYPE (duplicate of canonical step 6); one-shot skip for a stray OTP-shaped TYPE after canonical steps. **`@bladerunner/api` `0.5.24`**.
 - **0.7.25** — **Recording**: removed legacy **`pendingPostClerkVerificationAutomaticUi`** tagging of the first TYPE after **Sign in automatically** — it duplicated canonical step 6 (Clerk OTP) with a real DOM-captured OTP step. **`@bladerunner/api` `0.5.23`**.
 - **0.7.24** — **Playback**: **Execution chain** filters out Clerk/MailSlurp metadata rows (`clerkAuthPhase`, `clerkAutomationCanonical`) when auto Clerk is on — only **user app** steps run through `executePwCode` in sequence; canonical rows stay in DB for display. **`@bladerunner/api` `0.5.22`**.
 - **0.7.23** — **Recording**: DOM capture is **serialized** (FIFO) so LLM latency cannot reorder steps; **Sign in automatically** **removes** manual steps after navigate before inserting canonical Clerk steps (no duplicate Clerk blocks); LLM prompt prefers password vs email from `input` `type`/`name`; slightly longer HTML snippet for inputs. **`@bladerunner/api` `0.5.21`**.

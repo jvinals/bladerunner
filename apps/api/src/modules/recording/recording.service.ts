@@ -75,6 +75,11 @@ export interface RecordingSession {
    * (avoids LLM latency reordering: e.g. password step before email).
    */
   recordingCaptureTail: Promise<void>;
+  /**
+   * After server Clerk auto sign-in + canonical steps, ignore one DOM TYPE that looks like the same
+   * Clerk OTP field (debounced `input` can still fire after unpause).
+   */
+  skipDuplicateClerkOtpDomCaptureOnce?: boolean;
 }
 
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
@@ -406,13 +411,55 @@ export class RecordingService extends EventEmitter {
       this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
     const baseURL = this.playbackClerkBaseUrl(run.url);
     try {
-      await performClerkPasswordEmail2FA(session.page, {
-        baseURL,
-        identifier,
-        password,
-        skipInitialNavigate: true,
-        otpMode,
+      /** Do not record debounced `input` events from automated fill — canonical steps cover them. */
+      await session.page.evaluate(() => {
+        (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
+          true;
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          location: 'recording.service.ts:clerkAutoSignInDuringRecording',
+          message: 'pause DOM capture before performClerkPasswordEmail2FA',
+          data: { hypothesisId: 'A', runId },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      try {
+        await performClerkPasswordEmail2FA(session.page, {
+          baseURL,
+          identifier,
+          password,
+          skipInitialNavigate: true,
+          otpMode,
+        });
+      } finally {
+        try {
+          await session.page.evaluate(() => {
+            (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
+              false;
+          });
+        } catch {
+          /* ignore */
+        }
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+          body: JSON.stringify({
+            sessionId: '5cf234',
+            location: 'recording.service.ts:clerkAutoSignInDuringRecording',
+            message: 'resume DOM capture after performClerkPasswordEmail2FA',
+            data: { hypothesisId: 'A', runId },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
@@ -450,6 +497,8 @@ export class RecordingService extends EventEmitter {
       this.emit('step', runId, step);
       lastStep = step;
     }
+    /** Belt-and-suspenders: if a debounced OTP `input` still fires after unpause, drop one matching TYPE. */
+    session.skipDuplicateClerkOtpDomCaptureOnce = true;
     /** Canonical steps already include Clerk OTP (TYPE); do not auto-tag the next DOM TYPE (would duplicate step 6). */
     const seqLo = lastStep!.sequence - CLERK_CANONICAL_SIGN_IN_STEPS.length + 1;
     this.logger.log(
@@ -1530,6 +1579,31 @@ export class RecordingService extends EventEmitter {
       async (actionData: string) => {
         await this.enqueueRecordingCapture(session, async () => {
           const data = JSON.parse(actionData);
+          if (session.skipDuplicateClerkOtpDomCaptureOnce && data.type === 'type') {
+            const v = String(data.value ?? '').trim();
+            const html = String(data.elementHtml ?? '');
+            const looksOtp =
+              /^\d{4,8}$/.test(v) ||
+              /inputmode\s*=\s*["']numeric["']/i.test(html) ||
+              /verification|otp|one[-\s]?time/i.test(html);
+            if (looksOtp) {
+              session.skipDuplicateClerkOtpDomCaptureOnce = false;
+              // #region agent log
+              fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+                body: JSON.stringify({
+                  sessionId: '5cf234',
+                  location: 'recording.service.ts:enqueueRecordingCapture',
+                  message: 'skipped duplicate Clerk OTP DOM capture (one-shot)',
+                  data: { hypothesisId: 'B', runId: session.runId },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {});
+              // #endregion
+              return;
+            }
+          }
           let accessibilityTree = '';
           try {
             const snapshot = await (session.page as any).accessibility?.snapshot();
@@ -1559,6 +1633,26 @@ export class RecordingService extends EventEmitter {
           });
 
           this.emit('step', session.runId, step);
+          if (data.type === 'type') {
+            // #region agent log
+            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+              body: JSON.stringify({
+                sessionId: '5cf234',
+                location: 'recording.service.ts:enqueueRecordingCapture',
+                message: 'DOM capture persisted TYPE step',
+                data: {
+                  hypothesisId: 'C',
+                  runId: session.runId,
+                  sequence: step.sequence,
+                  hasSkipFlag: !!session.skipDuplicateClerkOtpDomCaptureOnce,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+          }
         });
       },
     );
@@ -1584,6 +1678,7 @@ export class RecordingService extends EventEmitter {
         }
 
         document.addEventListener('click', function(e) {
+          if (window.__bladerunnerPauseRecording) return;
           var target = e.target;
           if (!target || !window.__bladerunnerRecordAction) return;
           window.__bladerunnerRecordAction(
@@ -1597,6 +1692,7 @@ export class RecordingService extends EventEmitter {
         }, true);
 
         document.addEventListener('input', function(e) {
+          if (window.__bladerunnerPauseRecording) return;
           var target = e.target;
           if (!target || !window.__bladerunnerRecordAction) return;
           clearTimeout(target.__brDebounce);
