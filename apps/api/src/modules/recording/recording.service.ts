@@ -431,19 +431,6 @@ export class RecordingService extends EventEmitter {
         (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
           true;
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          location: 'recording.service.ts:clerkAutoSignInDuringRecording',
-          message: 'pause DOM capture before performClerkPasswordEmail2FA',
-          data: { hypothesisId: 'A', runId },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       await performClerkPasswordEmail2FA(session.page, {
         baseURL,
         identifier,
@@ -466,19 +453,6 @@ export class RecordingService extends EventEmitter {
       } catch {
         /* ignore */
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          location: 'recording.service.ts:clerkAutoSignInDuringRecording',
-          message: 'resume DOM capture after performClerkPasswordEmail2FA',
-          data: { hypothesisId: 'A', runId, barrier: session.clerkDomCaptureBarrier },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
     }
 
     /** Drop sloppy manual captures (clicks/types) after navigate so canonical Clerk steps replace them. */
@@ -1596,19 +1570,6 @@ export class RecordingService extends EventEmitter {
           const data = JSON.parse(actionData);
           const barrierAtStart = session.clerkDomCaptureBarrier;
           if (session.recordingDomCapturePaused) {
-            // #region agent log
-            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-              body: JSON.stringify({
-                sessionId: '5cf234',
-                location: 'recording.service.ts:enqueueRecordingCapture',
-                message: 'skipped DOM capture (session pause during Clerk auto sign-in)',
-                data: { hypothesisId: 'D', runId: session.runId, actionType: data.type },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
             return;
           }
           if (session.skipDuplicateClerkOtpDomCaptureOnce && data.type === 'type') {
@@ -1620,19 +1581,6 @@ export class RecordingService extends EventEmitter {
               /verification|otp|one[-\s]?time/i.test(html);
             if (looksOtp) {
               session.skipDuplicateClerkOtpDomCaptureOnce = false;
-              // #region agent log
-              fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-                body: JSON.stringify({
-                  sessionId: '5cf234',
-                  location: 'recording.service.ts:enqueueRecordingCapture',
-                  message: 'skipped duplicate Clerk OTP DOM capture (one-shot)',
-                  data: { hypothesisId: 'B', runId: session.runId },
-                  timestamp: Date.now(),
-                }),
-              }).catch(() => {});
-              // #endregion
               return;
             }
           }
@@ -1651,24 +1599,6 @@ export class RecordingService extends EventEmitter {
           });
 
           if (session.clerkDomCaptureBarrier !== barrierAtStart) {
-            // #region agent log
-            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-              body: JSON.stringify({
-                sessionId: '5cf234',
-                location: 'recording.service.ts:enqueueRecordingCapture',
-                message: 'skipped DOM capture after LLM (crossed Clerk auto sign-in barrier)',
-                data: {
-                  hypothesisId: 'D',
-                  runId: session.runId,
-                  barrierAtStart,
-                  barrierNow: session.clerkDomCaptureBarrier,
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
             return;
           }
 
@@ -1687,26 +1617,6 @@ export class RecordingService extends EventEmitter {
           });
 
           this.emit('step', session.runId, step);
-          if (data.type === 'type') {
-            // #region agent log
-            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-              body: JSON.stringify({
-                sessionId: '5cf234',
-                location: 'recording.service.ts:enqueueRecordingCapture',
-                message: 'DOM capture persisted TYPE step',
-                data: {
-                  hypothesisId: 'C',
-                  runId: session.runId,
-                  sequence: step.sequence,
-                  hasSkipFlag: !!session.skipDuplicateClerkOtpDomCaptureOnce,
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
-          }
         });
       },
     );
