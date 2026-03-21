@@ -1524,6 +1524,17 @@ export class RecordingService extends EventEmitter {
       // #endregion
 
       if (otpVisible && !idVisible) {
+        if (state.clerkFullSignInDone) {
+          // #region agent log
+          dbgPlayback({
+            hypothesisId: 'H2',
+            location: 'recording.service.ts:maybePlaybackClerkAuthAssist',
+            message: 'branch_otp_fill_skip_duplicate_after_full_signin',
+            data: {},
+          });
+          // #endregion
+          return;
+        }
         // #region agent log
         dbgPlayback({
           hypothesisId: 'H2',
