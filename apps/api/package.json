@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
@@ -13,6 +13,7 @@
     "start:prod": "node dist/main",
     "typecheck": "tsc --noEmit",
     "test:playback-skip": "tsx src/modules/recording/playback-skip.selftest.ts",
+    "test:recording-merge": "tsx src/modules/recording/recording-playwright-merge.selftest.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {

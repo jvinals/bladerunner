@@ -27,6 +27,7 @@ import {
   performClerkPasswordEmail2FA,
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
+import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
   copyRecordingVideoToArtifacts,
@@ -1425,12 +1426,17 @@ export class RecordingService extends EventEmitter {
             pageAccessibilityTree: accessibilityTree,
           });
 
+          const playwrightCode = preferRecordedCssSelectorForBarePageLocator(
+            data.selector,
+            translated.playwrightCode,
+          );
+
           const step = await this.recordStep(session, {
             action: (data.type?.toUpperCase() || 'CUSTOM') as any,
             selector: data.selector,
             value: data.value,
             instruction: translated.instruction,
-            playwrightCode: translated.playwrightCode,
+            playwrightCode,
             origin: 'MANUAL',
           });
 

@@ -15,8 +15,9 @@ Respond ONLY with valid JSON: { "instruction": "...", "playwrightCode": "..." }
 
 Guidelines:
 - Instructions should be natural language, e.g. "Click the 'Sign In' button in the navigation bar"
+- The "Selector" field is the clicked element's CSS selector from the browser (tag + #id, classes, or [data-testid]). When it contains a class, id, or attribute (not just a bare tag name), prefer await page.locator(<that exact selector as a single-quoted or JSON string>) for clicks/fills so replay targets the same node.
 - Playwright code should use modern locator APIs (getByRole, getByText, getByLabel) when possible
-- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. Use getByRole('link', { name: '...' }), getByText('...'), or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
+- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. Use getByRole('link', { name: '...' }), getByText('...'), page.locator(<Selector field>) when specific, or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
 - Keep instructions concise but specific enough to identify the target element`;
 
 const INSTRUCTION_TO_ACTION_SYSTEM = `You are a Playwright test automation agent. Given a natural language instruction and the current page context, generate the Playwright code to execute the action.
