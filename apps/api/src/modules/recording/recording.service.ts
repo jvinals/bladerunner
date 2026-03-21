@@ -1463,6 +1463,42 @@ export class RecordingService extends EventEmitter {
     `);
   }
 
+  /**
+   * LLM-generated steps sometimes use `page.locator('span')` etc., which matches many nodes and
+   * throws strict mode violation on click/fill. Append `.first()` when the chain does not already
+   * narrow (first/nth/filter/locator/getBy).
+   */
+  private relaxPlaywrightCodegenForPlayback(code: string): string {
+    const alreadyNarrowed = String.raw`(?!\s*\.(?:first|nth|filter|locator|last|getBy))`;
+    const pattern = String.raw`\bpage\.locator\s*\(\s*(['"\`])(span|div|p|a|button|input)\1\s*\)${alreadyNarrowed}`;
+    const re = new RegExp(pattern, 'gi');
+    const matchCount = [...code.matchAll(new RegExp(pattern, 'gi'))].length;
+    const hasBareLocatorSpan = /(?:^|[^.\w])locator\s*\(\s*['"`]span['"`]\s*\)/.test(code);
+    const out = code.replace(re, (_full, quote: string, tag: string) => `page.locator(${quote}${tag}${quote}).first()`);
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        location: 'recording.service.ts:relaxPlaywrightCodegenForPlayback',
+        message: 'playback codegen relax',
+        data: {
+          matchCount,
+          replaced: matchCount > 0,
+          hasBareLocatorSpan,
+          codeLen: code.length,
+          changed: code !== out,
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+        runId: 'pre-fix',
+      }),
+    }).catch(() => {});
+    // #endregion
+    return out;
+  }
+
   private async executePwCode(page: Page, code: string): Promise<void> {
     const forbidden = ['require(', 'import ', 'process.', 'fs.', 'child_process', 'eval('];
     for (const f of forbidden) {
@@ -1471,7 +1507,8 @@ export class RecordingService extends EventEmitter {
       }
     }
 
-    const fn = new Function('page', `return (async () => { ${code} })();`);
+    const safeCode = this.relaxPlaywrightCodegenForPlayback(code);
+    const fn = new Function('page', `return (async () => { ${safeCode} })();`);
     await fn(page);
   }
 
