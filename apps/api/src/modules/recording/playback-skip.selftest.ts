@@ -89,6 +89,17 @@ s = buildPlaybackSkipSet({ steps: [llmOtpNoPrefix], wantAutoClerkSkip: true });
 assert.equal(s.has('otp5'), true);
 assert.equal(shouldSkipStoredPlaywrightForClerk(llmOtpNoPrefix, true), true);
 
+const looseWording = {
+  id: 'lw',
+  sequence: 5,
+  metadata: {},
+  action: 'TYPE',
+  origin: 'MANUAL' as const,
+  instruction: "Type '139459' into the verification code input field",
+  playwrightCode: '',
+};
+assert.equal(shouldSkipStoredPlaywrightForClerk(looseWording, true), true);
+
 const manualUnrelated = {
   id: 'u1',
   sequence: 1,

@@ -15,9 +15,17 @@ export interface PlaybackSkipStepLike {
 
 /** LLM instructions for email/Clerk OTP entry often omit `[MailSlurp automation]`. */
 function instructionLooksLikeVerificationCodeTyping(instr: string): boolean {
-  const t = instr.trim();
+  const t = instr.trim().replace(/\s+/g, ' ');
   if (!t) return false;
   if (/\[MailSlurp automation\]/i.test(t)) return true;
+  const lower = t.toLowerCase();
+  if (lower.includes('verification') && lower.includes('code')) return true;
+  if (
+    /type\s+['"]?\d{4,8}['"]?\s+into/i.test(t) &&
+    /(verification|otp|one[-\s]?time|2\s*fa)/i.test(t)
+  ) {
+    return true;
+  }
   return /verification\s+code|verification\s+code\s+input|email\s+(verification\s+)?code|one[-\s]?time\s+code|\botp\b|2\s*fa|two[-\s]?factor/i.test(
     t,
   );
@@ -26,9 +34,19 @@ function instructionLooksLikeVerificationCodeTyping(instr: string): boolean {
 /** Fragile generated locators that MailSlurp automation replaces during playback. */
 function playwrightCodeLooksLikeClerkOtpFill(pw: string): boolean {
   if (!pw) return false;
-  if (/getByLabel\s*\(\s*['"]Enter verification code['"]\s*\)/i.test(pw)) return true;
-  if (/getByLabel\s*\([^)]*verification[^)]*code/i.test(pw)) return true;
-  if (/getByPlaceholder\s*\([^)]*verification[^)]*code/i.test(pw)) return true;
+  const compact = pw.replace(/\s+/g, ' ');
+  if (/getByLabel\s*\(\s*[`'"]Enter verification code[`'"]\s*\)/i.test(compact)) return true;
+  if (/getByLabel\s*\(\s*['"]Enter verification code['"]\s*\)/i.test(compact)) return true;
+  if (/getByLabel\s*\([^)]*verification[^)]*code/i.test(compact)) return true;
+  if (/getByPlaceholder\s*\([^)]*verification[^)]*code/i.test(compact)) return true;
+  if (
+    /\.getByLabel\s*\(/i.test(compact) &&
+    /verification/i.test(compact) &&
+    /code/i.test(compact) &&
+    /\.fill\s*\(/i.test(compact)
+  ) {
+    return true;
+  }
   return false;
 }
 

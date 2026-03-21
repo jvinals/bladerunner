@@ -985,10 +985,17 @@ export class RecordingService extends EventEmitter {
 
     const playbackSessionId = randomUUID();
     const delayMs = Math.min(5000, Math.max(0, opts?.delayMs ?? 600));
-    const envAutoRaw = this.configService.get<string>('PLAYBACK_AUTO_CLERK_SIGNIN', '').toLowerCase();
+    const envAutoRaw = this.configService.get<string>('PLAYBACK_AUTO_CLERK_SIGNIN', '').trim().toLowerCase();
     const envAutoOn = envAutoRaw === 'true' || envAutoRaw === '1' || envAutoRaw === 'yes';
+    const envExplicitlyOff =
+      envAutoRaw === 'false' || envAutoRaw === '0' || envAutoRaw === 'no';
+    /** When env is unset and the client omits `autoClerkSignIn`, default ON (matches UI "Server default" + MailSlurp parity). */
     const wantAutoClerkSignIn =
-      opts?.autoClerkSignIn !== undefined ? opts.autoClerkSignIn : envAutoOn;
+      opts?.autoClerkSignIn !== undefined
+        ? opts.autoClerkSignIn
+        : envExplicitlyOff
+          ? false
+          : envAutoOn || envAutoRaw === '';
     const skipSet = buildPlaybackSkipSet({
       steps: run.steps.map((s) => ({
         id: s.id,
