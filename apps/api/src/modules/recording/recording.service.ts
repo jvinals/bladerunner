@@ -22,6 +22,8 @@ import { EventEmitter } from 'events';
 import {
   clerkSignInUrlLooksLike,
   detectClerkSignInUi,
+  detectClerkOtpInputVisible,
+  fillClerkOtpFromMailSlurp,
   performClerkPasswordEmail2FA,
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet } from './playback-skip.util';
@@ -407,6 +409,8 @@ export class RecordingService extends EventEmitter {
       { syntheticClerkAutoSignIn: true },
     );
     this.emit('step', runId, step);
+    /** Next TYPE step is often in-app email verification — tag as AUTOMATIC + clerkAuthPhase. */
+    session.pendingPostClerkVerificationAutomaticUi = true;
     this.logger.log(`Recording ${runId}: clerk auto sign-in completed, step ${step.sequence}`);
     return { ok: true as const, step };
   }
@@ -779,6 +783,15 @@ export class RecordingService extends EventEmitter {
       const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
       metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
     }
+    /** After server Clerk+MailSlurp, the next captured TYPE is usually email/OTP verification. */
+    if (
+      session.pendingPostClerkVerificationAutomaticUi &&
+      data.action === 'TYPE' &&
+      !opts?.syntheticClerkAutoSignIn
+    ) {
+      metadata = { ...metadata, clerkAuthPhase: true };
+      session.pendingPostClerkVerificationAutomaticUi = false;
+    }
     const isAutomatic = !!(
       opts?.syntheticClerkAutoSignIn ||
       (metadata && (metadata as { clerkAuthPhase?: boolean }).clerkAuthPhase === true)
@@ -1112,7 +1125,7 @@ export class RecordingService extends EventEmitter {
     runUrl: string,
     ctx: { wantAutoClerkSignIn: boolean; skipSet: Set<string>; playThroughSequence?: number },
   ) {
-    let clerkAutoSignInDone = false;
+    const clerkPlaybackState = { clerkFullSignInDone: false };
 
     try {
       this.emit('status', playbackSessionId, {
@@ -1121,17 +1134,7 @@ export class RecordingService extends EventEmitter {
         sourceRunId,
       });
 
-      if (ctx.wantAutoClerkSignIn && this.playbackClerkEnvReady()) {
-        try {
-          if (await detectClerkSignInUi(session.page)) {
-            await this.runPlaybackClerkAutoSignIn(session.page, runUrl);
-            clerkAutoSignInDone = true;
-          }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          this.logger.warn(`Playback Clerk auto sign-in (pre-loop) failed: ${msg}`);
-        }
-      }
+      await this.maybePlaybackClerkMailSlurpAssist(session, runUrl, ctx.wantAutoClerkSignIn, clerkPlaybackState);
 
       for (const step of steps) {
         if (ctx.playThroughSequence != null && step.sequence > ctx.playThroughSequence) {
@@ -1163,6 +1166,12 @@ export class RecordingService extends EventEmitter {
             step: stepPayload,
             phase: 'skipped',
           });
+          await this.maybePlaybackClerkMailSlurpAssist(
+            session,
+            runUrl,
+            ctx.wantAutoClerkSignIn,
+            clerkPlaybackState,
+          );
           await this.sleepWithPause(session, delayMs);
           continue;
         }
@@ -1189,17 +1198,7 @@ export class RecordingService extends EventEmitter {
           return;
         }
 
-        if (ctx.wantAutoClerkSignIn && !clerkAutoSignInDone && this.playbackClerkEnvReady()) {
-          try {
-            if (await detectClerkSignInUi(session.page)) {
-              await this.runPlaybackClerkAutoSignIn(session.page, runUrl);
-              clerkAutoSignInDone = true;
-            }
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            this.logger.warn(`Playback Clerk auto sign-in (post-step) failed: ${msg}`);
-          }
-        }
+        await this.maybePlaybackClerkMailSlurpAssist(session, runUrl, ctx.wantAutoClerkSignIn, clerkPlaybackState);
 
         await session.page.waitForLoadState('domcontentloaded').catch(() => {});
         await this.sleepWithPause(session, delayMs);
@@ -1319,6 +1318,40 @@ export class RecordingService extends EventEmitter {
       skipInitialNavigate: true,
     });
     this.logger.log('Playback: Clerk + MailSlurp auto sign-in completed');
+  }
+
+  /**
+   * Match recording: MailSlurp + Clerk when UI shows full sign-in or OTP-only (after skipped AUTOMATIC steps too).
+   */
+  private async maybePlaybackClerkMailSlurpAssist(
+    session: PlaybackSession,
+    runUrl: string,
+    wantAuto: boolean,
+    state: { clerkFullSignInDone: boolean },
+  ): Promise<void> {
+    if (!wantAuto || !this.playbackClerkEnvReady()) return;
+    try {
+      const page = session.page;
+      const identifier = page.locator('input[name="identifier"], #identifier-field').first();
+      const idVisible = await identifier.isVisible().catch(() => false);
+      const otpVisible = await detectClerkOtpInputVisible(page);
+
+      if (otpVisible && !idVisible) {
+        await fillClerkOtpFromMailSlurp(page, {
+          runUrl,
+          notBeforeMs: Date.now() - 5_000,
+        });
+        return;
+      }
+
+      if (!state.clerkFullSignInDone && (await detectClerkSignInUi(page))) {
+        await this.runPlaybackClerkAutoSignIn(page, runUrl);
+        state.clerkFullSignInDone = true;
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`Playback Clerk/MailSlurp assist failed: ${msg}`);
+    }
   }
 
   private async setupEventCapture(session: RecordingSession) {

@@ -2,6 +2,25 @@ import type { BrowserContext, Page } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
 import { waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
 
+/** Locators for Clerk / app email OTP fields (broader than legacy `detectClerkSignInUi`). */
+function otpInputLocator(page: Page) {
+  return page
+    .locator(
+      [
+        'input[inputmode="numeric"]',
+        'input[name="code"]',
+        'input[autocomplete="one-time-code"]',
+        '[data-input-otp]',
+        'input[type="text"][inputmode="numeric"]',
+        'input[placeholder*="code" i]',
+        'input[placeholder*="verification" i]',
+        'input[aria-label*="code" i]',
+        'input[aria-label*="verification" i]',
+      ].join(', '),
+    )
+    .first();
+}
+
 /** Same query param as `@clerk/testing` Playwright route (see `@clerk/testing` chunk-M5YIJ3SE). */
 const CLERK_TESTING_TOKEN_PARAM = '__clerk_testing_token';
 
@@ -249,6 +268,13 @@ export function clerkSignInUrlLooksLike(url: string): boolean {
 }
 
 /**
+ * True when a one-time / verification code field is visible (Clerk hosted or in-app).
+ */
+export async function detectClerkOtpInputVisible(page: Page): Promise<boolean> {
+  return otpInputLocator(page).isVisible().catch(() => false);
+}
+
+/**
  * True when the page likely shows Clerk identifier/password or OTP UI.
  */
 export async function detectClerkSignInUi(page: Page): Promise<boolean> {
@@ -268,17 +294,81 @@ export async function detectClerkSignInUi(page: Page): Promise<boolean> {
     .first();
   const pwdVisible = await pwd.isVisible().catch(() => false);
   if (pwdVisible) {
-    const otp = page.locator('input[inputmode="numeric"], input[name="code"]').first();
+    const otp = otpInputLocator(page);
     const otpVisible = await otp.isVisible().catch(() => false);
     if (!otpVisible) return true;
   }
 
-  const otpOnly = page
-    .locator(
-      'input[inputmode="numeric"], input[name="code"], input[autocomplete="one-time-code"], [data-input-otp]',
-    )
-    .first();
-  return otpOnly.isVisible().catch(() => false);
+  return detectClerkOtpInputVisible(page);
+}
+
+export type FillClerkOtpFromMailSlurpOpts = {
+  /** Run / app URL (used for post-OTP redirect wait). */
+  runUrl: string;
+  /**
+   * Only accept MailSlurp emails received at or after this time (ms since epoch).
+   * Use `Date.now()` right after password submit in full flow; for OTP-only screens use a recent window.
+   */
+  notBeforeMs: number;
+};
+
+/**
+ * Fill visible OTP field(s) using MailSlurp — use when identifier field is not shown (post-password / OTP-only).
+ */
+export async function fillClerkOtpFromMailSlurp(
+  page: Page,
+  opts: FillClerkOtpFromMailSlurpOpts,
+): Promise<void> {
+  const pagePk = await readPublishableKeyFromPage(page);
+  const publishableKey = (pagePk ?? envPublishableKey())?.trim();
+  if (publishableKey) {
+    await refreshClerkTestingCredentials(publishableKey);
+    await installDynamicClerkFapiRouteOnce(page.context());
+  }
+
+  const otpSingle = otpInputLocator(page);
+  try {
+    await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
+  } catch {
+    const anyOtp = page.locator('input[inputmode="numeric"]').first();
+    await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
+  }
+
+  const otp = await waitForClerkOtpFromMailSlurp({
+    notBeforeMs: opts.notBeforeMs,
+    timeoutMs: 120_000,
+  });
+
+  const multi = page.locator('input[inputmode="numeric"]');
+  const count = await multi.count();
+  if (count >= 6) {
+    const digits = otp.split('');
+    for (let i = 0; i < Math.min(digits.length, count); i++) {
+      await multi.nth(i).fill(digits[i]!);
+    }
+  } else {
+    await otpSingle.fill(otp);
+  }
+
+  const host = new URL(
+    opts.runUrl.includes('://') ? opts.runUrl : `https://${opts.runUrl}`,
+  ).hostname;
+
+  try {
+    await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 20_000 });
+  } catch {
+    let clicked = await tryClickPostOtpSubmit(page);
+    if (!clicked) {
+      try {
+        await locatorAfterOtpSubmit(page).first().click({ timeout: 5_000 });
+        clicked = true;
+      } catch {
+        /* final waitForURL may still succeed */
+      }
+    }
+  }
+
+  await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 120_000 });
 }
 
 export type PerformClerkPasswordEmail2FAOpts = {
@@ -343,49 +433,8 @@ export async function performClerkPasswordEmail2FA(
   /** Clerk sends the OTP email after this moment — only accept MailSlurp messages received after here. */
   const otpWindowStartMs = Date.now();
 
-  const otpSingle = page
-    .locator(
-      'input[inputmode="numeric"], input[name="code"], input[autocomplete="one-time-code"], [data-input-otp]',
-    )
-    .first();
-
-  try {
-    await otpSingle.waitFor({ state: 'visible', timeout: 45_000 });
-  } catch {
-    const anyOtp = page.locator('input[inputmode="numeric"]').first();
-    await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
-  }
-
-  const otp = await waitForClerkOtpFromMailSlurp({ notBeforeMs: otpWindowStartMs, timeoutMs: 120_000 });
-
-  const multi = page.locator('input[inputmode="numeric"]');
-  const count = await multi.count();
-  if (count >= 6) {
-    const digits = otp.split('');
-    for (let i = 0; i < Math.min(digits.length, count); i++) {
-      await multi.nth(i).fill(digits[i]!);
-    }
-  } else {
-    await otpSingle.fill(otp);
-  }
-
-  const host = new URL(opts.baseURL.includes('://') ? opts.baseURL : `https://${opts.baseURL}`).hostname;
-
-  // Fast path: Clerk may redirect to the app immediately after OTP. If not, avoid a single
-  // Continue/Verify locator with Playwright's default ~30s timeout (blocks the API + feels like a frozen UI).
-  try {
-    await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 20_000 });
-  } catch {
-    let clicked = await tryClickPostOtpSubmit(page);
-    if (!clicked) {
-      try {
-        await locatorAfterOtpSubmit(page).first().click({ timeout: 5_000 });
-        clicked = true;
-      } catch {
-        // Legacy Continue/Verify click failed; final waitForURL below may still succeed.
-      }
-    }
-  }
-
-  await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 120_000 });
+  await fillClerkOtpFromMailSlurp(page, {
+    runUrl: opts.baseURL,
+    notBeforeMs: otpWindowStartMs,
+  });
 }
