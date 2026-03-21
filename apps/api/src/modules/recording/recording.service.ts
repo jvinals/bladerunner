@@ -1435,8 +1435,24 @@ export class RecordingService extends EventEmitter {
       const idVisible = await identifier.isVisible().catch(() => false);
       const otpVisible = await detectClerkOtpInputVisible(page);
 
+      /**
+       * OTP locator matches any `input[inputmode="numeric"]` etc. — common on post-login UIs.
+       * Only run MailSlurp / test-email OTP assist when the page URL looks like Clerk or /login.
+       */
       if (otpVisible && !idVisible) {
         if (state.clerkFullSignInDone) {
+          return;
+        }
+        let pageUrl = '';
+        try {
+          pageUrl = page.url();
+        } catch {
+          return;
+        }
+        if (!clerkSignInUrlLooksLike(pageUrl)) {
+          this.logger.debug(
+            `Playback: skip OTP-only Clerk assist (URL does not look like sign-in: ${pageUrl})`,
+          );
           return;
         }
         if (otpMode === 'mailslurp') {
@@ -1451,6 +1467,22 @@ export class RecordingService extends EventEmitter {
       }
 
       if (!state.clerkFullSignInDone && (await detectClerkSignInUi(page))) {
+        let pageUrl = '';
+        try {
+          pageUrl = page.url();
+        } catch {
+          return;
+        }
+        /**
+         * detectClerkSignInUi falls back to OTP-visible-only; that matches non-Clerk numeric fields.
+         * Require sign-in-like URL unless the email identifier field is visible (strong Clerk signal).
+         */
+        if (!idVisible && !clerkSignInUrlLooksLike(pageUrl)) {
+          this.logger.debug(
+            `Playback: skip full Clerk sign-in assist (URL not sign-in-like: ${pageUrl})`,
+          );
+          return;
+        }
         await this.runPlaybackClerkAutoSignIn(page, runUrl, otpMode);
         state.clerkFullSignInDone = true;
       }

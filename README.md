@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.22** — **Playback**: Clerk assist no longer treats arbitrary visible numeric inputs as OTP when the URL is not sign-in-like (avoids long MailSlurp waits / timeouts on in-app pages). Same guard for full sign-in when only OTP detection fired. **`@bladerunner/api` `0.5.20`**.
 - **0.7.21** — **Recording**: **Sign in automatically** appends **six** canonical TYPE/CLICK steps (email, Continue, password, Continue, verification code, Continue) instead of one CUSTOM row, so the recorded timeline matches the Clerk + MailSlurp flow; playback behavior unchanged (one `performClerkPasswordEmail2FA` when auto Clerk is on). **`@bladerunner/api` `0.5.19`**.
 - **0.7.20** — **Playback**: escape Tailwind `:` in class chains inside `page.locator('…')` (e.g. `hover:bg-accent` → `hover\\:bg-accent`) so `querySelector` accepts recorded CSS; skips selectors with `[` / spaces. **`@bladerunner/api` `0.5.18`**.
 - **0.7.19** — **Playback**: after Clerk **full** auto sign-in (`performClerkPasswordEmail2FA`), do not run the OTP-only MailSlurp path again when skipped TYPE rows still match OTP UI — avoids hanging with no toast. **`@bladerunner/api` `0.5.17`**.
