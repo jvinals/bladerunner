@@ -61,7 +61,7 @@ export class StartPlaybackDto {
 
   @ApiPropertyOptional({
     description:
-      'Use server env (Clerk + MailSlurp) to sign in once when Clerk UI is shown; skip steps tagged clerkAuthPhase',
+      'Use server env (Clerk + MailSlurp) to sign in when Clerk UI is shown; skip clerkAuthPhase steps and AUTOMATIC-origin steps (no stored code replay for those).',
   })
   @IsOptional()
   @Type(() => Boolean)

@@ -182,6 +182,16 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ playbackSessionId }),
     }),
+  pausePlayback: (playbackSessionId: string) =>
+    apiFetch<{ ok: boolean }>('/runs/playback/pause', {
+      method: 'POST',
+      body: JSON.stringify({ playbackSessionId }),
+    }),
+  resumePlayback: (playbackSessionId: string) =>
+    apiFetch<{ ok: boolean }>('/runs/playback/resume', {
+      method: 'POST',
+      body: JSON.stringify({ playbackSessionId }),
+    }),
   /** App-state checkpoints (storage snapshots after each step while recording). */
   getCheckpoints: (runId: string) =>
     apiFetch<

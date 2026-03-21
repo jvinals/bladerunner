@@ -18,7 +18,7 @@ import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
   Camera, FileText, Activity, Play, Square, ExternalLink,
-  Film,
+  Film, Pause,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -97,7 +97,8 @@ function SessionRecordingCard({ runId }: { runId: string }) {
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('default');
+  const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
+  const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const stepRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -111,8 +112,11 @@ export default function RunDetailPage() {
     highlightSequence,
     completedSequences,
     playbackError,
+    isPaused,
     startPlayback,
     stopPlayback,
+    pausePlayback,
+    resumePlayback,
   } = usePlayback();
 
   const { data: run, isLoading, error } = useQuery({
@@ -180,6 +184,7 @@ export default function RunDetailPage() {
         await startPlayback(
           id,
           buildStartPlaybackBody({
+            delayMs: playbackDelayMs,
             autoClerkMode: playbackAutoClerkMode,
             skipUntilSequence: sequence,
             ...(mode === 'only' ? { playThroughSequence: sequence } : {}),
@@ -189,7 +194,7 @@ export default function RunDetailPage() {
         console.error('Step playback failed:', e);
       }
     },
-    [id, canPlayback, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
+    [id, canPlayback, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode, playbackDelayMs],
   );
 
   const { data: runCheckpoints = [] } = useQuery({
@@ -233,6 +238,7 @@ export default function RunDetailPage() {
       await startPlayback(
         id,
         buildStartPlaybackBody({
+          delayMs: playbackDelayMs,
           autoClerkMode: playbackAutoClerkMode,
           skipUntilSequence:
             skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
@@ -241,7 +247,7 @@ export default function RunDetailPage() {
     } catch (e) {
       console.error('Playback failed to start:', e);
     }
-  }, [id, canPlayback, startPlayback, playbackAutoClerkMode, playbackSkipUntilSeq]);
+  }, [id, canPlayback, startPlayback, playbackAutoClerkMode, playbackSkipUntilSeq, playbackDelayMs]);
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
@@ -378,6 +384,22 @@ export default function RunDetailPage() {
                 className="w-16 border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
                 title="Skip steps with sequence strictly less than this (legacy runs)"
               />
+              <label htmlFor="run-playback-delay" className="whitespace-nowrap">
+                Delay
+              </label>
+              <input
+                id="run-playback-delay"
+                type="range"
+                min={0}
+                max={5000}
+                step={50}
+                value={playbackDelayMs}
+                onChange={(e) => setPlaybackDelayMs(Number(e.target.value))}
+                disabled={isPlaying}
+                className="w-24 sm:w-32 accent-[#4B90FF] disabled:opacity-50"
+                title="Delay between steps (ms). Fixed for the session once Play starts."
+              />
+              <span className="text-[11px] text-gray-500 tabular-nums">{playbackDelayMs}ms</span>
             </div>
           )}
           <div className="flex flex-wrap gap-2">
@@ -404,6 +426,25 @@ export default function RunDetailPage() {
           </button>
           {isPlaying && (
             <>
+              {isPaused ? (
+                <button
+                  type="button"
+                  onClick={() => void resumePlayback()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-200 text-emerald-700 text-xs font-medium rounded-md hover:bg-emerald-50 transition-colors"
+                  title="Resume playback"
+                >
+                  <Play size={13} className="fill-current" /> Resume
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void pausePlayback()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-amber-200 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-50 transition-colors"
+                  title="Pause playback"
+                >
+                  <Pause size={13} /> Pause
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void stopPlayback()}

@@ -113,6 +113,28 @@ export class RunsController {
     return { ok: true };
   }
 
+  @Post('playback/pause')
+  @ApiOperation({ summary: 'Pause an in-progress playback session' })
+  @ApiResponse({ status: 200, description: 'Playback paused' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async pausePlayback(@Req() req: any, @Body() dto: StopPlaybackDto) {
+    const userId = req.user.sub;
+    const ok = await this.recordingService.pausePlayback(dto.playbackSessionId, userId);
+    if (!ok) throw new NotFoundException('Playback session not found');
+    return { ok: true };
+  }
+
+  @Post('playback/resume')
+  @ApiOperation({ summary: 'Resume a paused playback session' })
+  @ApiResponse({ status: 200, description: 'Playback resumed' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async resumePlayback(@Req() req: any, @Body() dto: StopPlaybackDto) {
+    const userId = req.user.sub;
+    const ok = await this.recordingService.resumePlayback(dto.playbackSessionId, userId);
+    if (!ok) throw new NotFoundException('Playback session not found');
+    return { ok: true };
+  }
+
   @Post(':id/instruct')
   @ApiOperation({ summary: 'Send a natural language instruction to the active recording' })
   @ApiResponse({ status: 200, description: 'Instruction executed, step returned' })

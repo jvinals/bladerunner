@@ -12,7 +12,7 @@ import {
   type RemotePreviewBridge,
 } from '@/hooks/useRemotePreviewCanvas';
 import {
-  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2,
+  Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2, Pause,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -24,7 +24,8 @@ export default function RunsPage() {
   const [newName, setNewName] = useState('');
   const [newRunProjectId, setNewRunProjectId] = useState('');
   const [instructionText, setInstructionText] = useState('');
-  const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('default');
+  const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
+  const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);
   const [isDetached, setIsDetached] = useState(false);
@@ -72,8 +73,11 @@ export default function RunsPage() {
     highlightSequence,
     completedSequences,
     playbackError,
+    isPaused,
     startPlayback,
     stopPlayback,
+    pausePlayback,
+    resumePlayback,
   } = usePlayback();
 
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -225,6 +229,7 @@ export default function RunsPage() {
       await startPlayback(
         selectedRunId,
         buildStartPlaybackBody({
+          delayMs: playbackDelayMs,
           autoClerkMode: playbackAutoClerkMode,
           skipUntilSequence:
             skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
@@ -239,6 +244,7 @@ export default function RunsPage() {
     startPlayback,
     playbackAutoClerkMode,
     playbackSkipUntilSeq,
+    playbackDelayMs,
   ]);
 
   const handleStepPlaybackRuns = useCallback(
@@ -249,6 +255,7 @@ export default function RunsPage() {
         await startPlayback(
           selectedRunId,
           buildStartPlaybackBody({
+            delayMs: playbackDelayMs,
             autoClerkMode: playbackAutoClerkMode,
             skipUntilSequence: sequence,
             ...(mode === 'only' ? { playThroughSequence: sequence } : {}),
@@ -258,7 +265,15 @@ export default function RunsPage() {
         console.error('Step playback failed:', err);
       }
     },
-    [selectedRunId, canPlaybackSelected, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
+    [
+      selectedRunId,
+      canPlaybackSelected,
+      isPlaying,
+      stopPlayback,
+      startPlayback,
+      playbackAutoClerkMode,
+      playbackDelayMs,
+    ],
   );
 
   const { data: runCheckpointsRuns = [] } = useQuery({
@@ -489,6 +504,27 @@ export default function RunsPage() {
               </button>
             ) : isPlaying ? (
               <div className="flex items-center gap-1.5 shrink-0">
+                {isPaused ? (
+                  <button
+                    type="button"
+                    onClick={() => void resumePlayback()}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-md hover:bg-emerald-100 transition-colors"
+                    title="Resume playback"
+                  >
+                    <Play size={12} className="fill-current" />
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void pausePlayback()}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors"
+                    title="Pause playback"
+                  >
+                    <Pause size={12} />
+                    Pause
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => void stopPlayback()}
@@ -597,6 +633,22 @@ export default function RunsPage() {
                   className="w-14 border border-gray-200 rounded-md px-1.5 py-1 text-[11px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
                   title="Skip steps with sequence strictly less than this"
                 />
+                <label htmlFor="runs-playback-delay" className="whitespace-nowrap ml-1">
+                  Delay
+                </label>
+                <input
+                  id="runs-playback-delay"
+                  type="range"
+                  min={0}
+                  max={5000}
+                  step={50}
+                  value={playbackDelayMs}
+                  onChange={(e) => setPlaybackDelayMs(Number(e.target.value))}
+                  disabled={isPlaying}
+                  className="w-20 sm:w-28 accent-[#4B90FF] disabled:opacity-50"
+                  title="Delay between steps (ms). Fixed for the session once Play starts."
+                />
+                <span className="text-[10px] text-gray-500 tabular-nums w-10">{playbackDelayMs}ms</span>
               </div>
             <button
               type="button"

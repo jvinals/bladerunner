@@ -73,6 +73,9 @@ export interface PlaybackSession {
   page: Page;
   cdpSession: CDPSession;
   latestFrame: Buffer | null;
+  paused: boolean;
+  /** Resolvers waiting in `waitUntilPlaybackNotPaused` */
+  playbackResumeWaiters: Array<() => void>;
 }
 
 @Injectable()
@@ -974,10 +977,18 @@ export class RecordingService extends EventEmitter {
     const wantAutoClerkSignIn =
       opts?.autoClerkSignIn !== undefined ? opts.autoClerkSignIn : envAutoOn;
     const skipSet = buildPlaybackSkipSet({
-      steps: run.steps.map((s) => ({ id: s.id, sequence: s.sequence, metadata: s.metadata })),
+      steps: run.steps.map((s) => ({
+        id: s.id,
+        sequence: s.sequence,
+        metadata: s.metadata,
+        action: s.action,
+        value: s.value,
+        origin: s.origin,
+      })),
       wantAutoClerkSkip: wantAutoClerkSignIn,
       skipUntilSequence: opts?.skipUntilSequence,
       skipStepIds: opts?.skipStepIds,
+      runUrl: run.url,
     });
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
 
@@ -1008,19 +1019,16 @@ export class RecordingService extends EventEmitter {
         page,
         cdpSession,
         latestFrame: null,
+        paused: false,
+        playbackResumeWaiters: [],
       };
 
       this.playbackSessions.set(playbackSessionId, session);
       await this.attachScreencast(cdpSession, session, playbackSessionId);
 
       const steps = run.steps;
-      const first = steps[0];
-      const firstLooksLikeNavigate =
-        first.action === 'NAVIGATE' ||
-        new RegExp('page\\.goto\\s*\\(', 'i').test(first.playwrightCode || '');
-      if (!firstLooksLikeNavigate) {
-        await page.goto(run.url, { waitUntil: 'domcontentloaded' });
-      }
+      /** Zero-state load — aligns with recording; redundant first NAVIGATE is skipped via `skipSet`. */
+      await page.goto(run.url, { waitUntil: 'domcontentloaded' });
 
       void this.runPlaybackLoop(playbackSessionId, session, steps, delayMs, sourceRunId, run.url, {
         wantAutoClerkSignIn,
@@ -1043,6 +1051,42 @@ export class RecordingService extends EventEmitter {
       const detail = err instanceof Error ? err.message : String(err);
       throw new ServiceUnavailableException(`Playback setup failed. ${detail}`);
     }
+  }
+
+  async pausePlayback(playbackSessionId: string, userId: string): Promise<boolean> {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return false;
+    }
+    session.paused = true;
+    this.emit('status', playbackSessionId, {
+      status: 'playback_paused',
+      runId: playbackSessionId,
+      sourceRunId: session.sourceRunId,
+    });
+    return true;
+  }
+
+  async resumePlayback(playbackSessionId: string, userId: string): Promise<boolean> {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return false;
+    }
+    session.paused = false;
+    const waiters = session.playbackResumeWaiters.splice(0);
+    for (const w of waiters) {
+      try {
+        w();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.emit('status', playbackSessionId, {
+      status: 'playback',
+      runId: playbackSessionId,
+      sourceRunId: session.sourceRunId,
+    });
+    return true;
   }
 
   async stopPlayback(playbackSessionId: string, userId: string): Promise<boolean> {
@@ -1094,6 +1138,8 @@ export class RecordingService extends EventEmitter {
           break;
         }
 
+        await this.waitUntilPlaybackNotPaused(session);
+
         const stepPayload = {
           id: step.id,
           sequence: step.sequence,
@@ -1117,7 +1163,7 @@ export class RecordingService extends EventEmitter {
             step: stepPayload,
             phase: 'skipped',
           });
-          await this.sleep(delayMs);
+          await this.sleepWithPause(session, delayMs);
           continue;
         }
 
@@ -1156,7 +1202,7 @@ export class RecordingService extends EventEmitter {
         }
 
         await session.page.waitForLoadState('domcontentloaded').catch(() => {});
-        await this.sleep(delayMs);
+        await this.sleepWithPause(session, delayMs);
         this.emit('playbackProgress', playbackSessionId, {
           playbackSessionId,
           sourceRunId,
@@ -1188,6 +1234,15 @@ export class RecordingService extends EventEmitter {
   }
 
   private async cleanupPlaybackSession(playbackSessionId: string, session: PlaybackSession) {
+    session.paused = false;
+    const waiters = session.playbackResumeWaiters.splice(0);
+    for (const w of waiters) {
+      try {
+        w();
+      } catch {
+        /* ignore */
+      }
+    }
     this.playbackSessions.delete(playbackSessionId);
     try {
       await session.cdpSession.send('Page.stopScreencast').catch(() => {});
@@ -1203,6 +1258,25 @@ export class RecordingService extends EventEmitter {
 
   private sleep(ms: number): Promise<void> {
     return ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve();
+  }
+
+  private async waitUntilPlaybackNotPaused(session: PlaybackSession): Promise<void> {
+    while (session.paused) {
+      await new Promise<void>((resolve) => {
+        session.playbackResumeWaiters.push(resolve);
+      });
+    }
+  }
+
+  /** Like `sleep` but respects pause (and can resume mid-wait). */
+  private async sleepWithPause(session: PlaybackSession, ms: number): Promise<void> {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      await this.waitUntilPlaybackNotPaused(session);
+      const remaining = end - Date.now();
+      if (remaining <= 0) break;
+      await this.sleep(Math.min(100, remaining));
+    }
   }
 
   private playbackClerkEnvReady(): boolean {

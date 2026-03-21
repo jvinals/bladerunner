@@ -28,11 +28,15 @@ export interface UsePlaybackReturn {
   currentFrame: string | null;
   status: string;
   isPlaying: boolean;
+  /** True when server reports `playback_paused` */
+  isPaused: boolean;
   highlightSequence: number | null;
   completedSequences: Set<number>;
   playbackError: string | null;
   startPlayback: (runId: string, opts?: StartPlaybackBody) => Promise<void>;
   stopPlayback: () => Promise<void>;
+  pausePlayback: () => Promise<void>;
+  resumePlayback: () => Promise<void>;
 }
 
 function disconnectSocket(socketRef: MutableRefObject<Socket | null>, sessionId: string | null) {
@@ -54,6 +58,7 @@ export function usePlayback(): UsePlaybackReturn {
   const [currentFrame, setCurrentFrame] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('idle');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [highlightSequence, setHighlightSequence] = useState<number | null>(null);
   const [completedSequences, setCompletedSequences] = useState<Set<number>>(() => new Set());
   const [playbackError, setPlaybackError] = useState<string | null>(null);
@@ -71,6 +76,7 @@ export function usePlayback(): UsePlaybackReturn {
     const teardownAfterSocketFailure = (message: string) => {
       setPlaybackError(message);
       setIsPlaying(false);
+      setIsPaused(false);
       setStatus('idle');
       disconnectSocket(socketRef, sessionId);
       activeSessionRef.current = null;
@@ -110,12 +116,23 @@ export function usePlayback(): UsePlaybackReturn {
 
     socket.on('status', (data: PlaybackStatusPayload) => {
       if (data.runId !== sessionId) return;
+      if (data.status === 'playback_paused') {
+        setIsPaused(true);
+        setStatus('playback_paused');
+        return;
+      }
+      if (data.status === 'playback') {
+        setIsPaused(false);
+        setStatus('playback');
+        return;
+      }
       setStatus(data.status);
       if (data.status === 'failed') {
         if (data.error) {
           setPlaybackError(data.error);
         }
         setIsPlaying(false);
+        setIsPaused(false);
         disconnectSocket(socketRef, sessionId);
         activeSessionRef.current = null;
         setPlaybackSessionId(null);
@@ -125,6 +142,7 @@ export function usePlayback(): UsePlaybackReturn {
       }
       if (data.status === 'completed' || data.status === 'stopped') {
         setIsPlaying(false);
+        setIsPaused(false);
         disconnectSocket(socketRef, sessionId);
         activeSessionRef.current = null;
         setPlaybackSessionId(null);
@@ -145,6 +163,7 @@ export function usePlayback(): UsePlaybackReturn {
       setCompletedSequences(new Set());
       setHighlightSequence(null);
       setCurrentFrame(null);
+      setIsPaused(false);
       try {
         const result = await runsApi.startPlayback(runId, opts);
         setPlaybackSessionId(result.playbackSessionId);
@@ -156,6 +175,7 @@ export function usePlayback(): UsePlaybackReturn {
         const msg = e instanceof Error ? e.message : String(e);
         setPlaybackError(msg);
         setIsPlaying(false);
+        setIsPaused(false);
         setStatus('idle');
         setPlaybackSessionId(null);
         setSourceRunId(null);
@@ -175,11 +195,32 @@ export function usePlayback(): UsePlaybackReturn {
     disconnectSocket(socketRef, id);
     activeSessionRef.current = null;
     setIsPlaying(false);
+    setIsPaused(false);
     setStatus('stopped');
     setPlaybackSessionId(null);
     setSourceRunId(null);
     setHighlightSequence(null);
     setCompletedSequences(new Set());
+  }, [playbackSessionId]);
+
+  const pausePlayback = useCallback(async () => {
+    const id = playbackSessionId;
+    if (!id) return;
+    try {
+      await runsApi.pausePlayback(id);
+    } catch {
+      /* ignore */
+    }
+  }, [playbackSessionId]);
+
+  const resumePlayback = useCallback(async () => {
+    const id = playbackSessionId;
+    if (!id) return;
+    try {
+      await runsApi.resumePlayback(id);
+    } catch {
+      /* ignore */
+    }
   }, [playbackSessionId]);
 
   useEffect(() => {
@@ -199,10 +240,13 @@ export function usePlayback(): UsePlaybackReturn {
     currentFrame,
     status,
     isPlaying,
+    isPaused,
     highlightSequence,
     completedSequences,
     playbackError,
     startPlayback,
     stopPlayback,
+    pausePlayback,
+    resumePlayback,
   };
 }

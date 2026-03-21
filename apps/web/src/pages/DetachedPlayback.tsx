@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
+import { runsApi } from '@/lib/api';
+import { Pause, Play, Square } from 'lucide-react';
 
 /**
  * Detached window for live test replay preview.
@@ -13,6 +15,7 @@ export default function DetachedPlayback() {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<string>('connecting');
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     if (!playbackSessionId) return;
@@ -45,7 +48,19 @@ export default function DetachedPlayback() {
       img.src = `data:image/jpeg;base64,${data.data}`;
     });
 
-    socket.on('status', (data: { status: string }) => {
+    socket.on('status', (data: { status: string; runId?: string }) => {
+      if (data.runId && data.runId !== playbackSessionId) return;
+      if (data.status === 'playback_paused') {
+        setIsPaused(true);
+        setStatus('playback_paused');
+        return;
+      }
+      if (data.status === 'playback') {
+        setIsPaused(false);
+        setStatus('playback');
+        return;
+      }
+      setIsPaused(false);
       setStatus(data.status);
     });
 
@@ -56,6 +71,21 @@ export default function DetachedPlayback() {
     };
   }, [playbackSessionId]);
 
+  const handlePause = () => {
+    if (!playbackSessionId) return;
+    void runsApi.pausePlayback(playbackSessionId);
+  };
+
+  const handleResume = () => {
+    if (!playbackSessionId) return;
+    void runsApi.resumePlayback(playbackSessionId);
+  };
+
+  const handleStop = () => {
+    if (!playbackSessionId) return;
+    void runsApi.stopPlayback(playbackSessionId);
+  };
+
   return (
     <div className="w-screen h-screen bg-gray-900 flex flex-col">
       <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
@@ -63,9 +93,45 @@ export default function DetachedPlayback() {
           <span className="text-[#4B90FF] font-bold text-sm">Bladerunner</span>
           <span className="text-gray-400 text-xs">Playback preview</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
-          <span className="text-xs text-gray-400 capitalize">{status}</span>
+        <div className="flex items-center gap-3">
+          {playbackSessionId && status !== 'disconnected' && status !== 'completed' && status !== 'stopped' && status !== 'failed' && (
+            <div className="flex items-center gap-1.5">
+              {isPaused ? (
+                <button
+                  type="button"
+                  onClick={handleResume}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-600/90 text-white text-[11px] font-medium hover:bg-emerald-500"
+                  title="Resume"
+                >
+                  <Play size={12} className="fill-white" />
+                  Resume
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePause}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-amber-600/90 text-white text-[11px] font-medium hover:bg-amber-500"
+                  title="Pause"
+                >
+                  <Pause size={12} />
+                  Pause
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleStop}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-red-600/80 text-white text-[11px] font-medium hover:bg-red-500"
+                title="Stop playback"
+              >
+                <Square size={12} />
+                Stop
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
+            <span className="text-xs text-gray-400 capitalize">{status}</span>
+          </div>
         </div>
       </div>
       <div className="flex-1 flex flex-col items-center justify-center overflow-auto p-4">
