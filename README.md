@@ -181,7 +181,7 @@ When **Clerk auto playback is enabled** — the client sends **`autoClerkSignIn:
 
 **Step-scoped playback:** **`skipUntilSequence: N`** runs stored steps starting at sequence **N** (skips earlier steps). **`playThroughSequence: M`** stops playback after executing step **M** (use with the same **`skipUntilSequence`** for “this step only”). **Runs** and **Run detail** step cards expose **Play from here** / **This step only** when playback is available.
 
-**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk flow once on the remote browser (OTP mode chosen next to the button) and appends **six** canonical steps (`clerkAuthPhase` + `clerkAutoOneShot` on each) so the run list matches the real sign-in sequence; playback can skip them when auto sign-in is enabled.
+**While recording** on the **Runs** page, **Sign in automatically** runs the same server-side Clerk flow once on the remote browser (OTP mode chosen next to the button), **deletes any manually captured steps after the initial navigate** (avoids duplicate Clerk rows), then appends **six** canonical steps (`clerkAuthPhase` + `clerkAutoOneShot` on each) so the run list matches the real sign-in sequence; playback can skip them when auto sign-in is enabled. DOM events are processed **serially** so step order matches capture order (slow LLM can no longer reorder steps).
 
 Secrets stay on the **server**; the browser never receives test passwords.
 
@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.23** — **Recording**: DOM capture is **serialized** (FIFO) so LLM latency cannot reorder steps; **Sign in automatically** **removes** manual steps after navigate before inserting canonical Clerk steps (no duplicate Clerk blocks); LLM prompt prefers password vs email from `input` `type`/`name`; slightly longer HTML snippet for inputs. **`@bladerunner/api` `0.5.21`**.
 - **0.7.22** — **Playback**: Clerk assist no longer treats arbitrary visible numeric inputs as OTP when the URL is not sign-in-like (avoids long MailSlurp waits / timeouts on in-app pages). Same guard for full sign-in when only OTP detection fired. **`@bladerunner/api` `0.5.20`**.
 - **0.7.21** — **Recording**: **Sign in automatically** appends **six** canonical TYPE/CLICK steps (email, Continue, password, Continue, verification code, Continue) instead of one CUSTOM row, so the recorded timeline matches the Clerk + MailSlurp flow; playback behavior unchanged (one `performClerkPasswordEmail2FA` when auto Clerk is on). **`@bladerunner/api` `0.5.19`**.
 - **0.7.20** — **Playback**: escape Tailwind `:` in class chains inside `page.locator('…')` (e.g. `hover:bg-accent` → `hover\\:bg-accent`) so `querySelector` accepts recorded CSS; skips selectors with `[` / spaces. **`@bladerunner/api` `0.5.18`**.

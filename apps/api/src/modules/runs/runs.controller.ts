@@ -92,7 +92,7 @@ export class RunsController {
   @ApiOperation({
     summary: 'During recording: run Clerk + MailSlurp sign-in once on the remote browser',
     description:
-      'Uses API env (same as E2E). Appends six canonical TYPE/CLICK steps (Clerk flow labels) for playback skip. Requires an active recording session.',
+      'Uses API env (same as E2E). Removes any manual steps after the first navigate, then appends six canonical TYPE/CLICK steps. Requires an active recording session.',
   })
   @ApiResponse({ status: 200, description: 'Sign-in completed; last synthetic step returned' })
   @ApiResponse({ status: 400, description: 'Clerk / MailSlurp env not configured' })

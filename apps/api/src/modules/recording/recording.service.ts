@@ -74,6 +74,11 @@ export interface RecordingSession {
    * `recordVideo` files are not readable from this process).
    */
   screencastVideo: ScreencastVideoEncoder | null;
+  /**
+   * Serialize `__bladerunnerRecordAction` handling so steps are persisted in strict callback order
+   * (avoids LLM latency reordering: e.g. password step before email).
+   */
+  recordingCaptureTail: Promise<void>;
 }
 
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
@@ -158,6 +163,7 @@ export class RecordingService extends EventEmitter {
         latestFrame: null,
         pendingPostClerkVerificationAutomaticUi: false,
         screencastVideo,
+        recordingCaptureTail: Promise.resolve(),
       };
 
       this.sessions.set(run.id, session);
@@ -417,6 +423,21 @@ export class RecordingService extends EventEmitter {
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
       throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
     }
+
+    /** Drop sloppy manual captures (clicks/types) after navigate so canonical Clerk steps replace them. */
+    const removed = await this.prisma.runStep.deleteMany({
+      where: { runId, userId, sequence: { gt: 1 } },
+    });
+    await this.prisma.runCheckpoint.deleteMany({
+      where: { runId, userId, afterStepSequence: { gt: 1 } },
+    });
+    session.stepSequence = 1;
+    if (removed.count > 0) {
+      this.logger.log(
+        `Recording ${runId}: removed ${removed.count} manual step(s) after navigate before canonical Clerk steps`,
+      );
+    }
+
     let lastStep: RunStep | undefined;
     for (const row of CLERK_CANONICAL_SIGN_IN_STEPS) {
       const step = await this.recordStep(
@@ -1492,11 +1513,23 @@ export class RecordingService extends EventEmitter {
     }
   }
 
+  /**
+   * Run one captured DOM action through LLM + DB in strict FIFO order (matches debounce/click order).
+   */
+  private async enqueueRecordingCapture(session: RecordingSession, fn: () => Promise<void>): Promise<void> {
+    const prev = session.recordingCaptureTail;
+    const next = prev
+      .then(fn)
+      .catch((err) => this.logger.error('Recording capture failed', err));
+    session.recordingCaptureTail = next;
+    await next;
+  }
+
   private async setupEventCapture(session: RecordingSession) {
     await session.page.exposeFunction(
       '__bladerunnerRecordAction',
       async (actionData: string) => {
-        try {
+        await this.enqueueRecordingCapture(session, async () => {
           const data = JSON.parse(actionData);
           let accessibilityTree = '';
           try {
@@ -1527,9 +1560,7 @@ export class RecordingService extends EventEmitter {
           });
 
           this.emit('step', session.runId, step);
-        } catch (err) {
-          this.logger.error('Event capture failed', err);
-        }
+        });
       },
     );
 
@@ -1548,7 +1579,9 @@ export class RecordingService extends EventEmitter {
 
         function getElementHtml(el) {
           var clone = el.cloneNode(false);
-          return clone.outerHTML ? clone.outerHTML.slice(0, 200) : '';
+          var h = clone.outerHTML ? clone.outerHTML : '';
+          var limit = el.tagName && el.tagName.toLowerCase() === 'input' ? 400 : 200;
+          return h.slice(0, limit);
         }
 
         document.addEventListener('click', function(e) {
