@@ -16,6 +16,7 @@ Respond ONLY with valid JSON: { "instruction": "...", "playwrightCode": "..." }
 Guidelines:
 - Instructions should be natural language, e.g. "Click the 'Sign In' button in the navigation bar"
 - Playwright code should use modern locator APIs (getByRole, getByText, getByLabel) when possible
+- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. Use getByRole('link', { name: '...' }), getByText('...'), or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
 - Keep instructions concise but specific enough to identify the target element`;
 
 const INSTRUCTION_TO_ACTION_SYSTEM = `You are a Playwright test automation agent. Given a natural language instruction and the current page context, generate the Playwright code to execute the action.
@@ -30,6 +31,7 @@ Respond ONLY with valid JSON:
 
 Guidelines:
 - Use modern Playwright locator APIs (getByRole, getByText, getByLabel, getByPlaceholder) when possible
+- NEVER emit page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') with only a tag name — strict mode will fail when multiple elements match. Prefer getByRole with name, or locator with hasText, or .first() only as a last resort.
 - For navigation, use page.goto()
 - For typing, use page.fill() or page.getByLabel().fill()
 - Handle waiting implicitly (Playwright auto-waits)
