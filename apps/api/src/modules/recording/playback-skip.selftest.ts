@@ -76,4 +76,28 @@ assert.equal(s.has('ms1'), true);
 assert.equal(shouldSkipStoredPlaywrightForClerk(mailSlurpInstr[0]!, true), true);
 assert.equal(shouldSkipStoredPlaywrightForClerk(mailSlurpInstr[0]!, false), false);
 
+const llmOtpNoPrefix = {
+  id: 'otp5',
+  sequence: 5,
+  metadata: {},
+  action: 'TYPE',
+  origin: 'MANUAL' as const,
+  instruction: "Type '139459' into the verification code input field",
+  playwrightCode: `await page.getByLabel('Enter verification code').fill('139459');`,
+};
+s = buildPlaybackSkipSet({ steps: [llmOtpNoPrefix], wantAutoClerkSkip: true });
+assert.equal(s.has('otp5'), true);
+assert.equal(shouldSkipStoredPlaywrightForClerk(llmOtpNoPrefix, true), true);
+
+const manualUnrelated = {
+  id: 'u1',
+  sequence: 1,
+  metadata: {},
+  action: 'TYPE',
+  origin: 'MANUAL' as const,
+  instruction: 'Type your name in the field',
+  playwrightCode: `await page.getByLabel('Name').fill('x');`,
+};
+assert.equal(shouldSkipStoredPlaywrightForClerk(manualUnrelated, true), false);
+
 console.log('playback-skip.selftest: ok');

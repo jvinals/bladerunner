@@ -998,6 +998,7 @@ export class RecordingService extends EventEmitter {
         value: s.value,
         origin: s.origin,
         instruction: s.instruction,
+        playwrightCode: s.playwrightCode,
       })),
       wantAutoClerkSkip: wantAutoClerkSignIn,
       skipUntilSequence: opts?.skipUntilSequence,
@@ -1162,6 +1163,7 @@ export class RecordingService extends EventEmitter {
               value: step.value,
               origin: step.origin,
               instruction: step.instruction,
+              playwrightCode: step.playwrightCode,
             },
             ctx.wantAutoClerkSignIn,
           );

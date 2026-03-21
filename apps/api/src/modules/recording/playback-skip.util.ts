@@ -9,6 +9,27 @@ export interface PlaybackSkipStepLike {
   origin?: string;
   /** Step instruction (used to detect MailSlurp-tagged rows when metadata/origin are missing). */
   instruction?: string;
+  /** Stored codegen — detect Clerk OTP locators when instruction lacks MailSlurp prefix. */
+  playwrightCode?: string;
+}
+
+/** LLM instructions for email/Clerk OTP entry often omit `[MailSlurp automation]`. */
+function instructionLooksLikeVerificationCodeTyping(instr: string): boolean {
+  const t = instr.trim();
+  if (!t) return false;
+  if (/\[MailSlurp automation\]/i.test(t)) return true;
+  return /verification\s+code|verification\s+code\s+input|email\s+(verification\s+)?code|one[-\s]?time\s+code|\botp\b|2\s*fa|two[-\s]?factor/i.test(
+    t,
+  );
+}
+
+/** Fragile generated locators that MailSlurp automation replaces during playback. */
+function playwrightCodeLooksLikeClerkOtpFill(pw: string): boolean {
+  if (!pw) return false;
+  if (/getByLabel\s*\(\s*['"]Enter verification code['"]\s*\)/i.test(pw)) return true;
+  if (/getByLabel\s*\([^)]*verification[^)]*code/i.test(pw)) return true;
+  if (/getByPlaceholder\s*\([^)]*verification[^)]*code/i.test(pw)) return true;
+  return false;
 }
 
 /**
@@ -25,6 +46,9 @@ export function shouldSkipStoredPlaywrightForClerk(
   if (m && m.clerkAuthPhase === true) return true;
   const instr = step.instruction ?? '';
   if (/\[MailSlurp automation\]/i.test(instr)) return true;
+  if (instructionLooksLikeVerificationCodeTyping(instr)) return true;
+  const pw = step.playwrightCode ?? '';
+  if (playwrightCodeLooksLikeClerkOtpFill(pw)) return true;
   return false;
 }
 
