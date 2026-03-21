@@ -214,6 +214,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.16** — **Playback**: removed temporary **debug ingest** / **NDJSON** probes for `td` timeouts (post-fix cleanup). **`@bladerunner/api` `0.5.14`**, **`@bladerunner/web` `0.6.10`**.
 - **0.7.15** — **Recording**: when the LLM returns a **bare tag** `page.locator('span')` (etc.) but the injected **`getSelector`** value is a **concrete CSS** path (`span.ml-2…`, `td.px-6.py-4`), **merge** stored **`playwrightCode`** to use **`page.locator(<recorded selector>)`** so playback does not use **`.first()`** on the wrong node (fixes misaligned URLs before table clicks). **`actionToInstruction`** prompt updated to prefer the **Selector** field when specific. **`@bladerunner/api` `0.5.13`**, **`@bladerunner/web` `0.6.10`**.
 - **0.7.14** — **Playback (debug)**: before each non-skipped step, probe **`td` / `td.px-6.py-4`** counts + first-cell visibility when stored code references table classes; on step failure, log again — NDJSON to **`.cursor/debug-5f6bd9.log`** + ingest (diagnose **`locator.click` Timeout** vs missing DOM). **`@bladerunner/api` `0.5.12`**, **`@bladerunner/web` `0.6.10`**.
 - **0.7.13** — **Playback**: fix **`relaxPlaywrightCodegenForPlayback`** — correct **`String.replace`** capture groups so bare **`page.locator('span')`** (etc.) is rewritten to **`.first()`**, avoiding Playwright **strict mode** on generic tag locators. **`@bladerunner/api` `0.5.11`**, **`@bladerunner/web` `0.6.10`**.
