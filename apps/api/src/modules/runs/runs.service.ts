@@ -120,7 +120,7 @@ export class RunsService {
   async findCheckpoints(runId: string, userId: string) {
     const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
     if (!run) throw new NotFoundException(`Run ${runId} not found`);
-    const rows = await this.prisma.runCheckpoint.findMany({
+    return this.prisma.runCheckpoint.findMany({
       where: { runId, userId },
       orderBy: { afterStepSequence: 'asc' },
       select: {
@@ -133,10 +133,6 @@ export class RunsService {
         createdAt: true,
       },
     });
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'runs.service.ts:findCheckpoints',message:'findCheckpoints result',data:{hypothesisId:'H3',runId,count:rows.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    return rows;
   }
 
   async findCheckpointById(checkpointId: string, runId: string, userId: string) {

@@ -192,51 +192,13 @@ export default function RunDetailPage() {
     [id, canPlayback, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
   );
 
-  const {
-    data: runCheckpoints = [],
-    fetchStatus: checkpointsFetchStatus,
-  } = useQuery({
+  const { data: runCheckpoints = [] } = useQuery({
     queryKey: ['run-checkpoints', id],
     queryFn: () => runsApi.getCheckpoints(id!),
     enabled: !!id && !!canShowStepActions,
     refetchInterval:
       (run as { status?: string } | undefined)?.status === 'RECORDING' ? 3000 : false,
   });
-
-  // #region agent log
-  useEffect(() => {
-    const runStatus = (run as { status?: string } | undefined)?.status;
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
-      body: JSON.stringify({
-        sessionId: '5f6bd9',
-        location: 'RunDetail.tsx:debug-playback-gate',
-        message: 'RunDetail playback/checkpoint gate',
-        data: {
-          hypothesisId: 'H1-H4',
-          runStatus,
-          canPlayback,
-          waitingForSteps,
-          recordedStepsLen: recordedSteps.length,
-          runId: id,
-          checkpointsQueryEnabled: !!id && !!canPlayback,
-          checkpointsFetchStatus,
-          checkpointsCount: runCheckpoints.length,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }, [
-    run,
-    id,
-    canPlayback,
-    waitingForSteps,
-    recordedSteps.length,
-    runCheckpoints.length,
-    checkpointsFetchStatus,
-  ]);
-  // #endregion
 
   const stepsQueryErrorMessage =
     stepsQueryError && stepsQueryErr instanceof Error ? stepsQueryErr.message : null;

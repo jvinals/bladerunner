@@ -214,6 +214,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.4** — **Checkpoint thumbnails + live dividers**: JPEG screenshots captured at each checkpoint; **`GET /runs/:id/checkpoints/:checkpointId/thumbnail`**; checkpoint dividers between step cards (expandable thumbnail popup); **Play from here** / **This step only** visible during recording (disabled while browser busy); checkpoint query uses `effectiveRunId` so it works during active recording (polls every 3s). Migration: `thumbnail_path` on `run_checkpoints`. **`@bladerunner/web` `0.6.3`**, **`@bladerunner/api` `0.5.3`**.
 - **0.7.3** — **App state checkpoints** (`RunCheckpoint`, migration): optional **`storageState`** snapshots after each step; **`GET /runs/:id/checkpoints`**. **Playback**: **`playThroughSequence`** stops after a given step; UI **Play from here** / **This step only** on **Runs** + **Run detail**. README: restore strategy (hybrid: prefix replay + checkpoints). **`RECORDING_CHECKPOINTS`** env. **`@bladerunner/web` `0.6.2`**, **`@bladerunner/api` `0.5.2`**.
 - **0.7.2** — **Docs**: troubleshooting for **`StepOrigin` / `AUTOMATIC`** — run **`pnpm migrate`** in **`apps/api`** when the DB enum is behind **`schema.prisma`** (fixes `22P02` invalid enum + missing recording steps). **`apps/api`**: **`migrate`** script.
 - **0.7.1** — **Runs**: show **`role="alert"`** error when **Re-record step** fails. **`@bladerunner/web` `0.6.1`**.

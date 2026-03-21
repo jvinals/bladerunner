@@ -824,9 +824,6 @@ export class RecordingService extends EventEmitter {
    */
   private async persistCheckpointAfterStep(session: RecordingSession, step: RunStep): Promise<void> {
     const raw = this.configService.get<string>('RECORDING_CHECKPOINTS', 'true').toLowerCase();
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'recording.service.ts:persistCheckpointAfterStep',message:'checkpoint entry',data:{hypothesisId:'H3',runId:session.runId,stepSeq:step.sequence,raw,disabled:raw==='false'||raw==='0'||raw==='no'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (raw === 'false' || raw === '0' || raw === 'no') return;
 
     const base = getRecordingsBaseDir(this.configService);
@@ -838,9 +835,6 @@ export class RecordingService extends EventEmitter {
     try {
       await session.page.context().storageState({ path: absPath });
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'recording.service.ts:storageState-fail',message:'storageState failed',data:{hypothesisId:'H3',stepSeq:step.sequence,err:String(err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       this.logger.warn(`storageState failed for step ${step.sequence}: ${err}`);
       return;
     }
@@ -878,13 +872,7 @@ export class RecordingService extends EventEmitter {
           thumbnailPath: thumbName ?? null,
         },
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'recording.service.ts:checkpoint-saved',message:'checkpoint persisted ok',data:{hypothesisId:'H3',runId:session.runId,stepSeq:step.sequence,pageUrl,thumbName},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     } catch (dbErr) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f6bd9'},body:JSON.stringify({sessionId:'5f6bd9',location:'recording.service.ts:checkpoint-db-fail',message:'checkpoint DB write failed',data:{hypothesisId:'H3',stepSeq:step.sequence,err:String(dbErr)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       this.logger.warn(`Checkpoint DB write failed for step ${step.sequence}: ${dbErr}`);
     }
   }
