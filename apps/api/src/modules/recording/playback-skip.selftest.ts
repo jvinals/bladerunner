@@ -2,7 +2,11 @@
  * Run: pnpm exec tsx src/modules/recording/playback-skip.selftest.ts (from apps/api)
  */
 import assert from 'node:assert/strict';
-import { buildPlaybackSkipSet, normalizePlaybackUrl } from './playback-skip.util';
+import {
+  buildPlaybackSkipSet,
+  normalizePlaybackUrl,
+  shouldSkipStoredPlaywrightForClerk,
+} from './playback-skip.util';
 
 const steps = [
   { id: 'a', sequence: 1, metadata: { clerkAuthPhase: true }, action: 'CLICK', origin: 'MANUAL' as const },
@@ -56,5 +60,20 @@ assert.equal(s.has('n1'), true);
 assert.equal(s.has('n2'), false);
 
 assert.equal(normalizePlaybackUrl('https://example.com/app/'), normalizePlaybackUrl('https://example.com/app'));
+
+const mailSlurpInstr = [
+  {
+    id: 'ms1',
+    sequence: 5,
+    metadata: {},
+    action: 'TYPE',
+    origin: 'MANUAL' as const,
+    instruction: '[MailSlurp automation] Enter the code from email',
+  },
+];
+s = buildPlaybackSkipSet({ steps: mailSlurpInstr, wantAutoClerkSkip: true });
+assert.equal(s.has('ms1'), true);
+assert.equal(shouldSkipStoredPlaywrightForClerk(mailSlurpInstr[0]!, true), true);
+assert.equal(shouldSkipStoredPlaywrightForClerk(mailSlurpInstr[0]!, false), false);
 
 console.log('playback-skip.selftest: ok');

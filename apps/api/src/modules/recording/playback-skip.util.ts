@@ -7,6 +7,25 @@ export interface PlaybackSkipStepLike {
   value?: string | null;
   /** Prisma `StepOrigin` string */
   origin?: string;
+  /** Step instruction (used to detect MailSlurp-tagged rows when metadata/origin are missing). */
+  instruction?: string;
+}
+
+/**
+ * When Clerk auto-playback is on, skip executing stored Playwright for steps that are driven by
+ * server MailSlurp/Clerk automation instead of replaying brittle LLM-generated locators.
+ */
+export function shouldSkipStoredPlaywrightForClerk(
+  step: PlaybackSkipStepLike,
+  wantAutoClerk: boolean,
+): boolean {
+  if (!wantAutoClerk) return false;
+  if (step.origin === 'AUTOMATIC') return true;
+  const m = step.metadata as { clerkAuthPhase?: boolean } | null | undefined;
+  if (m && m.clerkAuthPhase === true) return true;
+  const instr = step.instruction ?? '';
+  if (/\[MailSlurp automation\]/i.test(instr)) return true;
+  return false;
 }
 
 export interface BuildPlaybackSkipSetInput {
@@ -59,10 +78,7 @@ export function buildPlaybackSkipSet(input: BuildPlaybackSkipSetInput): Set<stri
   }
   if (input.wantAutoClerkSkip) {
     for (const s of input.steps) {
-      const origin = (s as { origin?: string }).origin;
-      if (origin === 'AUTOMATIC') out.add(s.id);
-      const m = s.metadata as { clerkAuthPhase?: boolean } | null | undefined;
-      if (m && m.clerkAuthPhase === true) out.add(s.id);
+      if (shouldSkipStoredPlaywrightForClerk(s, true)) out.add(s.id);
     }
   }
 

@@ -26,7 +26,7 @@ import {
   fillClerkOtpFromMailSlurp,
   performClerkPasswordEmail2FA,
 } from '@bladerunner/clerk-agentmail-signin';
-import { buildPlaybackSkipSet } from './playback-skip.util';
+import { buildPlaybackSkipSet, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
 import {
   adjustRecordingVideoDurationToWallClock,
   copyRecordingVideoToArtifacts,
@@ -997,6 +997,7 @@ export class RecordingService extends EventEmitter {
         action: s.action,
         value: s.value,
         origin: s.origin,
+        instruction: s.instruction,
       })),
       wantAutoClerkSkip: wantAutoClerkSignIn,
       skipUntilSequence: opts?.skipUntilSequence,
@@ -1150,7 +1151,20 @@ export class RecordingService extends EventEmitter {
           instruction: step.instruction,
         };
 
-        const skipped = ctx.skipSet.has(step.id);
+        const skipped =
+          ctx.skipSet.has(step.id) ||
+          shouldSkipStoredPlaywrightForClerk(
+            {
+              id: step.id,
+              sequence: step.sequence,
+              metadata: step.metadata,
+              action: step.action,
+              value: step.value,
+              origin: step.origin,
+              instruction: step.instruction,
+            },
+            ctx.wantAutoClerkSignIn,
+          );
 
         this.emit('playbackProgress', playbackSessionId, {
           playbackSessionId,
