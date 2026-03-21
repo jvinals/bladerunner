@@ -100,6 +100,15 @@ export function useRecording(): UseRecordingReturn {
     socket.on('connect', () => {
       setSocketConnected(true);
       socket.emit('join', { runId: recordRunId });
+      /** Sync steps after join — socket `step` events may have fired before this client entered the room. */
+      void (async () => {
+        try {
+          const rows = (await runsApi.getSteps(recordRunId)) as RecordedStep[];
+          setSteps(rows);
+        } catch {
+          /* ignore */
+        }
+      })();
     });
 
     socket.on('disconnect', () => {
@@ -159,7 +168,7 @@ export function useRecording(): UseRecordingReturn {
     }
     setRunId(result.runId);
     setSteps(initialSteps);
-    setCurrentFrame(null);
+    /** Do not clear currentFrame here — it wipes frames that arrived before React flushes; preview syncs via socket + connect refetch. */
     setIsRecording(true);
     setStatus('recording');
     setClerkAutoSignInError(null);
@@ -255,6 +264,12 @@ export function useRecording(): UseRecordingReturn {
     });
     try {
       await runsApi.clerkAutoSignInRecording(runId);
+      try {
+        const synced = (await runsApi.getSteps(runId)) as RecordedStep[];
+        setSteps(synced);
+      } catch {
+        /* ignore */
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setClerkAutoSignInError(msg);

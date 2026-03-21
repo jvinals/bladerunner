@@ -50,6 +50,11 @@ export class RecordingGateway implements OnGatewayInit {
   ) {
     client.join(`run:${data.runId}`);
     this.logger.log(`Client ${client.id} joined run:${data.runId}`);
+    /** Catch-up: frames/steps may have been broadcast before this socket joined the room. */
+    const latest = this.recordingService.getLatestFrame(data.runId);
+    if (latest && latest.length > 0) {
+      client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
+    }
     return { event: 'joined', data: { runId: data.runId } };
   }
 

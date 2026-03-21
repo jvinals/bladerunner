@@ -926,7 +926,8 @@ export class RecordingService extends EventEmitter {
       quality: 60,
       maxWidth: 1280,
       maxHeight: 720,
-      everyNthFrame: 3,
+      /** 1 = every frame — static pages still get regular preview updates (was 3, felt “stuck” until input). */
+      everyNthFrame: 1,
     });
 
     cdpSession.on('Page.screencastFrame', async (params: any) => {
