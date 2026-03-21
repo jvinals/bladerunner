@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.28** — **Recording**: **Clerk DOM capture barrier** — `session.clerkDomCaptureBarrier` increments when auto sign-in pause starts/ends; DOM capture callbacks snapshot it and **drop** `recordStep` after LLM if the barrier crossed (fixes slow LLM finishing after `resume` and still persisting a stale TYPE). **`@bladerunner/api` `0.5.26`**.
 - **0.7.27** — **Recording**: debounced `input` capture now **re-checks pause** before `__bladerunnerRecordAction` (scheduled callbacks could fire mid–auto sign-in after inputs queued before pause). **`@bladerunner/api` `0.5.25`**.
 - **0.7.26** — **Recording**: **Pause DOM capture** during **`performClerkPasswordEmail2FA`** so debounced `input` events from the automated OTP fill are not persisted as an extra TYPE (duplicate of canonical step 6); one-shot skip for a stray OTP-shaped TYPE after canonical steps. **`@bladerunner/api` `0.5.24`**.
 - **0.7.25** — **Recording**: removed legacy **`pendingPostClerkVerificationAutomaticUi`** tagging of the first TYPE after **Sign in automatically** — it duplicated canonical step 6 (Clerk OTP) with a real DOM-captured OTP step. **`@bladerunner/api` `0.5.23`**.

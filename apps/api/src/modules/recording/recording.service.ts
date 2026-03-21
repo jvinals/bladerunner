@@ -80,6 +80,16 @@ export interface RecordingSession {
    * Clerk OTP field (debounced `input` can still fire after unpause).
    */
   skipDuplicateClerkOtpDomCaptureOnce?: boolean;
+  /**
+   * True while `performClerkPasswordEmail2FA` runs — DOM capture may still finish LLM work async after
+   * the page pause flag is set; this blocks `recordStep` until resume.
+   */
+  recordingDomCapturePaused: boolean;
+  /**
+   * Incremented when Clerk auto sign-in DOM pause starts and again when it ends. Capture callbacks
+   * snapshot this at entry; if it changed after `await` LLM, the action crossed the pause window and is dropped.
+   */
+  clerkDomCaptureBarrier: number;
 }
 
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
@@ -164,6 +174,8 @@ export class RecordingService extends EventEmitter {
         latestFrame: null,
         screencastVideo,
         recordingCaptureTail: Promise.resolve(),
+        recordingDomCapturePaused: false,
+        clerkDomCaptureBarrier: 0,
       };
 
       this.sessions.set(run.id, session);
@@ -410,6 +422,9 @@ export class RecordingService extends EventEmitter {
       this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
       this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
     const baseURL = this.playbackClerkBaseUrl(run.url);
+    /** Set before page pause so in-flight capture callbacks see it before `recordStep`. */
+    session.recordingDomCapturePaused = true;
+    session.clerkDomCaptureBarrier += 1;
     try {
       /** Do not record debounced `input` events from automated fill — canonical steps cover them. */
       await session.page.evaluate(() => {
@@ -429,41 +444,41 @@ export class RecordingService extends EventEmitter {
         }),
       }).catch(() => {});
       // #endregion
-      try {
-        await performClerkPasswordEmail2FA(session.page, {
-          baseURL,
-          identifier,
-          password,
-          skipInitialNavigate: true,
-          otpMode,
-        });
-      } finally {
-        try {
-          await session.page.evaluate(() => {
-            (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
-              false;
-          });
-        } catch {
-          /* ignore */
-        }
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-          body: JSON.stringify({
-            sessionId: '5cf234',
-            location: 'recording.service.ts:clerkAutoSignInDuringRecording',
-            message: 'resume DOM capture after performClerkPasswordEmail2FA',
-            data: { hypothesisId: 'A', runId },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-      }
+      await performClerkPasswordEmail2FA(session.page, {
+        baseURL,
+        identifier,
+        password,
+        skipInitialNavigate: true,
+        otpMode,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
       throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
+    } finally {
+      session.recordingDomCapturePaused = false;
+      session.clerkDomCaptureBarrier += 1;
+      try {
+        await session.page.evaluate(() => {
+          (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
+            false;
+        });
+      } catch {
+        /* ignore */
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          location: 'recording.service.ts:clerkAutoSignInDuringRecording',
+          message: 'resume DOM capture after performClerkPasswordEmail2FA',
+          data: { hypothesisId: 'A', runId, barrier: session.clerkDomCaptureBarrier },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
     }
 
     /** Drop sloppy manual captures (clicks/types) after navigate so canonical Clerk steps replace them. */
@@ -1579,6 +1594,23 @@ export class RecordingService extends EventEmitter {
       async (actionData: string) => {
         await this.enqueueRecordingCapture(session, async () => {
           const data = JSON.parse(actionData);
+          const barrierAtStart = session.clerkDomCaptureBarrier;
+          if (session.recordingDomCapturePaused) {
+            // #region agent log
+            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+              body: JSON.stringify({
+                sessionId: '5cf234',
+                location: 'recording.service.ts:enqueueRecordingCapture',
+                message: 'skipped DOM capture (session pause during Clerk auto sign-in)',
+                data: { hypothesisId: 'D', runId: session.runId, actionType: data.type },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+            return;
+          }
           if (session.skipDuplicateClerkOtpDomCaptureOnce && data.type === 'type') {
             const v = String(data.value ?? '').trim();
             const html = String(data.elementHtml ?? '');
@@ -1617,6 +1649,28 @@ export class RecordingService extends EventEmitter {
             value: data.value,
             pageAccessibilityTree: accessibilityTree,
           });
+
+          if (session.clerkDomCaptureBarrier !== barrierAtStart) {
+            // #region agent log
+            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+              body: JSON.stringify({
+                sessionId: '5cf234',
+                location: 'recording.service.ts:enqueueRecordingCapture',
+                message: 'skipped DOM capture after LLM (crossed Clerk auto sign-in barrier)',
+                data: {
+                  hypothesisId: 'D',
+                  runId: session.runId,
+                  barrierAtStart,
+                  barrierNow: session.clerkDomCaptureBarrier,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+            return;
+          }
 
           const playwrightCode = preferRecordedCssSelectorForBarePageLocator(
             data.selector,
