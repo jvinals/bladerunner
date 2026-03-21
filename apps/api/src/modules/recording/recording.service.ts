@@ -1199,10 +1199,38 @@ export class RecordingService extends EventEmitter {
           continue;
         }
 
+        const probeBefore = await this.probePlaybackDomForCode(session.page, step.playwrightCode);
+        await this.debugEmitPlaybackDiagnostics({
+          location: 'recording.service.ts:runPlaybackLoop:beforeExecute',
+          message: 'playback step before executePwCode',
+          data: {
+            sequence: step.sequence,
+            action: step.action,
+            codePreview: step.playwrightCode.slice(0, 500),
+            ...probeBefore,
+          },
+          hypothesisId: 'H2',
+          runId: 'td-timeout',
+        });
+
         try {
           await this.executePwCode(session.page, step.playwrightCode);
         } catch (execErr) {
           const msg = execErr instanceof Error ? execErr.message : String(execErr);
+          const probeAfter = await this.probePlaybackDomForCode(session.page, step.playwrightCode);
+          await this.debugEmitPlaybackDiagnostics({
+            location: 'recording.service.ts:runPlaybackLoop:executeError',
+            message: 'playback step failed',
+            data: {
+              sequence: step.sequence,
+              action: step.action,
+              error: msg,
+              codePreview: step.playwrightCode.slice(0, 500),
+              ...probeAfter,
+            },
+            hypothesisId: 'H3',
+            runId: 'td-timeout',
+          });
           this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);
           this.emit('playbackProgress', playbackSessionId, {
             playbackSessionId,
@@ -1491,12 +1519,68 @@ export class RecordingService extends EventEmitter {
           changed: code !== out,
         },
         timestamp: Date.now(),
-        hypothesisId: 'H1',
+        hypothesisId: 'H-span',
         runId: 'pre-fix',
       }),
     }).catch(() => {});
     // #endregion
     return out;
+  }
+
+  /** Repo-root `.cursor/debug-<session>.log` (Nest `src` or `dist` both use `modules/recording/` depth). */
+  private debugSessionLogPath(): string {
+    return path.join(__dirname, '..', '..', '..', '..', '..', '.cursor', 'debug-5f6bd9.log');
+  }
+
+  /**
+   * Runtime DOM snapshot for fragile LLM locators (e.g. `td.px-6.py-4`) to explain timeouts vs strict errors.
+   * Hypotheses: H2 — zero matches; H3 — matches but not visible; H4 — wrong URL / no table yet.
+   */
+  private async probePlaybackDomForCode(page: Page, playwrightCode: string): Promise<Record<string, unknown>> {
+    const url = page.url();
+    const out: Record<string, unknown> = { url };
+    if (!playwrightCode || (!playwrightCode.includes('td') && !playwrightCode.includes('px-6'))) {
+      return out;
+    }
+    try {
+      out.tdCount = await page.locator('td').count();
+    } catch (e) {
+      out.tdCountError = e instanceof Error ? e.message : String(e);
+    }
+    try {
+      out.tableCount = await page.locator('table').count();
+    } catch {
+      /* ignore */
+    }
+    if (playwrightCode.includes('px-6') || playwrightCode.includes('td.px')) {
+      try {
+        const loc = page.locator('td.px-6.py-4');
+        out.tdPx6Py4Count = await loc.count();
+        const first = loc.first();
+        out.tdPx6Py4FirstVisible = await first.isVisible().catch(() => false);
+        out.tdPx6Py4FirstBox = await first.boundingBox().catch(() => null);
+      } catch (e) {
+        out.tdPx6Py4Error = e instanceof Error ? e.message : String(e);
+      }
+    }
+    return out;
+  }
+
+  private async debugEmitPlaybackDiagnostics(payload: Record<string, unknown>): Promise<void> {
+    const ts = Date.now();
+    const line = JSON.stringify({ ...payload, timestamp: ts }) + '\n';
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({ sessionId: '5f6bd9', ...payload, timestamp: ts }),
+    }).catch(() => {});
+    try {
+      await fs.appendFile(this.debugSessionLogPath(), line, 'utf8');
+    } catch {
+      /* ignore */
+    }
+    // #endregion
   }
 
   private async executePwCode(page: Page, code: string): Promise<void> {
