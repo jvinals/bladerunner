@@ -92,9 +92,9 @@ export class RunsController {
   @ApiOperation({
     summary: 'During recording: run Clerk + MailSlurp sign-in once on the remote browser',
     description:
-      'Uses API env (same as E2E). Appends a tagged CUSTOM step for playback skip. Requires an active recording session.',
+      'Uses API env (same as E2E). Appends six canonical TYPE/CLICK steps (Clerk flow labels) for playback skip. Requires an active recording session.',
   })
-  @ApiResponse({ status: 200, description: 'Sign-in completed; synthetic step returned' })
+  @ApiResponse({ status: 200, description: 'Sign-in completed; last synthetic step returned' })
   @ApiResponse({ status: 400, description: 'Clerk / MailSlurp env not configured' })
   @ApiResponse({ status: 404, description: 'No active recording session' })
   @ApiResponse({ status: 503, description: 'Sign-in flow failed' })

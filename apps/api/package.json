@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.5.18",
+  "version": "0.5.19",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test:playback-skip": "tsx src/modules/recording/playback-skip.selftest.ts",
     "test:playback-css": "tsx src/modules/recording/playback-css-escape.selftest.ts",
+    "test:clerk-canonical": "tsx src/modules/recording/recording-clerk-canonical-steps.selftest.ts",
     "test:recording-merge": "tsx src/modules/recording/recording-playwright-merge.selftest.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },

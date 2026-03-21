@@ -30,6 +30,7 @@ import {
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
 import { escapeLocatorCssInPlaywrightSnippet } from './playback-css-escape.util';
+import { CLERK_CANONICAL_SIGN_IN_STEPS } from './recording-clerk-canonical-steps';
 import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -371,7 +372,8 @@ export class RecordingService extends EventEmitter {
 
   /**
    * One-shot Clerk + MailSlurp sign-in on the recording browser (server env credentials).
-   * Appends a CUSTOM step tagged for playback skip (`clerkAuthPhase` + `clerkAutoOneShot`).
+   * Appends **six** canonical TYPE/CLICK steps (labeled like the real flow) for playback skip
+   * (`clerkAuthPhase` + `clerkAutoOneShot`); playback still runs one `performClerkPasswordEmail2FA`.
    */
   async clerkAutoSignInDuringRecording(
     runId: string,
@@ -415,27 +417,30 @@ export class RecordingService extends EventEmitter {
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
       throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
     }
-    const instruction =
-      otpMode === 'mailslurp'
-        ? 'Clerk sign-in (automatic — server used test credentials + MailSlurp OTP from inbox)'
-        : 'Clerk sign-in (automatic — server used test credentials + Clerk test email OTP 424242)';
-    const step = await this.recordStep(
-      session,
-      {
-        action: 'CUSTOM',
-        selector: null,
-        value: null,
-        instruction,
-        playwrightCode: `await page.waitForLoadState('domcontentloaded').catch(() => {});`,
-        origin: 'MANUAL',
-      },
-      { syntheticClerkAutoSignIn: true },
-    );
-    this.emit('step', runId, step);
+    let lastStep: RunStep | undefined;
+    for (const row of CLERK_CANONICAL_SIGN_IN_STEPS) {
+      const step = await this.recordStep(
+        session,
+        {
+          action: row.action,
+          selector: null,
+          value: null,
+          instruction: row.instruction,
+          playwrightCode: row.playwrightCode,
+          origin: 'MANUAL',
+        },
+        { syntheticClerkAutoSignIn: true },
+      );
+      this.emit('step', runId, step);
+      lastStep = step;
+    }
     /** Next TYPE step is often in-app email verification — tag as AUTOMATIC + clerkAuthPhase. */
     session.pendingPostClerkVerificationAutomaticUi = true;
-    this.logger.log(`Recording ${runId}: clerk auto sign-in completed, step ${step.sequence}`);
-    return { ok: true as const, step };
+    const seqLo = lastStep!.sequence - CLERK_CANONICAL_SIGN_IN_STEPS.length + 1;
+    this.logger.log(
+      `Recording ${runId}: clerk auto sign-in completed, canonical steps ${seqLo}–${lastStep!.sequence}`,
+    );
+    return { ok: true as const, step: lastStep! };
   }
 
   async executeInstruction(runId: string, userId: string, instruction: string) {
