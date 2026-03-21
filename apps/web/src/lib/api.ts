@@ -7,7 +7,7 @@ export type ClerkOtpMode = 'clerk_test_email' | 'mailslurp';
 export type StartPlaybackBody = {
   delayMs?: number;
   autoClerkSignIn?: boolean;
-  /** Omit to use server `PLAYBACK_CLERK_OTP_MODE` (default clerk_test_email). */
+  /** Omit to use server `PLAYBACK_CLERK_OTP_MODE` (defaults to mailslurp when unset). */
   clerkOtpMode?: ClerkOtpMode;
   skipUntilSequence?: number;
   skipStepIds?: string[];

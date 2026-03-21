@@ -71,7 +71,7 @@ export class StartPlaybackDto {
   @ApiPropertyOptional({
     enum: ['clerk_test_email', 'mailslurp'],
     description:
-      'How to complete email OTP during auto sign-in. `clerk_test_email` (default): identifier must include +clerk_test, fixed code 424242. `mailslurp`: read OTP from MailSlurp (requires MAILSLURP_* env). Server default: PLAYBACK_CLERK_OTP_MODE.',
+      'How to complete email OTP during auto sign-in. `mailslurp` (default when PLAYBACK_CLERK_OTP_MODE is unset): read OTP from MailSlurp (requires MAILSLURP_* env). `clerk_test_email`: identifier must include +clerk_test, fixed code 424242, no MailSlurp. Override via PLAYBACK_CLERK_OTP_MODE.',
   })
   @IsOptional()
   @IsIn(['clerk_test_email', 'mailslurp'])
@@ -112,7 +112,7 @@ export class ClerkAutoSignInRecordingDto {
   @ApiPropertyOptional({
     enum: ['clerk_test_email', 'mailslurp'],
     description:
-      'Same as playback `clerkOtpMode`. Default follows PLAYBACK_CLERK_OTP_MODE or clerk_test_email.',
+      'Same as playback `clerkOtpMode`. Default follows PLAYBACK_CLERK_OTP_MODE or mailslurp when unset.',
   })
   @IsOptional()
   @IsIn(['clerk_test_email', 'mailslurp'])

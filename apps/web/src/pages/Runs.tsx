@@ -31,8 +31,8 @@ export default function RunsPage() {
   const [newRunProjectId, setNewRunProjectId] = useState('');
   const [instructionText, setInstructionText] = useState('');
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
-  const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('clerk_test_email');
-  const [recordingClerkOtpMode, setRecordingClerkOtpMode] = useState<AutoClerkOtpUiMode>('clerk_test_email');
+  const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
+  const [recordingClerkOtpMode, setRecordingClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);

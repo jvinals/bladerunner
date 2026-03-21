@@ -45,7 +45,7 @@ export type StartPlaybackServiceOpts = {
   autoClerkSignIn?: boolean;
   /**
    * How to obtain the email OTP during Clerk auto sign-in.
-   * Default / server env `PLAYBACK_CLERK_OTP_MODE`: `clerk_test_email` (fixed code `424242`, identifier must include `+clerk_test`).
+   * When omitted, server uses `PLAYBACK_CLERK_OTP_MODE` or defaults to `mailslurp` (requires MAILSLURP_* env).
    */
   clerkOtpMode?: ClerkOtpMode;
   skipUntilSequence?: number;
@@ -1376,8 +1376,9 @@ export class RecordingService extends EventEmitter {
   private resolveClerkOtpMode(opts?: StartPlaybackServiceOpts): ClerkOtpMode {
     if (opts?.clerkOtpMode) return opts.clerkOtpMode;
     const raw = this.configService.get<string>('PLAYBACK_CLERK_OTP_MODE', '').trim().toLowerCase();
+    if (raw === 'clerk_test_email' || raw === 'test_email') return 'clerk_test_email';
     if (raw === 'mailslurp' || raw === 'mail_slurp') return 'mailslurp';
-    return 'clerk_test_email';
+    return 'mailslurp';
   }
 
   private playbackClerkBaseUrl(runUrl: string): string {

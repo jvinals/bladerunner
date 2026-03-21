@@ -98,7 +98,7 @@ function SessionRecordingCard({ runId }: { runId: string }) {
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
-  const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('clerk_test_email');
+  const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
