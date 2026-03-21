@@ -66,11 +66,6 @@ export interface RecordingSession {
   stepSequence: number;
   latestFrame: Buffer | null;
   /**
-   * After server Clerk+MailSlurp sign-in completes, the next in-app verification OTP type (if any) is labeled AUTOMATIC for UI.
-   * Does not set `clerkAuthPhase` (playback must still execute that step).
-   */
-  pendingPostClerkVerificationAutomaticUi: boolean;
-  /**
    * Encodes CDP screencast JPEGs to WebM on the API host (required when the browser is remote — Playwright
    * `recordVideo` files are not readable from this process).
    */
@@ -162,7 +157,6 @@ export class RecordingService extends EventEmitter {
         cdpSession,
         stepSequence: 0,
         latestFrame: null,
-        pendingPostClerkVerificationAutomaticUi: false,
         screencastVideo,
         recordingCaptureTail: Promise.resolve(),
       };
@@ -456,8 +450,7 @@ export class RecordingService extends EventEmitter {
       this.emit('step', runId, step);
       lastStep = step;
     }
-    /** Next TYPE step is often in-app email verification — tag as AUTOMATIC + clerkAuthPhase. */
-    session.pendingPostClerkVerificationAutomaticUi = true;
+    /** Canonical steps already include Clerk OTP (TYPE); do not auto-tag the next DOM TYPE (would duplicate step 6). */
     const seqLo = lastStep!.sequence - CLERK_CANONICAL_SIGN_IN_STEPS.length + 1;
     this.logger.log(
       `Recording ${runId}: clerk auto sign-in completed, canonical steps ${seqLo}–${lastStep!.sequence}`,
@@ -837,15 +830,6 @@ export class RecordingService extends EventEmitter {
     } else {
       const clerkAuthPhase = await this.computeClerkAuthPhaseForRecording(session, data);
       metadata = clerkAuthPhase ? { clerkAuthPhase: true } : undefined;
-    }
-    /** After server Clerk+MailSlurp, the next captured TYPE is usually email/OTP verification. */
-    if (
-      session.pendingPostClerkVerificationAutomaticUi &&
-      data.action === 'TYPE' &&
-      !opts?.syntheticClerkAutoSignIn
-    ) {
-      metadata = { ...metadata, clerkAuthPhase: true };
-      session.pendingPostClerkVerificationAutomaticUi = false;
     }
     const isAutomatic = !!(
       opts?.syntheticClerkAutoSignIn ||
