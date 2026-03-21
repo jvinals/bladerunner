@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.20** — **Playback**: escape Tailwind `:` in class chains inside `page.locator('…')` (e.g. `hover:bg-accent` → `hover\\:bg-accent`) so `querySelector` accepts recorded CSS; skips selectors with `[` / spaces. **`@bladerunner/api` `0.5.18`**.
 - **0.7.19** — **Playback**: after Clerk **full** auto sign-in (`performClerkPasswordEmail2FA`), do not run the OTP-only MailSlurp path again when skipped TYPE rows still match OTP UI — avoids hanging with no toast. **`@bladerunner/api` `0.5.17`**.
 - **0.7.18** — **Clerk OTP**: default **`mailslurp`** again when **`PLAYBACK_CLERK_OTP_MODE`** is unset; UI **Clerk OTP** defaults to MailSlurp on Runs / Run detail. Use **`PLAYBACK_CLERK_OTP_MODE=clerk_test_email`** or the test-email dropdown option for **`+clerk_test`** / **`424242`** without MailSlurp. **`@bladerunner/api` `0.5.16`**, **`@bladerunner/web` `0.6.12`**.
 - **0.7.17** — **Clerk OTP**: default to **[Clerk test emails](https://clerk.com/docs/testing/test-emails-and-phones)** — identifier must include **`+clerk_test`**, fixed code **`424242`**, no MailSlurp / no dev email quota. **`PLAYBACK_CLERK_OTP_MODE`** (`clerk_test_email` \| `mailslurp`) + API **`clerkOtpMode`** + UI **Clerk OTP** dropdown (Runs / Run detail + recording). **`@bladerunner/clerk-agentmail-signin` `0.4.0`**, **`@bladerunner/api` `0.5.15`**, **`@bladerunner/web` `0.6.11`**.
