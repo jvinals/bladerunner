@@ -101,6 +101,8 @@ model RunCheckpoint {
   pageUrl            String?  @map("page_url")
   /// File name under the run artifact dir, e.g. `checkpoint-3.json`
   storageStatePath   String?  @map("storage_state_path")
+  /// JPEG thumbnail file name, e.g. `checkpoint-3.jpg`
+  thumbnailPath      String?  @map("thumbnail_path")
   createdAt          DateTime @default(now()) @map("created_at")
 
   run Run @relation(fields: [runId], references: [id], onDelete: Cascade)

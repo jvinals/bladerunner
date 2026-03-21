@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import { runsApi, buildStartPlaybackBody, projectsApi, type ProjectDto } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
+import { CheckpointDivider } from '@/components/ui/CheckpointDivider';
 import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
 import { playbackToneForStep } from '@/lib/playbackStepTone';
@@ -117,12 +118,16 @@ export default function RunsPage() {
   }>;
 
   const selectedRun = selectedRunId ? runs.find((r) => r.id === selectedRunId) : undefined;
+  const effectiveRunId = isRecording ? runId : selectedRunId;
   const canPlaybackSelected =
     !!selectedRunId &&
     steps.length > 0 &&
     !!selectedRun &&
     selectedRun.status !== 'RECORDING' &&
     !isRecording;
+  const canShowStepActions =
+    steps.length > 0 &&
+    (!!effectiveRunId);
   const showReplayChrome =
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
@@ -256,11 +261,52 @@ export default function RunsPage() {
     [selectedRunId, canPlaybackSelected, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
   );
 
-  const { data: runCheckpointsRuns = [] } = useQuery({
-    queryKey: ['run-checkpoints', selectedRunId],
-    queryFn: () => runsApi.getCheckpoints(selectedRunId!),
-    enabled: !!selectedRunId && canPlaybackSelected,
+  const {
+    data: runCheckpointsRuns = [],
+    fetchStatus: checkpointsRunsFetchStatus,
+  } = useQuery({
+    queryKey: ['run-checkpoints', effectiveRunId],
+    queryFn: () => runsApi.getCheckpoints(effectiveRunId!),
+    enabled: !!effectiveRunId && canShowStepActions,
+    refetchInterval: isRecording ? 3000 : false,
   });
+
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        location: 'Runs.tsx:debug-playback-gate',
+        message: 'Runs playback/checkpoint gate',
+        data: {
+          hypothesisId: 'H1-H4',
+          isRecording,
+          selectedRunStatus: selectedRun?.status,
+          canPlaybackSelected,
+          stepsLen: steps.length,
+          effectiveRunId,
+          canShowStepActions,
+          checkpointsQueryEnabled: !!effectiveRunId && canShowStepActions,
+          checkpointsRunsFetchStatus,
+          checkpointsRunsCount: runCheckpointsRuns.length,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [
+    isRecording,
+    selectedRun,
+    canPlaybackSelected,
+    canShowStepActions,
+    effectiveRunId,
+    steps.length,
+    selectedRunId,
+    runCheckpointsRuns.length,
+    checkpointsRunsFetchStatus,
+  ]);
+  // #endregion
 
   const handleDetachPlaybackRuns = useCallback(() => {
     if (!playbackSessionId) return;
@@ -755,13 +801,6 @@ export default function RunsPage() {
               {reRecordError}
             </p>
           )}
-          {!isRecording && canPlaybackSelected && runCheckpointsRuns.length > 0 && (
-            <p className="mb-2 text-[10px] text-gray-500">
-              {runCheckpointsRuns.length} app-state checkpoint{runCheckpointsRuns.length === 1 ? '' : 's'} (browser
-              storage after each step).
-            </p>
-          )}
-
           {steps.length === 0 ? (
             <div className="flex items-center justify-center h-32">
               <p className="text-xs text-gray-400">
@@ -774,44 +813,53 @@ export default function RunsPage() {
             </div>
           ) : (
             <div>
-              {steps.map((step) => (
-                <StepCard
-                  key={step.id}
-                  ref={(el) => {
-                    if (el) stepRefsPlayback.current.set(step.sequence, el);
-                    else stepRefsPlayback.current.delete(step.sequence);
-                  }}
-                  sequence={step.sequence}
-                  action={step.action}
-                  instruction={step.instruction}
-                  playwrightCode={step.playwrightCode}
-                  origin={step.origin}
-                  timestamp={step.timestamp}
-                  playbackHighlight={playbackToneForStep(
-                    step.sequence,
-                    showReplayChrome,
-                    highlightSequence,
-                    completedSequences,
-                  )}
-                  reRecord={
-                    isRecording
-                      ? {
-                          busy: reRecordBusyStepId === step.id,
-                          onSubmit: (instr) => handleReRecordStep(step.id, instr),
-                        }
-                      : undefined
-                  }
-                  stepPlayback={
-                    !isRecording && canPlaybackSelected
-                      ? {
-                          onPlayFromHere: () => void handleStepPlaybackRuns(step.sequence, 'from'),
-                          onPlayThisStepOnly: () => void handleStepPlaybackRuns(step.sequence, 'only'),
-                          disabled: isPlaying,
-                        }
-                      : undefined
-                  }
-                />
-              ))}
+              {steps.map((step) => {
+                const cp = runCheckpointsRuns.find(
+                  (c) => c.afterStepSequence === step.sequence,
+                );
+                return (
+                  <div key={step.id}>
+                    <StepCard
+                      ref={(el) => {
+                        if (el) stepRefsPlayback.current.set(step.sequence, el);
+                        else stepRefsPlayback.current.delete(step.sequence);
+                      }}
+                      sequence={step.sequence}
+                      action={step.action}
+                      instruction={step.instruction}
+                      playwrightCode={step.playwrightCode}
+                      origin={step.origin}
+                      timestamp={step.timestamp}
+                      playbackHighlight={playbackToneForStep(
+                        step.sequence,
+                        showReplayChrome,
+                        highlightSequence,
+                        completedSequences,
+                      )}
+                      reRecord={
+                        isRecording
+                          ? {
+                              busy: reRecordBusyStepId === step.id,
+                              onSubmit: (instr) => handleReRecordStep(step.id, instr),
+                            }
+                          : undefined
+                      }
+                      stepPlayback={
+                        canShowStepActions
+                          ? {
+                              onPlayFromHere: () => void handleStepPlaybackRuns(step.sequence, 'from'),
+                              onPlayThisStepOnly: () => void handleStepPlaybackRuns(step.sequence, 'only'),
+                              disabled: isPlaying || isRecording || !canPlaybackSelected,
+                            }
+                          : undefined
+                      }
+                    />
+                    {cp && effectiveRunId && (
+                      <CheckpointDivider runId={effectiveRunId} checkpoint={cp} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

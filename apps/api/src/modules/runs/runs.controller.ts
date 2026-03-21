@@ -175,6 +175,26 @@ export class RunsController {
     return this.runsService.findCheckpoints(id, userId);
   }
 
+  @Get(':id/checkpoints/:checkpointId/thumbnail')
+  @ApiOperation({ summary: 'JPEG thumbnail captured at a checkpoint' })
+  @ApiResponse({ status: 200, description: 'image/jpeg' })
+  @Header('Cache-Control', 'private, max-age=3600')
+  async checkpointThumbnail(
+    @Req() req: any,
+    @Param('id') runId: string,
+    @Param('checkpointId') checkpointId: string,
+  ): Promise<StreamableFile> {
+    const userId = req.user.sub;
+    const run = await this.runsService.findOne(runId, userId);
+    if (!run) throw new NotFoundException(`Run ${runId} not found`);
+    const checkpoint = await this.runsService.findCheckpointById(checkpointId, runId, userId);
+    if (!checkpoint?.thumbnailPath) throw new NotFoundException('Checkpoint thumbnail not found');
+    const { artifactDir } = this.recordingService.getRunArtifactFilePaths(runId, userId);
+    const absPath = require('path').join(artifactDir, checkpoint.thumbnailPath);
+    await access(absPath).catch(() => { throw new NotFoundException('Thumbnail file missing'); });
+    return new StreamableFile(createReadStream(absPath), { type: 'image/jpeg' });
+  }
+
   @Get(':id/recording/video')
   @ApiOperation({ summary: 'Stream the session screen recording (MP4 preferred, WebM legacy)' })
   @ApiResponse({ status: 200, description: 'video/mp4 or video/webm stream' })

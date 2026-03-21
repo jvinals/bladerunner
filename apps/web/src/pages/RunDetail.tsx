@@ -9,6 +9,7 @@ import {
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
+import { CheckpointDivider } from '@/components/ui/CheckpointDivider';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
 import { playbackToneForStep } from '@/lib/playbackStepTone';
@@ -166,6 +167,10 @@ export default function RunDetailPage() {
     recordedSteps.length > 0 &&
     (run as { status: string }).status !== 'RECORDING' &&
     !waitingForSteps;
+  const canShowStepActions =
+    !!run &&
+    recordedSteps.length > 0 &&
+    !waitingForSteps;
 
   const handleStepPlayback = useCallback(
     async (sequence: number, mode: 'from' | 'only') => {
@@ -187,11 +192,51 @@ export default function RunDetailPage() {
     [id, canPlayback, isPlaying, stopPlayback, startPlayback, playbackAutoClerkMode],
   );
 
-  const { data: runCheckpoints = [] } = useQuery({
+  const {
+    data: runCheckpoints = [],
+    fetchStatus: checkpointsFetchStatus,
+  } = useQuery({
     queryKey: ['run-checkpoints', id],
     queryFn: () => runsApi.getCheckpoints(id!),
-    enabled: !!id && !!canPlayback,
+    enabled: !!id && !!canShowStepActions,
+    refetchInterval:
+      (run as { status?: string } | undefined)?.status === 'RECORDING' ? 3000 : false,
   });
+
+  // #region agent log
+  useEffect(() => {
+    const runStatus = (run as { status?: string } | undefined)?.status;
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5f6bd9' },
+      body: JSON.stringify({
+        sessionId: '5f6bd9',
+        location: 'RunDetail.tsx:debug-playback-gate',
+        message: 'RunDetail playback/checkpoint gate',
+        data: {
+          hypothesisId: 'H1-H4',
+          runStatus,
+          canPlayback,
+          waitingForSteps,
+          recordedStepsLen: recordedSteps.length,
+          runId: id,
+          checkpointsQueryEnabled: !!id && !!canPlayback,
+          checkpointsFetchStatus,
+          checkpointsCount: runCheckpoints.length,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [
+    run,
+    id,
+    canPlayback,
+    waitingForSteps,
+    recordedSteps.length,
+    runCheckpoints.length,
+    checkpointsFetchStatus,
+  ]);
+  // #endregion
 
   const stepsQueryErrorMessage =
     stepsQueryError && stepsQueryErr instanceof Error ? stepsQueryErr.message : null;
@@ -511,43 +556,42 @@ export default function RunDetailPage() {
               Recorded steps
               <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
             </p>
-            {runCheckpoints.length > 0 && (
-              <p className="text-[10px] text-gray-500 mb-2">
-                {runCheckpoints.length} app-state checkpoint{runCheckpoints.length === 1 ? '' : 's'} (browser storage
-                after each step). Prefix replay remains the reliable way to reach a step.
-              </p>
-            )}
             <div className="overflow-y-auto flex-1 pr-1 -mr-1">
-              {recordedSteps.map((step) => (
-                <StepCard
-                  key={step.id}
-                  ref={(el) => {
-                    if (el) stepRefs.current.set(step.sequence, el);
-                    else stepRefs.current.delete(step.sequence);
-                  }}
-                  sequence={step.sequence}
-                  action={step.action}
-                  instruction={step.instruction}
-                  playwrightCode={step.playwrightCode}
-                  origin={step.origin}
-                  timestamp={step.timestamp}
-                  playbackHighlight={playbackToneForStep(
-                    step.sequence,
-                    showReplayChrome,
-                    highlightSequence,
-                    completedSequences,
-                  )}
-                  stepPlayback={
-                    canPlayback
-                      ? {
-                          onPlayFromHere: () => void handleStepPlayback(step.sequence, 'from'),
-                          onPlayThisStepOnly: () => void handleStepPlayback(step.sequence, 'only'),
-                          disabled: isPlaying,
-                        }
-                      : undefined
-                  }
-                />
-              ))}
+              {recordedSteps.map((step) => {
+                const cp = runCheckpoints.find((c) => c.afterStepSequence === step.sequence);
+                return (
+                  <div key={step.id}>
+                    <StepCard
+                      ref={(el) => {
+                        if (el) stepRefs.current.set(step.sequence, el);
+                        else stepRefs.current.delete(step.sequence);
+                      }}
+                      sequence={step.sequence}
+                      action={step.action}
+                      instruction={step.instruction}
+                      playwrightCode={step.playwrightCode}
+                      origin={step.origin}
+                      timestamp={step.timestamp}
+                      playbackHighlight={playbackToneForStep(
+                        step.sequence,
+                        showReplayChrome,
+                        highlightSequence,
+                        completedSequences,
+                      )}
+                      stepPlayback={
+                        canShowStepActions
+                          ? {
+                              onPlayFromHere: () => void handleStepPlayback(step.sequence, 'from'),
+                              onPlayThisStepOnly: () => void handleStepPlayback(step.sequence, 'only'),
+                              disabled: isPlaying || !canPlayback,
+                            }
+                          : undefined
+                      }
+                    />
+                    {cp && id && <CheckpointDivider runId={id} checkpoint={cp} />}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

@@ -191,9 +191,23 @@ export const runsApi = {
         label: string;
         pageUrl: string | null;
         storageStatePath: string | null;
+        thumbnailPath: string | null;
         createdAt: string;
       }>
     >(`/runs/${runId}/checkpoints`),
+  /** Authenticated JPEG thumbnail for a checkpoint (returns blob URL). */
+  getCheckpointThumbnailUrl: async (runId: string, checkpointId: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/runs/${runId}/checkpoints/${checkpointId}/thumbnail`, {
+        headers: await authHeaders(),
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch {
+      return null;
+    }
+  },
 };
 
 // ─── Projects ────────────────────────────────────────────────────────────────
