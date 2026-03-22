@@ -278,6 +278,9 @@ export default function RunDetailPage() {
   const showReplayChrome =
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
+  /** Full-width, single-column layout while a live playback session is active (no sidebar / split columns). */
+  const playbackLayoutActive = isPlaying;
+
   useEffect(() => {
     if (!currentFrame || !playbackCanvasRef.current) return;
     const canvas = playbackCanvasRef.current;
@@ -409,7 +412,11 @@ export default function RunDetailPage() {
   const PlatformIcon = PLATFORM_ICONS[r.platform] || Monitor;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 max-w-6xl">
+    <div
+      className={`flex-1 min-h-0 overflow-y-auto py-8 px-6 lg:px-10 ${
+        playbackLayoutActive ? 'w-full max-w-none' : 'max-w-6xl'
+      }`}
+    >
       {/* Back link */}
       <Link to="/runs" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4B90FF] transition-colors mb-6">
         <ArrowLeft size={14} />
@@ -686,7 +693,11 @@ export default function RunDetailPage() {
 
       {/* Playback preview + recorded steps */}
       {recordedSteps.length > 0 && (
-        <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div
+          className={`mb-8 grid gap-6 ${
+            playbackLayoutActive ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'
+          }`}
+        >
           <div className="bg-white border border-gray-100 rounded-lg p-4 min-h-[240px] flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
@@ -701,7 +712,9 @@ export default function RunDetailPage() {
               {(currentFrame || isPlaying) && (
                 <canvas
                   ref={playbackCanvasRef}
-                  className="max-w-full max-h-[min(420px,50vh)] object-contain"
+                  className={`max-w-full object-contain ${
+                    playbackLayoutActive ? 'max-h-[min(560px,65vh)]' : 'max-h-[min(420px,50vh)]'
+                  }`}
                   role="img"
                   aria-label="Playback preview"
                 />
@@ -733,7 +746,11 @@ export default function RunDetailPage() {
               )}
             </div>
           </div>
-          <div className="bg-white border border-gray-100 rounded-lg p-4 max-h-[min(520px,70vh)] flex flex-col">
+          <div
+            className={`bg-white border border-gray-100 rounded-lg p-4 flex flex-col ${
+              playbackLayoutActive ? 'max-h-[min(640px,75vh)]' : 'max-h-[min(520px,70vh)]'
+            }`}
+          >
             <p className="text-sm font-semibold text-gray-800 mb-3">
               Recorded steps
               <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
@@ -788,9 +805,13 @@ export default function RunDetailPage() {
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div
+        className={`grid gap-6 ${
+          playbackLayoutActive ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'
+        }`}
+      >
         {/* Left: Targets & Timeline */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={playbackLayoutActive ? 'space-y-6' : 'lg:col-span-2 space-y-6'}>
           {/* Targets */}
           {targets.length > 0 && (
             <div className="bg-white border border-gray-100 rounded-lg p-5">

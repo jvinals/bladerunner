@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.46** — **Run detail**: While **playback is running** (`isPlaying`), the page uses **full main width** (`max-w-none`), **single-column** preview + steps, and **Findings / Tags / Details** stack **below** Targets (no narrow right column). Slightly taller preview canvas and steps list. **`@bladerunner/web` `0.6.20`**.
 - **0.7.45** — **Run detail**: Playback **Clerk / OTP / skip / delay** moved behind **Playback settings**; top row is **Play**, **Pause** (or **Resume** while paused), then **Playback settings**. **Stop / Restart / Detach** and step-advance controls live in the panel while playing. **`@bladerunner/web` `0.6.19`**.
 - **0.7.44** — **Run detail**: Session recording **video / preview** opens in a **modal**; header button **Video recording** (when artifacts/thumbnail exist). **`@bladerunner/web` `0.6.18`**.
 - **0.7.43** — **Step cards**: Checkpoint thumbnails **without** the “After” text label; thumbs **`h-8 w-14`** (was `h-6 w-11`). **`@bladerunner/web` `0.6.17`**.
