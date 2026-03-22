@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.61** — **Web**: Removed debug **NDJSON ingest** / render logging from **`usePlayback`** and **`DetachedPlayback`**. **`@bladerunner/web` `0.6.35`**.
 - **0.7.60** — **Playback UI**: **Pause** and **Stop** stay **disabled** until the recorded **`clerk_auto_sign_in`** step has finished (socket **`playbackProgress`** `after` / `skipped` — same as **`completedSequences`** in **`usePlayback`**). Applies to **Run detail**, **Runs** (inline replay), and **Detached playback**. Runs without that step are unchanged. **`@bladerunner/web` `0.6.34`**.
 - **0.7.59** — **Run detail**: **Playback** controls card is **left**, **Duration / Steps / …** metrics card is **right** (`lg` row); toolbar row uses **`justify-start`**. **`@bladerunner/web` `0.6.33`**.
 - **0.7.58** — **Run detail**: Back link is **Back to Home** (navigates to **`/`**). **`@bladerunner/web` `0.6.32`**.

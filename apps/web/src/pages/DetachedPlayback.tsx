@@ -114,23 +114,6 @@ export default function DetachedPlayback() {
   }, [playbackSessionId]);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-      body: JSON.stringify({
-        sessionId: '5cf234',
-        location: 'DetachedPlayback.tsx:renderState',
-        message: 'isPaused/status snapshot',
-        data: { isPaused, status, showAdvanceRowWillBe: Boolean(playbackSessionId) },
-        timestamp: Date.now(),
-        hypothesisId: 'H1',
-      }),
-    }).catch(() => {});
-    // #endregion
-  }, [isPaused, status, playbackSessionId]);
-
-  useEffect(() => {
     if (!playbackSessionId) return;
 
     const socket: Socket = createRecordingSocket();
@@ -188,20 +171,6 @@ export default function DetachedPlayback() {
           sourceRunId: data.sourceRunId!,
         }));
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          location: 'DetachedPlayback.tsx:socket.status',
-          message: 'status event',
-          data: { incoming: data.status, runId: data.runId ?? null },
-          timestamp: Date.now(),
-          hypothesisId: 'H1',
-        }),
-      }).catch(() => {});
-      // #endregion
       if (data.status === 'playback_paused') {
         setIsPaused(true);
         setStatus('playback_paused');
@@ -277,20 +246,6 @@ export default function DetachedPlayback() {
 
   const handleAdvanceOne = () => {
     if (!playbackSessionId) return;
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-      body: JSON.stringify({
-        sessionId: '5cf234',
-        location: 'DetachedPlayback.tsx:handleAdvanceOne',
-        message: 'advance one clicked',
-        data: { playbackSessionId },
-        timestamp: Date.now(),
-        hypothesisId: 'H1',
-      }),
-    }).catch(() => {});
-    // #endregion
     void runsApi.advancePlaybackOne(playbackSessionId);
   };
 
