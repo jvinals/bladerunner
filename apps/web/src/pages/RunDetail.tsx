@@ -652,36 +652,31 @@ export default function RunDetailPage() {
         </p>
       )}
 
-      {/* Metrics cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <div className="bg-white border border-gray-100 rounded-lg p-4">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Duration</p>
-          <p className="text-lg font-bold text-gray-800 ce-mono">
-            {r.durationMs ? formatDuration(r.durationMs) : '—'}
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-lg p-4">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Steps</p>
-          <p className="text-lg font-bold text-gray-800">
-            {passedSteps}/{stepsCount}
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-lg p-4">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Failures</p>
-          <p className={`text-lg font-bold ${failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-800'}`}>
-            {failedSteps}
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-lg p-4">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Findings</p>
-          <p className={`text-lg font-bold ${findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-800'}`}>
-            {findingsCount}
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-lg p-4">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Artifacts</p>
-          <p className="text-lg font-bold text-[#4B90FF]">{artifactsCount}</p>
-        </div>
+      {/* Run metrics — single compact strip (wraps to 2 lines on narrow viewports) */}
+      <div
+        className="mb-8 flex flex-wrap items-baseline gap-x-3 gap-y-1.5 rounded-lg border border-gray-100 bg-white px-3 py-2 sm:gap-x-4 sm:px-4 sm:py-2.5"
+        role="group"
+        aria-label="Run metrics"
+      >
+        {(
+          [
+            ['Duration', r.durationMs ? formatDuration(r.durationMs) : '—', 'text-gray-900'],
+            ['Steps', `${passedSteps}/${stepsCount}`, 'text-gray-900'],
+            ['Failures', String(failedSteps), failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-900'],
+            ['Findings', String(findingsCount), findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-900'],
+            ['Artifacts', String(artifactsCount), 'text-[#4B90FF]'],
+          ] as const
+        ).map(([label, value, valueClass], i) => (
+          <span key={label} className="inline-flex items-baseline gap-1.5 sm:gap-2">
+            {i > 0 && (
+              <span className="mr-1 text-[10px] text-gray-200 select-none sm:mr-2" aria-hidden="true">
+                ·
+              </span>
+            )}
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+            <span className={`text-sm font-bold tabular-nums ce-mono sm:text-base ${valueClass}`}>{value}</span>
+          </span>
+        ))}
       </div>
 
       {/* Playback preview + recorded steps — wide preview left, narrower steps column right */}
