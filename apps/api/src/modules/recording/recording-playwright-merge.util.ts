@@ -96,3 +96,11 @@ export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): str
   // #endregion
   return s;
 }
+
+/**
+ * Playback: Radix/modal layers often report "subtree intercepts pointer events" — Playwright refuses the click.
+ * `force: true` skips that actionability check and dispatches to the locator’s element (see Playwright input docs).
+ */
+export function relaxClickForceForPlayback(playwrightCode: string): string {
+  return playwrightCode.replace(/\.click\(\s*\)/g, '.click({ force: true })');
+}

@@ -42,6 +42,7 @@ import {
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
+  relaxClickForceForPlayback,
   tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
 import {
@@ -1387,6 +1388,33 @@ export class RecordingService extends EventEmitter {
         }
 
         try {
+          // #region agent log
+          let openDialogCount = -1;
+          try {
+            openDialogCount = await session.page
+              .locator('[role="dialog"][data-state="open"]')
+              .count();
+          } catch {
+            openDialogCount = -2;
+          }
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+            body: JSON.stringify({
+              sessionId: '5cf234',
+              location: 'recording.service.ts:runPlaybackLoop:beforeExecutePwCode',
+              message: 'playback step pre-execute',
+              data: {
+                hypothesisId: 'H1',
+                runId: 'dialog-overlay',
+                stepSequence: step.sequence,
+                openDialogCount,
+                codeLen: (step.playwrightCode ?? '').length,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           await this.executePwCode(session.page, step.playwrightCode);
         } catch (execErr) {
           const msg = execErr instanceof Error ? execErr.message : String(execErr);
@@ -1818,6 +1846,16 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
+   * Default `true`: playback rewrites bare `.click()` to `.click({ force: true })` (avoids Radix/modal
+   * "subtree intercepts pointer events"). Set `PLAYBACK_CLICK_FORCE=false` to disable.
+   */
+  private wantPlaybackClickForce(): boolean {
+    const raw = this.configService.get<string>('PLAYBACK_CLICK_FORCE', 'true').trim().toLowerCase();
+    if (raw === '' || raw === 'true' || raw === '1' || raw === 'yes') return true;
+    return false;
+  }
+
+  /**
    * LLM-generated steps sometimes use `page.locator('span')` etc., which matches many nodes and
    * throws strict mode violation on click/fill. Append `.first()` when the chain does not already
    * narrow (first/nth/filter/locator/getBy).
@@ -1837,9 +1875,10 @@ export class RecordingService extends EventEmitter {
       }
     }
 
-    const safeCode = escapeLocatorCssInPlaywrightSnippet(
-      tightenGetByTextLocatorsForPlayback(this.relaxPlaywrightCodegenForPlayback(code)),
-    );
+    const relaxed = this.relaxPlaywrightCodegenForPlayback(code);
+    const tightened = tightenGetByTextLocatorsForPlayback(relaxed);
+    const withForce = this.wantPlaybackClickForce() ? relaxClickForceForPlayback(tightened) : tightened;
+    const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);
     const fn = new Function('page', `return (async () => { ${safeCode} })();`);
     await fn(page);
   }

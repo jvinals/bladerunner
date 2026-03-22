@@ -1,6 +1,7 @@
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
+  relaxClickForceForPlayback,
   tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
 
@@ -63,6 +64,18 @@ assertEq(
     `await page.getByText('Patients', { exact: true }).first().click();`,
   ),
   `await page.getByText('Patients', { exact: true }).first().click();`,
+);
+
+assertEq(
+  'playback force: bare .click()',
+  relaxClickForceForPlayback(`await page.getByRole('link', { name: 'Patients' }).click();`),
+  `await page.getByRole('link', { name: 'Patients' }).click({ force: true });`,
+);
+
+assertEq(
+  'playback force: leaves .click({ force: true }) unchanged',
+  relaxClickForceForPlayback(`await page.locator('button').click({ force: true });`),
+  `await page.locator('button').click({ force: true });`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');
