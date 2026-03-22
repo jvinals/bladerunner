@@ -17,7 +17,7 @@ import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
   Camera, FileText, Activity, Play, Square, ExternalLink,
-  Film, Pause, RotateCcw, StepForward,
+  Film, Pause, RotateCcw, StepForward, X,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -33,17 +33,17 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: typeof A
   suggestion: { bg: 'bg-gray-50', text: 'text-gray-500', icon: Eye },
 };
 
-function SessionRecordingCard({ runId }: { runId: string }) {
-  const { url, kind, loading } = useSessionRecordingPlayback(runId, true);
+function SessionRecordingMedia({ runId, enabled }: { runId: string; enabled: boolean }) {
+  const { url, kind, loading } = useSessionRecordingPlayback(runId, enabled);
   const [videoDecodeFailed, setVideoDecodeFailed] = useState(false);
   const thumbFallbackUrl = useSessionRecordingThumbnailOnly(
     runId,
-    videoDecodeFailed && kind === 'video',
+    enabled && videoDecodeFailed && kind === 'video',
   );
 
   useEffect(() => {
     setVideoDecodeFailed(false);
-  }, [runId]);
+  }, [runId, enabled]);
 
   const showVideo = kind === 'video' && url && !videoDecodeFailed;
   const showImg =
@@ -51,21 +51,14 @@ function SessionRecordingCard({ runId }: { runId: string }) {
   const imgSrc = videoDecodeFailed ? thumbFallbackUrl : url;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-lg p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Film size={14} className="text-[#4B90FF]" />
-        <p className="text-sm font-semibold text-gray-800">Session recording</p>
-        <span className="text-[10px] font-normal text-gray-400 uppercase tracking-wider">
-          {showVideo ? 'Video' : 'Preview'}
-        </span>
-      </div>
+    <>
       <div className="rounded-md border border-gray-100 bg-gray-900/5 min-h-[200px] flex items-center justify-center overflow-hidden">
         {loading ? (
           <p className="text-xs text-gray-400 px-4 py-8 text-center">Loading recording…</p>
         ) : showVideo ? (
           <video
             controls
-            className="w-full max-h-[min(480px,60vh)] bg-black"
+            className="w-full max-h-[min(72vh,640px)] bg-black"
             src={url!}
             playsInline
             onError={() => setVideoDecodeFailed(true)}
@@ -74,7 +67,7 @@ function SessionRecordingCard({ runId }: { runId: string }) {
           <img
             src={imgSrc}
             alt="Session recording preview"
-            className="max-w-full max-h-[min(480px,60vh)] object-contain"
+            className="max-w-full max-h-[min(72vh,640px)] object-contain"
           />
         ) : (
           <p className="text-xs text-gray-400 px-4 py-8 text-center">No recording preview available.</p>
@@ -90,12 +83,71 @@ function SessionRecordingCard({ runId }: { runId: string }) {
           Preview frame from the session (no video file was stored for this run).
         </p>
       )}
+    </>
+  );
+}
+
+function SessionRecordingModal({
+  open,
+  onClose,
+  runId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  runId: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="session-recording-modal-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+        aria-label="Close session recording"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex w-full max-w-4xl max-h-[min(92vh,900px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Film size={16} className="shrink-0 text-[#4B90FF]" aria-hidden />
+            <h2 id="session-recording-modal-title" className="truncate text-sm font-semibold text-gray-900">
+              Session recording
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <SessionRecordingMedia runId={runId} enabled={open} />
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [sessionRecordingModalOpen, setSessionRecordingModalOpen] = useState(false);
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
   const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
@@ -366,10 +418,20 @@ export default function RunDetailPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex flex-wrap items-center gap-3 mb-2">
             <PlatformIcon size={18} className="text-gray-400" />
             <h1 className="text-xl font-bold text-gray-900">{r.name}</h1>
             <StatusBadge status={r.status} />
+            {showSessionRecordingCard && (
+              <button
+                type="button"
+                onClick={() => setSessionRecordingModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:border-[#4B90FF] hover:text-[#4B90FF]"
+              >
+                <Film size={14} className="text-[#4B90FF]" aria-hidden />
+                Video recording
+              </button>
+            )}
           </div>
           {r.description && (
             <p className="text-sm text-gray-500 max-w-xl">{r.description}</p>
@@ -696,9 +758,11 @@ export default function RunDetailPage() {
       )}
 
       {showSessionRecordingCard && (
-        <div className="mb-8">
-          <SessionRecordingCard runId={r.id} />
-        </div>
+        <SessionRecordingModal
+          open={sessionRecordingModalOpen}
+          onClose={() => setSessionRecordingModalOpen(false)}
+          runId={r.id}
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.44** — **Run detail**: Session recording **video / preview** opens in a **modal**; header button **Video recording** (when artifacts/thumbnail exist). **`@bladerunner/web` `0.6.18`**.
 - **0.7.43** — **Step cards**: Checkpoint thumbnails **without** the “After” text label; thumbs **`h-8 w-14`** (was `h-6 w-11`). **`@bladerunner/web` `0.6.17`**.
 - **0.7.42** — **Run / playback step list**: **`StepCard`** rows are **shorter** (tighter padding and type). **Checkpoint “After”** thumbnails show as a **small fixed-size strip** on the **right** of the card (replacing the separate **`CheckpointDivider`** row). **`@bladerunner/web` `0.6.16`**.
 - **0.7.41** — **Detached playback**: **Replay** after **completed / stopped / failed** starts a new session via **`POST /runs/:sourceRunId/playback/start`** (options from **`GET /runs/playback/:id`** while active, else `?source=` + server defaults). **`playbackBodyFromSnapshot`** in **`@bladerunner/web`**. Detach URL includes **`?source=`** for replay when the session is gone. **`@bladerunner/web` `0.6.15`**.
