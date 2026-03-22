@@ -856,7 +856,7 @@ export default function RunDetailPage() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center self-stretch rounded-lg border border-gray-100 bg-white px-2 py-0 shadow-sm lg:min-w-[min(100%,30rem)] lg:flex-[1.2]">
             <span className="sr-only">Playback</span>
             <div
-              className="flex min-h-0 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto"
+              className="flex min-h-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto"
               role="toolbar"
               aria-label="Playback controls"
             >
@@ -875,7 +875,7 @@ export default function RunDetailPage() {
                           : 'No recorded steps'
                       : 'Replay recorded steps in a live browser preview'
                 }
-                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-600"
               >
                 <Play size={12} /> {waitingForSteps ? 'Loading…' : 'Play'}
               </button>
@@ -883,7 +883,7 @@ export default function RunDetailPage() {
                 <button
                   type="button"
                   onClick={() => void resumePlayback()}
-                  className="flex shrink-0 items-center gap-1 px-2 py-1 border border-emerald-200 text-emerald-700 text-[11px] font-medium rounded-md hover:bg-emerald-50 transition-colors"
+                  className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-emerald-200 text-emerald-700 text-[11px] font-medium rounded-md hover:bg-emerald-50 transition-colors"
                   title="Resume playback"
                 >
                   <Play size={12} className="fill-current" /> Resume
@@ -893,7 +893,7 @@ export default function RunDetailPage() {
                   type="button"
                   disabled={!isPlaying || !canPauseOrStopDuringPlayback}
                   onClick={() => void pausePlayback()}
-                  className="flex shrink-0 items-center gap-1 px-2 py-1 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-md hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-400 disabled:hover:bg-transparent"
+                  className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-md hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-400 disabled:hover:bg-transparent"
                   title={
                     !canPauseOrStopDuringPlayback
                       ? 'Wait until automatic Clerk sign-in has finished'
@@ -909,7 +909,7 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!isPlaying || !canPauseOrStopDuringPlayback}
                 onClick={() => void stopPlayback()}
-                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-red-200 text-red-600 text-[11px] font-medium rounded-md hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-red-200 text-red-600 text-[11px] font-medium rounded-md hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title={
                   !canPauseOrStopDuringPlayback
                     ? 'Wait until automatic Clerk sign-in has finished'
@@ -922,7 +922,7 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!isPlaying}
                 onClick={() => void restartPlayback()}
-                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-slate-200 text-slate-700 text-[11px] font-medium rounded-md hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-slate-200 text-slate-700 text-[11px] font-medium rounded-md hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Restart from the beginning with the same options"
               >
                 <RotateCcw size={12} /> Restart
@@ -931,7 +931,7 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!isPlaying || !isPaused}
                 onClick={() => void advancePlaybackOne()}
-                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Run the next step, then pause again"
               >
                 <StepForward size={11} />
@@ -956,7 +956,7 @@ export default function RunDetailPage() {
                   const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
                   if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
                 }}
-                className="shrink-0 rounded border border-violet-200 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="shrink-0 rounded border border-violet-200 px-2 py-0.5 text-[11px] font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Go
               </button>
@@ -964,7 +964,7 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!playbackSessionId}
                 onClick={handleDetachPlayback}
-                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex shrink-0 items-center gap-1 px-2 py-0.5 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ExternalLink size={12} /> Detach preview
               </button>
@@ -1012,7 +1012,7 @@ export default function RunDetailPage() {
           </div>
 
           <div
-            className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm lg:max-w-[min(100%,28.5rem)] lg:flex-none lg:shrink-0"
+            className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm lg:max-w-[min(100%,30rem)] lg:flex-none lg:shrink-0"
             role="group"
             aria-label="Run metrics"
           >

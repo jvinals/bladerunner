@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.73** — **Run detail**: Playback toolbar **slightly shorter** (`py-0.5` controls, tighter `gap`); metrics card **slightly wider** (`max-w` ~30rem). **`@bladerunner/web` `0.6.47`**.
 - **0.7.72** — **Run detail**: Playback card **slightly shorter** (`py-0`); metrics card **slightly wider** (`max-w` ~28.5rem). **`@bladerunner/web` `0.6.46`**.
 - **0.7.71** — **Run detail**: Playback card **slightly shorter** (`py-0.5`); metrics card **slightly wider** (`max-w` ~27rem). **`@bladerunner/web` `0.6.45`**.
 - **0.7.70** — **Run detail**: Playback controls card **slightly shorter** (`py-1`); metrics / **Run details** card **slightly wider** (`max-w` ~25.5rem). **`@bladerunner/web` `0.6.44`**.
