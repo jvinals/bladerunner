@@ -39,7 +39,10 @@ import {
   isClerkAutoSignInMetadata,
   postAuthUrlsRoughlyMatch,
 } from './clerk-auto-sign-in-step-metadata';
-import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
+import {
+  preferGetByTextForBareTagLocator,
+  preferRecordedCssSelectorForBarePageLocator,
+} from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
   copyRecordingVideoToArtifacts,
@@ -1701,6 +1704,9 @@ export class RecordingService extends EventEmitter {
             action: data.type,
             selector: data.selector || '',
             elementHtml: data.elementHtml || '',
+            elementVisibleText:
+              typeof data.elementText === 'string' ? data.elementText : undefined,
+            ariaLabel: typeof data.ariaLabel === 'string' ? data.ariaLabel : undefined,
             value: data.value,
             pageAccessibilityTree: accessibilityTree,
           });
@@ -1709,9 +1715,14 @@ export class RecordingService extends EventEmitter {
             return;
           }
 
-          const playwrightCode = preferRecordedCssSelectorForBarePageLocator(
+          let playwrightCode = preferRecordedCssSelectorForBarePageLocator(
             data.selector,
             translated.playwrightCode,
+          );
+          playwrightCode = preferGetByTextForBareTagLocator(
+            data.selector,
+            typeof data.elementText === 'string' ? data.elementText : undefined,
+            playwrightCode,
           );
 
           const step = await this.recordStep(session, {
@@ -1742,10 +1753,28 @@ export class RecordingService extends EventEmitter {
         }
 
         function getElementHtml(el) {
-          var clone = el.cloneNode(false);
-          var h = clone.outerHTML ? clone.outerHTML : '';
-          var limit = el.tagName && el.tagName.toLowerCase() === 'input' ? 400 : 200;
+          var h = el.outerHTML ? el.outerHTML : '';
+          var limit = el.tagName && el.tagName.toLowerCase() === 'input' ? 400 : 400;
           return h.slice(0, limit);
+        }
+
+        function getVisibleText(el) {
+          try {
+            var t = el.innerText || '';
+            return t.replace(/\\s+/g, ' ').trim().slice(0, 200);
+          } catch (e) {
+            return '';
+          }
+        }
+
+        function getAriaLabel(el) {
+          try {
+            if (!el.getAttribute) return '';
+            var a = el.getAttribute('aria-label');
+            return a ? String(a).trim().slice(0, 160) : '';
+          } catch (e) {
+            return '';
+          }
         }
 
         document.addEventListener('click', function(e) {
@@ -1757,6 +1786,8 @@ export class RecordingService extends EventEmitter {
               type: 'click',
               selector: getSelector(target),
               elementHtml: getElementHtml(target),
+              elementText: getVisibleText(target),
+              ariaLabel: getAriaLabel(target),
               value: null
             })
           );
@@ -1774,6 +1805,8 @@ export class RecordingService extends EventEmitter {
                 type: 'type',
                 selector: getSelector(target),
                 elementHtml: getElementHtml(target),
+                elementText: getVisibleText(target),
+                ariaLabel: getAriaLabel(target),
                 value: target.value
               })
             );

@@ -31,3 +31,30 @@ export function preferRecordedCssSelectorForBarePageLocator(
     return `page.locator(${JSON.stringify(sel)})`;
   });
 }
+
+/**
+ * When the LLM still emits `page.locator('span').first().click()` but we have visible label text
+ * (e.g. nav item "Patients") because recorded HTML used to omit children, prefer `getByText`.
+ */
+export function preferGetByTextForBareTagLocator(
+  recordedSelector: string | null | undefined,
+  elementVisibleText: string | null | undefined,
+  playwrightCode: string,
+): string {
+  const text = elementVisibleText?.trim();
+  if (!text || text.length > 200) return playwrightCode;
+  const sel = (recordedSelector ?? '').trim();
+  if (!sel) return playwrightCode;
+  if (!/^[a-z][a-z0-9]*$/i.test(sel)) return playwrightCode;
+  const tag = sel.toLowerCase();
+  if (!['span', 'div', 'a', 'button', 'i', 'svg', 'label', 'p'].includes(tag)) return playwrightCode;
+
+  const byText = `page.getByText(${JSON.stringify(text)}, { exact: false }).first().click()`;
+  for (const q of ["'", '"', '`'] as const) {
+    const needle = `page.locator(${q}${tag}${q}).first().click()`;
+    if (playwrightCode.includes(needle)) {
+      return playwrightCode.replace(needle, byText);
+    }
+  }
+  return playwrightCode;
+}

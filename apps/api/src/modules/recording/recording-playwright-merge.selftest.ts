@@ -1,4 +1,7 @@
-import { preferRecordedCssSelectorForBarePageLocator } from './recording-playwright-merge.util';
+import {
+  preferGetByTextForBareTagLocator,
+  preferRecordedCssSelectorForBarePageLocator,
+} from './recording-playwright-merge.util';
 
 function assertEq<T>(label: string, got: T, want: T) {
   if (got !== want) {
@@ -29,6 +32,16 @@ assertEq(
   'skip getByRole',
   preferRecordedCssSelectorForBarePageLocator('span.x', `await page.getByRole('link', { name: 'Patients' }).click();`),
   `await page.getByRole('link', { name: 'Patients' }).click();`,
+);
+
+assertEq(
+  'bare span + visible text -> getByText',
+  preferGetByTextForBareTagLocator(
+    'span',
+    'Patients',
+    `await page.locator('span').first().click();`,
+  ),
+  `await page.getByText(${JSON.stringify('Patients')}, { exact: false }).first().click();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

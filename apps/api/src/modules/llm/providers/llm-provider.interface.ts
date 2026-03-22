@@ -17,6 +17,10 @@ export interface ActionToInstructionInput {
   action: string;
   selector: string;
   elementHtml: string;
+  /** `innerText` from the clicked element (trimmed); not stripped unlike cloneNode(false) HTML. */
+  elementVisibleText?: string;
+  /** `aria-label` when present (e.g. icon-only controls). */
+  ariaLabel?: string;
   value?: string;
   pageAccessibilityTree: string;
 }

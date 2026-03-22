@@ -15,10 +15,12 @@ Respond ONLY with valid JSON: { "instruction": "...", "playwrightCode": "..." }
 
 Guidelines:
 - Instructions should be natural language, e.g. "Click the 'Sign In' button in the navigation bar"
+- **Visible text** (if provided) is the element's innerText from the browser — use it for the instruction name (e.g. "Click the Patients item in the sidebar"). Never say "empty span" or "empty element" when Visible text is non-empty. **Aria label** (if provided) names icon-only controls.
+- Element HTML may be truncated; prefer Visible text and Aria label over HTML when they disagree with an empty-looking tag.
 - For TYPE actions, use Element HTML attributes: input[type="password"] or autocomplete="current-password" means password field; type="email", name="identifier", or email-like placeholders mean email/username. Never describe typing a password into an email field or vice versa.
 - The "Selector" field is the clicked element's CSS selector from the browser (tag + #id, classes, or [data-testid]). When it contains a class, id, or attribute (not just a bare tag name), prefer await page.locator(<that exact selector as a single-quoted or JSON string>) for clicks/fills so replay targets the same node.
 - Playwright code should use modern locator APIs (getByRole, getByText, getByLabel) when possible
-- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. Use getByRole('link', { name: '...' }), getByText('...'), page.locator(<Selector field>) when specific, or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
+- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. When Visible text is available for a click, prefer getByText(visibleText, { exact: false }) or getByRole with name from Visible text / aria. Otherwise use getByRole('link', { name: '...' }), getByText('...'), page.locator(<Selector field>) when specific, or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
 - Keep instructions concise but specific enough to identify the target element`;
 
 const INSTRUCTION_TO_ACTION_SYSTEM = `You are a Playwright test automation agent. Given a natural language instruction and the current page context, generate the Playwright code to execute the action.
@@ -56,8 +58,12 @@ export class LlmService {
     input: ActionToInstructionInput,
   ): Promise<ActionToInstructionOutput> {
     if (!this.provider) {
+      const label = input.elementVisibleText?.trim() || input.ariaLabel?.trim();
       return {
-        instruction: `${input.action} on ${input.selector}`,
+        instruction:
+          input.action === 'click' && label
+            ? `Click ${label}`
+            : `${input.action} on ${input.selector}`,
         playwrightCode: `// ${input.action}: ${input.selector}`,
       };
     }
@@ -65,8 +71,7 @@ export class LlmService {
     const userPrompt = `Action: ${input.action}
 Selector: ${input.selector}
 Element HTML: ${input.elementHtml}
-${input.value ? `Value: ${input.value}` : ''}
-Page context (accessibility tree excerpt):
+${input.elementVisibleText ? `Visible text: ${input.elementVisibleText}\n` : ''}${input.ariaLabel ? `Aria label: ${input.ariaLabel}\n` : ''}${input.value ? `Value: ${input.value}\n` : ''}Page context (accessibility tree excerpt):
 ${input.pageAccessibilityTree.slice(0, 3000)}`;
 
     try {
@@ -78,8 +83,12 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       return JSON.parse(response);
     } catch (err) {
       this.logger.error('actionToInstruction failed', err);
+      const label = input.elementVisibleText?.trim() || input.ariaLabel?.trim();
       return {
-        instruction: `${input.action} on ${input.selector}`,
+        instruction:
+          input.action === 'click' && label
+            ? `Click ${label}`
+            : `${input.action} on ${input.selector}`,
         playwrightCode: `// ${input.action}: ${input.selector}`,
       };
     }

@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.31** — **Recording**: DOM capture now sends **`elementText`** (`innerText`) and **`ariaLabel`** to **`actionToInstruction`**; **`getElementHtml`** uses **`outerHTML`** (was `cloneNode(false)`, which hid label text). LLM prompt forbids “empty span” when visible text exists; **`preferGetByTextForBareTagLocator`** rewrites bare `page.locator('span').first().click()` when label text is known. **`@bladerunner/api` `0.5.29`**.
 - **0.7.30** — **Recording + playback**: **single-step automatic Clerk sign-in** — one **`CUSTOM`** row with **`metadata.kind: clerk_auto_sign_in`** (`otpMode`, `postAuthPageUrl`) instead of six canonical steps; playback runs **`performClerkPasswordEmail2FA`** from recorded **`otpMode`** and skips pre-loop assist when that step exists. Legacy **`clerkAutomationCanonical`** runs unchanged. **`@bladerunner/api` `0.5.28`**.
 - **0.7.29** — **Recording**: removed **debug-session NDJSON/fetch** instrumentation from Clerk DOM capture path (verification complete). **`@bladerunner/api` `0.5.27`**.
 - **0.7.28** — **Recording**: **Clerk DOM capture barrier** — `session.clerkDomCaptureBarrier` increments when auto sign-in pause starts/ends; DOM capture callbacks snapshot it and **drop** `recordStep` after LLM if the barrier crossed (fixes slow LLM finishing after `resume` and still persisting a stale TYPE). **`@bladerunner/api` `0.5.26`**.
