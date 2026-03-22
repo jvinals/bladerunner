@@ -853,7 +853,7 @@ export default function RunDetailPage() {
       {/* Playback (left) + metrics (right) on large screens; same card chrome and height via items-stretch */}
       <div className="space-y-2 mb-6">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1 shadow-sm lg:min-w-[min(100%,30rem)] lg:flex-[1.2]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center self-stretch rounded-lg border border-gray-100 bg-white px-2 py-0.5 shadow-sm lg:min-w-[min(100%,30rem)] lg:flex-[1.2]">
             <span className="sr-only">Playback</span>
             <div
               className="flex min-h-0 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto"
@@ -1012,7 +1012,7 @@ export default function RunDetailPage() {
           </div>
 
           <div
-            className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm lg:max-w-[min(100%,25.5rem)] lg:flex-none lg:shrink-0"
+            className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm lg:max-w-[min(100%,27rem)] lg:flex-none lg:shrink-0"
             role="group"
             aria-label="Run metrics"
           >
