@@ -49,7 +49,7 @@ export function preferGetByTextForBareTagLocator(
   const tag = sel.toLowerCase();
   if (!['span', 'div', 'a', 'button', 'i', 'svg', 'label', 'p'].includes(tag)) return playwrightCode;
 
-  const byText = `page.getByText(${JSON.stringify(text)}, { exact: false }).first().click()`;
+  const byText = `page.getByText(${JSON.stringify(text)}, { exact: true }).first().click()`;
   for (const q of ["'", '"', '`'] as const) {
     const needle = `page.locator(${q}${tag}${q}).first().click()`;
     if (playwrightCode.includes(needle)) {
@@ -57,4 +57,42 @@ export function preferGetByTextForBareTagLocator(
     }
   }
   return playwrightCode;
+}
+
+/**
+ * Playback: `getByText('Patients', { exact: false })` matches "Total Patients" and other substrings.
+ * Prefer exact full-string match; ensure `.first()` before `.click()` when multiple exact matches exist.
+ */
+export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): string {
+  let s = playwrightCode;
+  s = s.replace(
+    /\.getByText\(([^,]+),\s*\{\s*exact:\s*false\s*\}\)/g,
+    '.getByText($1, { exact: true })',
+  );
+  s = s.replace(
+    /\.getByText\(\s*(['"`])([^'"`]*)\1\s*(?:,\s*\{\s*exact:\s*true\s*\})?\s*\)(?!\s*\.first\(\))(\s*\.click\(\))/g,
+    (_m, q: string, text: string, clickPart: string) =>
+      `.getByText(${q}${text}${q}, { exact: true }).first()${clickPart}`,
+  );
+  // #region agent log
+  if (s !== playwrightCode && /getByText/i.test(playwrightCode)) {
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'recording-playwright-merge.util.ts:tightenGetByTextLocatorsForPlayback',
+        message: 'tighten applied',
+        data: {
+          hypothesisId: 'H1',
+          runId: 'post-fix',
+          lenBefore: playwrightCode.length,
+          lenAfter: s.length,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+  return s;
 }

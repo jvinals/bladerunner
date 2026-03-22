@@ -42,6 +42,7 @@ import {
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
+  tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -1836,7 +1837,9 @@ export class RecordingService extends EventEmitter {
       }
     }
 
-    const safeCode = escapeLocatorCssInPlaywrightSnippet(this.relaxPlaywrightCodegenForPlayback(code));
+    const safeCode = escapeLocatorCssInPlaywrightSnippet(
+      tightenGetByTextLocatorsForPlayback(this.relaxPlaywrightCodegenForPlayback(code)),
+    );
     const fn = new Function('page', `return (async () => { ${safeCode} })();`);
     await fn(page);
   }
