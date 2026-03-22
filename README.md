@@ -217,6 +217,8 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.69** — **Run detail**: Softer playback vs metrics split (`flex-[1.2]`, metrics `max-w` ~23rem, min playback ~30rem); playback toolbar uses **horizontal scroll** again instead of wrapping. **`@bladerunner/web` `0.6.43`**.
+- **0.7.68** — **Run detail**: Wider playback toolbar row (`flex-[3]`), narrower metrics card (`max-w` ~17.5rem), slightly shorter metrics padding; playback controls **wrap** instead of horizontal scroll. **`@bladerunner/web` `0.6.42`**.
 - **0.7.67** — **Run detail**: **View** control (**Split** / **Stack**) to the right of the playback toolbar — **Split** keeps **Live replay preview** left and **Recorded steps** right; **Stack** shows steps in a **horizontal scrolling** row with **full-width preview** below. **`@bladerunner/web` `0.6.41`**.
 - **0.7.66** — **Playback**: Socket **`completed`** / **`stopped`** now sets status **`idle`** after teardown (avoids a stuck **`COMPLETED`** / **`STOPPED`** label with no session). **`@bladerunner/web` `0.6.40`**.
 - **0.7.65** — **Playback**: Manual **Stop** sets status **`idle`** (not **`stopped`**). **Run to seq** clears whenever **`!isPlaying && !playbackSessionId`** so it resets after **Stop**/**complete**/**navigation**. **`@bladerunner/web` `0.6.39`**.
