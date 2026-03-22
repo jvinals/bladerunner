@@ -2,6 +2,7 @@ import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
   relaxClickForceForPlayback,
+  relaxPageLocatorFirstForPlayback,
   tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
 
@@ -76,6 +77,24 @@ assertEq(
   'playback force: leaves .click({ force: true }) unchanged',
   relaxClickForceForPlayback(`await page.locator('button').click({ force: true });`),
   `await page.locator('button').click({ force: true });`,
+);
+
+assertEq(
+  'playback relax: bare span -> .first()',
+  relaxPageLocatorFirstForPlayback(`await page.locator('span').click();`),
+  `await page.locator('span').first().click();`,
+);
+
+assertEq(
+  'playback relax: svg class chain -> .first()',
+  relaxPageLocatorFirstForPlayback(`await page.locator('svg.lucide-triangle-alert').click();`),
+  `await page.locator('svg.lucide-triangle-alert').first().click();`,
+);
+
+assertEq(
+  'playback relax: no-op when already .first()',
+  relaxPageLocatorFirstForPlayback(`await page.locator('svg.lucide-triangle-alert').first().click();`),
+  `await page.locator('svg.lucide-triangle-alert').first().click();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

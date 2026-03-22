@@ -43,6 +43,7 @@ import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
   relaxClickForceForPlayback,
+  relaxPageLocatorFirstForPlayback,
   tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
 import {
@@ -1831,18 +1832,6 @@ export class RecordingService extends EventEmitter {
     return false;
   }
 
-  /**
-   * LLM-generated steps sometimes use `page.locator('span')` etc., which matches many nodes and
-   * throws strict mode violation on click/fill. Append `.first()` when the chain does not already
-   * narrow (first/nth/filter/locator/getBy).
-   */
-  private relaxPlaywrightCodegenForPlayback(code: string): string {
-    const alreadyNarrowed = String.raw`(?!\s*\.(?:first|nth|filter|locator|last|getBy))`;
-    const pattern = String.raw`\bpage\.locator\s*\(\s*(['"\`])(span|div|p|a|button|input)\1\s*\)${alreadyNarrowed}`;
-    const re = new RegExp(pattern, 'gi');
-    return code.replace(re, (_full, quote: string, tag: string) => `page.locator(${quote}${tag}${quote}).first()`);
-  }
-
   private async executePwCode(
     page: Page,
     code: string,
@@ -1855,7 +1844,7 @@ export class RecordingService extends EventEmitter {
       }
     }
 
-    const relaxed = this.relaxPlaywrightCodegenForPlayback(code);
+    const relaxed = relaxPageLocatorFirstForPlayback(code);
     const tightened = tightenGetByTextLocatorsForPlayback(relaxed);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;

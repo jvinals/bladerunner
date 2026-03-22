@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.36** — **Playback**: **`relaxPageLocatorFirstForPlayback`** (replaces in-service **`relaxPlaywrightCodegenForPlayback`**) also appends **`.first()`** to **`page.locator('tag.class1.class2…')`** compound class chains (e.g. **`svg.lucide-triangle-alert`**) when not already narrowed — fixes strict mode when the same icon class appears on multiple buttons. **`@bladerunner/api` `0.5.34`**.
 - **0.7.35** — **Recording / playback**: removed **debug-session** NDJSON **fetch** instrumentation from **`tightenGetByTextLocatorsForPlayback`** and **`runPlaybackLoop` / `executePwCode`** (verification complete). **`@bladerunner/api` `0.5.33`**.
 - **0.7.34** — **Playback**: **`click({ force: true })`** is **not** applied until **`clerkFullSignInDone`** (after **`clerk_auto_sign_in`** or the pre-loop Clerk assist). Pre-auth steps used **force** and could break **automatic Clerk sign-in** when a recorded **`clerk_auto_sign_in`** row exists (initial assist is skipped). **`@bladerunner/api` `0.5.32`**.
 - **0.7.33** — **Playback**: bare **`.click()`** in stored codegen is rewritten to **`.click({ force: true })`** (default; set **`PLAYBACK_CLICK_FORCE=false`** to disable) so Radix/dialog layers that **intercept pointer events** do not hang the action. **`relaxClickForceForPlayback`** in the **`executePwCode`** pipeline. **`@bladerunner/api` `0.5.31`**.

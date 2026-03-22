@@ -78,6 +78,24 @@ export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): str
 }
 
 /**
+ * Playback: LLM codegen often uses `page.locator('span')` or `page.locator('svg.lucide-triangle-alert')`.
+ * Bare tags and **tag + class-chain** selectors (no spaces / # / [) can match many nodes (strict mode).
+ * Append `.first()` when the chain is not already narrowed (first/nth/filter/locator/getBy).
+ */
+export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string {
+  const alreadyNarrowed = String.raw`(?!\s*\.(?:first|nth|filter|locator|last|getBy))`;
+  let s = playwrightCode;
+  const bareTag = String.raw`\bpage\.locator\s*\(\s*(['"\`])(span|div|p|a|button|input)\1\s*\)${alreadyNarrowed}`;
+  s = s.replace(new RegExp(bareTag, 'gi'), (_full, quote: string, tag: string) => `page.locator(${quote}${tag}${quote}).first()`);
+  const compoundClassChain = String.raw`\bpage\.locator\s*\(\s*(['"\`])([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_-]+)+)\1\s*\)${alreadyNarrowed}`;
+  s = s.replace(
+    new RegExp(compoundClassChain, 'gi'),
+    (_full, quote: string, sel: string) => `page.locator(${quote}${sel}${quote}).first()`,
+  );
+  return s;
+}
+
+/**
  * Playback: Radix/modal layers often report "subtree intercepts pointer events" — Playwright refuses the click.
  * `force: true` skips that actionability check and dispatches to the locator’s element (see Playwright input docs).
  */
