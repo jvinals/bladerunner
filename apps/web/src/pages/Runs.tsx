@@ -77,6 +77,7 @@ export default function RunsPage() {
 
   const {
     playbackSessionId,
+    sourceRunId: playbackSourceRunId,
     currentFrame: playFrame,
     status: playbackStatus,
     isPlaying,
@@ -302,7 +303,8 @@ export default function RunsPage() {
 
   const handleDetachPlaybackRuns = useCallback(() => {
     if (!playbackSessionId) return;
-    const url = `${window.location.origin}/playback/${playbackSessionId}`;
+    const src = playbackSourceRunId;
+    const url = `${window.location.origin}/playback/${playbackSessionId}${src ? `?source=${encodeURIComponent(src)}` : ''}`;
     const w = window.open(
       url,
       'bladerunner-playback',
@@ -317,7 +319,7 @@ export default function RunsPage() {
         }
       }, 500);
     }
-  }, [playbackSessionId]);
+  }, [playbackSessionId, playbackSourceRunId]);
 
   const handleSendInstruction = useCallback(async () => {
     if (!instructionText.trim() || isSendingInstruction) return;

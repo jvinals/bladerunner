@@ -1,9 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
-import { runsApi } from '@/lib/api';
+import { runsApi, playbackBodyFromSnapshot, type ClerkOtpMode } from '@/lib/api';
 import { Pause, Play, RotateCcw, Square, StepForward } from 'lucide-react';
+
+type ReplaySnapshot = {
+  sourceRunId: string;
+  delayMs?: number;
+  wantAutoClerkSignIn?: boolean;
+  clerkOtpMode?: ClerkOtpMode;
+  skipUntilSequence?: number;
+  skipStepIds?: string[];
+  playThroughSequence?: number;
+};
+
+function isFullReplaySnapshot(s: ReplaySnapshot | null): s is ReplaySnapshot & {
+  delayMs: number;
+  wantAutoClerkSignIn: boolean;
+  clerkOtpMode: ClerkOtpMode;
+} {
+  return (
+    !!s &&
+    typeof s.delayMs === 'number' &&
+    typeof s.wantAutoClerkSignIn === 'boolean' &&
+    !!s.clerkOtpMode
+  );
+}
 
 /**
  * Detached window for live test replay preview.
@@ -11,6 +34,7 @@ import { Pause, Play, RotateCcw, Square, StepForward } from 'lucide-react';
  */
 export default function DetachedPlayback() {
   const { playbackSessionId: routePlaybackId } = useParams<{ playbackSessionId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -20,10 +44,60 @@ export default function DetachedPlayback() {
   const [activeStepSequence, setActiveStepSequence] = useState<number | null>(null);
   const [advanceToSeq, setAdvanceToSeq] = useState('');
   const [playbackSessionId, setPlaybackSessionId] = useState(routePlaybackId ?? '');
+  const [replaySnapshot, setReplaySnapshot] = useState<ReplaySnapshot | null>(null);
+  const [replayBusy, setReplayBusy] = useState(false);
 
   useEffect(() => {
     setPlaybackSessionId(routePlaybackId ?? '');
   }, [routePlaybackId]);
+
+  useEffect(() => {
+    const q = searchParams.get('source');
+    if (!q) return;
+    setReplaySnapshot((prev) => (prev?.sourceRunId ? prev : { ...prev, sourceRunId: q }));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!playbackSessionId) return;
+    let cancelled = false;
+    void runsApi
+      .getPlaybackSession(playbackSessionId)
+      .then((snap) => {
+        if (cancelled) return;
+        setReplaySnapshot({
+          sourceRunId: snap.sourceRunId,
+          delayMs: snap.delayMs,
+          wantAutoClerkSignIn: snap.wantAutoClerkSignIn,
+          clerkOtpMode: snap.clerkOtpMode,
+          skipUntilSequence: snap.skipUntilSequence,
+          skipStepIds: snap.skipStepIds,
+          playThroughSequence: snap.playThroughSequence,
+        });
+      })
+      .catch(() => {
+        /* session may already be finished — rely on ?source= or socket sourceRunId */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [playbackSessionId]);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'DetachedPlayback.tsx:renderState',
+        message: 'isPaused/status snapshot',
+        data: { isPaused, status, showAdvanceRowWillBe: Boolean(playbackSessionId) },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+      }),
+    }).catch(() => {});
+    // #endregion
+  }, [isPaused, status, playbackSessionId]);
 
   useEffect(() => {
     if (!playbackSessionId) return;
@@ -72,8 +146,28 @@ export default function DetachedPlayback() {
       },
     );
 
-    socket.on('status', (data: { status: string; runId?: string }) => {
+    socket.on('status', (data: { status: string; runId?: string; sourceRunId?: string }) => {
       if (data.runId && data.runId !== playbackSessionId) return;
+      if (data.sourceRunId) {
+        setReplaySnapshot((prev) => ({
+          ...(prev ?? { sourceRunId: data.sourceRunId! }),
+          sourceRunId: data.sourceRunId!,
+        }));
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          location: 'DetachedPlayback.tsx:socket.status',
+          message: 'status event',
+          data: { incoming: data.status, runId: data.runId ?? null },
+          timestamp: Date.now(),
+          hypothesisId: 'H1',
+        }),
+      }).catch(() => {});
+      // #endregion
       if (data.status === 'playback_paused') {
         setIsPaused(true);
         setStatus('playback_paused');
@@ -116,15 +210,53 @@ export default function DetachedPlayback() {
       const next = await runsApi.restartPlayback(playbackSessionId);
       if (next?.playbackSessionId) {
         setPlaybackSessionId(next.playbackSessionId);
-        navigate(`/playback/${next.playbackSessionId}`, { replace: true });
+        const src = replaySnapshot?.sourceRunId ?? searchParams.get('source');
+        navigate(
+          `/playback/${next.playbackSessionId}${src ? `?source=${encodeURIComponent(src)}` : ''}`,
+          { replace: true },
+        );
       }
     } catch {
       /* ignore */
     }
   };
 
+  const handleReplayAfterEnd = async () => {
+    const source = replaySnapshot?.sourceRunId ?? searchParams.get('source');
+    if (!source || replayBusy) return;
+    const body = isFullReplaySnapshot(replaySnapshot) ? playbackBodyFromSnapshot(replaySnapshot) : {};
+    setReplayBusy(true);
+    try {
+      const next = await runsApi.startPlayback(source, body);
+      setPlaybackSessionId(next.playbackSessionId);
+      setStatus('connecting');
+      setIsPaused(false);
+      navigate(`/playback/${next.playbackSessionId}?source=${encodeURIComponent(source)}`, {
+        replace: true,
+      });
+    } catch {
+      /* ignore */
+    } finally {
+      setReplayBusy(false);
+    }
+  };
+
   const handleAdvanceOne = () => {
     if (!playbackSessionId) return;
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'DetachedPlayback.tsx:handleAdvanceOne',
+        message: 'advance one clicked',
+        data: { playbackSessionId },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+      }),
+    }).catch(() => {});
+    // #endregion
     void runsApi.advancePlaybackOne(playbackSessionId);
   };
 
@@ -139,6 +271,7 @@ export default function DetachedPlayback() {
   const sessionEnded =
     status === 'completed' || status === 'stopped' || status === 'failed';
   const showControls = Boolean(playbackSessionId) && !sessionEnded;
+  const canReplayAfterEnd = Boolean(replaySnapshot?.sourceRunId ?? searchParams.get('source'));
 
   return (
     <div className="w-screen h-screen bg-gray-900 flex flex-col">
@@ -157,9 +290,23 @@ export default function DetachedPlayback() {
             </span>
           )}
           {sessionEnded && playbackSessionId && (
-            <span className="text-[10px] text-gray-400 max-w-[18rem] text-right" role="status">
-              Playback ended. Start again from Run detail or the Runs page.
-            </span>
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              <span className="text-[10px] text-gray-400 max-w-[18rem] text-right" role="status">
+                Playback ended.
+              </span>
+              {canReplayAfterEnd && (
+                <button
+                  type="button"
+                  disabled={replayBusy}
+                  onClick={() => void handleReplayAfterEnd()}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-[#4B90FF]/90 text-white text-[11px] font-medium hover:bg-[#4B90FF] disabled:opacity-50"
+                  title="Start the same replay again with the last known options (or server defaults)"
+                >
+                  <Play size={12} className="fill-white" />
+                  {replayBusy ? 'Starting…' : 'Replay'}
+                </button>
+              )}
+            </div>
           )}
           {showControls && (
             <div

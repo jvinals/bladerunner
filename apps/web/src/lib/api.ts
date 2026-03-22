@@ -53,6 +53,38 @@ export function buildStartPlaybackBody(params: {
   return out;
 }
 
+/** Build `POST .../playback/start` body from a server playback snapshot (e.g. `GET /runs/playback/:id`). */
+export function playbackBodyFromSnapshot(s: {
+  delayMs: number;
+  wantAutoClerkSignIn: boolean;
+  clerkOtpMode: ClerkOtpMode;
+  skipUntilSequence?: number;
+  skipStepIds?: string[];
+  playThroughSequence?: number;
+}): StartPlaybackBody {
+  const out: StartPlaybackBody = {
+    delayMs: s.delayMs,
+    autoClerkSignIn: s.wantAutoClerkSignIn,
+    clerkOtpMode: s.clerkOtpMode,
+  };
+  if (
+    typeof s.skipUntilSequence === 'number' &&
+    Number.isFinite(s.skipUntilSequence) &&
+    s.skipUntilSequence >= 0
+  ) {
+    out.skipUntilSequence = Math.floor(s.skipUntilSequence);
+  }
+  if (s.skipStepIds?.length) out.skipStepIds = s.skipStepIds;
+  if (
+    typeof s.playThroughSequence === 'number' &&
+    Number.isFinite(s.playThroughSequence) &&
+    s.playThroughSequence >= 0
+  ) {
+    out.playThroughSequence = Math.floor(s.playThroughSequence);
+  }
+  return out;
+}
+
 let _getToken: (() => Promise<string | null>) | null = null;
 
 export function setTokenProvider(fn: () => Promise<string | null>) {
