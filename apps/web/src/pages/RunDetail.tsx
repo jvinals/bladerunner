@@ -21,6 +21,7 @@ import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Play, Square, ExternalLink,
   Film, Pause, RotateCcw, StepForward, X, PanelRight,
+  Columns2, Rows,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -511,6 +512,8 @@ export default function RunDetailPage() {
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const [playbackAdvanceToSeq, setPlaybackAdvanceToSeq] = useState('');
+  /** Split: preview left + steps column right. Stack: steps in a horizontal scroller on top, full-width preview below. */
+  const [playbackLayout, setPlaybackLayout] = useState<'split' | 'stack'>('split');
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const stepRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const detachedPlaybackWindowRef = useRef<Window | null>(null);
@@ -969,6 +972,46 @@ export default function RunDetailPage() {
           </div>
 
           <div
+            className="flex shrink-0 flex-col items-stretch justify-center gap-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm sm:flex-row sm:items-center sm:gap-2"
+            role="group"
+            aria-label="Playback layout"
+          >
+            <span className="text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400 sm:text-left">
+              View
+            </span>
+            <div className="flex rounded-md border border-gray-200 bg-gray-50 p-0.5">
+              <button
+                type="button"
+                aria-pressed={playbackLayout === 'split'}
+                onClick={() => setPlaybackLayout('split')}
+                className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+                  playbackLayout === 'split'
+                    ? 'bg-white text-[#4B90FF] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="Preview on the left, recorded steps on the right"
+              >
+                <Columns2 size={12} aria-hidden />
+                Split
+              </button>
+              <button
+                type="button"
+                aria-pressed={playbackLayout === 'stack'}
+                onClick={() => setPlaybackLayout('stack')}
+                className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+                  playbackLayout === 'stack'
+                    ? 'bg-white text-[#4B90FF] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="Recorded steps in a horizontal row; live preview full width below"
+              >
+                <Rows size={12} aria-hidden />
+                Stack
+              </button>
+            </div>
+          </div>
+
+          <div
             className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm"
             role="group"
             aria-label="Run metrics"
@@ -1023,106 +1066,206 @@ export default function RunDetailPage() {
         )}
       </div>
 
-      {/* Playback preview + recorded steps — wide preview left, narrower steps column right */}
-      {recordedSteps.length > 0 && (
-        <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-6">
-          <div
-            className={`min-w-0 flex-1 bg-white border border-gray-100 rounded-lg p-4 flex flex-col ${PLAYBACK_COL_HEIGHT}`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                <Play size={14} className="text-[#4B90FF]" />
-                Live replay preview
-              </p>
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider">
-                {playbackStatus === 'idle' ? 'Idle' : playbackStatus}
-              </span>
-            </div>
-            <div className="relative flex-1 min-h-0 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 overflow-hidden">
-              {(currentFrame || isPlaying) && (
-                <canvas
-                  ref={playbackCanvasRef}
-                  className="max-h-full w-full max-w-full object-contain"
-                  role="img"
-                  aria-label="Playback preview"
-                />
-              )}
-              {isPlaying && !currentFrame && !playbackError && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
-                </div>
-              )}
-              {playbackError && (
-                <div
-                  className={`flex items-center justify-center p-4 z-[2] ${
-                    currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
-                  }`}
-                  role="alert"
-                >
-                  <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
-                </div>
-              )}
-              {!currentFrame && !isPlaying && !playbackError && (
-                <p className="text-xs text-gray-400 text-center px-6">
-                  Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
-                  session. Frames stream here in real time.
+      {/* Playback preview + recorded steps — split (preview | steps) or stack (steps row, preview full width) */}
+      {recordedSteps.length > 0 &&
+        (playbackLayout === 'split' ? (
+          <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-6">
+            <div
+              className={`min-w-0 flex-1 bg-white border border-gray-100 rounded-lg p-4 flex flex-col ${PLAYBACK_COL_HEIGHT}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  <Play size={14} className="text-[#4B90FF]" />
+                  Live replay preview
                 </p>
-              )}
-            </div>
-          </div>
-          <div
-            className={`w-full shrink-0 bg-white border border-gray-100 rounded-lg p-4 flex flex-col lg:w-[min(20rem,26%)] lg:min-w-[17rem] lg:max-w-sm ${PLAYBACK_COL_HEIGHT}`}
-          >
-            <p className="text-sm font-semibold text-gray-800 mb-3">
-              Recorded steps
-              <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
-            </p>
-            <div className="overflow-y-auto flex-1 pr-1 -mr-1">
-              {recordedSteps.map((step) => {
-                const cp = runCheckpoints.find((c) => c.afterStepSequence === step.sequence);
-                return (
-                  <div key={step.id}>
-                    <StepCard
-                      ref={(el) => {
-                        if (el) stepRefs.current.set(step.sequence, el);
-                        else stepRefs.current.delete(step.sequence);
-                      }}
-                      sequence={step.sequence}
-                      action={step.action}
-                      instruction={step.instruction}
-                      playwrightCode={step.playwrightCode}
-                      origin={step.origin}
-                      timestamp={step.timestamp}
-                      metadata={step.metadata}
-                      playbackHighlight={playbackToneForStep(
-                        step.sequence,
-                        showReplayChrome,
-                        effectiveHighlightSequence,
-                        completedSequences,
-                      )}
-                      stepPlayback={
-                        canShowStepActions
-                          ? {
-                              onPlayFromHere: () => void handleStepPlayback(step.sequence, 'from'),
-                              onPlayThisStepOnly: () => void handleStepPlayback(step.sequence, 'only'),
-                              disabled: isPlaying || !canPlayback,
-                            }
-                          : undefined
-                      }
-                      checkpointAfterStep={cp ?? undefined}
-                      checkpointRunId={cp && id ? id : undefined}
-                    />
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+                  {playbackStatus === 'idle' ? 'Idle' : playbackStatus}
+                </span>
+              </div>
+              <div className="relative flex-1 min-h-0 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 overflow-hidden">
+                {(currentFrame || isPlaying) && (
+                  <canvas
+                    ref={playbackCanvasRef}
+                    className="max-h-full w-full max-w-full object-contain"
+                    role="img"
+                    aria-label="Playback preview"
+                  />
+                )}
+                {isPlaying && !currentFrame && !playbackError && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
                   </div>
-                );
-              })}
+                )}
+                {playbackError && (
+                  <div
+                    className={`flex items-center justify-center p-4 z-[2] ${
+                      currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
+                    }`}
+                    role="alert"
+                  >
+                    <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
+                  </div>
+                )}
+                {!currentFrame && !isPlaying && !playbackError && (
+                  <p className="text-xs text-gray-400 text-center px-6">
+                    Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
+                    session. Frames stream here in real time.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div
+              className={`w-full shrink-0 bg-white border border-gray-100 rounded-lg p-4 flex flex-col lg:w-[min(20rem,26%)] lg:min-w-[17rem] lg:max-w-sm ${PLAYBACK_COL_HEIGHT}`}
+            >
+              <p className="text-sm font-semibold text-gray-800 mb-3">
+                Recorded steps
+                <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
+              </p>
+              <div className="overflow-y-auto flex-1 pr-1 -mr-1">
+                {recordedSteps.map((step) => {
+                  const cp = runCheckpoints.find((c) => c.afterStepSequence === step.sequence);
+                  return (
+                    <div key={step.id}>
+                      <StepCard
+                        ref={(el) => {
+                          if (el) stepRefs.current.set(step.sequence, el);
+                          else stepRefs.current.delete(step.sequence);
+                        }}
+                        sequence={step.sequence}
+                        action={step.action}
+                        instruction={step.instruction}
+                        playwrightCode={step.playwrightCode}
+                        origin={step.origin}
+                        timestamp={step.timestamp}
+                        metadata={step.metadata}
+                        playbackHighlight={playbackToneForStep(
+                          step.sequence,
+                          showReplayChrome,
+                          effectiveHighlightSequence,
+                          completedSequences,
+                        )}
+                        stepPlayback={
+                          canShowStepActions
+                            ? {
+                                onPlayFromHere: () => void handleStepPlayback(step.sequence, 'from'),
+                                onPlayThisStepOnly: () => void handleStepPlayback(step.sequence, 'only'),
+                                disabled: isPlaying || !canPlayback,
+                              }
+                            : undefined
+                        }
+                        checkpointAfterStep={cp ?? undefined}
+                        checkpointRunId={cp && id ? id : undefined}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="mb-8 flex flex-col gap-6">
+            <div className="flex min-h-0 flex-col rounded-lg border border-gray-100 bg-white p-4">
+              <p className="mb-3 text-sm font-semibold text-gray-800">
+                Recorded steps
+                <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
+              </p>
+              <div className="-mx-1 flex gap-3 overflow-x-auto overflow-y-hidden px-1 pb-2 scroll-smooth">
+                {recordedSteps.map((step) => {
+                  const cp = runCheckpoints.find((c) => c.afterStepSequence === step.sequence);
+                  return (
+                    <div
+                      key={step.id}
+                      className="w-[min(18rem,calc(100vw-2.5rem))] shrink-0 sm:w-80 max-h-[min(44vh,420px)] overflow-y-auto overflow-x-hidden"
+                    >
+                      <StepCard
+                        ref={(el) => {
+                          if (el) stepRefs.current.set(step.sequence, el);
+                          else stepRefs.current.delete(step.sequence);
+                        }}
+                        sequence={step.sequence}
+                        action={step.action}
+                        instruction={step.instruction}
+                        playwrightCode={step.playwrightCode}
+                        origin={step.origin}
+                        timestamp={step.timestamp}
+                        metadata={step.metadata}
+                        playbackHighlight={playbackToneForStep(
+                          step.sequence,
+                          showReplayChrome,
+                          effectiveHighlightSequence,
+                          completedSequences,
+                        )}
+                        stepPlayback={
+                          canShowStepActions
+                            ? {
+                                onPlayFromHere: () => void handleStepPlayback(step.sequence, 'from'),
+                                onPlayThisStepOnly: () => void handleStepPlayback(step.sequence, 'only'),
+                                disabled: isPlaying || !canPlayback,
+                              }
+                            : undefined
+                        }
+                        checkpointAfterStep={cp ?? undefined}
+                        checkpointRunId={cp && id ? id : undefined}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div
+              className={`min-w-0 w-full bg-white border border-gray-100 rounded-lg p-4 flex flex-col ${PLAYBACK_COL_HEIGHT}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  <Play size={14} className="text-[#4B90FF]" />
+                  Live replay preview
+                </p>
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+                  {playbackStatus === 'idle' ? 'Idle' : playbackStatus}
+                </span>
+              </div>
+              <div className="relative flex-1 min-h-0 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 overflow-hidden">
+                {(currentFrame || isPlaying) && (
+                  <canvas
+                    ref={playbackCanvasRef}
+                    className="max-h-full w-full max-w-full object-contain"
+                    role="img"
+                    aria-label="Playback preview"
+                  />
+                )}
+                {isPlaying && !currentFrame && !playbackError && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                  </div>
+                )}
+                {playbackError && (
+                  <div
+                    className={`flex items-center justify-center p-4 z-[2] ${
+                      currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
+                    }`}
+                    role="alert"
+                  >
+                    <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
+                  </div>
+                )}
+                {!currentFrame && !isPlaying && !playbackError && (
+                  <p className="text-xs text-gray-400 text-center px-6">
+                    Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
+                    session. Frames stream here in real time.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
 
       <RunDetailsSlideOver
         open={runDetailsOpen}

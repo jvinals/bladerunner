@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.67** — **Run detail**: **View** control (**Split** / **Stack**) to the right of the playback toolbar — **Split** keeps **Live replay preview** left and **Recorded steps** right; **Stack** shows steps in a **horizontal scrolling** row with **full-width preview** below. **`@bladerunner/web` `0.6.41`**.
 - **0.7.66** — **Playback**: Socket **`completed`** / **`stopped`** now sets status **`idle`** after teardown (avoids a stuck **`COMPLETED`** / **`STOPPED`** label with no session). **`@bladerunner/web` `0.6.40`**.
 - **0.7.65** — **Playback**: Manual **Stop** sets status **`idle`** (not **`stopped`**). **Run to seq** clears whenever **`!isPlaying && !playbackSessionId`** so it resets after **Stop**/**complete**/**navigation**. **`@bladerunner/web` `0.6.39`**.
 - **0.7.64** — **Playback**: **`stopPlayback`** clears **preview frame** and **playback error**; socket **`completed` / `stopped`** also clears the **last frame** so the canvas does not show a stale image after a run ends. **Run detail** and **Runs** reset **Run to seq** when playback **stops** or **completes**. **`@bladerunner/web` `0.6.38`**.
