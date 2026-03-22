@@ -155,6 +155,7 @@ export function usePlayback(): UsePlaybackReturn {
         setSourceRunId(null);
         setHighlightSequence(null);
         setCompletedSequences(new Set());
+        setCurrentFrame(null);
       }
     });
 
@@ -207,6 +208,8 @@ export function usePlayback(): UsePlaybackReturn {
     setSourceRunId(null);
     setHighlightSequence(null);
     setCompletedSequences(new Set());
+    setCurrentFrame(null);
+    setPlaybackError(null);
   }, [playbackSessionId]);
 
   const pausePlayback = useCallback(async () => {

@@ -166,6 +166,11 @@ export default function RunsPage() {
   );
 
   useEffect(() => {
+    if (playbackStatus !== 'stopped' && playbackStatus !== 'completed') return;
+    setPlaybackAdvanceToSeq('');
+  }, [playbackStatus]);
+
+  useEffect(() => {
     const panel = stepsListScrollRef.current;
     if (!panel || steps.length === 0) return;
     panel.scrollTop = panel.scrollHeight;

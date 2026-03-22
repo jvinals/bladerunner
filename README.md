@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.64** — **Playback**: **`stopPlayback`** clears **preview frame** and **playback error**; socket **`completed` / `stopped`** also clears the **last frame** so the canvas does not show a stale image after a run ends. **Run detail** and **Runs** reset **Run to seq** when playback **stops** or **completes**. **`@bladerunner/web` `0.6.38`**.
 - **0.7.63** — **Run detail**: **Live replay preview** and **Recorded steps** use a **taller** shared block (`min-h` **520px**, viewport **~75vh**, cap **880px**). **`@bladerunner/web` `0.6.37`**.
 - **0.7.62** — **Playback UI**: **Recorded steps** highlight follows the **next** step after a step finishes (`playbackProgress` `after`/`skipped` used to leave the cursor on the completed row). **`effectivePlaybackHighlightSequence`** in **`playbackStepTone`**. **`@bladerunner/web` `0.6.36`**.
 - **0.7.61** — **Web**: Removed debug **NDJSON ingest** / render logging from **`usePlayback`** and **`DetachedPlayback`**. **`@bladerunner/web` `0.6.35`**.
