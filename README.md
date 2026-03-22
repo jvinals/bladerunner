@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.35** — **Recording / playback**: removed **debug-session** NDJSON **fetch** instrumentation from **`tightenGetByTextLocatorsForPlayback`** and **`runPlaybackLoop` / `executePwCode`** (verification complete). **`@bladerunner/api` `0.5.33`**.
 - **0.7.34** — **Playback**: **`click({ force: true })`** is **not** applied until **`clerkFullSignInDone`** (after **`clerk_auto_sign_in`** or the pre-loop Clerk assist). Pre-auth steps used **force** and could break **automatic Clerk sign-in** when a recorded **`clerk_auto_sign_in`** row exists (initial assist is skipped). **`@bladerunner/api` `0.5.32`**.
 - **0.7.33** — **Playback**: bare **`.click()`** in stored codegen is rewritten to **`.click({ force: true })`** (default; set **`PLAYBACK_CLICK_FORCE=false`** to disable) so Radix/dialog layers that **intercept pointer events** do not hang the action. **`relaxClickForceForPlayback`** in the **`executePwCode`** pipeline. **`@bladerunner/api` `0.5.31`**.
 - **0.7.32** — **Playback**: **`tightenGetByTextLocatorsForPlayback`** rewrites stored **`getByText(..., { exact: false })`** to **`exact: true`** and inserts **`.first()`** before **`.click()`** when missing — substring matches no longer hit “Total Patients” / “Patients in your care”. **`preferGetByTextForBareTagLocator`** now emits **`exact: true`**. LLM prompt updated accordingly. **`@bladerunner/api` `0.5.30`**.

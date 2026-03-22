@@ -74,26 +74,6 @@ export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): str
     (_m, q: string, text: string, clickPart: string) =>
       `.getByText(${q}${text}${q}, { exact: true }).first()${clickPart}`,
   );
-  // #region agent log
-  if (s !== playwrightCode && /getByText/i.test(playwrightCode)) {
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-      body: JSON.stringify({
-        sessionId: '5cf234',
-        location: 'recording-playwright-merge.util.ts:tightenGetByTextLocatorsForPlayback',
-        message: 'tighten applied',
-        data: {
-          hypothesisId: 'H1',
-          runId: 'post-fix',
-          lenBefore: playwrightCode.length,
-          lenAfter: s.length,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   return s;
 }
 

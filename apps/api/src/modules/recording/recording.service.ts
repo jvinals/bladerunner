@@ -1388,33 +1388,6 @@ export class RecordingService extends EventEmitter {
         }
 
         try {
-          // #region agent log
-          let openDialogCount = -1;
-          try {
-            openDialogCount = await session.page
-              .locator('[role="dialog"][data-state="open"]')
-              .count();
-          } catch {
-            openDialogCount = -2;
-          }
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-            body: JSON.stringify({
-              sessionId: '5cf234',
-              location: 'recording.service.ts:runPlaybackLoop:beforeExecutePwCode',
-              message: 'playback step pre-execute',
-              data: {
-                hypothesisId: 'H1',
-                runId: 'dialog-overlay',
-                stepSequence: step.sequence,
-                openDialogCount,
-                codeLen: (step.playwrightCode ?? '').length,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           await this.executePwCode(session.page, step.playwrightCode, {
             /** Prevents `click({ force: true })` on steps before recorded `clerk_auto_sign_in` — force can break Clerk UI. */
             skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
@@ -1885,21 +1858,6 @@ export class RecordingService extends EventEmitter {
     const relaxed = this.relaxPlaywrightCodegenForPlayback(code);
     const tightened = tightenGetByTextLocatorsForPlayback(relaxed);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
-    // #region agent log
-    if (opts?.skipClickForce && this.wantPlaybackClickForce()) {
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          location: 'recording.service.ts:executePwCode',
-          message: 'skip click force (pre-Clerk playback)',
-          data: { hypothesisId: 'H2', runId: 'clerk-skip-force' },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
     const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);
     const fn = new Function('page', `return (async () => { ${safeCode} })();`);
