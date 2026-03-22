@@ -823,54 +823,13 @@ export default function RunDetailPage() {
         </p>
       )}
 
-      {/* Metrics + playback (one row on large screens; same card chrome and height via items-stretch) */}
+      {/* Playback (left) + metrics (right) on large screens; same card chrome and height via items-stretch */}
       <div className="space-y-2 mb-6">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
-          <div
-            className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm"
-            role="group"
-            aria-label="Run metrics"
-          >
-            {(
-              [
-                ['Duration', r.durationMs ? formatDuration(r.durationMs) : '—', 'text-gray-900'],
-                ['Steps', `${passedSteps}/${stepsCount}`, 'text-gray-900'],
-                ['Failures', String(failedSteps), failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-900'],
-                ['Findings', String(findingsCount), findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-900'],
-                ['Artifacts', String(artifactsCount), 'text-[#4B90FF]'],
-              ] as const
-            ).map(([label, value, valueClass], i) => (
-              <span key={label} className="inline-flex items-baseline gap-1">
-                {i > 0 && (
-                  <span className="mr-0.5 text-[9px] text-gray-200 select-none" aria-hidden="true">
-                    ·
-                  </span>
-                )}
-                <span className="text-[8px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
-                <span className={`text-xs font-bold tabular-nums ce-mono ${valueClass}`}>{value}</span>
-              </span>
-            ))}
-            <span className="inline-flex items-baseline gap-1 shrink-0">
-              <span className="mr-0.5 text-[9px] text-gray-200 select-none" aria-hidden="true">
-                ·
-              </span>
-              <button
-                type="button"
-                onClick={() => setRunDetailsOpen(true)}
-                className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 shadow-sm transition-colors hover:border-[#4B90FF] hover:text-[#4B90FF]"
-                aria-expanded={runDetailsOpen}
-                aria-controls="run-details-panel"
-              >
-                <PanelRight size={11} className="text-[#4B90FF]" aria-hidden />
-                Run Details
-              </button>
-            </span>
-          </div>
-
           <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm lg:min-w-[min(100%,28rem)]">
             <span className="sr-only">Playback</span>
             <div
-              className="flex min-h-0 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto"
+              className="flex min-h-0 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto"
               role="toolbar"
               aria-label="Playback controls"
             >
@@ -972,6 +931,47 @@ export default function RunDetailPage() {
                 <ExternalLink size={12} /> Detach preview
               </button>
             </div>
+          </div>
+
+          <div
+            className="flex min-h-0 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 self-stretch rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm"
+            role="group"
+            aria-label="Run metrics"
+          >
+            {(
+              [
+                ['Duration', r.durationMs ? formatDuration(r.durationMs) : '—', 'text-gray-900'],
+                ['Steps', `${passedSteps}/${stepsCount}`, 'text-gray-900'],
+                ['Failures', String(failedSteps), failedSteps > 0 ? 'text-[#FF4D4D]' : 'text-gray-900'],
+                ['Findings', String(findingsCount), findingsCount > 0 ? 'text-[#EAB508]' : 'text-gray-900'],
+                ['Artifacts', String(artifactsCount), 'text-[#4B90FF]'],
+              ] as const
+            ).map(([label, value, valueClass], i) => (
+              <span key={label} className="inline-flex items-baseline gap-1">
+                {i > 0 && (
+                  <span className="mr-0.5 text-[9px] text-gray-200 select-none" aria-hidden="true">
+                    ·
+                  </span>
+                )}
+                <span className="text-[8px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+                <span className={`text-xs font-bold tabular-nums ce-mono ${valueClass}`}>{value}</span>
+              </span>
+            ))}
+            <span className="inline-flex items-baseline gap-1 shrink-0">
+              <span className="mr-0.5 text-[9px] text-gray-200 select-none" aria-hidden="true">
+                ·
+              </span>
+              <button
+                type="button"
+                onClick={() => setRunDetailsOpen(true)}
+                className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 shadow-sm transition-colors hover:border-[#4B90FF] hover:text-[#4B90FF]"
+                aria-expanded={runDetailsOpen}
+                aria-controls="run-details-panel"
+              >
+                <PanelRight size={11} className="text-[#4B90FF]" aria-hidden />
+                Run Details
+              </button>
+            </span>
           </div>
         </div>
 
