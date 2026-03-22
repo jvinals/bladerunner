@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.51** — **Run detail**: **Playback settings** moved into the same **right slide-over** pattern as **Run details** (backdrop, slide-in, Escape). Opening one panel closes the other. **`@bladerunner/web` `0.6.25`**.
 - **0.7.50** — **Run detail**: **Timeline, Details, Findings, Artifacts** live in a **right slide-over** opened by **Run Details** (after **Artifacts** on the metrics row). **Targets** and **Tags** stay as compact strips below. **`@bladerunner/web` `0.6.24`**.
 - **0.7.49** — **Run detail**: **Timeline, Targets, Details, Tags, Findings, Artifacts** join the **metrics** block as **compact strips** (same pattern as Duration / Steps / …); the large **bottom grid** for those sections is removed so **Live replay preview** and **Recorded steps** share a **taller, matched height** (`min-h-[380px]`, `h-[min(64vh,720px)]`). **`@bladerunner/web` `0.6.23`**.
 - **0.7.48** — **Run detail**: **Duration / Steps / Failures / Findings / Artifacts** in one **compact strip** (one line when space allows; wraps to two) with **`·`** separators — replaces five large cards. **`@bladerunner/web` `0.6.22`**.
