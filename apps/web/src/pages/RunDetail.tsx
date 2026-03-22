@@ -1059,6 +1059,7 @@ export default function RunDetailPage() {
                       playwrightCode={step.playwrightCode}
                       origin={step.origin}
                       timestamp={step.timestamp}
+                      metadata={step.metadata}
                       playbackHighlight={playbackToneForStep(
                         step.sequence,
                         showReplayChrome,

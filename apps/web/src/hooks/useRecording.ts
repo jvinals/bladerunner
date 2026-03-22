@@ -15,6 +15,8 @@ export interface RecordedStep {
   playwrightCode: string;
   origin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC';
   timestamp: string;
+  /** Optional JSON from API (e.g. `clerk_auto_sign_in` step). */
+  metadata?: unknown;
 }
 
 export type RemotePointerPayload = {

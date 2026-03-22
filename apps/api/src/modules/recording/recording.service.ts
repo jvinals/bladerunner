@@ -915,7 +915,8 @@ export class RecordingService extends EventEmitter {
         otpMode,
         postAuthPageUrl,
       };
-      return { metadata, origin: 'MANUAL', instruction: data.instruction };
+      /** UI: Run list / step cards show **Automatic** (same as other server-driven automation rows). */
+      return { metadata, origin: 'AUTOMATIC', instruction: data.instruction };
     }
     if (opts?.syntheticClerkAutoSignIn) {
       metadata = {
