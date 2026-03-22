@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.75** — **Run detail**: Playback toolbar controls **taller** (`py-1.5`, seq input aligned); card padding **`py-0.5`**. **`@bladerunner/web` `0.6.49`**.
 - **0.7.74** — **Run detail**: Playback toolbar **shorter** (`py-0`, `leading-none`); metrics card **no max-width** on large screens, **`lg:flex-nowrap`** so Duration–Run Details stay **one line** (with **`overflow-x-auto`** if the viewport is tight). **`@bladerunner/web` `0.6.48`**.
 - **0.7.73** — **Run detail**: Playback toolbar **slightly shorter** (`py-0.5` controls, tighter `gap`); metrics card **slightly wider** (`max-w` ~30rem). **`@bladerunner/web` `0.6.47`**.
 - **0.7.72** — **Run detail**: Playback card **slightly shorter** (`py-0`); metrics card **slightly wider** (`max-w` ~28.5rem). **`@bladerunner/web` `0.6.46`**.
