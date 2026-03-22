@@ -145,7 +145,6 @@ function RunDetailsSlideOver({
   artifactsCount,
   canPlayback,
   isPlaying,
-  isPaused,
   playbackAutoClerkMode,
   setPlaybackAutoClerkMode,
   playbackClerkOtpMode,
@@ -154,14 +153,6 @@ function RunDetailsSlideOver({
   setPlaybackSkipUntilSeq,
   playbackDelayMs,
   setPlaybackDelayMs,
-  stopPlayback,
-  restartPlayback,
-  advancePlaybackOne,
-  advancePlaybackTo,
-  playbackAdvanceToSeq,
-  setPlaybackAdvanceToSeq,
-  playbackSessionId,
-  handleDetachPlayback,
 }: {
   open: boolean;
   onClose: () => void;
@@ -190,7 +181,6 @@ function RunDetailsSlideOver({
   artifactsCount: number;
   canPlayback: boolean;
   isPlaying: boolean;
-  isPaused: boolean;
   playbackAutoClerkMode: 'default' | 'on' | 'off';
   setPlaybackAutoClerkMode: (v: 'default' | 'on' | 'off') => void;
   playbackClerkOtpMode: AutoClerkOtpUiMode;
@@ -199,14 +189,6 @@ function RunDetailsSlideOver({
   setPlaybackSkipUntilSeq: (v: string) => void;
   playbackDelayMs: number;
   setPlaybackDelayMs: (v: number) => void;
-  stopPlayback: () => void | Promise<void>;
-  restartPlayback: () => void | Promise<void>;
-  advancePlaybackOne: () => void | Promise<void>;
-  advancePlaybackTo: (n: number) => void | Promise<void>;
-  playbackAdvanceToSeq: string;
-  setPlaybackAdvanceToSeq: (v: string) => void;
-  playbackSessionId: string | null;
-  handleDetachPlayback: () => void;
 }) {
   const artifactPreviewNames = Array.from({ length: Math.min(artifactsCount, 6) }, (_, i) =>
     i % 3 === 0 ? `screenshot_step_${i + 1}.png` : i % 3 === 1 ? `trace_${i + 1}.json` : `log_${i + 1}.txt`,
@@ -293,67 +275,6 @@ function RunDetailsSlideOver({
                     title="Delay between steps (ms). Fixed for the session once Play starts."
                   />
                   <span className="text-[11px] text-gray-500 tabular-nums">{playbackDelayMs}ms</span>
-                </div>
-              )}
-              {isPlaying && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void stopPlayback()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-md hover:bg-red-50 transition-colors"
-                  >
-                    <Square size={13} /> Stop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void restartPlayback()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
-                    title="Restart from the beginning with the same options"
-                  >
-                    <RotateCcw size={13} /> Restart
-                  </button>
-                  {playbackSessionId && (
-                    <button
-                      type="button"
-                      onClick={handleDetachPlayback}
-                      className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
-                    >
-                      <ExternalLink size={13} /> Detach preview
-                    </button>
-                  )}
-                </div>
-              )}
-              {isPlaying && isPaused && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => void advancePlaybackOne()}
-                    className="flex items-center gap-1 px-2.5 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors"
-                    title="Run the next step, then pause again"
-                  >
-                    <StepForward size={12} />
-                    Next step
-                  </button>
-                  <span className="text-[10px] text-gray-400">Run to seq</span>
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="seq"
-                    value={playbackAdvanceToSeq}
-                    onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
-                    className="w-14 border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-800 tabular-nums bg-white"
-                    title="Pause after this step sequence completes (inclusive)"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
-                      if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
-                    }}
-                    className="px-2.5 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50 transition-colors"
-                  >
-                    Go
-                  </button>
                 </div>
               )}
               {!canPlayback && !isPlaying && (
@@ -868,7 +789,9 @@ export default function RunDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-8">
+      <div
+        className={`flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 ${isPlaying ? 'mb-5' : 'mb-8'}`}
+      >
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <PlatformIcon size={18} className="text-gray-400" />
@@ -894,7 +817,7 @@ export default function RunDetailPage() {
             <span>{formatRelativeTime(r.createdAt)}</span>
           </div>
         </div>
-        <div className="flex flex-col gap-2 items-end w-full lg:w-auto">
+        <div className="flex flex-col gap-2 items-end w-full lg:w-auto lg:min-w-[min(100%,20rem)]">
           <span className="sr-only">Playback</span>
           <div className="flex flex-wrap items-center justify-end gap-2 w-full">
             <button
@@ -949,6 +872,75 @@ export default function RunDetailPage() {
                 </button>
               ))}
           </div>
+
+          {isPlaying && (
+            <div
+              className="w-full max-w-md rounded-lg border border-gray-100 bg-white p-2 text-left shadow-sm"
+              role="region"
+              aria-label="Playback session controls"
+            >
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void stopPlayback()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-md hover:bg-red-50 transition-colors"
+                >
+                  <Square size={13} /> Stop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void restartPlayback()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
+                  title="Restart from the beginning with the same options"
+                >
+                  <RotateCcw size={13} /> Restart
+                </button>
+                {playbackSessionId && (
+                  <button
+                    type="button"
+                    onClick={handleDetachPlayback}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
+                  >
+                    <ExternalLink size={13} /> Detach preview
+                  </button>
+                )}
+              </div>
+              {isPaused && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void advancePlaybackOne()}
+                    className="flex items-center gap-1 px-2.5 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors"
+                    title="Run the next step, then pause again"
+                  >
+                    <StepForward size={12} />
+                    Next step
+                  </button>
+                  <span className="text-[10px] text-gray-400">Run to seq</span>
+                  <input
+                    id="header-playback-advance-to-seq"
+                    type="number"
+                    min={0}
+                    placeholder="seq"
+                    value={playbackAdvanceToSeq}
+                    onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
+                    className="w-14 border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-800 tabular-nums bg-white"
+                    title="Pause after this step sequence completes (inclusive)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
+                      if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
+                    }}
+                    className="px-2.5 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50 transition-colors"
+                  >
+                    Go
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -959,7 +951,7 @@ export default function RunDetailPage() {
       )}
 
       {/* Metrics (compact) + Run Details (opens slide-over with playback + run info); targets + tags below */}
-      <div className="space-y-2 mb-6">
+      <div className={`space-y-2 ${isPlaying ? 'mb-5' : 'mb-6'}`}>
         <div
           className="flex w-fit max-w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-gray-100 bg-white px-2 py-1.5"
           role="group"
@@ -1123,7 +1115,6 @@ export default function RunDetailPage() {
         artifactsCount={artifactsCount}
         canPlayback={canPlayback}
         isPlaying={isPlaying}
-        isPaused={isPaused}
         playbackAutoClerkMode={playbackAutoClerkMode}
         setPlaybackAutoClerkMode={setPlaybackAutoClerkMode}
         playbackClerkOtpMode={playbackClerkOtpMode}
@@ -1132,14 +1123,6 @@ export default function RunDetailPage() {
         setPlaybackSkipUntilSeq={setPlaybackSkipUntilSeq}
         playbackDelayMs={playbackDelayMs}
         setPlaybackDelayMs={setPlaybackDelayMs}
-        stopPlayback={stopPlayback}
-        restartPlayback={restartPlayback}
-        advancePlaybackOne={advancePlaybackOne}
-        advancePlaybackTo={advancePlaybackTo}
-        playbackAdvanceToSeq={playbackAdvanceToSeq}
-        setPlaybackAdvanceToSeq={setPlaybackAdvanceToSeq}
-        playbackSessionId={playbackSessionId}
-        handleDetachPlayback={handleDetachPlayback}
       />
 
       {showSessionRecordingCard && (
