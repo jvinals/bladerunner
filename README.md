@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.58** — **Run detail**: Back link is **Back to Home** (navigates to **`/`**). **`@bladerunner/web` `0.6.32`**.
 - **0.7.57** — **Run detail**: **Metrics** (Duration, Steps, …) and **playback** controls share **one row** on large screens with **matching card chrome** (`rounded-lg border … px-2 py-1.5 shadow-sm`); **`lg:items-stretch`** keeps **equal height**; playback column scrolls horizontally when needed. **`@bladerunner/web` `0.6.31`**.
 - **0.7.56** — **Steps UI**: Single-step **Automatic Clerk sign-in** is stored with **`origin: AUTOMATIC`** (was `MANUAL`); **StepCard** also treats **`metadata.kind === clerk_auto_sign_in`** or **“Automatic Clerk sign-in…”** instructions as **Automatic** for older runs. **`@bladerunner/api` `0.5.38`**, **`@bladerunner/web` `0.6.30`**.
 - **0.7.55** — **Run detail**: **Play**, **Pause/Resume**, **Stop**, **Restart**, **Next step**, **Run to seq** + **Go**, and **Detach preview** are **one always-visible row** (`flex-nowrap`, horizontal scroll on narrow viewports); controls are **disabled** when not applicable. **`@bladerunner/web` `0.6.29`**.

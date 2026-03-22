@@ -783,9 +783,9 @@ export default function RunDetailPage() {
   return (
     <div className="flex-1 min-h-0 w-full max-w-none overflow-y-auto py-8 px-6 lg:px-10">
       {/* Back link */}
-      <Link to="/runs" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4B90FF] transition-colors mb-6">
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4B90FF] transition-colors mb-6">
         <ArrowLeft size={14} />
-        Back to Runs
+        Back to Home
       </Link>
 
       {/* Header */}
