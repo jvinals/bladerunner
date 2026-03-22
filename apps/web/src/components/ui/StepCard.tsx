@@ -104,19 +104,16 @@ function AfterStepThumbnail({ runId, checkpoint }: { runId: string; checkpoint: 
 
   return (
     <div
-      className="flex-shrink-0 self-center w-11 flex flex-col items-center gap-px"
+      className="flex-shrink-0 self-center h-8 w-14 rounded overflow-hidden border border-gray-100 bg-gray-50 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)]"
       title={title}
     >
-      <span className="text-[7px] font-semibold uppercase tracking-wide text-gray-400 leading-none">After</span>
-      <div className="h-6 w-11 rounded overflow-hidden border border-gray-100 bg-gray-50 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)]">
-        {thumbUrl ? (
-          <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center bg-gray-50/80">
-            <Camera size={10} className="text-gray-200" aria-hidden />
-          </div>
-        )}
-      </div>
+      {thumbUrl ? (
+        <img src={thumbUrl} alt={title} className="h-full w-full object-cover" />
+      ) : (
+        <div className="h-full w-full flex items-center justify-center bg-gray-50/80">
+          <Camera size={12} className="text-gray-200" aria-hidden />
+        </div>
+      )}
     </div>
   );
 }
