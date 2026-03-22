@@ -78,8 +78,8 @@ export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): str
 }
 
 /**
- * Playback: LLM codegen often uses `page.locator('span')` or `page.locator('svg.lucide-triangle-alert')`.
- * Bare tags and **tag + class-chain** selectors (no spaces / # / [) can match many nodes (strict mode).
+ * Playback: LLM codegen often uses `page.locator('span')`, `page.locator('svg.lucide-x')`, or
+ * `page.locator('path[d="…"]')` (Lucide path shapes). Those can match many nodes (strict mode).
  * Append `.first()` when the chain is not already narrowed (first/nth/filter/locator/getBy).
  */
 export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string {
@@ -90,6 +90,12 @@ export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string
   const compoundClassChain = String.raw`\bpage\.locator\s*\(\s*(['"\`])([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_-]+)+)\1\s*\)${alreadyNarrowed}`;
   s = s.replace(
     new RegExp(compoundClassChain, 'gi'),
+    (_full, quote: string, sel: string) => `page.locator(${quote}${sel}${quote}).first()`,
+  );
+  // `path[d="…"]` — same Lucide path reused on multiple buttons (no spaces in selector).
+  const tagWithAttr = String.raw`\bpage\.locator\s*\(\s*(['"\`])([a-zA-Z][a-zA-Z0-9]*(?:\[[^\]]*\])+)\1\s*\)${alreadyNarrowed}`;
+  s = s.replace(
+    new RegExp(tagWithAttr, 'gi'),
     (_full, quote: string, sel: string) => `page.locator(${quote}${sel}${quote}).first()`,
   );
   return s;

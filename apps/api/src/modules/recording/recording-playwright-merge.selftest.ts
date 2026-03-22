@@ -97,4 +97,10 @@ assertEq(
   `await page.locator('svg.lucide-triangle-alert').first().click();`,
 );
 
+assertEq(
+  'playback relax: path[d] lucide shape -> .first()',
+  relaxPageLocatorFirstForPlayback(`await page.locator('path[d="M18 6 6 18"]').click();`),
+  `await page.locator('path[d="M18 6 6 18"]').first().click();`,
+);
+
 console.log('recording-playwright-merge.selftest: ok');
