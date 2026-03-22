@@ -16,7 +16,7 @@ import { formatDuration, formatRelativeTime } from '@/lib/utils';
 import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Play, Square, ExternalLink,
-  Film, Pause, RotateCcw, StepForward, X, SlidersHorizontal,
+  Film, Pause, RotateCcw, StepForward, X, SlidersHorizontal, PanelRight,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -44,6 +44,218 @@ function CompactStrip({
     <div className={COMPACT_STRIP} role="group" aria-label={ariaLabel ?? title}>
       <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 shrink-0">{title}</span>
       <span className="min-w-0 flex-1 text-xs leading-snug text-gray-800 sm:text-sm">{children}</span>
+    </div>
+  );
+}
+
+function RunDetailsSlideOver({
+  open,
+  onClose,
+  run,
+  timelineParts,
+  findingsArr,
+  artifactsCount,
+}: {
+  open: boolean;
+  onClose: () => void;
+  run: {
+    id: string;
+    platform: string;
+    status: string;
+    triggeredBy: string;
+    createdAt: string;
+    startedAt?: string | null;
+    completedAt?: string | null;
+  };
+  timelineParts: string[];
+  findingsArr: Array<{
+    id: string;
+    category: string;
+    severity: string;
+    title: string;
+    description: string;
+    expected?: string;
+    actual?: string;
+    suggestion?: string;
+    resolved: boolean;
+    createdAt: string;
+  }>;
+  artifactsCount: number;
+}) {
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setEntered(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  const artifactPreviewNames = Array.from({ length: Math.min(artifactsCount, 6) }, (_, i) =>
+    i % 3 === 0 ? `screenshot_step_${i + 1}.png` : i % 3 === 1 ? `trace_${i + 1}.json` : `log_${i + 1}.txt`,
+  );
+
+  const severityClass = (s: string) =>
+    s === 'critical'
+      ? 'text-[#FF4D4D]'
+      : s === 'warning'
+        ? 'text-[#EAB508]'
+        : s === 'info'
+          ? 'text-[#4B90FF]'
+          : 'text-gray-500';
+
+  return (
+    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-labelledby="run-details-title">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+        aria-label="Close run details"
+        onClick={onClose}
+      />
+      <div
+        id="run-details-panel"
+        className={`absolute right-0 top-0 flex h-full w-full max-w-lg flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out ${
+          entered ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <PanelRight size={16} className="shrink-0 text-[#4B90FF]" aria-hidden />
+            <h2 id="run-details-title" className="truncate text-sm font-semibold text-gray-900">
+              Run details
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4">
+          <section>
+            <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Details</h3>
+            <dl className="space-y-2 text-sm text-gray-800">
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[11px] text-gray-400">Run ID</dt>
+                <dd className="ce-mono text-xs break-all">{run.id}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[11px] text-gray-400">Platform</dt>
+                <dd>{run.platform}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[11px] text-gray-400">Status</dt>
+                <dd className="capitalize">{run.status}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[11px] text-gray-400">Triggered by</dt>
+                <dd>{run.triggeredBy}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[11px] text-gray-400">Created</dt>
+                <dd>{new Date(run.createdAt).toLocaleString()}</dd>
+              </div>
+              {run.startedAt && (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-[11px] text-gray-400">Started</dt>
+                  <dd>{new Date(run.startedAt).toLocaleString()}</dd>
+                </div>
+              )}
+              {run.completedAt && (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-[11px] text-gray-400">Completed</dt>
+                  <dd>{new Date(run.completedAt).toLocaleString()}</dd>
+                </div>
+              )}
+            </dl>
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Timeline</h3>
+            <ul className="list-none space-y-2 text-sm text-gray-800">
+              {timelineParts.map((line, i) => (
+                <li key={i} className="border-l-2 border-[#4B90FF]/30 pl-3">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Findings</h3>
+            {findingsArr.length === 0 ? (
+              <p className="text-sm text-gray-500">None</p>
+            ) : (
+              <ul className="space-y-3">
+                {findingsArr.map((f) => (
+                  <li
+                    key={f.id}
+                    className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2.5 text-sm"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="font-medium text-gray-900">{f.title}</span>
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide ${severityClass(f.severity)}`}>
+                        {f.severity}
+                      </span>
+                    </div>
+                    {f.description && <p className="mt-1.5 text-xs leading-snug text-gray-600">{f.description}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Artifacts</h3>
+            {artifactsCount === 0 ? (
+              <p className="text-sm text-gray-500">None</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-800">
+                  <span className="font-semibold tabular-nums">{artifactsCount}</span> stored artifact
+                  {artifactsCount === 1 ? '' : 's'}
+                </p>
+                <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {artifactPreviewNames.map((name, i) => (
+                    <li
+                      key={i}
+                      className="truncate rounded border border-dashed border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-500 ce-mono"
+                      title={name}
+                    >
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -163,6 +375,7 @@ function SessionRecordingModal({
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [sessionRecordingModalOpen, setSessionRecordingModalOpen] = useState(false);
+  const [runDetailsOpen, setRunDetailsOpen] = useState(false);
   const [playbackSettingsOpen, setPlaybackSettingsOpen] = useState(false);
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
   const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
@@ -435,30 +648,10 @@ export default function RunDetailPage() {
     timelineCompactParts.push(`${ev} ${new Date(r.completedAt).toLocaleString()}`);
   }
 
-  const detailsCompact = [
-    `ID ${r.id}`,
-    `Platform ${r.platform}`,
-    `Triggered by ${r.triggeredBy}`,
-    `Created ${new Date(r.createdAt).toLocaleString()}`,
-    ...(r.startedAt ? [`Started ${new Date(r.startedAt).toLocaleString()}`] : []),
-    ...(r.completedAt ? [`Completed ${new Date(r.completedAt).toLocaleString()}`] : []),
-  ].join(' · ');
-
   const targetsCompact =
     targets.length === 0
       ? '—'
       : targets.map((t) => `${t.deviceName} (${t.browserOrApp ?? t.platform})`).join(' · ');
-
-  const findingsCompact =
-    findingsArr.length === 0 ? 'None' : findingsArr.map((f) => f.title).join(' · ');
-
-  const artifactPreviewNames = Array.from({ length: Math.min(artifactsCount, 6) }, (_, i) =>
-    i % 3 === 0 ? `screenshot_step_${i + 1}.png` : i % 3 === 1 ? `trace_${i + 1}.json` : `log_${i + 1}.txt`,
-  );
-  const artifactsCompact =
-    artifactsCount === 0
-      ? 'None'
-      : `${artifactsCount} items · ${artifactPreviewNames.slice(0, 4).join(' · ')}${artifactsCount > 4 ? ' …' : ''}`;
 
   const PlatformIcon = PLATFORM_ICONS[r.platform] || Monitor;
 
@@ -706,7 +899,7 @@ export default function RunDetailPage() {
         </p>
       )}
 
-      {/* Compact strips: metrics + timeline + targets + details + tags + findings + artifacts */}
+      {/* Compact strips: metrics + Run Details (opens slide-over) + targets + tags */}
       <div className="space-y-2 mb-6">
         <div
           className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 rounded-lg border border-gray-100 bg-white px-3 py-2 sm:gap-x-4 sm:px-4 sm:py-2.5"
@@ -732,11 +925,22 @@ export default function RunDetailPage() {
               <span className={`text-sm font-bold tabular-nums ce-mono sm:text-base ${valueClass}`}>{value}</span>
             </span>
           ))}
+          <span className="inline-flex items-baseline gap-1.5 shrink-0">
+            <span className="mr-1 text-[10px] text-gray-200 select-none sm:mr-2" aria-hidden="true">
+              ·
+            </span>
+            <button
+              type="button"
+              onClick={() => setRunDetailsOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 shadow-sm transition-colors hover:border-[#4B90FF] hover:text-[#4B90FF]"
+              aria-expanded={runDetailsOpen}
+              aria-controls="run-details-panel"
+            >
+              <PanelRight size={12} className="text-[#4B90FF]" aria-hidden />
+              Run Details
+            </button>
+          </span>
         </div>
-
-        <CompactStrip title="Timeline" aria-label="Timeline summary">
-          {timelineCompactParts.join(' · ')}
-        </CompactStrip>
 
         {targets.length > 0 && (
           <CompactStrip title="Targets" aria-label="Run targets">
@@ -744,25 +948,11 @@ export default function RunDetailPage() {
           </CompactStrip>
         )}
 
-        <CompactStrip title="Details" aria-label="Run details">
-          {detailsCompact}
-        </CompactStrip>
-
         {tags.length > 0 && (
           <CompactStrip title="Tags" aria-label="Run tags">
             {tags.join(' · ')}
           </CompactStrip>
         )}
-
-        <CompactStrip title="Findings" aria-label="Findings list">
-          <span className="line-clamp-2" title={findingsCompact}>
-            {findingsCompact}
-          </span>
-        </CompactStrip>
-
-        <CompactStrip title="Artifacts" aria-label="Artifacts summary">
-          {artifactsCompact}
-        </CompactStrip>
       </div>
 
       {/* Playback preview + recorded steps — wide preview left, narrower steps column right */}
@@ -864,6 +1054,15 @@ export default function RunDetailPage() {
           </div>
         </div>
       )}
+
+      <RunDetailsSlideOver
+        open={runDetailsOpen}
+        onClose={() => setRunDetailsOpen(false)}
+        run={r}
+        timelineParts={timelineCompactParts}
+        findingsArr={findingsArr}
+        artifactsCount={artifactsCount}
+      />
 
       {showSessionRecordingCard && (
         <SessionRecordingModal
