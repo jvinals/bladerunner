@@ -122,6 +122,20 @@ export function usePlayback(): UsePlaybackReturn {
 
     socket.on('status', (data: PlaybackStatusPayload) => {
       if (data.runId !== sessionId) return;
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          location: 'usePlayback.ts:socket.status',
+          message: 'status event',
+          data: { incoming: data.status },
+          timestamp: Date.now(),
+          hypothesisId: 'H4',
+        }),
+      }).catch(() => {});
+      // #endregion
       if (data.status === 'playback_paused') {
         setIsPaused(true);
         setStatus('playback_paused');
@@ -287,6 +301,23 @@ export function usePlayback(): UsePlaybackReturn {
       }
     };
   }, []);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'usePlayback.ts:renderState',
+        message: 'isPaused/status',
+        data: { isPaused, status, isPlaying },
+        timestamp: Date.now(),
+        hypothesisId: 'H4',
+      }),
+    }).catch(() => {});
+    // #endregion
+  }, [isPaused, status, isPlaying]);
 
   return {
     playbackSessionId,
