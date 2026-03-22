@@ -379,7 +379,10 @@ export default function RunDetailPage() {
             <span>{formatRelativeTime(r.createdAt)}</span>
           </div>
         </div>
-        <div className="flex flex-col gap-2 items-end">
+        <div className="flex flex-col gap-2 items-end w-full lg:w-auto">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-full text-right">
+            Playback
+          </p>
           {canPlayback && !isPlaying && (
             <div className="flex flex-wrap items-center gap-2 justify-end text-[11px] text-gray-500 max-w-md">
               <label htmlFor="run-playback-clerk" className="whitespace-nowrap">
@@ -441,7 +444,7 @@ export default function RunDetailPage() {
               <span className="text-[11px] text-gray-500 tabular-nums">{playbackDelayMs}ms</span>
             </div>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
           <button
             type="button"
             aria-disabled={!canPlayback || isPlaying}
@@ -463,6 +466,16 @@ export default function RunDetailPage() {
           >
             <Play size={13} /> {waitingForSteps ? 'Loading…' : 'Play'}
           </button>
+          {canPlayback && !isPlaying && (
+            <button
+              type="button"
+              disabled
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-60"
+              title="Pause appears after you start playback"
+            >
+              <Pause size={13} /> Pause
+            </button>
+          )}
           {isPlaying && (
             <>
               {isPaused ? (

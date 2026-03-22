@@ -135,9 +135,10 @@ export default function DetachedPlayback() {
     void runsApi.advancePlaybackTo(playbackSessionId, n);
   };
 
-  const terminal =
-    status === 'disconnected' || status === 'completed' || status === 'stopped' || status === 'failed';
-  const showControls = playbackSessionId && !terminal;
+  /** Only hide transport controls when this playback session has finished — not when the preview socket drops. */
+  const sessionEnded =
+    status === 'completed' || status === 'stopped' || status === 'failed';
+  const showControls = Boolean(playbackSessionId) && !sessionEnded;
 
   return (
     <div className="w-screen h-screen bg-gray-900 flex flex-col">
@@ -145,10 +146,27 @@ export default function DetachedPlayback() {
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-[#4B90FF] font-bold text-sm shrink-0">Bladerunner</span>
           <span className="text-gray-400 text-xs truncate">Playback preview</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 shrink-0 hidden sm:inline">
+            · Controls
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
+          {!connected && showControls && (
+            <span className="text-[10px] text-amber-300/90 max-w-[14rem] text-right" role="status">
+              Preview socket disconnected — Pause / Stop still use the API.
+            </span>
+          )}
+          {sessionEnded && playbackSessionId && (
+            <span className="text-[10px] text-gray-400 max-w-[18rem] text-right" role="status">
+              Playback ended. Start again from Run detail or the Runs page.
+            </span>
+          )}
           {showControls && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div
+              className="flex flex-wrap items-center gap-1.5"
+              role="toolbar"
+              aria-label="Playback controls"
+            >
               {isPaused ? (
                 <button
                   type="button"

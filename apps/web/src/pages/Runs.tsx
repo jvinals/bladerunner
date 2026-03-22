@@ -664,6 +664,7 @@ export default function RunsPage() {
 
           {!isRecording && (
             <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Playback</p>
               <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
                 <label htmlFor="runs-playback-clerk" className="whitespace-nowrap">
                   Automatic Clerk sign-in
@@ -726,26 +727,39 @@ export default function RunsPage() {
                 />
                 <span className="text-[10px] text-gray-500 tabular-nums w-10">{playbackDelayMs}ms</span>
               </div>
-            <button
-              type="button"
-              aria-disabled={!canPlaybackSelected || isPlaying}
-              onClick={() => void handleStartPlaybackRuns()}
-              title={
-                !selectedRunId
-                  ? 'Select a run first'
-                  : selectedRun?.status === 'RECORDING'
-                    ? 'Wait until recording finishes'
-                    : steps.length === 0
-                      ? 'This run has no steps yet'
-                      : 'Replay this run in the preview'
-              }
-              className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#56A34A] text-white text-xs font-semibold rounded-md hover:bg-green-600 transition-colors shadow-sm ${
-                !canPlaybackSelected || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
-              }`}
-            >
-              <Play size={14} className="fill-white" />
-              Play
-            </button>
+            <div className="flex gap-2 w-full">
+              <button
+                type="button"
+                aria-disabled={!canPlaybackSelected || isPlaying}
+                onClick={() => void handleStartPlaybackRuns()}
+                title={
+                  !selectedRunId
+                    ? 'Select a run first'
+                    : selectedRun?.status === 'RECORDING'
+                      ? 'Wait until recording finishes'
+                      : steps.length === 0
+                        ? 'This run has no steps yet'
+                        : 'Replay this run in the preview'
+                }
+                className={`flex-1 min-w-0 flex items-center justify-center gap-2 px-3 py-2.5 bg-[#56A34A] text-white text-xs font-semibold rounded-md hover:bg-green-600 transition-colors shadow-sm ${
+                  !canPlaybackSelected || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
+                }`}
+              >
+                <Play size={14} className="fill-white" />
+                Play
+              </button>
+              {canPlaybackSelected && !isPlaying && (
+                <button
+                  type="button"
+                  disabled
+                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-2.5 border border-gray-200 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-60"
+                  title="Pause appears after you start playback"
+                >
+                  <Pause size={14} />
+                  Pause
+                </button>
+              )}
+            </div>
             </div>
           )}
         </div>
