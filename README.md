@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.55** — **Run detail**: **Play**, **Pause/Resume**, **Stop**, **Restart**, **Next step**, **Run to seq** + **Go**, and **Detach preview** are **one always-visible row** (`flex-nowrap`, horizontal scroll on narrow viewports); controls are **disabled** when not applicable. **`@bladerunner/web` `0.6.29`**.
 - **0.7.54** — **Run detail**: **Stop / Restart / Detach** and **paused** step controls sit in a **card below Play · Pause** in the header; **Run details** slide-over keeps only **pre-play** playback options (Clerk, OTP, skip, delay). Slightly tighter margins while playing. **`@bladerunner/web` `0.6.28`**.
 - **0.7.53** — **Run detail**: **Playback** controls (Clerk, OTP, skip, delay, session / paused actions) live in the **Run details** right slide-over, opened by **Run Details** after **Artifacts**; removed the second inline gray panel beside metrics. **`@bladerunner/web` `0.6.27`**.
 - **0.7.52** — **Run detail**: **Playback settings** controls are **inline** again next to a **narrower metrics strip** (no **Playback settings** button; no playback slide-over). **`@bladerunner/web` `0.6.26`**.

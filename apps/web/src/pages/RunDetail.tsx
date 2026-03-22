@@ -788,10 +788,8 @@ export default function RunDetailPage() {
         Back to Runs
       </Link>
 
-      {/* Header */}
-      <div
-        className={`flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 ${isPlaying ? 'mb-5' : 'mb-8'}`}
-      >
+      {/* Header — single-row playback toolbar (always visible; disabled when not applicable) */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-8">
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <PlatformIcon size={18} className="text-gray-400" />
@@ -817,12 +815,16 @@ export default function RunDetailPage() {
             <span>{formatRelativeTime(r.createdAt)}</span>
           </div>
         </div>
-        <div className="flex flex-col gap-2 items-end w-full lg:w-auto lg:min-w-[min(100%,20rem)]">
+        <div className="flex flex-col items-stretch w-full lg:w-auto lg:max-w-[min(100%,56rem)]">
           <span className="sr-only">Playback</span>
-          <div className="flex flex-wrap items-center justify-end gap-2 w-full">
+          <div
+            className="flex flex-nowrap items-center justify-end gap-1.5 overflow-x-auto rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-sm"
+            role="toolbar"
+            aria-label="Playback controls"
+          >
             <button
               type="button"
-              aria-disabled={!canPlayback || isPlaying}
+              disabled={!canPlayback || isPlaying || waitingForSteps}
               onClick={() => void handleStartPlayback()}
               title={
                 waitingForSteps
@@ -835,112 +837,89 @@ export default function RunDetailPage() {
                         : 'No recorded steps'
                     : 'Replay recorded steps in a live browser preview'
               }
-              className={`flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors ${
-                !canPlayback || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
-              }`}
+              className="flex shrink-0 items-center gap-1 px-2 py-1 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-600"
             >
-              <Play size={13} /> {waitingForSteps ? 'Loading…' : 'Play'}
+              <Play size={12} /> {waitingForSteps ? 'Loading…' : 'Play'}
             </button>
-            {canPlayback && !isPlaying && (
+            {isPlaying && isPaused ? (
               <button
                 type="button"
-                disabled
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-60"
-                title="Pause appears after you start playback"
+                onClick={() => void resumePlayback()}
+                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-emerald-200 text-emerald-700 text-[11px] font-medium rounded-md hover:bg-emerald-50 transition-colors"
+                title="Resume playback"
               >
-                <Pause size={13} /> Pause
+                <Play size={12} className="fill-current" /> Resume
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!isPlaying}
+                onClick={() => void pausePlayback()}
+                className="flex shrink-0 items-center gap-1 px-2 py-1 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-md hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-400 disabled:hover:bg-transparent"
+                title={isPlaying ? 'Pause playback' : 'Pause is available while playback is running'}
+              >
+                <Pause size={12} /> Pause
               </button>
             )}
-            {isPlaying &&
-              (isPaused ? (
-                <button
-                  type="button"
-                  onClick={() => void resumePlayback()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-200 text-emerald-700 text-xs font-medium rounded-md hover:bg-emerald-50 transition-colors"
-                  title="Resume playback"
-                >
-                  <Play size={13} className="fill-current" /> Resume
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void pausePlayback()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-amber-200 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-50 transition-colors"
-                  title="Pause playback"
-                >
-                  <Pause size={13} /> Pause
-                </button>
-              ))}
-          </div>
-
-          {isPlaying && (
-            <div
-              className="w-full max-w-md rounded-lg border border-gray-100 bg-white p-2 text-left shadow-sm"
-              role="region"
-              aria-label="Playback session controls"
+            <button
+              type="button"
+              disabled={!isPlaying}
+              onClick={() => void stopPlayback()}
+              className="flex shrink-0 items-center gap-1 px-2 py-1 border border-red-200 text-red-600 text-[11px] font-medium rounded-md hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void stopPlayback()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-md hover:bg-red-50 transition-colors"
-                >
-                  <Square size={13} /> Stop
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void restartPlayback()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
-                  title="Restart from the beginning with the same options"
-                >
-                  <RotateCcw size={13} /> Restart
-                </button>
-                {playbackSessionId && (
-                  <button
-                    type="button"
-                    onClick={handleDetachPlayback}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
-                  >
-                    <ExternalLink size={13} /> Detach preview
-                  </button>
-                )}
-              </div>
-              {isPaused && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => void advancePlaybackOne()}
-                    className="flex items-center gap-1 px-2.5 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors"
-                    title="Run the next step, then pause again"
-                  >
-                    <StepForward size={12} />
-                    Next step
-                  </button>
-                  <span className="text-[10px] text-gray-400">Run to seq</span>
-                  <input
-                    id="header-playback-advance-to-seq"
-                    type="number"
-                    min={0}
-                    placeholder="seq"
-                    value={playbackAdvanceToSeq}
-                    onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
-                    className="w-14 border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-800 tabular-nums bg-white"
-                    title="Pause after this step sequence completes (inclusive)"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
-                      if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
-                    }}
-                    className="px-2.5 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50 transition-colors"
-                  >
-                    Go
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+              <Square size={12} /> Stop
+            </button>
+            <button
+              type="button"
+              disabled={!isPlaying}
+              onClick={() => void restartPlayback()}
+              className="flex shrink-0 items-center gap-1 px-2 py-1 border border-slate-200 text-slate-700 text-[11px] font-medium rounded-md hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Restart from the beginning with the same options"
+            >
+              <RotateCcw size={12} /> Restart
+            </button>
+            <button
+              type="button"
+              disabled={!isPlaying || !isPaused}
+              onClick={() => void advancePlaybackOne()}
+              className="flex shrink-0 items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Run the next step, then pause again"
+            >
+              <StepForward size={11} />
+              Next step
+            </button>
+            <span className="shrink-0 text-[10px] text-gray-400 pl-0.5">Run to seq</span>
+            <input
+              id="playback-advance-to-seq"
+              type="number"
+              min={0}
+              placeholder="seq"
+              value={playbackAdvanceToSeq}
+              onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
+              disabled={!isPlaying || !isPaused}
+              className="w-12 shrink-0 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-800 tabular-nums bg-white disabled:opacity-50"
+              title="Pause after this step sequence completes (inclusive)"
+            />
+            <button
+              type="button"
+              disabled={!isPlaying || !isPaused}
+              onClick={() => {
+                const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
+                if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
+              }}
+              className="shrink-0 rounded border border-violet-200 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Go
+            </button>
+            <button
+              type="button"
+              disabled={!playbackSessionId}
+              onClick={handleDetachPlayback}
+              className="flex shrink-0 items-center gap-1 px-2 py-1 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ExternalLink size={12} /> Detach preview
+            </button>
+          </div>
         </div>
       </div>
 
@@ -951,7 +930,7 @@ export default function RunDetailPage() {
       )}
 
       {/* Metrics (compact) + Run Details (opens slide-over with playback + run info); targets + tags below */}
-      <div className={`space-y-2 ${isPlaying ? 'mb-5' : 'mb-6'}`}>
+      <div className="space-y-2 mb-6">
         <div
           className="flex w-fit max-w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-gray-100 bg-white px-2 py-1.5"
           role="group"
