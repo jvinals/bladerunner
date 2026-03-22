@@ -9,7 +9,6 @@ import {
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
-import { CheckpointDivider } from '@/components/ui/CheckpointDivider';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
 import { playbackToneForStep } from '@/lib/playbackStepTone';
@@ -685,8 +684,9 @@ export default function RunDetailPage() {
                             }
                           : undefined
                       }
+                      checkpointAfterStep={cp ?? undefined}
+                      checkpointRunId={cp && id ? id : undefined}
                     />
-                    {cp && id && <CheckpointDivider runId={id} checkpoint={cp} />}
                   </div>
                 );
               })}

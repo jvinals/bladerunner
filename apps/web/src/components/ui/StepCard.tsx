@@ -1,4 +1,4 @@
-import { useState, forwardRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -16,6 +16,8 @@ import {
   RotateCcw,
   Play,
 } from 'lucide-react';
+import { runsApi } from '@/lib/api';
+import type { CheckpointData } from '@/components/ui/CheckpointDivider';
 
 export type PlaybackHighlight = 'past' | 'current' | 'future';
 
@@ -39,6 +41,10 @@ interface StepCardProps {
     onPlayThisStepOnly: () => void;
     disabled?: boolean;
   };
+  /** When set, show a small “after step” checkpoint thumbnail on the right (no extra row). */
+  checkpointAfterStep?: CheckpointData;
+  /** Required with `checkpointAfterStep` to load the thumbnail */
+  checkpointRunId?: string;
 }
 
 const ACTION_ICONS: Record<string, typeof Mouse> = {
@@ -65,8 +71,70 @@ const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
   future: 'opacity-90',
 };
 
+function AfterStepThumbnail({ runId, checkpoint }: { runId: string; checkpoint: CheckpointData }) {
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+  const urlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!checkpoint.thumbnailPath) {
+      setThumbUrl(null);
+      return;
+    }
+    let cancelled = false;
+    if (urlRef.current) {
+      URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    }
+    setThumbUrl(null);
+    runsApi.getCheckpointThumbnailUrl(runId, checkpoint.id).then((url) => {
+      if (cancelled || !url) return;
+      urlRef.current = url;
+      setThumbUrl(url);
+    });
+    return () => {
+      cancelled = true;
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      }
+    };
+  }, [runId, checkpoint.id, checkpoint.thumbnailPath]);
+
+  const title = checkpoint.label?.trim() || `After step ${checkpoint.afterStepSequence}`;
+
+  return (
+    <div
+      className="flex-shrink-0 self-center w-11 flex flex-col items-center gap-px"
+      title={title}
+    >
+      <span className="text-[7px] font-semibold uppercase tracking-wide text-gray-400 leading-none">After</span>
+      <div className="h-6 w-11 rounded overflow-hidden border border-gray-100 bg-gray-50 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)]">
+        {thumbUrl ? (
+          <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center bg-gray-50/80">
+            <Camera size={10} className="text-gray-200" aria-hidden />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepCard(
-  { sequence, action, instruction, playwrightCode, origin, timestamp, playbackHighlight, reRecord, stepPlayback },
+  {
+    sequence,
+    action,
+    instruction,
+    playwrightCode,
+    origin,
+    timestamp,
+    playbackHighlight,
+    reRecord,
+    stepPlayback,
+    checkpointAfterStep,
+    checkpointRunId,
+  },
   ref,
 ) {
   /** Collapsed by default: playback actions, re-record, Playwright code */
@@ -95,32 +163,34 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
       : 'bg-gray-100 text-gray-500';
   const originLabel = isAutomatic ? 'Automatic' : isAI ? 'AI' : 'Manual';
 
+  const showAfterThumb = checkpointAfterStep && checkpointRunId;
+
   return (
     <div
       ref={ref}
-      className={`group relative border-l-3 rounded-r-lg bg-white border border-gray-100 mb-2 transition-all duration-200 hover:shadow-sm ${originBorder} ${highlightClass}`}
+      className={`group relative border-l-3 rounded-r-lg bg-white border border-gray-100 mb-1.5 transition-all duration-200 hover:shadow-sm ${originBorder} ${highlightClass}`}
     >
-      <div className="flex items-start gap-2.5 px-3 py-2.5">
+      <div className="flex items-start gap-2 px-2 py-1.5">
         <div
-          className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${originCircle}`}
+          className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${originCircle}`}
         >
           {sequence}
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <Icon size={12} className="text-gray-400 flex-shrink-0" />
-            <span className="text-[10px] text-gray-400 ce-mono">{formatTime(timestamp)}</span>
-            <span className={`text-[9px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
+          <div className="flex items-center gap-1 mb-0.5 flex-wrap">
+            <Icon size={11} className="text-gray-400 flex-shrink-0" />
+            <span className="text-[9px] text-gray-400 ce-mono">{formatTime(timestamp)}</span>
+            <span className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
               {originLabel}
             </span>
           </div>
-          <p className="text-xs text-gray-700 leading-relaxed">{instruction}</p>
+          <p className="text-[11px] text-gray-700 leading-snug">{instruction}</p>
           <button
             type="button"
             onClick={() => setDetailsOpen((v) => !v)}
             aria-expanded={detailsOpen}
-            className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-[#4D65FF] hover:text-[#3d54e8] hover:underline"
+            className="mt-1 inline-flex items-center gap-1 text-[9px] font-medium text-[#4D65FF] hover:text-[#3d54e8] hover:underline"
           >
             {detailsOpen ? (
               <>
@@ -135,10 +205,14 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
             )}
           </button>
         </div>
+
+        {showAfterThumb && (
+          <AfterStepThumbnail runId={checkpointRunId} checkpoint={checkpointAfterStep} />
+        )}
       </div>
 
       {detailsOpen && (
-        <div className="px-3 pb-2.5 pt-0 border-t border-gray-50">
+        <div className="px-2 pb-2 pt-0 border-t border-gray-50">
           {stepPlayback && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               <button

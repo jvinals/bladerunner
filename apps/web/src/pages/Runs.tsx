@@ -9,7 +9,6 @@ import {
   type AutoClerkOtpUiMode,
 } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
-import { CheckpointDivider } from '@/components/ui/CheckpointDivider';
 import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
 import { playbackToneForStep } from '@/lib/playbackStepTone';
@@ -975,10 +974,9 @@ export default function RunsPage() {
                             }
                           : undefined
                       }
+                      checkpointAfterStep={cp ?? undefined}
+                      checkpointRunId={cp && effectiveRunId ? effectiveRunId : undefined}
                     />
-                    {cp && effectiveRunId && (
-                      <CheckpointDivider runId={effectiveRunId} checkpoint={cp} />
-                    )}
                   </div>
                 );
               })}
