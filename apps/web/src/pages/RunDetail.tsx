@@ -17,7 +17,7 @@ import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
   Camera, FileText, Activity, Play, Square, ExternalLink,
-  Film, Pause, RotateCcw, StepForward, X,
+  Film, Pause, RotateCcw, StepForward, X, SlidersHorizontal,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -148,6 +148,7 @@ function SessionRecordingModal({
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [sessionRecordingModalOpen, setSessionRecordingModalOpen] = useState(false);
+  const [playbackSettingsOpen, setPlaybackSettingsOpen] = useState(false);
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
   const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
@@ -443,105 +444,41 @@ export default function RunDetailPage() {
           </div>
         </div>
         <div className="flex flex-col gap-2 items-end w-full lg:w-auto">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-full text-right">
-            Playback
-          </p>
-          {canPlayback && !isPlaying && (
-            <div className="flex flex-wrap items-center gap-2 justify-end text-[11px] text-gray-500 max-w-md">
-              <label htmlFor="run-playback-clerk" className="whitespace-nowrap">
-                Automatic Clerk sign-in
-              </label>
-              <select
-                id="run-playback-clerk"
-                value={playbackAutoClerkMode}
-                onChange={(e) => setPlaybackAutoClerkMode(e.target.value as 'default' | 'on' | 'off')}
-                className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
-                title="Automatic server-side Clerk sign-in during playback"
-              >
-                <option value="default">Automatic — server default</option>
-                <option value="on">Automatic — on</option>
-                <option value="off">Automatic — off</option>
-              </select>
-              <label htmlFor="run-playback-clerk-otp" className="whitespace-nowrap">
-                Automatic Clerk OTP
-              </label>
-              <select
-                id="run-playback-clerk-otp"
-                value={playbackClerkOtpMode}
-                onChange={(e) => setPlaybackClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
-                title="How to complete email verification when automatic Clerk sign-in runs"
-                className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
-              >
-                <option value="default">OTP: server default</option>
-                <option value="clerk_test_email">OTP: test email (424242)</option>
-                <option value="mailslurp">OTP: MailSlurp inbox</option>
-              </select>
-              <label htmlFor="run-playback-skip" className="whitespace-nowrap">
-                Skip seq &lt;
-              </label>
-              <input
-                id="run-playback-skip"
-                type="number"
-                min={0}
-                placeholder="—"
-                value={playbackSkipUntilSeq}
-                onChange={(e) => setPlaybackSkipUntilSeq(e.target.value)}
-                className="w-16 border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
-                title="Skip steps with sequence strictly less than this (legacy runs)"
-              />
-              <label htmlFor="run-playback-delay" className="whitespace-nowrap">
-                Delay
-              </label>
-              <input
-                id="run-playback-delay"
-                type="range"
-                min={0}
-                max={5000}
-                step={50}
-                value={playbackDelayMs}
-                onChange={(e) => setPlaybackDelayMs(Number(e.target.value))}
-                disabled={isPlaying}
-                className="w-24 sm:w-32 accent-[#4B90FF] disabled:opacity-50"
-                title="Delay between steps (ms). Fixed for the session once Play starts."
-              />
-              <span className="text-[11px] text-gray-500 tabular-nums">{playbackDelayMs}ms</span>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2 justify-end">
-          <button
-            type="button"
-            aria-disabled={!canPlayback || isPlaying}
-            onClick={() => void handleStartPlayback()}
-            title={
-              waitingForSteps
-                ? 'Loading steps…'
-                : !canPlayback
-                  ? r.status === 'RECORDING'
-                    ? 'Wait until recording finishes'
-                    : stepsQueryErrorMessage
-                      ? `Steps could not be loaded: ${stepsQueryErrorMessage}`
-                      : 'No recorded steps'
-                  : 'Replay recorded steps in a live browser preview'
-            }
-            className={`flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors ${
-              !canPlayback || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
-            }`}
-          >
-            <Play size={13} /> {waitingForSteps ? 'Loading…' : 'Play'}
-          </button>
-          {canPlayback && !isPlaying && (
+          <span className="sr-only">Playback</span>
+          <div className="flex flex-wrap items-center justify-end gap-2 w-full">
             <button
               type="button"
-              disabled
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-60"
-              title="Pause appears after you start playback"
+              aria-disabled={!canPlayback || isPlaying}
+              onClick={() => void handleStartPlayback()}
+              title={
+                waitingForSteps
+                  ? 'Loading steps…'
+                  : !canPlayback
+                    ? r.status === 'RECORDING'
+                      ? 'Wait until recording finishes'
+                      : stepsQueryErrorMessage
+                        ? `Steps could not be loaded: ${stepsQueryErrorMessage}`
+                        : 'No recorded steps'
+                    : 'Replay recorded steps in a live browser preview'
+              }
+              className={`flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors ${
+                !canPlayback || isPlaying ? 'opacity-40 cursor-not-allowed' : ''
+              }`}
             >
-              <Pause size={13} /> Pause
+              <Play size={13} /> {waitingForSteps ? 'Loading…' : 'Play'}
             </button>
-          )}
-          {isPlaying && (
-            <>
-              {isPaused ? (
+            {canPlayback && !isPlaying && (
+              <button
+                type="button"
+                disabled
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-60"
+                title="Pause appears after you start playback"
+              >
+                <Pause size={13} /> Pause
+              </button>
+            )}
+            {isPlaying &&
+              (isPaused ? (
                 <button
                   type="button"
                   onClick={() => void resumePlayback()}
@@ -559,65 +496,151 @@ export default function RunDetailPage() {
                 >
                   <Pause size={13} /> Pause
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => void stopPlayback()}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-md hover:bg-red-50 transition-colors"
-              >
-                <Square size={13} /> Stop
-              </button>
-              <button
-                type="button"
-                onClick={() => void restartPlayback()}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
-                title="Restart from the beginning with the same options"
-              >
-                <RotateCcw size={13} /> Restart
-              </button>
-              {playbackSessionId && (
-                <button
-                  type="button"
-                  onClick={handleDetachPlayback}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
-                >
-                  <ExternalLink size={13} /> Detach preview
-                </button>
-              )}
-            </>
-          )}
+              ))}
+            <button
+              type="button"
+              onClick={() => setPlaybackSettingsOpen((o) => !o)}
+              aria-expanded={playbackSettingsOpen}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 border text-xs font-medium rounded-md transition-colors ${
+                playbackSettingsOpen
+                  ? 'border-[#4B90FF] bg-[#4B90FF]/5 text-[#2563EB]'
+                  : 'border-gray-200 text-gray-600 hover:border-[#4B90FF]/40 hover:text-[#4B90FF]'
+              }`}
+            >
+              <SlidersHorizontal size={13} aria-hidden />
+              Playback settings
+            </button>
           </div>
-          {isPlaying && isPaused && (
-            <div className="flex flex-wrap items-center gap-2 justify-end w-full max-w-xl mt-1">
-              <button
-                type="button"
-                onClick={() => void advancePlaybackOne()}
-                className="flex items-center gap-1 px-2.5 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors"
-                title="Run the next step, then pause again"
-              >
-                <StepForward size={12} />
-                Next step
-              </button>
-              <span className="text-[10px] text-gray-400">Run to seq</span>
-              <input
-                type="number"
-                min={0}
-                placeholder="seq"
-                value={playbackAdvanceToSeq}
-                onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
-                className="w-14 border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-800 tabular-nums"
-                title="Pause after this step sequence completes (inclusive)"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
-                  if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
-                }}
-                className="px-2.5 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50 transition-colors"
-              >
-                Go
-              </button>
+
+          {playbackSettingsOpen && (
+            <div className="w-full max-w-md rounded-lg border border-gray-200 bg-gray-50/80 p-3 text-left shadow-sm">
+              {canPlayback && !isPlaying && (
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                  <label htmlFor="run-playback-clerk" className="whitespace-nowrap">
+                    Automatic Clerk sign-in
+                  </label>
+                  <select
+                    id="run-playback-clerk"
+                    value={playbackAutoClerkMode}
+                    onChange={(e) => setPlaybackAutoClerkMode(e.target.value as 'default' | 'on' | 'off')}
+                    className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                    title="Automatic server-side Clerk sign-in during playback"
+                  >
+                    <option value="default">Automatic — server default</option>
+                    <option value="on">Automatic — on</option>
+                    <option value="off">Automatic — off</option>
+                  </select>
+                  <label htmlFor="run-playback-clerk-otp" className="whitespace-nowrap">
+                    Automatic Clerk OTP
+                  </label>
+                  <select
+                    id="run-playback-clerk-otp"
+                    value={playbackClerkOtpMode}
+                    onChange={(e) => setPlaybackClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
+                    title="How to complete email verification when automatic Clerk sign-in runs"
+                    className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                  >
+                    <option value="default">OTP: server default</option>
+                    <option value="clerk_test_email">OTP: test email (424242)</option>
+                    <option value="mailslurp">OTP: MailSlurp inbox</option>
+                  </select>
+                  <label htmlFor="run-playback-skip" className="whitespace-nowrap">
+                    Skip seq &lt;
+                  </label>
+                  <input
+                    id="run-playback-skip"
+                    type="number"
+                    min={0}
+                    placeholder="—"
+                    value={playbackSkipUntilSeq}
+                    onChange={(e) => setPlaybackSkipUntilSeq(e.target.value)}
+                    className="w-16 border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                    title="Skip steps with sequence strictly less than this (legacy runs)"
+                  />
+                  <label htmlFor="run-playback-delay" className="whitespace-nowrap">
+                    Delay
+                  </label>
+                  <input
+                    id="run-playback-delay"
+                    type="range"
+                    min={0}
+                    max={5000}
+                    step={50}
+                    value={playbackDelayMs}
+                    onChange={(e) => setPlaybackDelayMs(Number(e.target.value))}
+                    disabled={isPlaying}
+                    className="w-24 sm:w-32 accent-[#4B90FF] disabled:opacity-50"
+                    title="Delay between steps (ms). Fixed for the session once Play starts."
+                  />
+                  <span className="text-[11px] text-gray-500 tabular-nums">{playbackDelayMs}ms</span>
+                </div>
+              )}
+              {isPlaying && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void stopPlayback()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-md hover:bg-red-50 transition-colors"
+                  >
+                    <Square size={13} /> Stop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void restartPlayback()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
+                    title="Restart from the beginning with the same options"
+                  >
+                    <RotateCcw size={13} /> Restart
+                  </button>
+                  {playbackSessionId && (
+                    <button
+                      type="button"
+                      onClick={handleDetachPlayback}
+                      className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors"
+                    >
+                      <ExternalLink size={13} /> Detach preview
+                    </button>
+                  )}
+                </div>
+              )}
+              {isPlaying && isPaused && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => void advancePlaybackOne()}
+                    className="flex items-center gap-1 px-2.5 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors"
+                    title="Run the next step, then pause again"
+                  >
+                    <StepForward size={12} />
+                    Next step
+                  </button>
+                  <span className="text-[10px] text-gray-400">Run to seq</span>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="seq"
+                    value={playbackAdvanceToSeq}
+                    onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
+                    className="w-14 border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-800 tabular-nums bg-white"
+                    title="Pause after this step sequence completes (inclusive)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
+                      if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
+                    }}
+                    className="px-2.5 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50 transition-colors"
+                  >
+                    Go
+                  </button>
+                </div>
+              )}
+              {!canPlayback && !isPlaying && (
+                <p className="text-[11px] text-gray-500">
+                  Playback options apply when this run has recorded steps and is not actively recording.
+                </p>
+              )}
             </div>
           )}
         </div>
