@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.38** — **Playback + LLM**: **`path[…]`** locators are rewritten to **`page.getByRole('dialog').last().locator('path[…]').first()`** so global **`.first()`** does not click the wrong Lucide X (e.g. row remove vs modal close). **`actionToInstruction`** prompt: prefer dialog-scoped or named close controls, not bare **`path[d="…"]`**. **`@bladerunner/api` `0.5.36`**.
 - **0.7.37** — **Playback**: **`relaxPageLocatorFirstForPlayback`** also appends **`.first()`** to **`page.locator('tag[attr]…')`** selectors (e.g. Lucide **`path[d="M18 6 6 18"]`**) when not already narrowed — fixes strict mode when the same path shape is reused. **`@bladerunner/api` `0.5.35`**.
 - **0.7.36** — **Playback**: **`relaxPageLocatorFirstForPlayback`** (replaces in-service **`relaxPlaywrightCodegenForPlayback`**) also appends **`.first()`** to **`page.locator('tag.class1.class2…')`** compound class chains (e.g. **`svg.lucide-triangle-alert`**) when not already narrowed — fixes strict mode when the same icon class appears on multiple buttons. **`@bladerunner/api` `0.5.34`**.
 - **0.7.35** — **Recording / playback**: removed **debug-session** NDJSON **fetch** instrumentation from **`tightenGetByTextLocatorsForPlayback`** and **`runPlaybackLoop` / `executePwCode`** (verification complete). **`@bladerunner/api` `0.5.33`**.

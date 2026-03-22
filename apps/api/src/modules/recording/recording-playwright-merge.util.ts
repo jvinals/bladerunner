@@ -81,6 +81,8 @@ export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): str
  * Playback: LLM codegen often uses `page.locator('span')`, `page.locator('svg.lucide-x')`, or
  * `page.locator('path[d="…"]')` (Lucide path shapes). Those can match many nodes (strict mode).
  * Append `.first()` when the chain is not already narrowed (first/nth/filter/locator/getBy).
+ * For `path[…]` only: scope to `getByRole('dialog').last()` so `.first()` does not pick an X icon
+ * outside the modal (e.g. row “remove” vs modal close).
  */
 export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string {
   const alreadyNarrowed = String.raw`(?!\s*\.(?:first|nth|filter|locator|last|getBy))`;
@@ -92,12 +94,13 @@ export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string
     new RegExp(compoundClassChain, 'gi'),
     (_full, quote: string, sel: string) => `page.locator(${quote}${sel}${quote}).first()`,
   );
-  // `path[d="…"]` — same Lucide path reused on multiple buttons (no spaces in selector).
   const tagWithAttr = String.raw`\bpage\.locator\s*\(\s*(['"\`])([a-zA-Z][a-zA-Z0-9]*(?:\[[^\]]*\])+)\1\s*\)${alreadyNarrowed}`;
-  s = s.replace(
-    new RegExp(tagWithAttr, 'gi'),
-    (_full, quote: string, sel: string) => `page.locator(${quote}${sel}${quote}).first()`,
-  );
+  s = s.replace(new RegExp(tagWithAttr, 'gi'), (_full, quote: string, sel: string) => {
+    if (/^path\[/i.test(sel)) {
+      return `page.getByRole('dialog').last().locator(${quote}${sel}${quote}).first()`;
+    }
+    return `page.locator(${quote}${sel}${quote}).first()`;
+  });
   return s;
 }
 

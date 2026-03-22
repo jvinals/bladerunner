@@ -98,9 +98,9 @@ assertEq(
 );
 
 assertEq(
-  'playback relax: path[d] lucide shape -> .first()',
+  'playback relax: path[d] -> scoped to dialog (not global .first())',
   relaxPageLocatorFirstForPlayback(`await page.locator('path[d="M18 6 6 18"]').click();`),
-  `await page.locator('path[d="M18 6 6 18"]').first().click();`,
+  `await page.getByRole('dialog').last().locator('path[d="M18 6 6 18"]').first().click();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');
