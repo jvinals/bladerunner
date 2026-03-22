@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.47** — **Run detail**: **Full width** (`max-w-none`) always — not tied to Play. **Live replay preview** uses **`flex-1`**; **Recorded steps** is a **narrower right column** (`~min(20rem, 26%)`, `max-w-sm`, `min-w-[17rem]`). Bottom **Targets / Findings** grid unchanged. **`@bladerunner/web` `0.6.21`**.
 - **0.7.46** — **Run detail**: While **playback is running** (`isPlaying`), the page uses **full main width** (`max-w-none`), **single-column** preview + steps, and **Findings / Tags / Details** stack **below** Targets (no narrow right column). Slightly taller preview canvas and steps list. **`@bladerunner/web` `0.6.20`**.
 - **0.7.45** — **Run detail**: Playback **Clerk / OTP / skip / delay** moved behind **Playback settings**; top row is **Play**, **Pause** (or **Resume** while paused), then **Playback settings**. **Stop / Restart / Detach** and step-advance controls live in the panel while playing. **`@bladerunner/web` `0.6.19`**.
 - **0.7.44** — **Run detail**: Session recording **video / preview** opens in a **modal**; header button **Video recording** (when artifacts/thumbnail exist). **`@bladerunner/web` `0.6.18`**.
