@@ -1415,7 +1415,10 @@ export class RecordingService extends EventEmitter {
             }),
           }).catch(() => {});
           // #endregion
-          await this.executePwCode(session.page, step.playwrightCode);
+          await this.executePwCode(session.page, step.playwrightCode, {
+            /** Prevents `click({ force: true })` on steps before recorded `clerk_auto_sign_in` — force can break Clerk UI. */
+            skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
+          });
         } catch (execErr) {
           const msg = execErr instanceof Error ? execErr.message : String(execErr);
           this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);
@@ -1867,7 +1870,11 @@ export class RecordingService extends EventEmitter {
     return code.replace(re, (_full, quote: string, tag: string) => `page.locator(${quote}${tag}${quote}).first()`);
   }
 
-  private async executePwCode(page: Page, code: string): Promise<void> {
+  private async executePwCode(
+    page: Page,
+    code: string,
+    opts?: { skipClickForce?: boolean },
+  ): Promise<void> {
     const forbidden = ['require(', 'import ', 'process.', 'fs.', 'child_process', 'eval('];
     for (const f of forbidden) {
       if (code.includes(f)) {
@@ -1877,7 +1884,23 @@ export class RecordingService extends EventEmitter {
 
     const relaxed = this.relaxPlaywrightCodegenForPlayback(code);
     const tightened = tightenGetByTextLocatorsForPlayback(relaxed);
-    const withForce = this.wantPlaybackClickForce() ? relaxClickForceForPlayback(tightened) : tightened;
+    const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
+    // #region agent log
+    if (opts?.skipClickForce && this.wantPlaybackClickForce()) {
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          location: 'recording.service.ts:executePwCode',
+          message: 'skip click force (pre-Clerk playback)',
+          data: { hypothesisId: 'H2', runId: 'clerk-skip-force' },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
+    const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
     const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);
     const fn = new Function('page', `return (async () => { ${safeCode} })();`);
     await fn(page);
