@@ -32,8 +32,8 @@ const PLATFORM_ICONS: Record<string, typeof Monitor> = {
 const COMPACT_STRIP =
   'flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-gray-100 bg-white px-3 py-2 sm:px-4 sm:py-2.5';
 
-/** Shared height for live preview + recorded steps (equal columns). */
-const PLAYBACK_COL_HEIGHT = 'min-h-[380px] h-[min(64vh,720px)] max-h-[min(64vh,720px)]';
+/** Shared fixed height for live preview + recorded steps (both columns use the same classes). */
+const PLAYBACK_COL_HEIGHT = 'min-h-[520px] h-[min(75vh,880px)] max-h-[min(75vh,880px)]';
 
 function CompactStrip({
   title,
