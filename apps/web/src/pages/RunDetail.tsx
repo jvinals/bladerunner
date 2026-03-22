@@ -11,7 +11,7 @@ import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
-import { playbackToneForStep } from '@/lib/playbackStepTone';
+import { effectivePlaybackHighlightSequence, playbackToneForStep } from '@/lib/playbackStepTone';
 import {
   canPauseOrStopPlaybackDuringClerkStep,
   getClerkAutoSignInStepSequence,
@@ -600,6 +600,11 @@ export default function RunDetailPage() {
     [clerkAutoSignInSequence, completedSequences],
   );
 
+  const effectiveHighlightSequence = useMemo(
+    () => effectivePlaybackHighlightSequence(highlightSequence, completedSequences, recordedSteps),
+    [highlightSequence, completedSequences, recordedSteps],
+  );
+
   const handleStepPlayback = useCallback(
     async (sequence: number, mode: 'from' | 'only') => {
       if (!id || !canPlayback) return;
@@ -659,10 +664,10 @@ export default function RunDetailPage() {
   }, [currentFrame]);
 
   useEffect(() => {
-    if (highlightSequence == null) return;
-    const el = stepRefs.current.get(highlightSequence);
+    if (effectiveHighlightSequence == null) return;
+    const el = stepRefs.current.get(effectiveHighlightSequence);
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [highlightSequence]);
+  }, [effectiveHighlightSequence]);
 
   const handleStartPlayback = useCallback(async () => {
     if (!id || !canPlayback) return;
@@ -1090,7 +1095,7 @@ export default function RunDetailPage() {
                       playbackHighlight={playbackToneForStep(
                         step.sequence,
                         showReplayChrome,
-                        highlightSequence,
+                        effectiveHighlightSequence,
                         completedSequences,
                       )}
                       stepPlayback={

@@ -11,7 +11,7 @@ import {
 import { StepCard } from '@/components/ui/StepCard';
 import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
-import { playbackToneForStep } from '@/lib/playbackStepTone';
+import { effectivePlaybackHighlightSequence, playbackToneForStep } from '@/lib/playbackStepTone';
 import {
   canPauseOrStopPlaybackDuringClerkStep,
   getClerkAutoSignInStepSequence,
@@ -160,6 +160,11 @@ export default function RunsPage() {
   const showReplayChrome =
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
+  const effectiveHighlightSequence = useMemo(
+    () => effectivePlaybackHighlightSequence(highlightSequence, completedSequences, steps),
+    [highlightSequence, completedSequences, steps],
+  );
+
   useEffect(() => {
     const panel = stepsListScrollRef.current;
     if (!panel || steps.length === 0) return;
@@ -184,10 +189,10 @@ export default function RunsPage() {
   }, [recordFrame, playFrame, isRecording, isDetached]);
 
   useEffect(() => {
-    if (highlightSequence == null) return;
-    const el = stepRefsPlayback.current.get(highlightSequence);
+    if (effectiveHighlightSequence == null) return;
+    const el = stepRefsPlayback.current.get(effectiveHighlightSequence);
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [highlightSequence]);
+  }, [effectiveHighlightSequence]);
 
   const handleStartRecording = useCallback(async () => {
     if (!newUrl || !newName) return;
@@ -978,7 +983,7 @@ export default function RunsPage() {
                       playbackHighlight={playbackToneForStep(
                         step.sequence,
                         showReplayChrome,
-                        highlightSequence,
+                        effectiveHighlightSequence,
                         completedSequences,
                       )}
                       reRecord={
