@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.53** — **Run detail**: **Playback** controls (Clerk, OTP, skip, delay, session / paused actions) live in the **Run details** right slide-over, opened by **Run Details** after **Artifacts**; removed the second inline gray panel beside metrics. **`@bladerunner/web` `0.6.27`**.
 - **0.7.52** — **Run detail**: **Playback settings** controls are **inline** again next to a **narrower metrics strip** (no **Playback settings** button; no playback slide-over). **`@bladerunner/web` `0.6.26`**.
 - **0.7.51** — **Run detail**: **Playback settings** moved into the same **right slide-over** pattern as **Run details** (backdrop, slide-in, Escape). Opening one panel closes the other. **`@bladerunner/web` `0.6.25`**.
 - **0.7.50** — **Run detail**: **Timeline, Details, Findings, Artifacts** live in a **right slide-over** opened by **Run Details** (after **Artifacts** on the metrics row). **Targets** and **Tags** stay as compact strips below. **`@bladerunner/web` `0.6.24`**.
