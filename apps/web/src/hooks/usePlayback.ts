@@ -132,8 +132,8 @@ export function usePlayback(): UsePlaybackReturn {
         setStatus('playback');
         return;
       }
-      setStatus(data.status);
       if (data.status === 'failed') {
+        setStatus(data.status);
         if (data.error) {
           setPlaybackError(data.error);
         }
@@ -156,7 +156,11 @@ export function usePlayback(): UsePlaybackReturn {
         setHighlightSequence(null);
         setCompletedSequences(new Set());
         setCurrentFrame(null);
+        /** Match manual stop: no lingering `completed`/`stopped` label once the session is torn down. */
+        setStatus('idle');
+        return;
       }
+      setStatus(data.status);
     });
 
     socket.on('disconnect', () => {
