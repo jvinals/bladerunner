@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.70** — **Run detail**: Playback controls card **slightly shorter** (`py-1`); metrics / **Run details** card **slightly wider** (`max-w` ~25.5rem). **`@bladerunner/web` `0.6.44`**.
 - **0.7.69** — **Run detail**: Softer playback vs metrics split (`flex-[1.2]`, metrics `max-w` ~23rem, min playback ~30rem); playback toolbar uses **horizontal scroll** again instead of wrapping. **`@bladerunner/web` `0.6.43`**.
 - **0.7.68** — **Run detail**: Wider playback toolbar row (`flex-[3]`), narrower metrics card (`max-w` ~17.5rem), slightly shorter metrics padding; playback controls **wrap** instead of horizontal scroll. **`@bladerunner/web` `0.6.42`**.
 - **0.7.67** — **Run detail**: **View** control (**Split** / **Stack**) to the right of the playback toolbar — **Split** keeps **Live replay preview** left and **Recorded steps** right; **Stack** shows steps in a **horizontal scrolling** row with **full-width preview** below. **`@bladerunner/web` `0.6.41`**.
