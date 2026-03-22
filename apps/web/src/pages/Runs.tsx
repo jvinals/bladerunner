@@ -166,9 +166,9 @@ export default function RunsPage() {
   );
 
   useEffect(() => {
-    if (playbackStatus !== 'stopped' && playbackStatus !== 'completed') return;
+    if (isPlaying || playbackSessionId != null) return;
     setPlaybackAdvanceToSeq('');
-  }, [playbackStatus]);
+  }, [isPlaying, playbackSessionId]);
 
   useEffect(() => {
     const panel = stepsListScrollRef.current;

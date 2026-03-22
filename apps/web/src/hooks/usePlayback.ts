@@ -203,7 +203,8 @@ export function usePlayback(): UsePlaybackReturn {
     activeSessionRef.current = null;
     setIsPlaying(false);
     setIsPaused(false);
-    setStatus('stopped');
+    /** `idle` keeps the run detail status label and chrome aligned with “ready for a new session” (not `stopped`). */
+    setStatus('idle');
     setPlaybackSessionId(null);
     setSourceRunId(null);
     setHighlightSequence(null);

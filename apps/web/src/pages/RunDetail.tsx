@@ -534,11 +534,11 @@ export default function RunDetailPage() {
     restartPlayback,
   } = usePlayback();
 
-  /** Clear stepped-advance input when a session ends so the next Play starts with no leftover UI state. */
+  /** Clear stepped-advance input whenever there is no active playback session (covers stop → idle, complete, navigate back). */
   useEffect(() => {
-    if (playbackStatus !== 'stopped' && playbackStatus !== 'completed') return;
+    if (isPlaying || playbackSessionId != null) return;
     setPlaybackAdvanceToSeq('');
-  }, [playbackStatus]);
+  }, [isPlaying, playbackSessionId]);
 
   const { data: run, isLoading, error } = useQuery({
     queryKey: ['run', id],
