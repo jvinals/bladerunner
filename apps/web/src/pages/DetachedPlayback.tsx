@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 import { runsApi, playbackBodyFromSnapshot, type ClerkOtpMode } from '@/lib/api';
+import {
+  canPauseOrStopPlaybackDuringClerkStep,
+  getClerkAutoSignInStepSequence,
+} from '@/lib/clerkAutoSignInStep';
 import { Pause, Play, RotateCcw, Square, StepForward } from 'lucide-react';
 
 type ReplaySnapshot = {
@@ -46,10 +51,36 @@ export default function DetachedPlayback() {
   const [playbackSessionId, setPlaybackSessionId] = useState(routePlaybackId ?? '');
   const [replaySnapshot, setReplaySnapshot] = useState<ReplaySnapshot | null>(null);
   const [replayBusy, setReplayBusy] = useState(false);
+  const [completedSequences, setCompletedSequences] = useState<Set<number>>(() => new Set());
+
+  const sourceRunIdForSteps = replaySnapshot?.sourceRunId ?? searchParams.get('source') ?? '';
+  const { data: sourceSteps, isPending: sourceStepsPending } = useQuery({
+    queryKey: ['run-steps-detached', sourceRunIdForSteps],
+    queryFn: () => runsApi.getSteps(sourceRunIdForSteps),
+    enabled: Boolean(sourceRunIdForSteps),
+  });
+  const stepsForClerk = (sourceSteps ?? []) as { sequence: number; metadata?: unknown }[];
+  const clerkAutoSignInSequence = useMemo(
+    () => getClerkAutoSignInStepSequence(stepsForClerk),
+    [stepsForClerk],
+  );
+  const canPauseOrStopDuringPlayback = useMemo(() => {
+    if (sourceStepsPending && sourceRunIdForSteps) return false;
+    return canPauseOrStopPlaybackDuringClerkStep(clerkAutoSignInSequence, completedSequences);
+  }, [
+    sourceStepsPending,
+    sourceRunIdForSteps,
+    clerkAutoSignInSequence,
+    completedSequences,
+  ]);
 
   useEffect(() => {
     setPlaybackSessionId(routePlaybackId ?? '');
   }, [routePlaybackId]);
+
+  useEffect(() => {
+    setCompletedSequences(new Set());
+  }, [playbackSessionId]);
 
   useEffect(() => {
     const q = searchParams.get('source');
@@ -142,6 +173,9 @@ export default function DetachedPlayback() {
         if (rid !== playbackSessionId) return;
         if (payload.phase === 'before' || payload.phase === 'error') {
           setActiveStepSequence(payload.step.sequence);
+        }
+        if (payload.phase === 'after' || payload.phase === 'skipped') {
+          setCompletedSequences((prev) => new Set(prev).add(payload.step.sequence));
         }
       },
     );
@@ -327,9 +361,14 @@ export default function DetachedPlayback() {
               ) : (
                 <button
                   type="button"
+                  disabled={!canPauseOrStopDuringPlayback}
                   onClick={handlePause}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-amber-600/90 text-white text-[11px] font-medium hover:bg-amber-500"
-                  title="Pause"
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-amber-600/90 text-white text-[11px] font-medium hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={
+                    !canPauseOrStopDuringPlayback
+                      ? 'Wait until automatic Clerk sign-in has finished'
+                      : 'Pause'
+                  }
                 >
                   <Pause size={12} />
                   Pause
@@ -346,9 +385,14 @@ export default function DetachedPlayback() {
               </button>
               <button
                 type="button"
+                disabled={!canPauseOrStopDuringPlayback}
                 onClick={handleStop}
-                className="flex items-center gap-1 px-2 py-1 rounded bg-red-600/80 text-white text-[11px] font-medium hover:bg-red-500"
-                title="Stop playback"
+                className="flex items-center gap-1 px-2 py-1 rounded bg-red-600/80 text-white text-[11px] font-medium hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                title={
+                  !canPauseOrStopDuringPlayback
+                    ? 'Wait until automatic Clerk sign-in has finished'
+                    : 'Stop playback'
+                }
               >
                 <Square size={12} />
                 Stop

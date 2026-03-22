@@ -13,6 +13,10 @@ import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
 import { playbackToneForStep } from '@/lib/playbackStepTone';
 import {
+  canPauseOrStopPlaybackDuringClerkStep,
+  getClerkAutoSignInStepSequence,
+} from '@/lib/clerkAutoSignInStep';
+import {
   useRemotePreviewCanvas,
   type RemotePreviewBridge,
 } from '@/hooks/useRemotePreviewCanvas';
@@ -145,6 +149,14 @@ export default function RunsPage() {
   const canShowStepActions =
     steps.length > 0 &&
     (!!effectiveRunId);
+  const clerkAutoSignInSequence = useMemo(
+    () => getClerkAutoSignInStepSequence(steps),
+    [steps],
+  );
+  const canPauseOrStopDuringPlayback = useMemo(
+    () => canPauseOrStopPlaybackDuringClerkStep(clerkAutoSignInSequence, completedSequences),
+    [clerkAutoSignInSequence, completedSequences],
+  );
   const showReplayChrome =
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
@@ -536,9 +548,14 @@ export default function RunsPage() {
                   ) : (
                     <button
                       type="button"
+                      disabled={!canPauseOrStopDuringPlayback}
                       onClick={() => void pausePlayback()}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors"
-                      title="Pause playback"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={
+                        !canPauseOrStopDuringPlayback
+                          ? 'Wait until automatic Clerk sign-in has finished'
+                          : 'Pause playback'
+                      }
                     >
                       <Pause size={12} />
                       Pause
@@ -546,8 +563,14 @@ export default function RunsPage() {
                   )}
                   <button
                     type="button"
+                    disabled={!canPauseOrStopDuringPlayback}
                     onClick={() => void stopPlayback()}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={
+                      !canPauseOrStopDuringPlayback
+                        ? 'Wait until automatic Clerk sign-in has finished'
+                        : 'Stop playback'
+                    }
                   >
                     <Square size={12} />
                     Stop

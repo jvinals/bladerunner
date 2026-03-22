@@ -12,6 +12,10 @@ import { StepCard } from '@/components/ui/StepCard';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
 import { playbackToneForStep } from '@/lib/playbackStepTone';
+import {
+  canPauseOrStopPlaybackDuringClerkStep,
+  getClerkAutoSignInStepSequence,
+} from '@/lib/clerkAutoSignInStep';
 import { formatDuration, formatRelativeTime } from '@/lib/utils';
 import {
   ArrowLeft, Monitor, Smartphone, Globe,
@@ -587,6 +591,15 @@ export default function RunDetailPage() {
     recordedSteps.length > 0 &&
     !waitingForSteps;
 
+  const clerkAutoSignInSequence = useMemo(
+    () => getClerkAutoSignInStepSequence(recordedSteps),
+    [recordedSteps],
+  );
+  const canPauseOrStopDuringPlayback = useMemo(
+    () => canPauseOrStopPlaybackDuringClerkStep(clerkAutoSignInSequence, completedSequences),
+    [clerkAutoSignInSequence, completedSequences],
+  );
+
   const handleStepPlayback = useCallback(
     async (sequence: number, mode: 'from' | 'only') => {
       if (!id || !canPlayback) return;
@@ -864,19 +877,30 @@ export default function RunDetailPage() {
               ) : (
                 <button
                   type="button"
-                  disabled={!isPlaying}
+                  disabled={!isPlaying || !canPauseOrStopDuringPlayback}
                   onClick={() => void pausePlayback()}
                   className="flex shrink-0 items-center gap-1 px-2 py-1 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-md hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-400 disabled:hover:bg-transparent"
-                  title={isPlaying ? 'Pause playback' : 'Pause is available while playback is running'}
+                  title={
+                    !canPauseOrStopDuringPlayback
+                      ? 'Wait until automatic Clerk sign-in has finished'
+                      : isPlaying
+                        ? 'Pause playback'
+                        : 'Pause is available while playback is running'
+                  }
                 >
                   <Pause size={12} /> Pause
                 </button>
               )}
               <button
                 type="button"
-                disabled={!isPlaying}
+                disabled={!isPlaying || !canPauseOrStopDuringPlayback}
                 onClick={() => void stopPlayback()}
                 className="flex shrink-0 items-center gap-1 px-2 py-1 border border-red-200 text-red-600 text-[11px] font-medium rounded-md hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title={
+                  !canPauseOrStopDuringPlayback
+                    ? 'Wait until automatic Clerk sign-in has finished'
+                    : 'Stop playback'
+                }
               >
                 <Square size={12} /> Stop
               </button>
