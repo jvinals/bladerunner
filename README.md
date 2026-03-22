@@ -217,6 +217,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.49** — **Run detail**: **Timeline, Targets, Details, Tags, Findings, Artifacts** join the **metrics** block as **compact strips** (same pattern as Duration / Steps / …); the large **bottom grid** for those sections is removed so **Live replay preview** and **Recorded steps** share a **taller, matched height** (`min-h-[380px]`, `h-[min(64vh,720px)]`). **`@bladerunner/web` `0.6.23`**.
 - **0.7.48** — **Run detail**: **Duration / Steps / Failures / Findings / Artifacts** in one **compact strip** (one line when space allows; wraps to two) with **`·`** separators — replaces five large cards. **`@bladerunner/web` `0.6.22`**.
 - **0.7.47** — **Run detail**: **Full width** (`max-w-none`) always — not tied to Play. **Live replay preview** uses **`flex-1`**; **Recorded steps** is a **narrower right column** (`~min(20rem, 26%)`, `max-w-sm`, `min-w-[17rem]`). Bottom **Targets / Findings** grid unchanged. **`@bladerunner/web` `0.6.21`**.
 - **0.7.46** — **Run detail**: While **playback is running** (`isPlaying`), the page uses **full main width** (`max-w-none`), **single-column** preview + steps, and **Findings / Tags / Details** stack **below** Targets (no narrow right column). Slightly taller preview canvas and steps list. **`@bladerunner/web` `0.6.20`**.
