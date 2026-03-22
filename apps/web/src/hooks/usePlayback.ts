@@ -37,6 +37,12 @@ export interface UsePlaybackReturn {
   stopPlayback: () => Promise<void>;
   pausePlayback: () => Promise<void>;
   resumePlayback: () => Promise<void>;
+  /** Paused only: run one step then pause again */
+  advancePlaybackOne: () => Promise<void>;
+  /** Paused only: run until step sequence completes, then pause */
+  advancePlaybackTo: (stopAfterSequence: number) => Promise<void>;
+  /** Stop and start a new session with the same options */
+  restartPlayback: () => Promise<void>;
 }
 
 function disconnectSocket(socketRef: MutableRefObject<Socket | null>, sessionId: string | null) {
@@ -223,6 +229,54 @@ export function usePlayback(): UsePlaybackReturn {
     }
   }, [playbackSessionId]);
 
+  const advancePlaybackOne = useCallback(async () => {
+    const id = playbackSessionId;
+    if (!id) return;
+    setPlaybackError(null);
+    try {
+      await runsApi.advancePlaybackOne(id);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setPlaybackError(msg);
+    }
+  }, [playbackSessionId]);
+
+  const advancePlaybackTo = useCallback(async (stopAfterSequence: number) => {
+    const id = playbackSessionId;
+    if (!id) return;
+    setPlaybackError(null);
+    try {
+      await runsApi.advancePlaybackTo(id, stopAfterSequence);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setPlaybackError(msg);
+    }
+  }, [playbackSessionId]);
+
+  const restartPlayback = useCallback(async () => {
+    const id = playbackSessionId;
+    if (!id) return;
+    setPlaybackError(null);
+    try {
+      const result = await runsApi.restartPlayback(id);
+      setPlaybackSessionId(result.playbackSessionId);
+      setSourceRunId(result.sourceRunId);
+      setIsPlaying(true);
+      setIsPaused(false);
+      setStatus('playback');
+      setCompletedSequences(new Set());
+      setHighlightSequence(null);
+      setCurrentFrame(null);
+      bindSocket(result.playbackSessionId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setPlaybackError(msg);
+      setIsPlaying(false);
+      setPlaybackSessionId(null);
+      setSourceRunId(null);
+    }
+  }, [playbackSessionId, bindSocket]);
+
   useEffect(() => {
     return () => {
       const id = activeSessionRef.current;
@@ -248,5 +302,8 @@ export function usePlayback(): UsePlaybackReturn {
     stopPlayback,
     pausePlayback,
     resumePlayback,
+    advancePlaybackOne,
+    advancePlaybackTo,
+    restartPlayback,
   };
 }

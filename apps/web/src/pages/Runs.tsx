@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useRemotePreviewCanvas';
 import {
   Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2, Pause,
+  RotateCcw, StepForward,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -35,6 +36,7 @@ export default function RunsPage() {
   const [recordingClerkOtpMode, setRecordingClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
+  const [playbackAdvanceToSeq, setPlaybackAdvanceToSeq] = useState('');
   const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);
   const [isDetached, setIsDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
@@ -86,6 +88,9 @@ export default function RunsPage() {
     stopPlayback,
     pausePlayback,
     resumePlayback,
+    advancePlaybackOne,
+    advancePlaybackTo,
+    restartPlayback,
   } = usePlayback();
 
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -515,46 +520,89 @@ export default function RunsPage() {
                 Stop
               </button>
             ) : isPlaying ? (
-              <div className="flex items-center gap-1.5 shrink-0">
-                {isPaused ? (
+              <div className="flex flex-col items-end gap-1 shrink-0 max-w-[min(100%,20rem)]">
+                <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                  {isPaused ? (
+                    <button
+                      type="button"
+                      onClick={() => void resumePlayback()}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-md hover:bg-emerald-100 transition-colors"
+                      title="Resume playback"
+                    >
+                      <Play size={12} className="fill-current" />
+                      Resume
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void pausePlayback()}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors"
+                      title="Pause playback"
+                    >
+                      <Pause size={12} />
+                      Pause
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => void resumePlayback()}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-md hover:bg-emerald-100 transition-colors"
-                    title="Resume playback"
+                    onClick={() => void stopPlayback()}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
                   >
-                    <Play size={12} className="fill-current" />
-                    Resume
+                    <Square size={12} />
+                    Stop
                   </button>
-                ) : (
                   <button
                     type="button"
-                    onClick={() => void pausePlayback()}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors"
-                    title="Pause playback"
+                    onClick={() => void restartPlayback()}
+                    className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
+                    title="Restart from the beginning with the same options"
                   >
-                    <Pause size={12} />
-                    Pause
+                    <RotateCcw size={12} />
+                    Restart
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewPanelOpen(!newPanelOpen)}
+                    disabled={isPlaying}
+                    className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-50"
+                    title="Stop playback before starting a new recording"
+                  >
+                    <Plus size={12} />
+                    New
+                  </button>
+                </div>
+                {isPaused && (
+                  <div className="flex flex-wrap items-center gap-1.5 justify-end w-full">
+                    <button
+                      type="button"
+                      onClick={() => void advancePlaybackOne()}
+                      className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50"
+                      title="Run the next step, then pause again"
+                    >
+                      <StepForward size={11} />
+                      Next step
+                    </button>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="seq"
+                      value={playbackAdvanceToSeq}
+                      onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
+                      className="w-12 border border-gray-200 rounded px-1.5 py-0.5 text-[11px] tabular-nums"
+                      title="Pause after this step sequence (inclusive)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
+                        if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
+                      }}
+                      className="px-2 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50"
+                    >
+                      Run to
+                    </button>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void stopPlayback()}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
-                >
-                  <Square size={12} />
-                  Stop
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewPanelOpen(!newPanelOpen)}
-                  disabled={isPlaying}
-                  className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-400 text-xs font-medium rounded-md cursor-not-allowed opacity-50"
-                  title="Stop playback before starting a new recording"
-                >
-                  <Plus size={12} />
-                  New
-                </button>
               </div>
             ) : (
               <button
@@ -618,28 +666,29 @@ export default function RunsPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
                 <label htmlFor="runs-playback-clerk" className="whitespace-nowrap">
-                  Clerk auto sign-in
+                  Automatic Clerk sign-in
                 </label>
                 <select
                   id="runs-playback-clerk"
                   value={playbackAutoClerkMode}
                   onChange={(e) => setPlaybackAutoClerkMode(e.target.value as 'default' | 'on' | 'off')}
                   disabled={isPlaying}
+                  title="Automatic server-side Clerk sign-in during playback"
                   className="flex-1 min-w-[120px] border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
                 >
-                  <option value="default">Server default</option>
-                  <option value="on">Force on</option>
-                  <option value="off">Force off</option>
+                  <option value="default">Automatic — server default</option>
+                  <option value="on">Automatic — on</option>
+                  <option value="off">Automatic — off</option>
                 </select>
                 <label htmlFor="runs-playback-clerk-otp" className="whitespace-nowrap">
-                  Clerk OTP
+                  Automatic Clerk OTP
                 </label>
                 <select
                   id="runs-playback-clerk-otp"
                   value={playbackClerkOtpMode}
                   onChange={(e) => setPlaybackClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
                   disabled={isPlaying}
-                  title="How to complete email verification when Clerk auto sign-in runs"
+                  title="How to complete email verification when automatic Clerk sign-in runs"
                   className="flex-1 min-w-[140px] border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
                 >
                   <option value="default">OTP: server default</option>

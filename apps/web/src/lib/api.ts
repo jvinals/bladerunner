@@ -204,6 +204,36 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ playbackSessionId }),
     }),
+  /** While paused: run one step, then pause again */
+  advancePlaybackOne: (playbackSessionId: string) =>
+    apiFetch<{ ok: boolean }>('/runs/playback/advance-one', {
+      method: 'POST',
+      body: JSON.stringify({ playbackSessionId }),
+    }),
+  /** While paused: run until `stopAfterSequence` completes, then pause */
+  advancePlaybackTo: (playbackSessionId: string, stopAfterSequence: number) =>
+    apiFetch<{ ok: boolean }>('/runs/playback/advance-to', {
+      method: 'POST',
+      body: JSON.stringify({ playbackSessionId, stopAfterSequence }),
+    }),
+  /** Stop and start a new playback with the same options; returns new session ids */
+  restartPlayback: (playbackSessionId: string) =>
+    apiFetch<{ playbackSessionId: string; sourceRunId: string }>('/runs/playback/restart', {
+      method: 'POST',
+      body: JSON.stringify({ playbackSessionId }),
+    }),
+  getPlaybackSession: (playbackSessionId: string) =>
+    apiFetch<{
+      playbackSessionId: string;
+      paused: boolean;
+      sourceRunId: string;
+      delayMs: number;
+      wantAutoClerkSignIn: boolean;
+      clerkOtpMode: ClerkOtpMode;
+      skipUntilSequence?: number;
+      skipStepIds?: string[];
+      playThroughSequence?: number;
+    }>(`/runs/playback/${encodeURIComponent(playbackSessionId)}`),
   /** App-state checkpoints (storage snapshots after each step while recording). */
   getCheckpoints: (runId: string) =>
     apiFetch<

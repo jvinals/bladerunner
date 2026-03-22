@@ -105,6 +105,17 @@ export interface RecordingSession {
   clerkDomCaptureBarrier: number;
 }
 
+/** Stored on each playback session so Restart can replay with the same options. */
+export type PlaybackReplaySnapshot = {
+  sourceRunId: string;
+  delayMs: number;
+  wantAutoClerkSignIn: boolean;
+  clerkOtpMode: ClerkOtpMode;
+  skipUntilSequence?: number;
+  skipStepIds?: string[];
+  playThroughSequence?: number;
+};
+
 /** Live replay session — keyed by playbackSessionId (socket room), not source run id */
 export interface PlaybackSession {
   playbackSessionId: string;
@@ -117,6 +128,12 @@ export interface PlaybackSession {
   paused: boolean;
   /** Resolvers waiting in `waitUntilPlaybackNotPaused` */
   playbackResumeWaiters: Array<() => void>;
+  /** Options used when this session started (restart / client UI). */
+  replaySnapshot: PlaybackReplaySnapshot;
+  /** After resume, pause again when the current step finishes (advance-one). */
+  pauseAfterNextStepCompletes?: boolean;
+  /** After resume, pause when a step with sequence >= this completes (advance-to). */
+  pauseAfterSequenceInclusive?: number | null;
 }
 
 @Injectable()
@@ -1132,6 +1149,16 @@ export class RecordingService extends EventEmitter {
       skipStepIds: opts?.skipStepIds,
       runUrl: run.url,
     });
+    const clerkOtpMode = this.resolveClerkOtpMode(opts);
+    const replaySnapshot: PlaybackReplaySnapshot = {
+      sourceRunId,
+      delayMs,
+      wantAutoClerkSignIn,
+      clerkOtpMode,
+      skipUntilSequence: opts?.skipUntilSequence,
+      skipStepIds: opts?.skipStepIds,
+      playThroughSequence: opts?.playThroughSequence,
+    };
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
 
     let wsEndpoint: string;
@@ -1163,6 +1190,7 @@ export class RecordingService extends EventEmitter {
         latestFrame: null,
         paused: false,
         playbackResumeWaiters: [],
+        replaySnapshot,
       };
 
       this.playbackSessions.set(playbackSessionId, session);
@@ -1178,7 +1206,6 @@ export class RecordingService extends EventEmitter {
       /** Zero-state load — aligns with recording; redundant first NAVIGATE is skipped via `skipSet`. */
       await page.goto(run.url, { waitUntil: 'domcontentloaded' });
 
-      const clerkOtpMode = this.resolveClerkOtpMode(opts);
       void this.runPlaybackLoop(playbackSessionId, session, playbackExecutionSteps, delayMs, sourceRunId, run.url, {
         wantAutoClerkSignIn,
         clerkOtpMode,
@@ -1222,6 +1249,8 @@ export class RecordingService extends EventEmitter {
     if (!session || session.userId !== userId) {
       return false;
     }
+    session.pauseAfterNextStepCompletes = false;
+    session.pauseAfterSequenceInclusive = null;
     session.paused = false;
     const waiters = session.playbackResumeWaiters.splice(0);
     for (const w of waiters) {
@@ -1237,6 +1266,104 @@ export class RecordingService extends EventEmitter {
       sourceRunId: session.sourceRunId,
     });
     return true;
+  }
+
+  /** Resume, run exactly one step, then pause again (only valid while paused). */
+  async resumePlaybackAfterOneStep(playbackSessionId: string, userId: string): Promise<boolean> {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return false;
+    }
+    if (!session.paused) {
+      throw new BadRequestException('Playback is not paused');
+    }
+    session.pauseAfterNextStepCompletes = true;
+    session.pauseAfterSequenceInclusive = null;
+    session.paused = false;
+    const waiters = session.playbackResumeWaiters.splice(0);
+    for (const w of waiters) {
+      try {
+        w();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.emit('status', playbackSessionId, {
+      status: 'playback',
+      runId: playbackSessionId,
+      sourceRunId: session.sourceRunId,
+    });
+    return true;
+  }
+
+  /** Resume until `stopAfterSequence` completes (inclusive), then pause. */
+  async resumePlaybackUntilSequence(playbackSessionId: string, userId: string, stopAfterSequence: number): Promise<boolean> {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return false;
+    }
+    if (!session.paused) {
+      throw new BadRequestException('Playback is not paused');
+    }
+    if (!Number.isFinite(stopAfterSequence) || stopAfterSequence < 0) {
+      throw new BadRequestException('stopAfterSequence must be a non-negative integer');
+    }
+    session.pauseAfterNextStepCompletes = false;
+    session.pauseAfterSequenceInclusive = Math.floor(stopAfterSequence);
+    session.paused = false;
+    const waiters = session.playbackResumeWaiters.splice(0);
+    for (const w of waiters) {
+      try {
+        w();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.emit('status', playbackSessionId, {
+      status: 'playback',
+      runId: playbackSessionId,
+      sourceRunId: session.sourceRunId,
+    });
+    return true;
+  }
+
+  getPlaybackSessionSnapshot(
+    playbackSessionId: string,
+    userId: string,
+  ): (PlaybackReplaySnapshot & { playbackSessionId: string; paused: boolean }) | null {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return null;
+    }
+    return {
+      playbackSessionId: session.playbackSessionId,
+      paused: session.paused,
+      ...session.replaySnapshot,
+    };
+  }
+
+  /** Stop current session and start a new playback with the same options. */
+  async restartPlayback(
+    playbackSessionId: string,
+    userId: string,
+  ): Promise<{ playbackSessionId: string; sourceRunId: string } | null> {
+    const session = this.playbackSessions.get(playbackSessionId);
+    if (!session || session.userId !== userId) {
+      return null;
+    }
+    const snap = session.replaySnapshot;
+    const ok = await this.stopPlayback(playbackSessionId, userId);
+    if (!ok) {
+      return null;
+    }
+    return this.startPlayback(userId, snap.sourceRunId, {
+      delayMs: snap.delayMs,
+      autoClerkSignIn: snap.wantAutoClerkSignIn,
+      clerkOtpMode: snap.clerkOtpMode,
+      skipUntilSequence: snap.skipUntilSequence,
+      skipStepIds: snap.skipStepIds,
+      playThroughSequence: snap.playThroughSequence,
+    });
   }
 
   async stopPlayback(playbackSessionId: string, userId: string): Promise<boolean> {
@@ -1367,6 +1494,7 @@ export class RecordingService extends EventEmitter {
             step: stepPayload,
             phase: 'after',
           });
+          this.applySteppedPauseAfterStep(playbackSessionId, session, step);
           continue;
         }
 
@@ -1385,6 +1513,7 @@ export class RecordingService extends EventEmitter {
             clerkPlaybackState,
           );
           await this.sleepWithPause(session, delayMs);
+          this.applySteppedPauseAfterStep(playbackSessionId, session, step);
           continue;
         }
 
@@ -1429,6 +1558,7 @@ export class RecordingService extends EventEmitter {
           step: stepPayload,
           phase: 'after',
         });
+        this.applySteppedPauseAfterStep(playbackSessionId, session, step);
       }
 
       this.emit('status', playbackSessionId, {
@@ -1478,6 +1608,32 @@ export class RecordingService extends EventEmitter {
 
   private sleep(ms: number): Promise<void> {
     return ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve();
+  }
+
+  /**
+   * After a step iteration completes, optionally pause (advance-one / advance-to) before the next step.
+   */
+  private applySteppedPauseAfterStep(playbackSessionId: string, session: PlaybackSession, step: RunStep): void {
+    if (session.pauseAfterNextStepCompletes) {
+      session.pauseAfterNextStepCompletes = false;
+      session.paused = true;
+      this.emit('status', playbackSessionId, {
+        status: 'playback_paused',
+        runId: playbackSessionId,
+        sourceRunId: session.sourceRunId,
+      });
+      return;
+    }
+    const target = session.pauseAfterSequenceInclusive;
+    if (target != null && step.sequence >= target) {
+      session.pauseAfterSequenceInclusive = null;
+      session.paused = true;
+      this.emit('status', playbackSessionId, {
+        status: 'playback_paused',
+        runId: playbackSessionId,
+        sourceRunId: session.sourceRunId,
+      });
+    }
   }
 
   private async waitUntilPlaybackNotPaused(session: PlaybackSession): Promise<void> {

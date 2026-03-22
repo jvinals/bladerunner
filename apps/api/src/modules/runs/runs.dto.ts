@@ -125,6 +125,17 @@ export class StopPlaybackDto {
   playbackSessionId!: string;
 }
 
+export class AdvancePlaybackToDto extends StopPlaybackDto {
+  @ApiProperty({
+    description: 'Run steps until this sequence completes (inclusive), then pause before the next step',
+    minimum: 0,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  stopAfterSequence!: number;
+}
+
 export class InstructDto {
   @ApiProperty({ description: 'Natural language instruction for the browser' })
   @IsString()

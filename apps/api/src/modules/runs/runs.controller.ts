@@ -28,7 +28,8 @@ import {
   StartPlaybackDto,
   ClerkAutoSignInRecordingDto,
   StopPlaybackDto,
-    InstructDto,
+  AdvancePlaybackToDto,
+  InstructDto,
   ReRecordStepDto,
   RunQueryDto,
 } from './runs.dto';
@@ -140,6 +141,57 @@ export class RunsController {
     const ok = await this.recordingService.resumePlayback(dto.playbackSessionId, userId);
     if (!ok) throw new NotFoundException('Playback session not found');
     return { ok: true };
+  }
+
+  @Post('playback/advance-one')
+  @ApiOperation({ summary: 'While paused: run exactly one step, then pause again' })
+  @ApiResponse({ status: 200, description: 'Playback resumed for one step' })
+  @ApiResponse({ status: 400, description: 'Not paused' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async advancePlaybackOne(@Req() req: any, @Body() dto: StopPlaybackDto) {
+    const userId = req.user.sub;
+    const ok = await this.recordingService.resumePlaybackAfterOneStep(dto.playbackSessionId, userId);
+    if (!ok) throw new NotFoundException('Playback session not found');
+    return { ok: true };
+  }
+
+  @Post('playback/advance-to')
+  @ApiOperation({ summary: 'While paused: run until stopAfterSequence completes, then pause' })
+  @ApiResponse({ status: 200, description: 'Playback resumed' })
+  @ApiResponse({ status: 400, description: 'Not paused or invalid sequence' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async advancePlaybackTo(@Req() req: any, @Body() dto: AdvancePlaybackToDto) {
+    const userId = req.user.sub;
+    const ok = await this.recordingService.resumePlaybackUntilSequence(
+      dto.playbackSessionId,
+      userId,
+      dto.stopAfterSequence,
+    );
+    if (!ok) throw new NotFoundException('Playback session not found');
+    return { ok: true };
+  }
+
+  @Post('playback/restart')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Stop current playback and start a new session with the same options' })
+  @ApiResponse({ status: 201, description: 'New playback started' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async restartPlayback(@Req() req: any, @Body() dto: StopPlaybackDto) {
+    const userId = req.user.sub;
+    const result = await this.recordingService.restartPlayback(dto.playbackSessionId, userId);
+    if (!result) throw new NotFoundException('Playback session not found');
+    return result;
+  }
+
+  @Get('playback/:playbackSessionId')
+  @ApiOperation({ summary: 'Snapshot of an active playback session (options + paused state)' })
+  @ApiResponse({ status: 200, description: 'Active session snapshot' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async getPlaybackSession(@Req() req: any, @Param('playbackSessionId') playbackSessionId: string) {
+    const userId = req.user.sub;
+    const snap = this.recordingService.getPlaybackSessionSnapshot(playbackSessionId, userId);
+    if (!snap) throw new NotFoundException('Playback session not found');
+    return snap;
   }
 
   @Post(':id/instruct')

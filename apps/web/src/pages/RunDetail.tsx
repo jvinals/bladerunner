@@ -18,7 +18,7 @@ import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Clock, CheckCircle, XCircle, AlertTriangle, Eye,
   Camera, FileText, Activity, Play, Square, ExternalLink,
-  Film, Pause,
+  Film, Pause, RotateCcw, StepForward,
 } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -101,6 +101,7 @@ export default function RunDetailPage() {
   const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
+  const [playbackAdvanceToSeq, setPlaybackAdvanceToSeq] = useState('');
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const stepRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const detachedPlaybackWindowRef = useRef<Window | null>(null);
@@ -118,6 +119,9 @@ export default function RunDetailPage() {
     stopPlayback,
     pausePlayback,
     resumePlayback,
+    advancePlaybackOne,
+    advancePlaybackTo,
+    restartPlayback,
   } = usePlayback();
 
   const { data: run, isLoading, error } = useQuery({
@@ -379,26 +383,27 @@ export default function RunDetailPage() {
           {canPlayback && !isPlaying && (
             <div className="flex flex-wrap items-center gap-2 justify-end text-[11px] text-gray-500 max-w-md">
               <label htmlFor="run-playback-clerk" className="whitespace-nowrap">
-                Clerk auto sign-in
+                Automatic Clerk sign-in
               </label>
               <select
                 id="run-playback-clerk"
                 value={playbackAutoClerkMode}
                 onChange={(e) => setPlaybackAutoClerkMode(e.target.value as 'default' | 'on' | 'off')}
                 className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                title="Automatic server-side Clerk sign-in during playback"
               >
-                <option value="default">Server default</option>
-                <option value="on">Force on</option>
-                <option value="off">Force off</option>
+                <option value="default">Automatic — server default</option>
+                <option value="on">Automatic — on</option>
+                <option value="off">Automatic — off</option>
               </select>
               <label htmlFor="run-playback-clerk-otp" className="whitespace-nowrap">
-                Clerk OTP
+                Automatic Clerk OTP
               </label>
               <select
                 id="run-playback-clerk-otp"
                 value={playbackClerkOtpMode}
                 onChange={(e) => setPlaybackClerkOtpMode(e.target.value as AutoClerkOtpUiMode)}
-                title="How to complete email verification when Clerk auto sign-in runs"
+                title="How to complete email verification when automatic Clerk sign-in runs"
                 className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
               >
                 <option value="default">OTP: server default</option>
@@ -486,6 +491,14 @@ export default function RunDetailPage() {
               >
                 <Square size={13} /> Stop
               </button>
+              <button
+                type="button"
+                onClick={() => void restartPlayback()}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-50 transition-colors"
+                title="Restart from the beginning with the same options"
+              >
+                <RotateCcw size={13} /> Restart
+              </button>
               {playbackSessionId && (
                 <button
                   type="button"
@@ -498,6 +511,39 @@ export default function RunDetailPage() {
             </>
           )}
           </div>
+          {isPlaying && isPaused && (
+            <div className="flex flex-wrap items-center gap-2 justify-end w-full max-w-xl mt-1">
+              <button
+                type="button"
+                onClick={() => void advancePlaybackOne()}
+                className="flex items-center gap-1 px-2.5 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors"
+                title="Run the next step, then pause again"
+              >
+                <StepForward size={12} />
+                Next step
+              </button>
+              <span className="text-[10px] text-gray-400">Run to seq</span>
+              <input
+                type="number"
+                min={0}
+                placeholder="seq"
+                value={playbackAdvanceToSeq}
+                onChange={(e) => setPlaybackAdvanceToSeq(e.target.value)}
+                className="w-14 border border-gray-200 rounded-md px-2 py-1 text-[11px] text-gray-800 tabular-nums"
+                title="Pause after this step sequence completes (inclusive)"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const n = Number.parseInt(playbackAdvanceToSeq.trim(), 10);
+                  if (!Number.isNaN(n) && n >= 0) void advancePlaybackTo(n);
+                }}
+                className="px-2.5 py-1 border border-violet-200 text-violet-800 text-[11px] font-medium rounded-md hover:bg-violet-50 transition-colors"
+              >
+                Go
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
