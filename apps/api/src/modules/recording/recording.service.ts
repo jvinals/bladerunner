@@ -52,6 +52,7 @@ import {
   type AiPromptLlmTranscriptStored,
 } from './ai-prompt-step-metadata';
 import type { InstructionToActionLlmTranscript } from '../llm/providers/llm-provider.interface';
+import { buildGeminiInstructionPrompt } from '../llm/gemini-instruction.client';
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
@@ -1241,9 +1242,14 @@ export class RecordingService extends EventEmitter {
       playwrightCode?: string;
       /** When Test fails with failure-help from the explain LLM. */
       suggestedPrompt?: string;
+      /** True while Gemini stream is in progress; client merges cumulative `rawResponse` / `thinking`. */
+      streamingPartial?: boolean;
     },
   ): void {
     const payload: Record<string, unknown> = { runId, stepId, message, phase };
+    if (extras?.streamingPartial === true) {
+      payload.streamingPartial = true;
+    }
     if (extras?.thinking?.trim()) {
       payload.thinking = extras.thinking.trim();
     }
@@ -1561,6 +1567,8 @@ export class RecordingService extends EventEmitter {
     }
     this.throwIfAborted(signal);
 
+    const fullUserPrompt = buildGeminiInstructionPrompt(instruction.trim());
+
     const llmResult = await this.llmService.instructionToAction(
       {
         instruction: instruction.trim(),
@@ -1568,7 +1576,27 @@ export class RecordingService extends EventEmitter {
         pageAccessibilityTree,
         screenshotBase64,
       },
-      { signal },
+      {
+        signal,
+        onStream: progress
+          ? (ev) => {
+              this.emitAiPromptTestProgress(
+                progress.runId,
+                progress.stepId,
+                'Generating Playwright from vision model…',
+                'llm',
+                {
+                  ...(screenshotBase64?.trim() ? { screenshotBase64: screenshotBase64.trim() } : {}),
+                  promptSent: instruction.trim(),
+                  fullUserPrompt,
+                  rawResponse: ev.rawText,
+                  ...(ev.thinking?.trim() ? { thinking: ev.thinking.trim() } : {}),
+                  streamingPartial: true,
+                },
+              );
+            }
+          : undefined,
+      },
     );
     const out = llmResult.output;
     const transcript = llmResult.transcript;
@@ -1589,6 +1617,7 @@ export class RecordingService extends EventEmitter {
           rawResponse: transcript.rawResponse,
           playwrightCode: out.playwrightCode,
           ...(thinking ? { thinking } : {}),
+          streamingPartial: false,
         },
       );
     }

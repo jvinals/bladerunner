@@ -40,6 +40,8 @@ export type AiPromptTestProgressPayload = {
   stepId: string;
   message: string;
   phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled';
+  /** True while Gemini vision stream is in progress (`rawResponse` / `thinking` are cumulative). */
+  streamingPartial?: boolean;
   /** Model reasoning / chain-of-thought when the API returns it (AI prompt test). */
   thinking?: string;
   /** JPEG base64 sent to the vision model (AI prompt test), after capture. */
@@ -189,6 +191,7 @@ export function useRecording(): UseRecordingReturn {
       if (!stepId || !message) return;
       setAiPromptTestProgress((prev) => {
         const sameStep = prev?.runId === runId && prev?.stepId === stepId;
+        const streamingPartial = payload.streamingPartial === true;
         const pick = (key: keyof AiPromptTestProgressPayload): string | undefined => {
           const v = payload[key];
           if (typeof v === 'string' && v.trim()) return v.trim();
@@ -198,11 +201,17 @@ export function useRecording(): UseRecordingReturn {
           }
           return undefined;
         };
-        const thinking = pick('thinking');
+        const thinking =
+          streamingPartial && typeof payload.thinking === 'string'
+            ? payload.thinking
+            : pick('thinking');
         const screenshotBase64 = pick('screenshotBase64');
         const promptSent = pick('promptSent');
         const fullUserPrompt = pick('fullUserPrompt');
-        const rawResponse = pick('rawResponse');
+        const rawResponse =
+          streamingPartial && typeof payload.rawResponse === 'string'
+            ? payload.rawResponse
+            : pick('rawResponse');
         const playwrightCode = pick('playwrightCode');
         const suggestedPrompt = pick('suggestedPrompt');
         const normalized: AiPromptTestProgressPayload = {
@@ -210,6 +219,7 @@ export function useRecording(): UseRecordingReturn {
           stepId,
           message,
           phase,
+          streamingPartial,
           ...(thinking ? { thinking } : {}),
           ...(screenshotBase64 ? { screenshotBase64 } : {}),
           ...(promptSent ? { promptSent } : {}),

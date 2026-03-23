@@ -51,18 +51,41 @@ export function normalizeGeminiPlaywrightSnippet(raw: string): string {
   return t.trim();
 }
 
+/** Extract incremental text / thought from one streamed chunk (avoids response.text() throwing on partial blocks). */
+function extractChunkParts(chunk: unknown): { text: string; thought: string } {
+  let text = '';
+  let thought = '';
+  const c = chunk as {
+    candidates?: Array<{ content?: { parts?: Array<Record<string, unknown>> } }>;
+  };
+  const parts = c.candidates?.[0]?.content?.parts;
+  if (!parts) return { text: '', thought: '' };
+  for (const part of parts) {
+    if (typeof part.thought === 'string') {
+      thought += part.thought;
+    } else if (typeof part.text === 'string') {
+      text += part.text;
+    }
+  }
+  return { text, thought };
+}
+
+export type GeminiInstructionStreamProgress = { rawText: string; thinking?: string };
+
 export async function generateGeminiPlaywrightSnippet(params: {
   apiKey: string;
   model: string;
   instruction: string;
   imageBase64: string;
   signal?: AbortSignal;
-}): Promise<{ rawText: string; playwrightCode: string }> {
-  const { apiKey, model, instruction, imageBase64, signal } = params;
+  /** Called with cumulative text as the stream arrives (throttled). */
+  onProgress?: (ev: GeminiInstructionStreamProgress) => void;
+}): Promise<{ rawText: string; playwrightCode: string; thinking?: string }> {
+  const { apiKey, model, instruction, imageBase64, signal, onProgress } = params;
   const prompt = buildGeminiInstructionPrompt(instruction);
   const genAI = new GoogleGenerativeAI(apiKey);
   const gm = genAI.getGenerativeModel({ model });
-  const result = await gm.generateContent(
+  const { stream, response } = await gm.generateContentStream(
     {
       contents: [
         {
@@ -85,13 +108,53 @@ export async function generateGeminiPlaywrightSnippet(params: {
     },
     { signal },
   );
-  const text = result.response.text();
-  if (!text?.trim()) {
+
+  let accumulated = '';
+  let thinkingAcc = '';
+  let lastEmitAt = 0;
+  let lastEmittedLen = 0;
+  const THROTTLE_MS = 120;
+  const MIN_CHARS = 220;
+
+  const emitProgress = (force: boolean) => {
+    if (!onProgress) return;
+    const now = Date.now();
+    const len = accumulated.length;
+    if (
+      !force &&
+      now - lastEmitAt < THROTTLE_MS &&
+      len - lastEmittedLen < MIN_CHARS &&
+      len > 0
+    ) {
+      return;
+    }
+    lastEmitAt = now;
+    lastEmittedLen = len;
+    const t = thinkingAcc.trim();
+    onProgress({
+      rawText: accumulated,
+      ...(t ? { thinking: t } : {}),
+    });
+  };
+
+  for await (const chunk of stream) {
+    const { text, thought } = extractChunkParts(chunk);
+    accumulated += text;
+    thinkingAcc += thought;
+    emitProgress(false);
+  }
+
+  await response;
+  emitProgress(true);
+
+  const rawText = accumulated.trim();
+  if (!rawText) {
     throw new Error('Gemini returned empty text for Playwright snippet');
   }
-  const rawText = text.trim();
+  const thinking = thinkingAcc.trim() || undefined;
   return {
     rawText,
     playwrightCode: normalizeGeminiPlaywrightSnippet(rawText),
+    ...(thinking ? { thinking } : {}),
   };
 }

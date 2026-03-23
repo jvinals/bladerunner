@@ -159,7 +159,11 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
 
   async instructionToAction(
     input: InstructionToActionInput,
-    opts?: { signal?: AbortSignal },
+    opts?: {
+      signal?: AbortSignal;
+      /** Cumulative vision-model output while Gemini streams (AI prompt Test drawer). */
+      onStream?: (ev: { rawText: string; thinking?: string }) => void;
+    },
   ): Promise<InstructionToActionResult> {
     const apiKey = this.configService?.get<string>('GEMINI_API_KEY')?.trim();
     if (!apiKey) {
@@ -179,12 +183,13 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       this.configService?.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
 
     const userPrompt = buildGeminiInstructionPrompt(input.instruction);
-    const { rawText, playwrightCode } = await generateGeminiPlaywrightSnippet({
+    const { rawText, playwrightCode, thinking } = await generateGeminiPlaywrightSnippet({
       apiKey,
       model,
       instruction: input.instruction,
       imageBase64: shot,
       signal: opts?.signal,
+      onProgress: opts?.onStream,
     });
 
     const output: InstructionToActionOutput = {
@@ -202,6 +207,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         rawResponse: rawText,
         visionAttached: true,
         screenshotBase64: shot,
+        ...(thinking ? { thinking } : {}),
       },
     };
   }

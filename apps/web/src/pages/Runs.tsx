@@ -687,15 +687,23 @@ export default function RunsPage() {
     const metaPw = step?.playwrightCode?.trim() ?? '';
 
     const live = aiPromptProgressBlock;
+    const streamingPartial = live?.streamingPartial === true;
 
     if (live) {
       return {
         screenshotBase64: live.screenshotBase64 ?? cached?.screenshotBase64,
         promptText: (live.fullUserPrompt || live.promptSent || cached?.userPrompt || '').trim(),
-        thinking: live.thinking ?? cached?.thinking,
-        rawResponse: (live.rawResponse ?? cached?.rawResponse ?? '').trim(),
+        thinking: streamingPartial
+          ? cached?.thinking
+          : (live.thinking ?? cached?.thinking),
+        rawResponse: streamingPartial
+          ? (cached?.rawResponse ?? '').trim()
+          : (live.rawResponse ?? cached?.rawResponse ?? '').trim(),
         suggestedPrompt: (live.suggestedPrompt ?? aiStepFailure?.suggestedPrompt ?? '').trim(),
         playwrightCode: (live.playwrightCode || metaPw).trim(),
+        streamingPartial,
+        liveRawStream: streamingPartial ? (live.rawResponse ?? '').trim() : '',
+        liveThinkingStream: streamingPartial ? (live.thinking ?? '').trim() : '',
       };
     }
 
@@ -707,6 +715,9 @@ export default function RunsPage() {
         rawResponse: '',
         suggestedPrompt: (aiStepFailure?.suggestedPrompt ?? '').trim(),
         playwrightCode: '',
+        streamingPartial: false,
+        liveRawStream: '',
+        liveThinkingStream: '',
       };
     }
 
@@ -717,6 +728,9 @@ export default function RunsPage() {
       rawResponse: (cached?.rawResponse ?? '').trim(),
       suggestedPrompt: (aiStepFailure?.suggestedPrompt ?? '').trim(),
       playwrightCode: metaPw,
+      streamingPartial: false,
+      liveRawStream: '',
+      liveThinkingStream: '',
     };
   }, [steps, aiStepCreatedId, aiPromptProgressBlock, aiStepBusy, aiStepFailure]);
 
@@ -1637,6 +1651,31 @@ export default function RunsPage() {
                     {aiPromptDrawerSections.playwrightCode || '—'}
                   </pre>
                 </div>
+                {aiPromptDrawerSections.streamingPartial ? (
+                  <div
+                    className="rounded border border-teal-100 bg-teal-50/40 p-2"
+                    role="region"
+                    aria-label="Live vision model output"
+                  >
+                    <p className="text-[10px] font-semibold text-gray-800 mb-1">6. Live model output</p>
+                    <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
+                      Updates in real time while Gemini streams. When generation finishes, the final text appears in §3
+                      and Playwright runs from §5.
+                    </p>
+                    {aiPromptDrawerSections.liveThinkingStream ? (
+                      <div className="mb-2">
+                        <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thinking</p>
+                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/60 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
+                          {aiPromptDrawerSections.liveThinkingStream}
+                        </pre>
+                      </div>
+                    ) : null}
+                    <p className="text-[9px] font-medium text-gray-600 mb-0.5">Stream</p>
+                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/80 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
+                      {aiPromptDrawerSections.liveRawStream || '…'}
+                    </pre>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-shrink-0 justify-end gap-2 border-t border-gray-100 px-3 py-2.5 bg-gray-50/80">
