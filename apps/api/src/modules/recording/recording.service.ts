@@ -11,7 +11,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
 import * as fs from 'node:fs/promises';
-import { appendFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { Prisma, type RunStep } from '@prisma/client';
@@ -62,19 +61,6 @@ import {
   writeJpegThumbnailFromVideo,
 } from './recording-storage';
 import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './recording-screencast-ffmpeg';
-
-/** Debug NDJSON (session 5cf234); do not log secrets. */
-const DEBUG_AGENT_LOG = '/Users/jvinals/code/bladerunner/.cursor/debug-5cf234.log';
-function debugAgentLog(payload: Record<string, unknown>): void {
-  try {
-    appendFileSync(
-      DEBUG_AGENT_LOG,
-      JSON.stringify({ sessionId: '5cf234', timestamp: Date.now(), ...payload }) + '\n',
-    );
-  } catch {
-    /* ignore */
-  }
-}
 
 /** AI-generated Playwright often needs longer than Playwright's default 30s action timeout. */
 const AI_PROMPT_PW_TIMEOUT_MS = 120_000;
@@ -1084,65 +1070,19 @@ export class RecordingService extends EventEmitter {
     instruction: string,
     opts: { skipClickForce: boolean },
   ): Promise<{ playwrightCode: string }> {
-    // #region agent log
-    debugAgentLog({
-      location: 'playAiPromptStepOnPage:entry',
-      hypothesisId: 'H_timing',
-      instructionLen: instruction.trim().length,
-    });
-    // #endregion
-    const tCtx = Date.now();
     const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page);
-    // #region agent log
-    debugAgentLog({
-      location: 'playAiPromptStepOnPage:context',
-      hypothesisId: 'H_ctx',
-      ms: Date.now() - tCtx,
-      a11yLen: pageAccessibilityTree.length,
-      hasScreenshot: !!screenshotBase64,
-    });
-    // #endregion
-    const tLlm = Date.now();
     const llmResult = await this.llmService.instructionToAction({
       instruction: instruction.trim(),
       pageUrl,
       pageAccessibilityTree,
       screenshotBase64,
     });
-    // #region agent log
-    debugAgentLog({
-      location: 'playAiPromptStepOnPage:llm_done',
-      hypothesisId: 'H_llm',
-      ms: Date.now() - tLlm,
-      codeLen: (llmResult.playwrightCode ?? '').length,
-      codeHead: (llmResult.playwrightCode ?? '').slice(0, 160),
-    });
-    // #endregion
-    const tExec = Date.now();
     try {
       page.setDefaultTimeout(AI_PROMPT_PW_TIMEOUT_MS);
       page.setDefaultNavigationTimeout(AI_PROMPT_PW_TIMEOUT_MS);
       await this.executePwCode(page, llmResult.playwrightCode, {
         skipClickForce: opts.skipClickForce,
       });
-      // #region agent log
-      debugAgentLog({
-        location: 'playAiPromptStepOnPage:exec_ok',
-        hypothesisId: 'H_pw',
-        ms: Date.now() - tExec,
-        defaultTimeoutUsedMs: AI_PROMPT_PW_TIMEOUT_MS,
-      });
-      // #endregion
-    } catch (execErr) {
-      // #region agent log
-      debugAgentLog({
-        location: 'playAiPromptStepOnPage:exec_err',
-        hypothesisId: 'H_pw',
-        ms: Date.now() - tExec,
-        err: execErr instanceof Error ? execErr.message : String(execErr),
-      });
-      // #endregion
-      throw execErr;
     } finally {
       page.setDefaultTimeout(PLAYWRIGHT_DEFAULT_TIMEOUT_MS);
       page.setDefaultNavigationTimeout(PLAYWRIGHT_DEFAULT_TIMEOUT_MS);

@@ -263,27 +263,6 @@ export function usePlayback(): UsePlaybackReturn {
       setPlaybackError(null);
       try {
         const snap = await runsApi.getPlaybackSession(id);
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-          body: JSON.stringify({
-            sessionId: '5cf234',
-            location: 'usePlayback.ts:advancePlaybackPrevious',
-            message: 'prevStep_rewind',
-            hypothesisId: 'H3',
-            data: {
-              nextSeq,
-              target,
-              highlightSequence,
-              snapSkipUntil: snap.skipUntilSequence,
-              snapPlayThrough: snap.playThroughSequence,
-              completedSample: [...completedSequences].slice(0, 12),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         disconnectSocket(socketRef, id);
         activeSessionRef.current = null;
         await runsApi.stopPlayback(id);
@@ -293,20 +272,6 @@ export function usePlayback(): UsePlaybackReturn {
           skipUntilSequence: 1,
           playThroughSequence: target,
         };
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-          body: JSON.stringify({
-            sessionId: '5cf234',
-            location: 'usePlayback.ts:advancePlaybackPrevious',
-            message: 'prevStep_body',
-            hypothesisId: 'H3',
-            data: { skipUntilSequence: body.skipUntilSequence, playThroughSequence: body.playThroughSequence },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         const result = await runsApi.startPlayback(snap.sourceRunId, body);
         setPlaybackSessionId(result.playbackSessionId);
         setSourceRunId(result.sourceRunId);
