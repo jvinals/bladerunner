@@ -1027,100 +1027,131 @@ export class RecordingService extends EventEmitter {
 
     const signal = opts?.signal;
 
-    try {
-      this.emitAiPromptTestProgress(runId, stepId, 'Preparing snapshot for undo (Reset)…', 'capturing');
-      this.throwIfAborted(signal);
-
-      let url = '';
+    /** While testing on the live *recording* page, generated Playwright must not create new RunSteps from DOM capture. */
+    const recordingSession = this.sessions.get(runId);
+    const pauseDomCapture = !!recordingSession && recordingSession.userId === userId;
+    if (pauseDomCapture) {
+      recordingSession.recordingDomCapturePaused = true;
+      recordingSession.clerkDomCaptureBarrier += 1;
       try {
-        url = page.url();
+        await page.evaluate(() => {
+          (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
+            true;
+        });
       } catch {
-        /* */
+        /* page may be closing */
       }
-      const state = await page.context().storageState();
-      this.aiPromptPreTestSnapshots.set(this.aiPromptSnapshotKey(runId, stepId), { url, state });
+    }
 
-      const { playwrightCode } = await this.playAiPromptStepOnPage(page, instructionToRun, {
-        skipClickForce: false,
-        persistTranscript: { stepId, runId, userId, source: 'test' },
-        signal,
-        progress: { runId, stepId },
-      });
-      const fresh = await this.prisma.runStep.findFirst({
-        where: { id: stepId, runId, userId },
-      });
-      const baseMeta =
-        fresh?.metadata && typeof fresh.metadata === 'object'
-          ? (fresh.metadata as Record<string, unknown>)
-          : {};
-      await this.prisma.runStep.update({
-        where: { id: stepId },
-        data: {
-          metadata: {
-            ...baseMeta,
-            kind: AI_PROMPT_STEP_KIND,
-            schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
-            lastTestAt: new Date().toISOString(),
-            lastTestOk: true,
-          } as Prisma.InputJsonValue,
-          playwrightCode,
-        },
-      });
-      this.emitAiPromptTestProgress(runId, stepId, 'Test completed.', 'done');
-      return { ok: true, playwrightCode };
-    } catch (e) {
-      if (signal?.aborted || this.isAbortError(e)) {
-        this.emitAiPromptTestProgress(runId, stepId, 'Cancelled.', 'cancelled');
-        return { ok: false, error: 'Cancelled', cancelled: true };
-      }
-      const msg = e instanceof Error ? e.message : String(e);
-      this.emitAiPromptTestProgress(
-        runId,
-        stepId,
-        msg.length > 140 ? `${msg.slice(0, 137)}…` : msg,
-        'error',
-      );
-      const fresh = await this.prisma.runStep.findFirst({
-        where: { id: stepId, runId, userId },
-      });
-      const baseMeta =
-        fresh?.metadata && typeof fresh.metadata === 'object'
-          ? (fresh.metadata as Record<string, unknown>)
-          : {};
-      await this.prisma.runStep.update({
-        where: { id: stepId },
-        data: {
-          metadata: {
-            ...baseMeta,
-            kind: AI_PROMPT_STEP_KIND,
-            schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
-            lastTestAt: new Date().toISOString(),
-            lastTestOk: false,
-          } as Prisma.InputJsonValue,
-        },
-      });
-
-      let failureHelp: AiPromptTestFailureHelp | undefined;
+    try {
       try {
-        const ctx = await this.captureLlmPageContext(page, signal);
-        const hint = await this.llmService.explainAiPromptTestFailure(
-          {
-            instruction: instructionToRun,
-            technicalError: msg,
-            pageUrl: ctx.pageUrl,
-            pageAccessibilityTree: ctx.pageAccessibilityTree,
-            screenshotBase64: ctx.screenshotBase64,
-          },
-          { signal },
-        );
-        if (hint) {
-          failureHelp = hint;
-        }
-      } catch (explainErr) {
-        this.logger.debug(`explainAiPromptTestFailure skipped: ${explainErr}`);
-      }
+        this.emitAiPromptTestProgress(runId, stepId, 'Preparing snapshot for undo (Reset)…', 'capturing');
+        this.throwIfAborted(signal);
 
-      return { ok: false, error: msg, failureHelp };
+        let url = '';
+        try {
+          url = page.url();
+        } catch {
+          /* */
+        }
+        const state = await page.context().storageState();
+        this.aiPromptPreTestSnapshots.set(this.aiPromptSnapshotKey(runId, stepId), { url, state });
+
+        const { playwrightCode } = await this.playAiPromptStepOnPage(page, instructionToRun, {
+          skipClickForce: false,
+          persistTranscript: { stepId, runId, userId, source: 'test' },
+          signal,
+          progress: { runId, stepId },
+        });
+        const fresh = await this.prisma.runStep.findFirst({
+          where: { id: stepId, runId, userId },
+        });
+        const baseMeta =
+          fresh?.metadata && typeof fresh.metadata === 'object'
+            ? (fresh.metadata as Record<string, unknown>)
+            : {};
+        await this.prisma.runStep.update({
+          where: { id: stepId },
+          data: {
+            metadata: {
+              ...baseMeta,
+              kind: AI_PROMPT_STEP_KIND,
+              schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+              lastTestAt: new Date().toISOString(),
+              lastTestOk: true,
+            } as Prisma.InputJsonValue,
+            playwrightCode,
+          },
+        });
+        this.emitAiPromptTestProgress(runId, stepId, 'Test completed.', 'done');
+        return { ok: true, playwrightCode };
+      } catch (e) {
+        if (signal?.aborted || this.isAbortError(e)) {
+          this.emitAiPromptTestProgress(runId, stepId, 'Cancelled.', 'cancelled');
+          return { ok: false, error: 'Cancelled', cancelled: true };
+        }
+        const msg = e instanceof Error ? e.message : String(e);
+        this.emitAiPromptTestProgress(
+          runId,
+          stepId,
+          msg.length > 140 ? `${msg.slice(0, 137)}…` : msg,
+          'error',
+        );
+        const fresh = await this.prisma.runStep.findFirst({
+          where: { id: stepId, runId, userId },
+        });
+        const baseMeta =
+          fresh?.metadata && typeof fresh.metadata === 'object'
+            ? (fresh.metadata as Record<string, unknown>)
+            : {};
+        await this.prisma.runStep.update({
+          where: { id: stepId },
+          data: {
+            metadata: {
+              ...baseMeta,
+              kind: AI_PROMPT_STEP_KIND,
+              schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+              lastTestAt: new Date().toISOString(),
+              lastTestOk: false,
+            } as Prisma.InputJsonValue,
+          },
+        });
+
+        let failureHelp: AiPromptTestFailureHelp | undefined;
+        try {
+          const ctx = await this.captureLlmPageContext(page, signal);
+          const hint = await this.llmService.explainAiPromptTestFailure(
+            {
+              instruction: instructionToRun,
+              technicalError: msg,
+              pageUrl: ctx.pageUrl,
+              pageAccessibilityTree: ctx.pageAccessibilityTree,
+              screenshotBase64: ctx.screenshotBase64,
+            },
+            { signal },
+          );
+          if (hint) {
+            failureHelp = hint;
+          }
+        } catch (explainErr) {
+          this.logger.debug(`explainAiPromptTestFailure skipped: ${explainErr}`);
+        }
+
+        return { ok: false, error: msg, failureHelp };
+      }
+    } finally {
+      if (pauseDomCapture && recordingSession) {
+        recordingSession.recordingDomCapturePaused = false;
+        recordingSession.clerkDomCaptureBarrier += 1;
+        try {
+          await page.evaluate(() => {
+            (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
+              false;
+          });
+        } catch {
+          /* */
+        }
+      }
     }
   }
 
