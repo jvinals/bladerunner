@@ -699,7 +699,6 @@ export default function RunsPage() {
         rawResponse: streamingPartial
           ? (cached?.rawResponse ?? '').trim()
           : (live.rawResponse ?? cached?.rawResponse ?? '').trim(),
-        suggestedPrompt: (live.suggestedPrompt ?? aiStepFailure?.suggestedPrompt ?? '').trim(),
         playwrightCode: (live.playwrightCode || metaPw).trim(),
         streamingPartial,
         liveRawStream: streamingPartial ? (live.rawResponse ?? '').trim() : '',
@@ -713,7 +712,6 @@ export default function RunsPage() {
         promptText: '',
         thinking: undefined,
         rawResponse: '',
-        suggestedPrompt: (aiStepFailure?.suggestedPrompt ?? '').trim(),
         playwrightCode: '',
         streamingPartial: false,
         liveRawStream: '',
@@ -726,7 +724,6 @@ export default function RunsPage() {
       promptText: (cached?.userPrompt ?? '').trim(),
       thinking: cached?.thinking,
       rawResponse: (cached?.rawResponse ?? '').trim(),
-      suggestedPrompt: (aiStepFailure?.suggestedPrompt ?? '').trim(),
       playwrightCode: metaPw,
       streamingPartial: false,
       liveRawStream: '',
@@ -1637,16 +1634,7 @@ export default function RunsPage() {
                   </pre>
                 </div>
                 <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">4. Suggested prompt</p>
-                  <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
-                    If Test fails, a revised prompt may appear here (from the failure explainer).
-                  </p>
-                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-dashed border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2.5rem]">
-                    {aiPromptDrawerSections.suggestedPrompt || '—'}
-                  </pre>
-                </div>
-                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">5. Playwright code to run</p>
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">4. Playwright code to run</p>
                   <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
                     {aiPromptDrawerSections.playwrightCode || '—'}
                   </pre>
@@ -1657,10 +1645,10 @@ export default function RunsPage() {
                     role="region"
                     aria-label="Live vision model output"
                   >
-                    <p className="text-[10px] font-semibold text-gray-800 mb-1">6. Live model output</p>
+                    <p className="text-[10px] font-semibold text-gray-800 mb-1">5. Live model output</p>
                     <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
                       Thought summaries and answer text stream here. When generation finishes, the final transcript
-                      appears in §3 and Playwright runs from §5.
+                      appears in §3 and Playwright runs from §4.
                     </p>
                     <div className="mb-2">
                       <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thought summary</p>
