@@ -317,6 +317,8 @@ export interface RecordedStep {
   durationMs?: number;
   timestamp: string;
   metadata?: Record<string, unknown>;
+  /** When true, replay skips this step (row kept for audit). */
+  excludedFromPlayback?: boolean;
   createdAt: string;
 }
 

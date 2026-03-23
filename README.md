@@ -119,7 +119,7 @@ docker compose up
 | GET    | /integrations       | List integrations            |
 | GET    | /agents             | List registered agents       |
 | POST   | /runs/:id/steps/:stepId/re-record | Re-capture one step by instruction (active recording) |
-| PATCH  | /runs/:id/steps/:stepId | Update **instruction**; set **`aiPromptMode: true`** with **instruction** to store an **AI prompt step** (`StepOrigin.AI_PROMPT`, **`metadata.kind: ai_prompt_step`**) — playback uses **LLM + screenshot + a11y tree** on the live page each time (not fixed stored codegen). **`aiPromptMode: false`** reverts to manual. |
+| PATCH  | /runs/:id/steps/:stepId | Update **instruction**; set **`aiPromptMode: true`** with **instruction** to store an **AI prompt step** (`StepOrigin.AI_PROMPT`, **`metadata.kind: ai_prompt_step`**) — playback uses **LLM + screenshot + a11y tree** on the live page each time (not fixed stored codegen). **`aiPromptMode: false`** reverts to manual. **`excludedFromPlayback: true`** marks the step **skipped** (not executed) on replay; **`false`** clears it (not while `RECORDING`). |
 | POST   | /runs/:id/steps/:stepId/test-ai-step | **Test step**: run the same LLM path once on the **active recording** or **playback** browser (requires a session). |
 | GET    | /runs/:id/checkpoints | List **app state checkpoints** (after-step browser storage + metadata) for a run |
 | POST   | /runs/:id/playback/start | Start live playback; body may include **`skipUntilSequence`**, **`playThroughSequence`** (stop after that step), **`skipStepIds`**, Clerk options |
@@ -227,6 +227,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.78** — **Steps**: **Skip replay** checkbox on each step (completed runs); **`run_steps.excluded_from_playback`** — playback **skips** those steps (rows stay for audit). **`PATCH /runs/:id/steps/:stepId`** body **`excludedFromPlayback`**. **`@bladerunner/api` `0.5.41`**, **`@bladerunner/web` `0.6.57`**, **`@bladerunner/types` `0.2.2`**.
 - **0.7.77** — **LLM / AI prompt steps**: **`instructionToAction`** system prompt now requires **ISO `YYYY-MM-DD`** for **`input[type="date"]`** fills (avoids Playwright **Malformed value** on slash dates like `01/01/1980`). **`@bladerunner/api` `0.5.40`**.
 - **0.7.76** — **AI prompt steps**: **`StepOrigin.AI_PROMPT`**, **`metadata.kind: ai_prompt_step`**; **`PATCH /runs/:id/steps/:stepId`**, **`POST .../test-ai-step`**; playback runs **LLM + vision** per step; **Runs** + **Run detail** **StepCard** (**Test step**, revert). **`@bladerunner/api` `0.5.39`**, **`@bladerunner/web` `0.6.50`**, **`@bladerunner/types` `0.2.1`**.
 - **0.7.75** — **Run detail**: Playback toolbar controls **taller** (`py-1.5`, seq input aligned); card padding **`py-0.5`**. **`@bladerunner/web` `0.6.49`**.

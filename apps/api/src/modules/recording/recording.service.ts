@@ -698,13 +698,34 @@ export class RecordingService extends EventEmitter {
     runId: string,
     userId: string,
     stepId: string,
-    dto: { instruction?: string; aiPromptMode?: boolean },
+    dto: { instruction?: string; aiPromptMode?: boolean; excludedFromPlayback?: boolean },
   ): Promise<RunStep> {
     const existing = await this.prisma.runStep.findFirst({
       where: { id: stepId, runId, userId },
     });
     if (!existing) {
       throw new NotFoundException('Step not found');
+    }
+
+    if (
+      dto.excludedFromPlayback !== undefined &&
+      dto.instruction === undefined &&
+      dto.aiPromptMode === undefined
+    ) {
+      const run = await this.prisma.run.findFirst({
+        where: { id: runId, userId },
+        select: { status: true },
+      });
+      if (!run) {
+        throw new NotFoundException('Run not found');
+      }
+      if (run.status === 'RECORDING') {
+        throw new BadRequestException('Finish recording before marking steps to skip in playback');
+      }
+      return this.prisma.runStep.update({
+        where: { id: stepId },
+        data: { excludedFromPlayback: dto.excludedFromPlayback },
+      });
     }
 
     if (dto.aiPromptMode === true) {
@@ -747,13 +768,28 @@ export class RecordingService extends EventEmitter {
       if (!t) {
         throw new BadRequestException('instruction cannot be empty');
       }
+      if (dto.excludedFromPlayback !== undefined) {
+        const run = await this.prisma.run.findFirst({
+          where: { id: runId, userId },
+          select: { status: true },
+        });
+        if (!run) {
+          throw new NotFoundException('Run not found');
+        }
+        if (run.status === 'RECORDING') {
+          throw new BadRequestException('Finish recording before marking steps to skip in playback');
+        }
+      }
       return this.prisma.runStep.update({
         where: { id: stepId },
-        data: { instruction: t },
+        data: {
+          instruction: t,
+          ...(dto.excludedFromPlayback !== undefined ? { excludedFromPlayback: dto.excludedFromPlayback } : {}),
+        },
       });
     }
 
-    throw new BadRequestException('Provide instruction and/or aiPromptMode');
+    throw new BadRequestException('Provide instruction and/or aiPromptMode, or excludedFromPlayback alone');
   }
 
   /**
@@ -1346,6 +1382,9 @@ export class RecordingService extends EventEmitter {
       skipStepIds: opts?.skipStepIds,
       runUrl: run.url,
     });
+    for (const s of run.steps) {
+      if (s.excludedFromPlayback) skipSet.add(s.id);
+    }
     const clerkOtpMode = this.resolveClerkOtpMode(opts);
     const replaySnapshot: PlaybackReplaySnapshot = {
       sourceRunId,

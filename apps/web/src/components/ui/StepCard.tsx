@@ -55,6 +55,12 @@ interface StepCardProps {
   checkpointAfterStep?: CheckpointData;
   /** Required with `checkpointAfterStep` to load the thumbnail */
   checkpointRunId?: string;
+  /** Mark step to skip during playback (completed runs). */
+  playbackExclusion?: {
+    excluded: boolean;
+    disabled?: boolean;
+    onToggle: () => void;
+  };
 }
 
 const ACTION_ICONS: Record<string, typeof Mouse> = {
@@ -143,6 +149,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
     aiPromptStep,
     checkpointAfterStep,
     checkpointRunId,
+    playbackExclusion,
   },
   ref,
 ) {
@@ -209,7 +216,9 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   return (
     <div
       ref={ref}
-      className={`group relative border-l-3 rounded-r-lg bg-white border border-gray-100 mb-1.5 transition-all duration-200 hover:shadow-sm ${originBorder} ${highlightClass}`}
+      className={`group relative border-l-3 rounded-r-lg bg-white border border-gray-100 mb-1.5 transition-all duration-200 hover:shadow-sm ${originBorder} ${highlightClass} ${
+        playbackExclusion?.excluded ? 'ring-1 ring-amber-200/90 bg-amber-50/40' : ''
+      }`}
     >
       <div className="flex items-start gap-2 px-2 py-1.5">
         <div
@@ -222,11 +231,30 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
           <div className="flex items-center gap-1 mb-0.5 flex-wrap">
             <Icon size={11} className="text-gray-400 flex-shrink-0" />
             <span className="text-[9px] text-gray-400 ce-mono">{formatTime(timestamp)}</span>
+            {playbackExclusion && (
+              <label
+                className="inline-flex items-center gap-0.5 shrink-0 cursor-pointer select-none"
+                title="Skip this step during playback (step stays in the list)"
+              >
+                <input
+                  type="checkbox"
+                  className="h-2.5 w-2.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500/30"
+                  checked={playbackExclusion.excluded}
+                  disabled={playbackExclusion.disabled}
+                  onChange={() => playbackExclusion.onToggle()}
+                />
+                <span className="text-[8px] font-medium text-amber-900/80">Skip replay</span>
+              </label>
+            )}
             <span className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
               {originLabel}
             </span>
           </div>
-          <p className="text-[11px] text-gray-700 leading-snug">
+          <p
+            className={`text-[11px] leading-snug ${
+              playbackExclusion?.excluded ? 'text-gray-400 line-through decoration-gray-300/90' : 'text-gray-700'
+            }`}
+          >
             {isAiPromptStep ? 'Prompt: ' : ''}
             {instruction}
           </p>

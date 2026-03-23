@@ -128,6 +128,8 @@ model RunStep {
   durationMs     Int?       @map("duration_ms")
   timestamp      DateTime
   metadata       Json?
+  /// When true, playback skips this step (still listed in the UI; soft “delete” from replay).
+  excludedFromPlayback Boolean @default(false) @map("excluded_from_playback")
   createdAt      DateTime   @default(now()) @map("created_at")
 
   run Run @relation(fields: [runId], references: [id], onDelete: Cascade)

@@ -49,6 +49,7 @@ export default function RunsPage() {
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const [reRecordBusyStepId, setReRecordBusyStepId] = useState<string | null>(null);
   const [reRecordError, setReRecordError] = useState<string | null>(null);
+  const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
@@ -325,6 +326,31 @@ export default function RunsPage() {
       playbackClerkOtpMode,
       playbackDelayMs,
     ],
+  );
+
+  const canEditPlaybackExclusionRuns =
+    !!effectiveRunId &&
+    !isRecording &&
+    selectedRun != null &&
+    selectedRun.status !== 'RECORDING';
+
+  const handleTogglePlaybackExclusionRuns = useCallback(
+    async (stepId: string, next: boolean) => {
+      if (!effectiveRunId) return;
+      setPlaybackExclusionBusyStepId(stepId);
+      try {
+        await runsApi.patchRunStep(effectiveRunId, stepId, { excludedFromPlayback: next });
+        await queryClient.invalidateQueries({ queryKey: ['run-steps', effectiveRunId] });
+        await queryClient.invalidateQueries({ queryKey: ['run', effectiveRunId] });
+        await queryClient.invalidateQueries({ queryKey: ['runs'] });
+        await loadRunSteps(effectiveRunId);
+      } catch (e) {
+        console.error('Failed to update step skip flag', e);
+      } finally {
+        setPlaybackExclusionBusyStepId(null);
+      }
+    },
+    [effectiveRunId, queryClient, loadRunSteps],
   );
 
   const { data: runCheckpointsRuns = [] } = useQuery({
@@ -1052,6 +1078,19 @@ export default function RunsPage() {
                                   void loadRunSteps(effectiveRunId);
                                 }
                               },
+                            }
+                          : undefined
+                      }
+                      playbackExclusion={
+                        canEditPlaybackExclusionRuns && step.runId === effectiveRunId
+                          ? {
+                              excluded: !!step.excludedFromPlayback,
+                              disabled: playbackExclusionBusyStepId === step.id,
+                              onToggle: () =>
+                                void handleTogglePlaybackExclusionRuns(
+                                  step.id,
+                                  !step.excludedFromPlayback,
+                                ),
                             }
                           : undefined
                       }

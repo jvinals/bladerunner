@@ -220,7 +220,7 @@ export const runsApi = {
   patchRunStep: (
     runId: string,
     stepId: string,
-    body: { instruction?: string; aiPromptMode?: boolean },
+    body: { instruction?: string; aiPromptMode?: boolean; excludedFromPlayback?: boolean },
   ) =>
     apiFetch<{ step: unknown }>(`/runs/${runId}/steps/${stepId}`, {
       method: 'PATCH',

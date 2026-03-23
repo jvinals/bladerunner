@@ -631,6 +631,28 @@ export default function RunDetailPage() {
     return previousPlayThroughTarget(completedSequences, nextSeq) != null;
   }, [isPlaying, isPaused, highlightSequence, completedSequences, recordedSteps]);
 
+  const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
+
+  const runStatus = (run as { status?: string } | undefined)?.status;
+  const canEditPlaybackExclusion = runStatus != null && runStatus !== 'RECORDING' && !!id;
+
+  const handleTogglePlaybackExclusion = useCallback(
+    async (stepId: string, next: boolean) => {
+      if (!id) return;
+      setPlaybackExclusionBusyStepId(stepId);
+      try {
+        await runsApi.patchRunStep(id, stepId, { excludedFromPlayback: next });
+        await queryClient.invalidateQueries({ queryKey: ['run-steps', id] });
+        await queryClient.invalidateQueries({ queryKey: ['run', id] });
+      } catch (e) {
+        console.error('Failed to update step skip flag', e);
+      } finally {
+        setPlaybackExclusionBusyStepId(null);
+      }
+    },
+    [id, queryClient],
+  );
+
   const handleStepPlayback = useCallback(
     async (sequence: number, mode: 'from' | 'only') => {
       if (!id || !canPlayback) return;
@@ -1202,6 +1224,19 @@ export default function RunDetailPage() {
                               }
                             : undefined
                         }
+                        playbackExclusion={
+                          canEditPlaybackExclusion
+                            ? {
+                                excluded: !!step.excludedFromPlayback,
+                                disabled: playbackExclusionBusyStepId === step.id,
+                                onToggle: () =>
+                                  void handleTogglePlaybackExclusion(
+                                    step.id,
+                                    !step.excludedFromPlayback,
+                                  ),
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                   );
@@ -1264,6 +1299,19 @@ export default function RunDetailPage() {
                                   void queryClient.invalidateQueries({ queryKey: ['run-steps', id] });
                                   void queryClient.invalidateQueries({ queryKey: ['run', id] });
                                 },
+                              }
+                            : undefined
+                        }
+                        playbackExclusion={
+                          canEditPlaybackExclusion
+                            ? {
+                                excluded: !!step.excludedFromPlayback,
+                                disabled: playbackExclusionBusyStepId === step.id,
+                                onToggle: () =>
+                                  void handleTogglePlaybackExclusion(
+                                    step.id,
+                                    !step.excludedFromPlayback,
+                                  ),
                               }
                             : undefined
                         }

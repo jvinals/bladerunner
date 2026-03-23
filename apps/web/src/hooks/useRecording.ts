@@ -17,6 +17,8 @@ export interface RecordedStep {
   timestamp: string;
   /** Optional JSON from API (e.g. `clerk_auto_sign_in` step). */
   metadata?: unknown;
+  /** When true, playback skips this step. */
+  excludedFromPlayback?: boolean;
 }
 
 export type RemotePointerPayload = {

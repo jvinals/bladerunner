@@ -164,6 +164,15 @@ export class PatchRunStepDto {
   @Type(() => Boolean)
   @IsBoolean()
   aiPromptMode?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'When true, playback skips this step (still shown in the list). Cannot set while run is RECORDING.',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  excludedFromPlayback?: boolean;
 }
 
 export class CreateRunDto {
