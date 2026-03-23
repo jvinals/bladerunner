@@ -895,7 +895,7 @@ export default function RunDetailPage() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center self-stretch rounded-lg border border-gray-100 bg-white px-2 py-0.5 shadow-sm lg:min-w-[min(100%,30rem)] lg:flex-[1.2]">
             <span className="sr-only">Playback</span>
             <div
-              className="flex min-h-0 flex-nowrap items-center justify-start gap-1 overflow-x-auto"
+              className="flex min-h-0 flex-wrap items-center justify-start gap-x-1 gap-y-1"
               role="toolbar"
               aria-label="Playback controls"
             >
@@ -970,21 +970,21 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!isPlaying || !isPaused || !canPlaybackPreviousStep}
                 onClick={() => void advancePlaybackPrevious(recordedSteps)}
-                className="flex w-[7.5rem] shrink-0 justify-center items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex w-[4.5rem] shrink-0 justify-center items-center gap-0.5 px-1.5 py-1.5 border border-indigo-200 text-indigo-800 text-[10px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Replay from the start and pause after the previous completed step"
               >
-                <StepBack size={11} />
-                Previous step
+                <StepBack size={10} />
+                Prev
               </button>
               <button
                 type="button"
                 disabled={!isPlaying || !isPaused}
                 onClick={() => void advancePlaybackOne()}
-                className="flex w-[7.5rem] shrink-0 justify-center items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex w-[4.5rem] shrink-0 justify-center items-center gap-0.5 px-1.5 py-1.5 border border-indigo-200 text-indigo-800 text-[10px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Run the next step, then pause again"
               >
-                <StepForward size={11} />
-                Next step
+                <StepForward size={10} />
+                Next
               </button>
               <span className="shrink-0 text-[10px] text-gray-400 pl-0.5">Run to seq</span>
               <input

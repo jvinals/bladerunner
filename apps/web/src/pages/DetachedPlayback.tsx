@@ -397,20 +397,20 @@ export default function DetachedPlayback() {
                 type="button"
                 disabled={!canDetachedPreviousStep}
                 onClick={() => void handlePreviousStep()}
-                className="flex w-[7.5rem] shrink-0 justify-center items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex w-[4.5rem] shrink-0 justify-center items-center gap-0.5 px-1.5 py-1 rounded bg-indigo-600/90 text-white text-[10px] font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Replay from the start and pause after the previous completed step"
               >
-                <StepBack size={12} />
-                Previous step
+                <StepBack size={10} />
+                Prev
               </button>
               <button
                 type="button"
                 onClick={handleAdvanceOne}
-                className="flex w-[7.5rem] shrink-0 justify-center items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500"
+                className="flex w-[4.5rem] shrink-0 justify-center items-center gap-0.5 px-1.5 py-1 rounded bg-indigo-600/90 text-white text-[10px] font-medium hover:bg-indigo-500"
                 title="Run the next step, then pause again"
               >
-                <StepForward size={12} />
-                Next step
+                <StepForward size={10} />
+                Next
               </button>
               <button
                 type="button"
@@ -448,8 +448,8 @@ export default function DetachedPlayback() {
           aria-label="Playback browser preview"
         />
         <p className="text-[10px] text-gray-500 text-center max-w-md px-4 mt-3">
-          Read-only replay of your recorded steps. When paused, use <strong className="text-gray-400">Previous step</strong>{' '}
-          or <strong className="text-gray-400">Next step</strong>, or <strong className="text-gray-400">Run to seq</strong>, to
+          Read-only replay of your recorded steps. When paused, use <strong className="text-gray-400">Prev</strong>{' '}
+          or <strong className="text-gray-400">Next</strong>, or <strong className="text-gray-400">Run to seq</strong>, to
           continue under control. Close this window when
           finished.
         </p>
