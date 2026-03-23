@@ -1,6 +1,6 @@
-import { appendFileSync, existsSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { config as loadDotenv } from 'dotenv';
+import { config as loadDotenv, parse as parseDotenv } from 'dotenv';
 
 const DEBUG_LOG = '/Users/jvinals/code/bladerunner/.cursor/debug-5cf234.log';
 
@@ -26,7 +26,7 @@ function debugLog(location: string, message: string, data: Record<string, unknow
 // Load order: monorepo root first, then apps/api (last wins). Do not append resolve(cwd, '.env') — when
 // cwd is the repo root it would overwrite apps/api/.env after we applied it.
 debugLog('bootstrap-env.ts:pre', 'GEMINI before dotenv preload', {
-  hasKey: Object.prototype.hasOwnProperty.call(process.env, 'GEMINI_API_KEY'),
+  inProcessEnv: 'GEMINI_API_KEY' in process.env,
   lenPre: process.env.GEMINI_API_KEY?.length ?? 0,
   cwd: process.cwd(),
 });
@@ -45,7 +45,24 @@ if (existsSync(apiEnv)) {
   loadDotenv({ path: apiEnv, override: true });
 }
 
+// Metadata only: confirms whether the on-disk file next to dist/ actually defines GEMINI (unsaved editor buffers do not).
+let parsedApiHasGemini = false;
+try {
+  if (existsSync(apiEnv)) {
+    const parsed = parseDotenv(readFileSync(apiEnv, 'utf8'));
+    parsedApiHasGemini =
+      Object.prototype.hasOwnProperty.call(parsed, 'GEMINI_API_KEY') &&
+      typeof parsed.GEMINI_API_KEY === 'string' &&
+      parsed.GEMINI_API_KEY.trim().length > 0;
+  }
+} catch {
+  parsedApiHasGemini = false;
+}
+
 debugLog('bootstrap-env.ts:post', 'GEMINI after dotenv preload', {
-  hasKey: Object.prototype.hasOwnProperty.call(process.env, 'GEMINI_API_KEY'),
+  inProcessEnv: 'GEMINI_API_KEY' in process.env,
   lenPost: process.env.GEMINI_API_KEY?.length ?? 0,
+  resolvedApiEnvPath: apiEnv,
+  existsApiEnv: existsSync(apiEnv),
+  parsedApiEnvFileDefinesGemini: parsedApiHasGemini,
 });
