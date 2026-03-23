@@ -230,6 +230,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.87** — **OpenAI chat**: use **`max_completion_tokens`** (not deprecated **`max_tokens`**) so **GPT-5.x** honors the output budget; **`instructionToAction`** **`maxTokens` 16384** (reasoning + long JSON). Fixes truncated **`lastLlmTranscript`** / **`Unexpected end of JSON input`**. **`@bladerunner/api` `0.5.50`**.
 - **0.7.86** — **AI prompt / `instructionToAction`**: **`maxTokens` 8192** for vision JSON (default **1024** truncated long **`playwrightCode`** → **`Unexpected end of JSON input`**); **`parseJsonFromLlmText`** + clearer parse errors; **OpenAI**/**Anthropic** reject empty assistant text. **`@bladerunner/api` `0.5.49`**.
 - **0.7.85** — **AI prompt steps**: Persist **`lastLlmTranscript`** (exact **system** / **user** text and **raw** model string) on **Test step** and **playback**; **StepCard** **AI prompt** badge opens a **modal** with the transcript. **`@bladerunner/api` `0.5.48`**, **`@bladerunner/web` `0.6.63`**.
 - **0.7.84** — **LLM**: Default **`OPENAI_MODEL`** is **`gpt-5.4-mini`** (was **`gpt-4o`**). **`@bladerunner/api` `0.5.47`**.

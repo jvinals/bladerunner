@@ -169,8 +169,11 @@ ${input.pageAccessibilityTree.slice(0, 4000)}`;
       ],
       {
         imageBase64: input.screenshotBase64,
-        /** Vision + long playwright snippets exceed the default 1024 and truncate JSON mid-stream. */
-        maxTokens: 8192,
+        /**
+         * Vision + long `playwrightCode` in JSON; use a high ceiling. OpenAI maps this to
+         * `max_completion_tokens` (reasoning + output share this budget on GPT-5.x).
+         */
+        maxTokens: 16384,
       },
     );
 

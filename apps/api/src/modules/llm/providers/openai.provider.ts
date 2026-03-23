@@ -32,11 +32,14 @@ export class OpenAiProvider implements LlmProvider {
       },
     );
 
+    /** `max_tokens` is deprecated; GPT-5.x / reasoning models use `max_completion_tokens` (includes reasoning + visible text). */
+    const maxCompletionTokens = options?.maxTokens ?? 1024;
+
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: openAiMessages,
       temperature: options?.temperature ?? 0.1,
-      max_tokens: options?.maxTokens ?? 1024,
+      max_completion_tokens: maxCompletionTokens,
       response_format: { type: 'json_object' },
     });
 
@@ -52,7 +55,12 @@ export class OpenAiProvider implements LlmProvider {
         sessionId: '5cf234',
         location: 'openai.provider.ts:chat',
         message: 'openai completion',
-        data: { contentLen: content.length, finishReason, model: this.model },
+        data: {
+          contentLen: content.length,
+          finishReason,
+          model: this.model,
+          maxCompletionTokens,
+        },
         timestamp: Date.now(),
         hypothesisId: 'H-openai',
         runId: 'instruction-to-action',
