@@ -44,6 +44,28 @@ export class AnthropicProvider implements LlmProvider {
     });
 
     const textBlock = response.content.find((b) => b.type === 'text');
-    return textBlock && 'text' in textBlock ? textBlock.text : '';
+    const text = textBlock && 'text' in textBlock ? textBlock.text : '';
+    const stopReason = response.stop_reason;
+
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'anthropic.provider.ts:chat',
+        message: 'anthropic completion',
+        data: { textLen: text.length, stopReason, model: this.model },
+        timestamp: Date.now(),
+        hypothesisId: 'H-anthropic',
+        runId: 'instruction-to-action',
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    if (!text.trim()) {
+      throw new Error(`Anthropic returned empty text (stop_reason=${String(stopReason ?? 'unknown')})`);
+    }
+    return text;
   }
 }

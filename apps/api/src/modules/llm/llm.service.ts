@@ -77,9 +77,24 @@ export type SuggestSkipForwardStepInput = {
 
 function parseJsonFromLlmText(raw: string): unknown {
   const t = raw.trim();
+  if (!t) {
+    throw new Error('LLM returned empty response (no JSON to parse)');
+  }
   const fence = /^```(?:json)?\s*\n?([\s\S]*?)```\s*$/m.exec(t);
   const payload = fence ? fence[1].trim() : t;
-  return JSON.parse(payload);
+  if (!payload) {
+    throw new Error('LLM returned empty JSON payload after extraction');
+  }
+  try {
+    return JSON.parse(payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const head = payload.slice(0, 120);
+    const tail = payload.slice(-120);
+    throw new Error(
+      `JSON parse failed (${msg}); response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}`,
+    );
+  }
 }
 
 @Injectable()
@@ -154,10 +169,12 @@ ${input.pageAccessibilityTree.slice(0, 4000)}`;
       ],
       {
         imageBase64: input.screenshotBase64,
+        /** Vision + long playwright snippets exceed the default 1024 and truncate JSON mid-stream. */
+        maxTokens: 8192,
       },
     );
 
-    const output = JSON.parse(rawResponse) as InstructionToActionOutput;
+    const output = parseJsonFromLlmText(rawResponse) as InstructionToActionOutput;
 
     return {
       output,

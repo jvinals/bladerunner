@@ -40,6 +40,31 @@ export class OpenAiProvider implements LlmProvider {
       response_format: { type: 'json_object' },
     });
 
-    return response.choices[0]?.message?.content || '';
+    const choice = response.choices[0];
+    const content = choice?.message?.content ?? '';
+    const finishReason = choice?.finish_reason;
+
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'openai.provider.ts:chat',
+        message: 'openai completion',
+        data: { contentLen: content.length, finishReason, model: this.model },
+        timestamp: Date.now(),
+        hypothesisId: 'H-openai',
+        runId: 'instruction-to-action',
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    if (!content.trim()) {
+      throw new Error(
+        `OpenAI returned empty assistant message (finish_reason=${String(finishReason ?? 'unknown')})`,
+      );
+    }
+    return content;
   }
 }
