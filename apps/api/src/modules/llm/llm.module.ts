@@ -22,7 +22,7 @@ export class LlmModule implements OnModuleInit {
     switch (provider) {
       case 'openai': {
         const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-        const model = this.configService.get<string>('OPENAI_MODEL', 'gpt-4o');
+        const model = this.configService.get<string>('OPENAI_MODEL', 'gpt-5.4-mini');
         if (apiKey) {
           this.llmService.setProvider(new OpenAiProvider(apiKey, model));
           this.logger.log(`LLM provider: OpenAI (${model})`);
