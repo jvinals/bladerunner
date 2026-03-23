@@ -227,6 +227,17 @@ export class RunsController {
     return { step };
   }
 
+  @Post(':id/steps/purge-skipped')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Delete all steps marked “skip replay” (excludedFromPlayback) and renumber the rest',
+  })
+  @ApiResponse({ status: 200, description: '{ deleted: number }' })
+  async purgeSkippedSteps(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    return this.recordingService.purgeSkippedSteps(id, userId);
+  }
+
   @Patch(':id/steps/:stepId')
   @ApiOperation({
     summary: 'Update step instruction and/or enable/disable AI prompt mode',

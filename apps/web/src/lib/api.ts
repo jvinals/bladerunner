@@ -232,6 +232,9 @@ export const runsApi = {
       `/runs/${runId}/steps/${stepId}/test-ai-step`,
       { method: 'POST' },
     ),
+  /** Permanently delete all steps marked skip replay; renumbers remaining steps. */
+  purgeSkippedSteps: (runId: string) =>
+    apiFetch<{ deleted: number }>(`/runs/${runId}/steps/purge-skipped`, { method: 'POST' }),
   startPlayback: (runId: string, opts?: StartPlaybackBody) =>
     apiFetch<{ playbackSessionId: string; sourceRunId: string }>(`/runs/${runId}/playback/start`, {
       method: 'POST',

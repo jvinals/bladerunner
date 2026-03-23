@@ -793,6 +793,83 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
+   * Permanently delete all steps with `excludedFromPlayback`; renumber remaining steps and remap checkpoints.
+   */
+  async purgeSkippedSteps(runId: string, userId: string): Promise<{ deleted: number }> {
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      select: { status: true },
+    });
+    if (!run) {
+      throw new NotFoundException('Run not found');
+    }
+    if (run.status === 'RECORDING') {
+      throw new BadRequestException('Finish recording before purging skipped steps');
+    }
+
+    const toRemove = await this.prisma.runStep.findMany({
+      where: { runId, userId, excludedFromPlayback: true },
+      orderBy: { sequence: 'asc' },
+    });
+    if (toRemove.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const deletedSeqs = new Set(toRemove.map((s) => s.sequence));
+    const deletedIds = toRemove.map((s) => s.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.runCheckpoint.deleteMany({
+        where: { runId, userId, afterStepSequence: { in: [...deletedSeqs] } },
+      });
+
+      await tx.runStep.deleteMany({ where: { id: { in: deletedIds } } });
+
+      const remaining = await tx.runStep.findMany({
+        where: { runId, userId },
+        orderBy: { sequence: 'asc' },
+      });
+
+      if (remaining.length === 0) {
+        await tx.runCheckpoint.deleteMany({ where: { runId, userId } });
+        return;
+      }
+
+      const oldToNew = new Map<number, number>();
+      remaining.forEach((s, i) => {
+        oldToNew.set(s.sequence, i + 1);
+      });
+
+      for (let i = 0; i < remaining.length; i++) {
+        const newSeq = i + 1;
+        if (remaining[i].sequence !== newSeq) {
+          await tx.runStep.update({
+            where: { id: remaining[i].id },
+            data: { sequence: newSeq },
+          });
+        }
+      }
+
+      const checkpoints = await tx.runCheckpoint.findMany({
+        where: { runId, userId },
+      });
+      for (const cp of checkpoints) {
+        const newSeq = oldToNew.get(cp.afterStepSequence);
+        if (newSeq === undefined) {
+          await tx.runCheckpoint.delete({ where: { id: cp.id } });
+        } else if (newSeq !== cp.afterStepSequence) {
+          await tx.runCheckpoint.update({
+            where: { id: cp.id },
+            data: { afterStepSequence: newSeq },
+          });
+        }
+      }
+    });
+
+    return { deleted: toRemove.length };
+  }
+
+  /**
    * Ephemeral: run LLM + vision + codegen on the current recording or playback page (same as playback for AI prompt steps).
    */
   async testAiPromptStep(

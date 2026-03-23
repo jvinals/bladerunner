@@ -653,6 +653,35 @@ export default function RunDetailPage() {
     [id, queryClient],
   );
 
+  const skippedStepsCount = useMemo(
+    () => recordedSteps.filter((s) => s.excludedFromPlayback).length,
+    [recordedSteps],
+  );
+
+  const [purgeSkippedBusy, setPurgeSkippedBusy] = useState(false);
+
+  const handlePurgeSkipped = useCallback(async () => {
+    if (!id || skippedStepsCount === 0) return;
+    if (
+      !window.confirm(
+        `Permanently remove ${skippedStepsCount} skipped step(s) from this run? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setPurgeSkippedBusy(true);
+    try {
+      await runsApi.purgeSkippedSteps(id);
+      await queryClient.invalidateQueries({ queryKey: ['run-steps', id] });
+      await queryClient.invalidateQueries({ queryKey: ['run', id] });
+      await queryClient.invalidateQueries({ queryKey: ['run-checkpoints', id] });
+    } catch (e) {
+      console.error('Purge skipped steps failed', e);
+    } finally {
+      setPurgeSkippedBusy(false);
+    }
+  }, [id, skippedStepsCount, queryClient]);
+
   const handleStepPlayback = useCallback(
     async (sequence: number, mode: 'from' | 'only') => {
       if (!id || !canPlayback) return;
@@ -1172,10 +1201,23 @@ export default function RunDetailPage() {
             <div
               className={`w-full shrink-0 bg-white border border-gray-100 rounded-lg p-4 flex flex-col lg:w-[min(20rem,26%)] lg:min-w-[17rem] lg:max-w-sm ${PLAYBACK_COL_HEIGHT}`}
             >
-              <p className="text-sm font-semibold text-gray-800 mb-3">
-                Recorded steps
-                <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
-              </p>
+              <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  Recorded steps
+                  <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
+                </p>
+                {canEditPlaybackExclusion && skippedStepsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handlePurgeSkipped()}
+                    disabled={purgeSkippedBusy}
+                    className="shrink-0 rounded border border-red-200 bg-white px-2 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    title="Permanently delete all steps marked Skip replay"
+                  >
+                    {purgeSkippedBusy ? 'Purging…' : 'Purge'}
+                  </button>
+                )}
+              </div>
               <div className="overflow-y-auto flex-1 pr-1 -mr-1">
                 {recordedSteps.map((step) => {
                   const cp = runCheckpoints.find((c) => c.afterStepSequence === step.sequence);
@@ -1247,10 +1289,23 @@ export default function RunDetailPage() {
         ) : (
           <div className="mb-8 flex flex-col gap-6">
             <div className="flex min-h-0 flex-col rounded-lg border border-gray-100 bg-white p-4">
-              <p className="mb-3 text-sm font-semibold text-gray-800">
-                Recorded steps
-                <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
-              </p>
+              <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  Recorded steps
+                  <span className="ml-2 text-[10px] font-normal text-gray-400">({recordedSteps.length})</span>
+                </p>
+                {canEditPlaybackExclusion && skippedStepsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handlePurgeSkipped()}
+                    disabled={purgeSkippedBusy}
+                    className="shrink-0 rounded border border-red-200 bg-white px-2 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    title="Permanently delete all steps marked Skip replay"
+                  >
+                    {purgeSkippedBusy ? 'Purging…' : 'Purge'}
+                  </button>
+                )}
+              </div>
               <div className="-mx-1 flex gap-3 overflow-x-auto overflow-y-hidden px-1 pb-2 scroll-smooth">
                 {recordedSteps.map((step) => {
                   const cp = runCheckpoints.find((c) => c.afterStepSequence === step.sequence);
