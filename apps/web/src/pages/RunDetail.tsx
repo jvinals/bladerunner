@@ -948,7 +948,7 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!isPlaying || !isPaused || !canPlaybackPreviousStep}
                 onClick={() => void advancePlaybackPrevious(recordedSteps)}
-                className="flex w-36 shrink-0 justify-center items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex w-[7.5rem] shrink-0 justify-center items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Replay from the start and pause after the previous completed step"
               >
                 <StepBack size={11} />
@@ -958,7 +958,7 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!isPlaying || !isPaused}
                 onClick={() => void advancePlaybackOne()}
-                className="flex w-36 shrink-0 justify-center items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex w-[7.5rem] shrink-0 justify-center items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Run the next step, then pause again"
               >
                 <StepForward size={11} />
