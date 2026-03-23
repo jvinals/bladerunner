@@ -13,8 +13,14 @@ export interface LlmChatOptions {
   signal?: AbortSignal;
 }
 
+/** Assistant text plus optional hidden reasoning when the provider exposes it (e.g. OpenAI reasoning models). */
+export interface LlmChatResult {
+  content: string;
+  thinking?: string;
+}
+
 export interface LlmProvider {
-  chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<string>;
+  chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<LlmChatResult>;
 }
 
 export interface ActionToInstructionInput {
@@ -59,6 +65,8 @@ export interface InstructionToActionLlmTranscript {
    * Same base64 JPEG passed to the vision API (optional persistence for Run step metadata / modal).
    */
   screenshotBase64?: string;
+  /** Model chain-of-thought / reasoning summary when returned by the provider (not the JSON Playwright output). */
+  thinking?: string;
 }
 
 export interface InstructionToActionResult {

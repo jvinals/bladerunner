@@ -173,7 +173,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         { role: 'user', content: userPrompt },
       ]);
 
-      return JSON.parse(response);
+      return JSON.parse(response.content);
     } catch (err) {
       this.logger.error('actionToInstruction failed', err);
       const label = input.elementVisibleText?.trim() || input.ariaLabel?.trim();
@@ -204,7 +204,7 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
 
     const visionAttached = !!input.screenshotBase64?.trim();
 
-    const rawResponse = await this.provider.chat(
+    const llm = await this.provider.chat(
       [
         { role: 'system', content: INSTRUCTION_TO_ACTION_SYSTEM },
         { role: 'user', content: userPrompt },
@@ -222,6 +222,8 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
       },
     );
 
+    const rawResponse = llm.content;
+    const thinking = llm.thinking?.trim() || undefined;
     const output = parseJsonFromLlmText(rawResponse) as InstructionToActionOutput;
 
     return {
@@ -232,6 +234,7 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
         rawResponse,
         visionAttached,
         screenshotBase64: input.screenshotBase64?.trim() || undefined,
+        ...(thinking ? { thinking } : {}),
       },
     };
   }
@@ -257,7 +260,7 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
     const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
 
     try {
-      const rawResponse = await this.provider.chat(
+      const llm = await this.provider.chat(
         [
           { role: 'system', content: EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM },
           { role: 'user', content: user },
@@ -270,7 +273,7 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
         },
       );
 
-      const parsed = parseJsonFromLlmText(rawResponse) as { explanation?: unknown; suggestedPrompt?: unknown };
+      const parsed = parseJsonFromLlmText(llm.content) as { explanation?: unknown; suggestedPrompt?: unknown };
       if (typeof parsed.explanation !== 'string' || typeof parsed.suggestedPrompt !== 'string') {
         return null;
       }
@@ -319,7 +322,7 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
 
     let parsed: unknown;
     try {
-      parsed = parseJsonFromLlmText(response);
+      parsed = parseJsonFromLlmText(response.content);
     } catch (err) {
       this.logger.error('suggestStepsToSkipAfterChange: invalid JSON', err);
       return { suggestions: [] };
