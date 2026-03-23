@@ -3057,8 +3057,81 @@ export class RecordingService extends EventEmitter {
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
     const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);
-    const fn = new Function('page', `return (async () => { ${safeCode} })();`);
-    await fn(page);
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        runId: 'pre-exec',
+        hypothesisId: 'H1',
+        location: 'recording.service.ts:executePwCode',
+        message: 'pw codegen static heuristics before new Function',
+        data: {
+          safeCodeLen: safeCode.length,
+          hasBareTableLocatorNoFirst: /\bpage\.locator\s*\(\s*['"]table['"]\s*\)(?!\s*\.first\b)/.test(
+            safeCode,
+          ),
+          hasInnerTextOnLocator: /\.innerText\s*\(/.test(safeCode),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    let fn: (page: Page) => Promise<unknown>;
+    try {
+      fn = new Function('page', `return (async () => { ${safeCode} })();`) as (
+        page: Page,
+      ) => Promise<unknown>;
+    } catch (e) {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          runId: 'pre-exec',
+          hypothesisId: 'H3',
+          location: 'recording.service.ts:executePwCode',
+          message: 'new Function parse failed',
+          data: {
+            name: e instanceof Error ? e.name : 'unknown',
+            message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      throw e;
+    }
+    try {
+      await fn(page);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          runId: 'pre-exec',
+          hypothesisId: 'H1-H4',
+          location: 'recording.service.ts:executePwCode',
+          message: 'executePwCode runtime error',
+          data: {
+            name: err.name,
+            message: err.message.slice(0, 800),
+            looksStrict:
+              /strict|strict mode|resolved to \d+ elements/i.test(err.message) ||
+              err.name === 'Error' /* Playwright often uses Error */,
+            looksTimeout: /timeout|exceeded/i.test(err.message),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      throw e;
+    }
   }
 
   private requestBrowserFromWorker(workerUrl: string): Promise<string> {
