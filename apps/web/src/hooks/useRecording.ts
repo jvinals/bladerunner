@@ -34,6 +34,14 @@ export type RemoteTouchPhase = 'touchStart' | 'touchMove' | 'touchEnd' | 'touchC
 
 export type RemoteTouchPoint = { id: number; x: number; y: number; force?: number };
 
+/** From recording socket `aiPromptTestProgress` during `test-ai-step`. */
+export type AiPromptTestProgressPayload = {
+  runId: string;
+  stepId: string;
+  message: string;
+  phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled';
+};
+
 interface UseRecordingReturn {
   isRecording: boolean;
   runId: string | null;
@@ -67,6 +75,9 @@ interface UseRecordingReturn {
   ) => Promise<string | undefined>;
   /** True when the recording socket is connected (for UI / clipboard). */
   socketConnected: boolean;
+  /** Latest AI prompt test progress for this recording run (filter by `stepId` in UI). Cleared on terminal phases / disconnect. */
+  aiPromptTestProgress: AiPromptTestProgressPayload | null;
+  clearAiPromptTestProgress: () => void;
   /** One-shot Clerk auto sign-in on the remote page (API env). Pass OTP mode or `default` for server env. */
   clerkAutoSignIn: (otpMode?: AutoClerkOtpUiMode) => Promise<void>;
   clerkAutoSigningIn: boolean;
@@ -82,6 +93,7 @@ export function useRecording(): UseRecordingReturn {
   const [socketConnected, setSocketConnected] = useState(false);
   const [clerkAutoSigningIn, setClerkAutoSigningIn] = useState(false);
   const [clerkAutoSignInError, setClerkAutoSignInError] = useState<string | null>(null);
+  const [aiPromptTestProgress, setAiPromptTestProgress] = useState<AiPromptTestProgressPayload | null>(null);
   const socketRef = useRef<Socket | null>(null);
   /** Set synchronously when a recording starts so pointer/key work before React re-renders. */
   const activeRunIdRef = useRef<string | null>(null);
@@ -117,6 +129,7 @@ export function useRecording(): UseRecordingReturn {
 
     socket.on('disconnect', () => {
       setSocketConnected(false);
+      setAiPromptTestProgress(null);
     });
 
     socket.on('connect_error', (err: Error) => {
@@ -153,7 +166,25 @@ export function useRecording(): UseRecordingReturn {
       }
     });
 
+    socket.on('aiPromptTestProgress', (payload: Record<string, unknown>) => {
+      const runId = typeof payload.runId === 'string' ? payload.runId : '';
+      if (runId !== recordRunId) return;
+      const stepId = typeof payload.stepId === 'string' ? payload.stepId : '';
+      const message = typeof payload.message === 'string' ? payload.message : '';
+      const phase = payload.phase as AiPromptTestProgressPayload['phase'];
+      if (!stepId || !message) return;
+      const normalized: AiPromptTestProgressPayload = { runId, stepId, message, phase };
+      setAiPromptTestProgress(normalized);
+      if (phase === 'done' || phase === 'error' || phase === 'cancelled') {
+        window.setTimeout(() => setAiPromptTestProgress(null), 400);
+      }
+    });
+
     socketRef.current = socket;
+  }, []);
+
+  const clearAiPromptTestProgress = useCallback(() => {
+    setAiPromptTestProgress(null);
   }, []);
 
   const startRecording = useCallback(async (url: string, name: string, projectId?: string) => {
@@ -233,6 +264,7 @@ export function useRecording(): UseRecordingReturn {
     setSteps([]);
     setCurrentFrame(null);
     setClerkAutoSignInError(null);
+    setAiPromptTestProgress(null);
   }, [runId]);
 
   const sendRemotePointer = useCallback((userId: string, payload: RemotePointerPayload) => {
@@ -320,6 +352,8 @@ export function useRecording(): UseRecordingReturn {
     sendRemoteTouch,
     sendRemoteClipboard,
     socketConnected,
+    aiPromptTestProgress,
+    clearAiPromptTestProgress,
     clerkAutoSignIn,
     clerkAutoSigningIn,
     clerkAutoSignInError,

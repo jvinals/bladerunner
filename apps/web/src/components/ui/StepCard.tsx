@@ -17,12 +17,11 @@ import {
   RotateCcw,
   Play,
   FlaskConical,
-  Copy,
-  X,
   Wand2,
 } from 'lucide-react';
 import { runsApi } from '@/lib/api';
 import type { CheckpointData } from '@/components/ui/CheckpointDivider';
+import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
 
 export type PlaybackHighlight = 'past' | 'current' | 'future';
 
@@ -85,38 +84,6 @@ const ACTION_ICONS: Record<string, typeof Mouse> = {
 function formatTime(ts: string): string {
   const d = new Date(ts);
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-/** From `RunStep.metadata.lastLlmTranscript` (AI prompt steps). */
-function parseAiPromptLastLlmTranscript(metadata: unknown): {
-  systemPrompt: string;
-  userPrompt: string;
-  rawResponse: string;
-  visionAttached?: boolean;
-  screenshotBase64?: string;
-  capturedAt?: string;
-  source?: string;
-} | null {
-  if (!metadata || typeof metadata !== 'object') return null;
-  const t = (metadata as Record<string, unknown>).lastLlmTranscript;
-  if (!t || typeof t !== 'object') return null;
-  const o = t as Record<string, unknown>;
-  if (
-    typeof o.systemPrompt !== 'string' ||
-    typeof o.userPrompt !== 'string' ||
-    typeof o.rawResponse !== 'string'
-  ) {
-    return null;
-  }
-  return {
-    systemPrompt: o.systemPrompt,
-    userPrompt: o.userPrompt,
-    rawResponse: o.rawResponse,
-    visionAttached: typeof o.visionAttached === 'boolean' ? o.visionAttached : undefined,
-    screenshotBase64: typeof o.screenshotBase64 === 'string' && o.screenshotBase64.trim() ? o.screenshotBase64 : undefined,
-    capturedAt: typeof o.capturedAt === 'string' ? o.capturedAt : undefined,
-    source: typeof o.source === 'string' ? o.source : undefined,
-  };
 }
 
 const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
@@ -201,8 +168,6 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   const [aiError, setAiError] = useState<string | null>(null);
   const [showEnableAi, setShowEnableAi] = useState(false);
   const [aiPromptLlmOpen, setAiPromptLlmOpen] = useState(false);
-  const [aiPromptScreenshotZoomOpen, setAiPromptScreenshotZoomOpen] = useState(false);
-  const [screenshotCopyStatus, setScreenshotCopyStatus] = useState<'idle' | 'copied' | 'copiedText' | 'error'>('idle');
   /** Structured failure from API (LLM explanation + suggested prompt). */
   const [aiTestFailureDialog, setAiTestFailureDialog] = useState<{
     error: string;
@@ -213,38 +178,6 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   useEffect(() => {
     setPromptDraft(instruction);
   }, [instruction]);
-
-  useEffect(() => {
-    if (!aiPromptLlmOpen) {
-      setAiPromptScreenshotZoomOpen(false);
-    }
-  }, [aiPromptLlmOpen]);
-
-  useEffect(() => {
-    if (!aiPromptScreenshotZoomOpen) {
-      setScreenshotCopyStatus('idle');
-    }
-  }, [aiPromptScreenshotZoomOpen]);
-
-  const copyLlmScreenshotToClipboard = useCallback(async (b64: string) => {
-    setScreenshotCopyStatus('idle');
-    try {
-      const res = await fetch(`data:image/jpeg;base64,${b64}`);
-      const blob = await res.blob();
-      await navigator.clipboard.write([new ClipboardItem({ 'image/jpeg': blob })]);
-      setScreenshotCopyStatus('copied');
-      window.setTimeout(() => setScreenshotCopyStatus('idle'), 2500);
-    } catch {
-      try {
-        await navigator.clipboard.writeText(b64);
-        setScreenshotCopyStatus('copiedText');
-        window.setTimeout(() => setScreenshotCopyStatus('idle'), 3500);
-      } catch {
-        setScreenshotCopyStatus('error');
-        window.setTimeout(() => setScreenshotCopyStatus('idle'), 3500);
-      }
-    }
-  }, []);
 
   const adoptSuggestedAiPrompt = useCallback(async () => {
     if (!aiPromptStep || !aiTestFailureDialog) return;
@@ -327,7 +260,6 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
         : 'Manual';
 
   const showAfterThumb = checkpointAfterStep && checkpointRunId;
-  const lastLlmTranscript = isAiPromptStep ? parseAiPromptLastLlmTranscript(metadata) : null;
 
   return (
     <>
@@ -370,149 +302,20 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
               </label>
             )}
             {isAiPromptStep ? (
-              <>
-                <Dialog.Root open={aiPromptLlmOpen} onOpenChange={setAiPromptLlmOpen}>
-                  <Dialog.Trigger asChild>
-                    <button
-                      type="button"
-                      title="View exact LLM prompt and response"
-                      className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg} border-0 p-0 font-inherit cursor-pointer hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/80 rounded-full`}
-                    >
-                      {originLabel}
-                    </button>
-                  </Dialog.Trigger>
-                  <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 z-[100] bg-black/45" />
-                    <Dialog.Content className="fixed left-1/2 top-1/2 z-[101] flex max-h-[85vh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-xl outline-none">
-                      <Dialog.Title className="text-sm font-semibold text-gray-900">AI prompt — LLM transcript</Dialog.Title>
-                      <Dialog.Description className="sr-only">
-                        Exact system prompt, user prompt, and raw model response from the last test or playback run.
-                      </Dialog.Description>
-                      {lastLlmTranscript?.screenshotBase64 ? (
-                        <div className="mt-2 space-y-1.5">
-                          <div className="text-[10px] font-semibold text-gray-600">Screenshot sent to the LLM (JPEG)</div>
-                          <p className="text-[9px] text-gray-500">Click the preview for full size, scroll, and copy.</p>
-                          <div className="max-h-[min(50vh,420px)] overflow-auto rounded border border-gray-200 bg-gray-50 p-1">
-                            <button
-                              type="button"
-                              onClick={() => setAiPromptScreenshotZoomOpen(true)}
-                              className="block w-full cursor-zoom-in rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/80"
-                              title="Open full-size screenshot"
-                            >
-                              <img
-                                src={`data:image/jpeg;base64,${lastLlmTranscript.screenshotBase64}`}
-                                alt="Page screenshot as attached to the vision model for this request"
-                                className="mx-auto max-w-full h-auto"
-                              />
-                            </button>
-                          </div>
-                        </div>
-                      ) : lastLlmTranscript?.visionAttached ? (
-                      <p className="mt-2 text-[10px] leading-snug text-amber-900/90 rounded bg-amber-50 px-2 py-1.5 border border-amber-100">
-                        A JPEG screenshot was attached to this LLM request, but it was not stored in this transcript (re-run
-                        Test step or playback to capture it).
-                      </p>
-                    ) : null}
-                    {lastLlmTranscript?.capturedAt ? (
-                      <p className="mt-2 text-[10px] text-gray-500">
-                        Last captured {new Date(lastLlmTranscript.capturedAt).toLocaleString()}
-                        {lastLlmTranscript.source ? ` (${lastLlmTranscript.source})` : ''}
-                      </p>
-                    ) : null}
-                    {!lastLlmTranscript ? (
-                      <p className="mt-3 text-sm text-gray-600">
-                        No transcript yet. Run Test step or playback once to capture the exact prompt and response.
-                      </p>
-                    ) : (
-                      <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto text-left">
-                        <div>
-                          <div className="mb-1 text-[10px] font-semibold text-gray-600">System prompt</div>
-                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
-                            {lastLlmTranscript.systemPrompt}
-                          </pre>
-                        </div>
-                        <div>
-                          <div className="mb-1 text-[10px] font-semibold text-gray-600">User prompt</div>
-                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
-                            {lastLlmTranscript.userPrompt}
-                          </pre>
-                        </div>
-                        <div>
-                          <div className="mb-1 text-[10px] font-semibold text-gray-600">Raw response</div>
-                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
-                            {lastLlmTranscript.rawResponse}
-                          </pre>
-                        </div>
-                      </div>
-                    )}
-                      <div className="mt-4 flex justify-end border-t border-gray-100 pt-3">
-                        <Dialog.Close asChild>
-                          <button
-                            type="button"
-                            className="rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-200"
-                          >
-                            Close
-                          </button>
-                        </Dialog.Close>
-                      </div>
-                    </Dialog.Content>
-                  </Dialog.Portal>
-                </Dialog.Root>
-                {lastLlmTranscript?.screenshotBase64 ? (
-                  <Dialog.Root open={aiPromptScreenshotZoomOpen} onOpenChange={setAiPromptScreenshotZoomOpen}>
-                    <Dialog.Portal>
-                      <Dialog.Overlay className="fixed inset-0 z-[110] bg-black/85" />
-                      <Dialog.Content className="fixed left-1/2 top-1/2 z-[111] flex max-h-[96vh] w-[min(98vw,1400px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-gray-700 bg-gray-950 p-0 shadow-2xl outline-none">
-                        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-gray-800 px-4 py-3">
-                          <Dialog.Title className="text-sm font-semibold text-gray-100">
-                            LLM screenshot — full resolution
-                          </Dialog.Title>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => copyLlmScreenshotToClipboard(lastLlmTranscript.screenshotBase64!)}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-100 hover:bg-gray-700"
-                            >
-                              <Copy size={14} className="opacity-90" aria-hidden />
-                              {screenshotCopyStatus === 'copied'
-                                ? 'Copied image'
-                                : screenshotCopyStatus === 'copiedText'
-                                  ? 'Copied base64 text'
-                                  : screenshotCopyStatus === 'error'
-                                    ? 'Copy failed'
-                                    : 'Copy image'}
-                            </button>
-                            <Dialog.Close asChild>
-                              <button
-                                type="button"
-                                className="rounded-md p-1.5 text-gray-400 hover:bg-gray-800 hover:text-gray-100"
-                                title="Close"
-                              >
-                                <X size={18} aria-hidden />
-                              </button>
-                            </Dialog.Close>
-                          </div>
-                        </div>
-                        <Dialog.Description className="sr-only">
-                          Full JPEG at native pixel dimensions. Scroll to see the entire image. Use Copy image to place it on
-                          the clipboard.
-                        </Dialog.Description>
-                        <p className="border-b border-gray-800 px-4 py-2 text-[10px] text-gray-500">
-                          If image copy is blocked by the browser, the same button falls back to copying raw base64 text.
-                        </p>
-                        <div className="min-h-0 flex-1 overflow-auto p-3">
-                          <img
-                            src={`data:image/jpeg;base64,${lastLlmTranscript.screenshotBase64}`}
-                            alt="Full page screenshot sent to the vision model"
-                            className="block w-max max-w-none h-auto"
-                            draggable={false}
-                          />
-                        </div>
-                      </Dialog.Content>
-                    </Dialog.Portal>
-                  </Dialog.Root>
-                ) : null}
-              </>
+              <AiPromptReviewModal
+                open={aiPromptLlmOpen}
+                onOpenChange={setAiPromptLlmOpen}
+                metadata={metadata}
+                trigger={
+                  <button
+                    type="button"
+                    title="View exact LLM prompt and response"
+                    className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg} border-0 p-0 font-inherit cursor-pointer hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/80 rounded-full`}
+                  >
+                    {originLabel}
+                  </button>
+                }
+              />
             ) : (
               <span className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
                 {originLabel}
