@@ -24,6 +24,16 @@ export function effectivePlaybackHighlightSequence(
   return seq;
 }
 
+/**
+ * Largest completed step sequence strictly before the effective "next" step, or `null` if there is
+ * no prior completed step to rewind to (e.g. still at the first step).
+ */
+export function previousPlayThroughTarget(completed: Set<number>, nextSequence: number): number | null {
+  const lower = [...completed].filter((s) => s < nextSequence);
+  if (lower.length === 0) return null;
+  return Math.max(...lower);
+}
+
 /** Map playback progress to per-step highlight for StepCard. */
 export function playbackToneForStep(
   sequence: number,

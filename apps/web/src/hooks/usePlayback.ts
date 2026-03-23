@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { Socket } from 'socket.io-client';
-import { runsApi, type StartPlaybackBody } from '@/lib/api';
+import { runsApi, playbackBodyFromSnapshot, type StartPlaybackBody } from '@/lib/api';
+import { effectivePlaybackHighlightSequence, previousPlayThroughTarget } from '@/lib/playbackStepTone';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 
 export type PlaybackProgressPhase = 'before' | 'after' | 'error' | 'skipped';
@@ -39,6 +40,8 @@ export interface UsePlaybackReturn {
   resumePlayback: () => Promise<void>;
   /** Paused only: run one step then pause again */
   advancePlaybackOne: () => Promise<void>;
+  /** Paused only: rewind by restarting and stopping after the prior completed step */
+  advancePlaybackPrevious: (recordedSteps: { sequence: number }[]) => Promise<void>;
   /** Paused only: run until step sequence completes, then pause */
   advancePlaybackTo: (stopAfterSequence: number) => Promise<void>;
   /** Stop and start a new session with the same options */
@@ -249,6 +252,47 @@ export function usePlayback(): UsePlaybackReturn {
     }
   }, [playbackSessionId]);
 
+  const advancePlaybackPrevious = useCallback(
+    async (recordedSteps: { sequence: number }[]) => {
+      const id = playbackSessionId;
+      if (!id || !isPaused || recordedSteps.length === 0) return;
+      const nextSeq = effectivePlaybackHighlightSequence(highlightSequence, completedSequences, recordedSteps);
+      if (nextSeq == null) return;
+      const target = previousPlayThroughTarget(completedSequences, nextSeq);
+      if (target == null) return;
+      setPlaybackError(null);
+      try {
+        const snap = await runsApi.getPlaybackSession(id);
+        disconnectSocket(socketRef, id);
+        activeSessionRef.current = null;
+        await runsApi.stopPlayback(id);
+        const body: StartPlaybackBody = {
+          ...playbackBodyFromSnapshot(snap),
+          playThroughSequence: target,
+        };
+        const result = await runsApi.startPlayback(snap.sourceRunId, body);
+        setPlaybackSessionId(result.playbackSessionId);
+        setSourceRunId(result.sourceRunId);
+        setIsPlaying(true);
+        setIsPaused(false);
+        setStatus('playback');
+        setCompletedSequences(new Set());
+        setHighlightSequence(null);
+        setCurrentFrame(null);
+        bindSocket(result.playbackSessionId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setPlaybackError(msg);
+        setIsPlaying(false);
+        setIsPaused(false);
+        setStatus('idle');
+        setPlaybackSessionId(null);
+        setSourceRunId(null);
+      }
+    },
+    [playbackSessionId, isPaused, highlightSequence, completedSequences, bindSocket],
+  );
+
   const advancePlaybackTo = useCallback(async (stopAfterSequence: number) => {
     const id = playbackSessionId;
     if (!id) return;
@@ -311,6 +355,7 @@ export function usePlayback(): UsePlaybackReturn {
     pausePlayback,
     resumePlayback,
     advancePlaybackOne,
+    advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
   };

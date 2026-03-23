@@ -11,7 +11,11 @@ import {
 import { StepCard } from '@/components/ui/StepCard';
 import { useRecording } from '@/hooks/useRecording';
 import { usePlayback } from '@/hooks/usePlayback';
-import { effectivePlaybackHighlightSequence, playbackToneForStep } from '@/lib/playbackStepTone';
+import {
+  effectivePlaybackHighlightSequence,
+  playbackToneForStep,
+  previousPlayThroughTarget,
+} from '@/lib/playbackStepTone';
 import {
   canPauseOrStopPlaybackDuringClerkStep,
   getClerkAutoSignInStepSequence,
@@ -22,7 +26,7 @@ import {
 } from '@/hooks/useRemotePreviewCanvas';
 import {
   Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2, Pause,
-  RotateCcw, StepForward,
+  RotateCcw, StepForward, StepBack,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -93,6 +97,7 @@ export default function RunsPage() {
     pausePlayback,
     resumePlayback,
     advancePlaybackOne,
+    advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
   } = usePlayback();
@@ -164,6 +169,13 @@ export default function RunsPage() {
     () => effectivePlaybackHighlightSequence(highlightSequence, completedSequences, steps),
     [highlightSequence, completedSequences, steps],
   );
+
+  const canPlaybackPreviousStep = useMemo(() => {
+    if (!isPlaying || !isPaused || steps.length === 0) return false;
+    const nextSeq = effectivePlaybackHighlightSequence(highlightSequence, completedSequences, steps);
+    if (nextSeq == null) return false;
+    return previousPlayThroughTarget(completedSequences, nextSeq) != null;
+  }, [isPlaying, isPaused, highlightSequence, completedSequences, steps]);
 
   useEffect(() => {
     if (isPlaying || playbackSessionId != null) return;
@@ -479,11 +491,11 @@ export default function RunsPage() {
                 <button
                   type="button"
                   onClick={handleDetachPlaybackRuns}
-                  className="absolute top-3 right-3 z-[3] flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
+                  className="absolute top-3 right-3 z-[3] flex items-center justify-center p-2 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
                   title="Open playback in a new window"
+                  aria-label="Open playback in a new window"
                 >
-                  <ExternalLink size={12} />
-                  Detach
+                  <ExternalLink size={12} aria-hidden />
                 </button>
               )}
             </div>
@@ -615,6 +627,16 @@ export default function RunsPage() {
                     >
                       <StepForward size={11} />
                       Next step
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canPlaybackPreviousStep}
+                      onClick={() => void advancePlaybackPrevious(steps)}
+                      className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Replay from the start and pause after the previous completed step"
+                    >
+                      <StepBack size={11} />
+                      Previous step
                     </button>
                     <input
                       type="number"

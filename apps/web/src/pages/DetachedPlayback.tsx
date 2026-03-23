@@ -8,7 +8,8 @@ import {
   canPauseOrStopPlaybackDuringClerkStep,
   getClerkAutoSignInStepSequence,
 } from '@/lib/clerkAutoSignInStep';
-import { Pause, Play, RotateCcw, Square, StepForward } from 'lucide-react';
+import { Pause, Play, RotateCcw, Square, StepBack, StepForward } from 'lucide-react';
+import { effectivePlaybackHighlightSequence, previousPlayThroughTarget } from '@/lib/playbackStepTone';
 
 type ReplaySnapshot = {
   sourceRunId: string;
@@ -249,6 +250,42 @@ export default function DetachedPlayback() {
     void runsApi.advancePlaybackOne(playbackSessionId);
   };
 
+  const canDetachedPreviousStep = useMemo(() => {
+    if (!isPaused || replayBusy || !sourceSteps?.length) return false;
+    const steps = sourceSteps as { sequence: number }[];
+    const nextSeq = effectivePlaybackHighlightSequence(activeStepSequence, completedSequences, steps);
+    if (nextSeq == null) return false;
+    return previousPlayThroughTarget(completedSequences, nextSeq) != null;
+  }, [isPaused, replayBusy, sourceSteps, activeStepSequence, completedSequences]);
+
+  const handlePreviousStep = async () => {
+    if (!playbackSessionId || !sourceSteps?.length || replayBusy) return;
+    const steps = sourceSteps as { sequence: number }[];
+    const nextSeq = effectivePlaybackHighlightSequence(activeStepSequence, completedSequences, steps);
+    if (nextSeq == null) return;
+    const target = previousPlayThroughTarget(completedSequences, nextSeq);
+    if (target == null) return;
+    setReplayBusy(true);
+    try {
+      const snap = await runsApi.getPlaybackSession(playbackSessionId);
+      await runsApi.stopPlayback(playbackSessionId);
+      const next = await runsApi.startPlayback(snap.sourceRunId, {
+        ...playbackBodyFromSnapshot(snap),
+        playThroughSequence: target,
+      });
+      setPlaybackSessionId(next.playbackSessionId);
+      setCompletedSequences(new Set());
+      setActiveStepSequence(null);
+      navigate(`/playback/${next.playbackSessionId}?source=${encodeURIComponent(snap.sourceRunId)}`, {
+        replace: true,
+      });
+    } catch {
+      /* ignore */
+    } finally {
+      setReplayBusy(false);
+    }
+  };
+
   const handleAdvanceTo = () => {
     if (!playbackSessionId) return;
     const n = Number.parseInt(advanceToSeq.trim(), 10);
@@ -364,6 +401,16 @@ export default function DetachedPlayback() {
               >
                 <StepForward size={12} />
                 Next step
+              </button>
+              <button
+                type="button"
+                disabled={!canDetachedPreviousStep}
+                onClick={() => void handlePreviousStep()}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Replay from the start and pause after the previous completed step"
+              >
+                <StepBack size={12} />
+                Previous step
               </button>
               <button
                 type="button"

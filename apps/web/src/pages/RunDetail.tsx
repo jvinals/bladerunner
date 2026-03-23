@@ -11,7 +11,11 @@ import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
-import { effectivePlaybackHighlightSequence, playbackToneForStep } from '@/lib/playbackStepTone';
+import {
+  effectivePlaybackHighlightSequence,
+  playbackToneForStep,
+  previousPlayThroughTarget,
+} from '@/lib/playbackStepTone';
 import {
   canPauseOrStopPlaybackDuringClerkStep,
   getClerkAutoSignInStepSequence,
@@ -20,7 +24,7 @@ import { formatDuration, formatRelativeTime } from '@/lib/utils';
 import {
   ArrowLeft, Monitor, Smartphone, Globe,
   Play, Square, ExternalLink,
-  Film, Pause, RotateCcw, StepForward, X, PanelRight,
+  Film, Pause, RotateCcw, StepForward, StepBack, X, PanelRight,
   Columns2, Rows,
 } from 'lucide-react';
 
@@ -534,6 +538,7 @@ export default function RunDetailPage() {
     pausePlayback,
     resumePlayback,
     advancePlaybackOne,
+    advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
   } = usePlayback();
@@ -614,6 +619,17 @@ export default function RunDetailPage() {
     () => effectivePlaybackHighlightSequence(highlightSequence, completedSequences, recordedSteps),
     [highlightSequence, completedSequences, recordedSteps],
   );
+
+  const canPlaybackPreviousStep = useMemo(() => {
+    if (!isPlaying || !isPaused || recordedSteps.length === 0) return false;
+    const nextSeq = effectivePlaybackHighlightSequence(
+      highlightSequence,
+      completedSequences,
+      recordedSteps,
+    );
+    if (nextSeq == null) return false;
+    return previousPlayThroughTarget(completedSequences, nextSeq) != null;
+  }, [isPlaying, isPaused, highlightSequence, completedSequences, recordedSteps]);
 
   const handleStepPlayback = useCallback(
     async (sequence: number, mode: 'from' | 'only') => {
@@ -938,6 +954,16 @@ export default function RunDetailPage() {
                 <StepForward size={11} />
                 Next step
               </button>
+              <button
+                type="button"
+                disabled={!isPlaying || !isPaused || !canPlaybackPreviousStep}
+                onClick={() => void advancePlaybackPrevious(recordedSteps)}
+                className="flex shrink-0 items-center gap-1 px-2 py-1.5 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Replay from the start and pause after the previous completed step"
+              >
+                <StepBack size={11} />
+                Previous step
+              </button>
               <span className="shrink-0 text-[10px] text-gray-400 pl-0.5">Run to seq</span>
               <input
                 id="playback-advance-to-seq"
@@ -965,9 +991,11 @@ export default function RunDetailPage() {
                 type="button"
                 disabled={!playbackSessionId}
                 onClick={handleDetachPlayback}
-                className="flex shrink-0 items-center gap-1 px-2 py-1.5 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Detach preview"
+                aria-label="Detach preview"
+                className="flex shrink-0 items-center justify-center px-2 py-1.5 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <ExternalLink size={12} /> Detach preview
+                <ExternalLink size={12} aria-hidden />
               </button>
             </div>
           </div>
