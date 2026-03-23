@@ -48,7 +48,7 @@ export class LlmModule implements OnModuleInit {
 
     const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
     const geminiModel =
-      this.configService.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-2.0-flash';
+      this.configService.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
     if (geminiKey?.trim()) {
       this.logger.log(`Gemini Playwright instruction path: enabled (GEMINI_INSTRUCTION_MODEL=${geminiModel})`);
     } else {

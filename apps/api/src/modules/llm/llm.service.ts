@@ -176,7 +176,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
 
     const model =
-      this.configService?.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-2.0-flash';
+      this.configService?.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
 
     const userPrompt = buildGeminiInstructionPrompt(input.instruction);
     const { rawText, playwrightCode } = await generateGeminiPlaywrightSnippet({

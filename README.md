@@ -78,7 +78,7 @@ cd apps/api && pnpm exec prisma migrate deploy
 ### LLM (AI prompt / instruct Playwright codegen)
 
 - **`GEMINI_API_KEY`** (required for AI prompt and instruct flows) — Google **Gemini** API key. Playwright snippets are generated only via Gemini using the server-side vision template. Create a key in [Google AI Studio](https://aistudio.google.com/).
-- **`GEMINI_INSTRUCTION_MODEL`** (optional) — Defaults to **`gemini-2.0-flash`**. For **Gemini 3 Flash Preview** or another model, set the exact model id from AI Studio (e.g. a `*-preview` id).
+- **`GEMINI_INSTRUCTION_MODEL`** (optional) — Defaults to **`gemini-3-flash-preview`**. Override with any model id from [Google AI Studio](https://aistudio.google.com/) if needed.
 
 Skip-replay suggestions and AI prompt **failure explanations** still use **`LLM_PROVIDER`** with **`OPENAI_API_KEY`** or **`ANTHROPIC_API_KEY`**.
 
@@ -240,6 +240,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.1** — **LLM**: Default **`GEMINI_INSTRUCTION_MODEL`** is **`gemini-3-flash-preview`** (was **`gemini-2.0-flash`**). **`@bladerunner/api` `0.6.1`**.
 - **0.10.0** — **LLM / AI prompt**: Playwright codegen for **`instructionToAction`** (instruct + AI prompt steps) uses **Google Gemini** only via **`@google/generative-ai`**, fixed vision prompt template, **JPEG** required. Env: **`GEMINI_API_KEY`**, optional **`GEMINI_INSTRUCTION_MODEL`** (default **`gemini-2.0-flash`**). OpenAI/Anthropic remain for skip suggestions and failure-explain. **`@bladerunner/api` `0.6.0`**.
 - **0.9.0** — **Runs / AI prompt drawer**: **Save prompt**, **Test**, and **Reset** at the top; below that, five panels — **(1)** viewport JPEG, **(2)** prompt sent to the LLM, **(3)** model thinking + raw output, **(4)** suggested prompt (placeholder / failure explainer), **(5)** Playwright code. Socket **`aiPromptTestProgress`** carries **`promptSent`**, **`fullUserPrompt`**, **`rawResponse`**, **`playwrightCode`**, **`suggestedPrompt`** (on error). Progress is kept until the next Test (no auto-clear on completion). **`@bladerunner/api` `0.5.65`**, **`@bladerunner/web` `0.7.0`**.
 - **0.8.9** — **Runs**: **Purge** (remove all **Skip replay** steps) at the **top of the steps column**, matching Run detail. Disabled while **recording** (API requires recording to finish first). **`@bladerunner/web` `0.6.75`**.
