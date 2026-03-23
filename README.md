@@ -230,6 +230,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.82** — **AI prompt steps**: **`playAiPromptStepOnPage`** uses **120s** default action/navigation timeout during generated **Playwright** (avoids **30s** false timeouts); **debug NDJSON** timing logs for LLM vs exec. **`@bladerunner/api` `0.5.45`**.
 - **0.7.81** — **Playback Prev**: **Previous step** rewind resets **`skipUntilSequence`** so prefix steps are not stuck skipped; **`playThroughSequence`** now **pauses** after the target step (server **`pauseAfterSequenceInclusive`**). **`@bladerunner/api` `0.5.44`**, **`@bladerunner/web` `0.6.61`**.
 - **0.7.80** — **Skip replay suggestions**: After **add/edit step** (instruct, re-record, or **StepCard** save), **LLM** suggests forward steps for **Skip replay**; **modal** to confirm **bulk skip** (**`POST .../suggest-skip-after-change`**, **`POST .../bulk-skip-replay`**). **`PATCH`** skip allowed during **`RECORDING`**. **`@bladerunner/api` `0.5.43`**, **`@bladerunner/web` `0.6.60`**.
 - **0.7.79** — **Run detail**: **Purge** button removes all **Skip replay** steps from the DB (**`POST /runs/:id/steps/purge-skipped`**); remaining steps **renumbered**, checkpoints **remapped**. **`@bladerunner/api` `0.5.42`**, **`@bladerunner/web` `0.6.59`**.
