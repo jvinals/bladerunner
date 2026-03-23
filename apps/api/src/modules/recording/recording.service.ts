@@ -1217,11 +1217,14 @@ export class RecordingService extends EventEmitter {
     stepId: string,
     message: string,
     phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled',
-    extras?: { thinking?: string },
+    extras?: { thinking?: string; screenshotBase64?: string },
   ): void {
     const payload: Record<string, unknown> = { runId, stepId, message, phase };
     if (extras?.thinking?.trim()) {
       payload.thinking = extras.thinking.trim();
+    }
+    if (extras?.screenshotBase64?.trim()) {
+      payload.screenshotBase64 = extras.screenshotBase64.trim();
     }
     this.emit('aiPromptTestProgress', runId, payload);
     for (const s of this.playbackSessions.values()) {
@@ -1511,6 +1514,9 @@ export class RecordingService extends EventEmitter {
         progress.stepId,
         'Calling vision model (this may take a minute)…',
         'llm',
+        screenshotBase64?.trim()
+          ? { screenshotBase64: screenshotBase64.trim() }
+          : undefined,
       );
     }
     this.throwIfAborted(signal);

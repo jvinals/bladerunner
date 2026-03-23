@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
+import { LlmVisionScreenshotPreview } from '@/components/ui/LlmVisionScreenshotPreview';
 import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
 import { useRecording } from '@/hooks/useRecording';
 import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
@@ -466,6 +467,7 @@ export default function RunsPage() {
         setAiStepError('Prompt is required');
         return false;
       }
+      clearAiPromptTestProgress();
       const ac = new AbortController();
       aiStepAbortRef.current = ac;
       setAiStepBusy(true);
@@ -509,7 +511,7 @@ export default function RunsPage() {
         setAiStepBusy(false);
       }
     },
-    [runId, aiStepCreatedId, aiStepPrompt, loadRunSteps, queryClient],
+    [runId, aiStepCreatedId, aiStepPrompt, loadRunSteps, queryClient, clearAiPromptTestProgress],
   );
 
   const openAiStepModal = useCallback(async () => {
@@ -592,6 +594,7 @@ export default function RunsPage() {
     if (!next) return;
     const ac = new AbortController();
     aiStepAbortRef.current = ac;
+    clearAiPromptTestProgress();
     setAiStepBusy(true);
     setAiStepError(null);
     try {
@@ -625,7 +628,7 @@ export default function RunsPage() {
       aiStepAbortRef.current = null;
       setAiStepBusy(false);
     }
-  }, [runId, aiStepCreatedId, aiStepFailure, aiStepBusy, loadRunSteps, queryClient]);
+  }, [runId, aiStepCreatedId, aiStepFailure, aiStepBusy, loadRunSteps, queryClient, clearAiPromptTestProgress]);
 
   const handleAiStepReset = useCallback(async () => {
     if (!runId || !aiStepCreatedId || aiStepBusy) return;
@@ -646,6 +649,7 @@ export default function RunsPage() {
     return {
       message: aiPromptTestProgress.message,
       thinking: aiPromptTestProgress.thinking,
+      screenshotBase64: aiPromptTestProgress.screenshotBase64,
     };
   }, [aiPromptTestProgress, aiStepCreatedId, runId]);
 
@@ -1464,6 +1468,16 @@ export default function RunsPage() {
                   >
                     Cancel
                   </button>
+                </div>
+              ) : null}
+              {aiStepBusy && aiPromptProgressBlock?.screenshotBase64 ? (
+                <div className="mt-2 space-y-1">
+                  <p className="text-[10px] font-medium text-gray-600">Viewport sent to the vision model (JPEG)</p>
+                  <p className="text-[9px] text-gray-500 leading-snug">Same image the API attaches for analysis — click to enlarge.</p>
+                  <LlmVisionScreenshotPreview
+                    b64={aiPromptProgressBlock.screenshotBase64}
+                    modalTitle="Vision input — full resolution"
+                  />
                 </div>
               ) : null}
               {aiStepError && !aiStepFailure ? (

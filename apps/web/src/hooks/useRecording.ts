@@ -42,6 +42,8 @@ export type AiPromptTestProgressPayload = {
   phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled';
   /** Model reasoning / chain-of-thought when the API returns it (AI prompt test). */
   thinking?: string;
+  /** JPEG base64 sent to the vision model (AI prompt test), after capture. */
+  screenshotBase64?: string;
 };
 
 interface UseRecordingReturn {
@@ -175,10 +177,30 @@ export function useRecording(): UseRecordingReturn {
       const message = typeof payload.message === 'string' ? payload.message : '';
       const phase = payload.phase as AiPromptTestProgressPayload['phase'];
       if (!stepId || !message) return;
-      const thinking =
-        typeof payload.thinking === 'string' && payload.thinking.trim() ? payload.thinking.trim() : undefined;
-      const normalized: AiPromptTestProgressPayload = { runId, stepId, message, phase, ...(thinking ? { thinking } : {}) };
-      setAiPromptTestProgress(normalized);
+      setAiPromptTestProgress((prev) => {
+        const sameStep = prev?.runId === runId && prev?.stepId === stepId;
+        const thinkingRaw = typeof payload.thinking === 'string' ? payload.thinking.trim() : '';
+        const thinking = thinkingRaw
+          ? thinkingRaw
+          : sameStep && prev?.thinking
+            ? prev.thinking
+            : undefined;
+        const shotRaw = typeof payload.screenshotBase64 === 'string' ? payload.screenshotBase64.trim() : '';
+        const screenshotBase64 = shotRaw
+          ? shotRaw
+          : sameStep && prev?.screenshotBase64
+            ? prev.screenshotBase64
+            : undefined;
+        const normalized: AiPromptTestProgressPayload = {
+          runId,
+          stepId,
+          message,
+          phase,
+          ...(thinking ? { thinking } : {}),
+          ...(screenshotBase64 ? { screenshotBase64 } : {}),
+        };
+        return normalized;
+      });
       if (phase === 'done' || phase === 'error' || phase === 'cancelled') {
         window.setTimeout(() => setAiPromptTestProgress(null), 400);
       }
