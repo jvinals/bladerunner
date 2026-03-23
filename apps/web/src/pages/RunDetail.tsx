@@ -9,6 +9,8 @@ import {
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
+import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
+import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
 import { usePlayback } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
 import {
@@ -510,6 +512,15 @@ function SessionRecordingModal({
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const {
+    skipReplayModalOpen,
+    skipReplayAnchorStepId,
+    skipReplaySuggestions,
+    skipReplayBusy,
+    promptAfterStepChange,
+    dismissSkipReplayModal,
+    confirmSkipReplaySuggestions,
+  } = useSkipReplayAfterStepChange({ runId: id, queryClient });
   const [sessionRecordingModalOpen, setSessionRecordingModalOpen] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(false);
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
@@ -634,7 +645,7 @@ export default function RunDetailPage() {
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
 
   const runStatus = (run as { status?: string } | undefined)?.status;
-  const canEditPlaybackExclusion = runStatus != null && runStatus !== 'RECORDING' && !!id;
+  const canEditPlaybackExclusion = runStatus != null && !!id;
 
   const handleTogglePlaybackExclusion = useCallback(
     async (stepId: string, next: boolean) => {
@@ -1279,6 +1290,7 @@ export default function RunDetailPage() {
                               }
                             : undefined
                         }
+                        onStepMutationSuccess={promptAfterStepChange}
                       />
                     </div>
                   );
@@ -1370,6 +1382,7 @@ export default function RunDetailPage() {
                               }
                             : undefined
                         }
+                        onStepMutationSuccess={promptAfterStepChange}
                       />
                     </div>
                   );
@@ -1453,6 +1466,20 @@ export default function RunDetailPage() {
           runId={r.id}
         />
       )}
+
+      <SkipReplaySuggestionsModal
+        open={skipReplayModalOpen}
+        anchorStepId={skipReplayAnchorStepId}
+        suggestions={skipReplaySuggestions}
+        stepsForLookup={recordedSteps.map((s) => ({
+          id: s.id,
+          sequence: s.sequence,
+          instruction: s.instruction,
+        }))}
+        busy={skipReplayBusy}
+        onConfirm={() => void confirmSkipReplaySuggestions()}
+        onDismiss={dismissSkipReplayModal}
+      />
     </div>
   );
 }

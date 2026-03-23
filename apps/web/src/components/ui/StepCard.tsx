@@ -51,6 +51,8 @@ interface StepCardProps {
     canTestLive: boolean;
     onUpdated: () => void;
   };
+  /** After a successful instruction / AI mode save for this step (e.g. skip-replay suggestions). */
+  onStepMutationSuccess?: (stepId: string) => void;
   /** When set, show a small “after step” checkpoint thumbnail on the right (no extra row). */
   checkpointAfterStep?: CheckpointData;
   /** Required with `checkpointAfterStep` to load the thumbnail */
@@ -150,6 +152,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
     checkpointAfterStep,
     checkpointRunId,
     playbackExclusion,
+    onStepMutationSuccess,
   },
   ref,
 ) {
@@ -357,6 +360,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                           })
                           .then(() => {
                             aiPromptStep.onUpdated();
+                            onStepMutationSuccess?.(aiPromptStep.stepId);
                           })
                           .catch((e) => {
                             setAiError(e instanceof Error ? e.message : String(e));
@@ -405,6 +409,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                           .then(() => {
                             setShowEnableAi(false);
                             aiPromptStep.onUpdated();
+                            onStepMutationSuccess?.(aiPromptStep.stepId);
                           })
                           .catch((e) => {
                             setAiError(e instanceof Error ? e.message : String(e));
@@ -456,6 +461,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                               .then(() => {
                                 setShowEnableAi(false);
                                 aiPromptStep.onUpdated();
+                                onStepMutationSuccess?.(aiPromptStep.stepId);
                               })
                               .catch((e) => {
                                 setAiError(e instanceof Error ? e.message : String(e));

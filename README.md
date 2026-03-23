@@ -120,7 +120,9 @@ docker compose up
 | GET    | /agents             | List registered agents       |
 | POST   | /runs/:id/steps/:stepId/re-record | Re-capture one step by instruction (active recording) |
 | POST   | /runs/:id/steps/purge-skipped | Permanently **delete** all steps with **`excludedFromPlayback`** (Skip replay); **renumbers** remaining steps and **remaps** checkpoints (not while `RECORDING`). |
-| PATCH  | /runs/:id/steps/:stepId | Update **instruction**; set **`aiPromptMode: true`** with **instruction** to store an **AI prompt step** (`StepOrigin.AI_PROMPT`, **`metadata.kind: ai_prompt_step`**) — playback uses **LLM + screenshot + a11y tree** on the live page each time (not fixed stored codegen). **`aiPromptMode: false`** reverts to manual. **`excludedFromPlayback: true`** marks the step **skipped** (not executed) on replay; **`false`** clears it (not while `RECORDING`). |
+| POST   | /runs/:id/steps/suggest-skip-after-change | Body **`anchorStepId`** — LLM suggests **forward** steps (not already skipped) to mark **Skip replay**; returns **`{ suggestions: { stepId, reason }[] }`**. Empty when no provider or nothing to suggest. |
+| POST   | /runs/:id/steps/bulk-skip-replay | Body **`anchorStepId`**, **`stepIds`** — sets **`excludedFromPlayback: true`** for those steps **after** the anchor sequence (already skipped rows unchanged). |
+| PATCH  | /runs/:id/steps/:stepId | Update **instruction**; set **`aiPromptMode: true`** with **instruction** to store an **AI prompt step** (`StepOrigin.AI_PROMPT`, **`metadata.kind: ai_prompt_step`**) — playback uses **LLM + screenshot + a11y tree** on the live page each time (not fixed stored codegen). **`aiPromptMode: false`** reverts to manual. **`excludedFromPlayback`** toggles **Skip replay** (allowed during **`RECORDING`** or completed runs). |
 | POST   | /runs/:id/steps/:stepId/test-ai-step | **Test step**: run the same LLM path once on the **active recording** or **playback** browser (requires a session). |
 | GET    | /runs/:id/checkpoints | List **app state checkpoints** (after-step browser storage + metadata) for a run |
 | POST   | /runs/:id/playback/start | Start live playback; body may include **`skipUntilSequence`**, **`playThroughSequence`** (stop after that step), **`skipStepIds`**, Clerk options |
@@ -228,6 +230,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.80** — **Skip replay suggestions**: After **add/edit step** (instruct, re-record, or **StepCard** save), **LLM** suggests forward steps for **Skip replay**; **modal** to confirm **bulk skip** (**`POST .../suggest-skip-after-change`**, **`POST .../bulk-skip-replay`**). **`PATCH`** skip allowed during **`RECORDING`**. **`@bladerunner/api` `0.5.43`**, **`@bladerunner/web` `0.6.60`**.
 - **0.7.79** — **Run detail**: **Purge** button removes all **Skip replay** steps from the DB (**`POST /runs/:id/steps/purge-skipped`**); remaining steps **renumbered**, checkpoints **remapped**. **`@bladerunner/api` `0.5.42`**, **`@bladerunner/web` `0.6.59`**.
 - **0.7.78** — **Steps**: **Skip replay** checkbox on each step (completed runs); **`run_steps.excluded_from_playback`** — playback **skips** those steps (rows stay for audit). **`PATCH /runs/:id/steps/:stepId`** body **`excludedFromPlayback`**. **`@bladerunner/api` `0.5.41`**, **`@bladerunner/web` `0.6.57`**, **`@bladerunner/types` `0.2.2`**.
 - **0.7.77** — **LLM / AI prompt steps**: **`instructionToAction`** system prompt now requires **ISO `YYYY-MM-DD`** for **`input[type="date"]`** fills (avoids Playwright **Malformed value** on slash dates like `01/01/1980`). **`@bladerunner/api` `0.5.40`**.

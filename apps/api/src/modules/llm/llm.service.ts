@@ -43,6 +43,44 @@ Guidelines:
 - Handle waiting implicitly (Playwright auto-waits)
 - Only generate safe Playwright API calls (no eval, no fs, no network)`;
 
+const SUGGEST_SKIP_AFTER_CHANGE_SYSTEM = `You analyze a test run's steps after the user changed one step (the "anchor" step).
+The user may have re-recorded or replaced behavior so that some *later* steps are now redundant, wrong, or would replay obsolete UI paths.
+
+You are given:
+- The anchor step (sequence, action, instruction, origin) — this is what was just added or edited.
+- Forward steps: only steps that come *after* the anchor in sequence order and are not already marked "skip replay". Each has id, sequence, action, instruction, origin.
+
+Task: Identify which forward steps should be marked **Skip replay** (excluded from automated playback) because they are likely irrelevant or harmful after the anchor change. Prefer marking steps that duplicate work, target removed UI, or would execute stale automation.
+
+Rules:
+- Only suggest steps that appear in the forward list; use the exact \`id\` values provided.
+- Do **not** suggest steps that are still clearly needed for the scenario.
+- If none qualify, return an empty suggestions array.
+- Respond ONLY with valid JSON:
+{ "suggestions": [ { "stepId": "<uuid from forward list>", "reason": "<short reason>" } ] }`;
+
+export type SuggestSkipAnchorInput = {
+  sequence: number;
+  instruction: string;
+  action: string;
+  origin: string;
+};
+
+export type SuggestSkipForwardStepInput = {
+  id: string;
+  sequence: number;
+  instruction: string;
+  action: string;
+  origin: string;
+};
+
+function parseJsonFromLlmText(raw: string): unknown {
+  const t = raw.trim();
+  const fence = /^```(?:json)?\s*\n?([\s\S]*?)```\s*$/m.exec(t);
+  const payload = fence ? fence[1].trim() : t;
+  return JSON.parse(payload);
+}
+
 @Injectable()
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
@@ -119,5 +157,66 @@ ${input.pageAccessibilityTree.slice(0, 4000)}`;
     );
 
     return JSON.parse(response);
+  }
+
+  /**
+   * Suggests forward steps to mark "skip replay" after the anchor step was added or edited.
+   * Returns empty suggestions when no LLM provider is configured.
+   */
+  async suggestStepsToSkipAfterChange(input: {
+    anchor: SuggestSkipAnchorInput;
+    forwardSteps: SuggestSkipForwardStepInput[];
+  }): Promise<{ suggestions: Array<{ stepId: string; reason: string }> }> {
+    if (!this.provider) {
+      this.logger.warn('suggestStepsToSkipAfterChange: LLM provider not configured');
+      return { suggestions: [] };
+    }
+
+    if (input.forwardSteps.length === 0) {
+      return { suggestions: [] };
+    }
+
+    const userPayload = JSON.stringify(
+      {
+        anchor: input.anchor,
+        forwardSteps: input.forwardSteps,
+      },
+      null,
+      2,
+    );
+
+    const response = await this.provider.chat([
+      { role: 'system', content: SUGGEST_SKIP_AFTER_CHANGE_SYSTEM },
+      { role: 'user', content: userPayload },
+    ]);
+
+    let parsed: unknown;
+    try {
+      parsed = parseJsonFromLlmText(response);
+    } catch (err) {
+      this.logger.error('suggestStepsToSkipAfterChange: invalid JSON', err);
+      return { suggestions: [] };
+    }
+
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('suggestions' in parsed) ||
+      !Array.isArray((parsed as { suggestions: unknown }).suggestions)
+    ) {
+      return { suggestions: [] };
+    }
+
+    const out: Array<{ stepId: string; reason: string }> = [];
+    for (const item of (parsed as { suggestions: unknown[] }).suggestions) {
+      if (typeof item !== 'object' || item === null) continue;
+      const stepId = (item as { stepId?: unknown }).stepId;
+      const reason = (item as { reason?: unknown }).reason;
+      if (typeof stepId !== 'string' || typeof reason !== 'string' || !stepId.trim() || !reason.trim()) {
+        continue;
+      }
+      out.push({ stepId: stepId.trim(), reason: reason.trim() });
+    }
+    return { suggestions: out };
   }
 }

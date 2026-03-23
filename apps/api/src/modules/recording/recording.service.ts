@@ -712,16 +712,6 @@ export class RecordingService extends EventEmitter {
       dto.instruction === undefined &&
       dto.aiPromptMode === undefined
     ) {
-      const run = await this.prisma.run.findFirst({
-        where: { id: runId, userId },
-        select: { status: true },
-      });
-      if (!run) {
-        throw new NotFoundException('Run not found');
-      }
-      if (run.status === 'RECORDING') {
-        throw new BadRequestException('Finish recording before marking steps to skip in playback');
-      }
       return this.prisma.runStep.update({
         where: { id: stepId },
         data: { excludedFromPlayback: dto.excludedFromPlayback },
@@ -768,18 +758,6 @@ export class RecordingService extends EventEmitter {
       if (!t) {
         throw new BadRequestException('instruction cannot be empty');
       }
-      if (dto.excludedFromPlayback !== undefined) {
-        const run = await this.prisma.run.findFirst({
-          where: { id: runId, userId },
-          select: { status: true },
-        });
-        if (!run) {
-          throw new NotFoundException('Run not found');
-        }
-        if (run.status === 'RECORDING') {
-          throw new BadRequestException('Finish recording before marking steps to skip in playback');
-        }
-      }
       return this.prisma.runStep.update({
         where: { id: stepId },
         data: {
@@ -790,6 +768,113 @@ export class RecordingService extends EventEmitter {
     }
 
     throw new BadRequestException('Provide instruction and/or aiPromptMode, or excludedFromPlayback alone');
+  }
+
+  /**
+   * After the user added or edited `anchorStepId`, ask the LLM which forward steps should be marked skip replay.
+   */
+  async suggestSkipReplayAfterChange(
+    runId: string,
+    userId: string,
+    anchorStepId: string,
+  ): Promise<{ suggestions: Array<{ stepId: string; reason: string }> }> {
+    const anchor = await this.prisma.runStep.findFirst({
+      where: { id: anchorStepId, runId, userId },
+      select: {
+        id: true,
+        sequence: true,
+        instruction: true,
+        action: true,
+        origin: true,
+      },
+    });
+    if (!anchor) {
+      throw new NotFoundException('Step not found');
+    }
+
+    const forward = await this.prisma.runStep.findMany({
+      where: {
+        runId,
+        userId,
+        sequence: { gt: anchor.sequence },
+        excludedFromPlayback: false,
+      },
+      orderBy: { sequence: 'asc' },
+      select: {
+        id: true,
+        sequence: true,
+        instruction: true,
+        action: true,
+        origin: true,
+      },
+    });
+
+    if (forward.length === 0) {
+      return { suggestions: [] };
+    }
+
+    const llm = await this.llmService.suggestStepsToSkipAfterChange({
+      anchor: {
+        sequence: anchor.sequence,
+        instruction: anchor.instruction,
+        action: anchor.action,
+        origin: anchor.origin,
+      },
+      forwardSteps: forward.map((s) => ({
+        id: s.id,
+        sequence: s.sequence,
+        instruction: s.instruction,
+        action: s.action,
+        origin: s.origin,
+      })),
+    });
+
+    const allowed = new Set(forward.map((s) => s.id));
+    const suggestions: Array<{ stepId: string; reason: string }> = [];
+    for (const s of llm.suggestions) {
+      if (!allowed.has(s.stepId)) continue;
+      suggestions.push({ stepId: s.stepId, reason: s.reason });
+    }
+    return { suggestions };
+  }
+
+  /**
+   * Mark multiple steps as skip replay; only steps after `anchorStepId` and not already skipped are updated.
+   */
+  async bulkMarkSkipReplay(
+    runId: string,
+    userId: string,
+    anchorStepId: string,
+    stepIds: string[],
+  ): Promise<{ updated: number }> {
+    const anchor = await this.prisma.runStep.findFirst({
+      where: { id: anchorStepId, runId, userId },
+      select: { sequence: true },
+    });
+    if (!anchor) {
+      throw new NotFoundException('Anchor step not found');
+    }
+    const unique = [...new Set(stepIds)].filter(Boolean);
+    if (unique.length === 0) {
+      return { updated: 0 };
+    }
+
+    const rows = await this.prisma.runStep.findMany({
+      where: { runId, userId, id: { in: unique } },
+      select: { id: true, sequence: true, excludedFromPlayback: true },
+    });
+    const okIds = rows
+      .filter((r) => r.sequence > anchor.sequence && !r.excludedFromPlayback)
+      .map((r) => r.id);
+    if (okIds.length === 0) {
+      return { updated: 0 };
+    }
+
+    const result = await this.prisma.runStep.updateMany({
+      where: { runId, userId, id: { in: okIds } },
+      data: { excludedFromPlayback: true },
+    });
+    return { updated: result.count };
   }
 
   /**

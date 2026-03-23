@@ -235,6 +235,18 @@ export const runsApi = {
   /** Permanently delete all steps marked skip replay; renumbers remaining steps. */
   purgeSkippedSteps: (runId: string) =>
     apiFetch<{ deleted: number }>(`/runs/${runId}/steps/purge-skipped`, { method: 'POST' }),
+  /** LLM: suggest forward steps to mark skip replay after a step add/edit. */
+  suggestSkipAfterChange: (runId: string, body: { anchorStepId: string }) =>
+    apiFetch<{ suggestions: Array<{ stepId: string; reason: string }> }>(
+      `/runs/${runId}/steps/suggest-skip-after-change`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  /** Mark multiple steps as skip replay (server validates vs anchor sequence). */
+  bulkSkipReplay: (runId: string, body: { anchorStepId: string; stepIds: string[] }) =>
+    apiFetch<{ updated: number }>(`/runs/${runId}/steps/bulk-skip-replay`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   startPlayback: (runId: string, opts?: StartPlaybackBody) =>
     apiFetch<{ playbackSessionId: string; sourceRunId: string }>(`/runs/${runId}/playback/start`, {
       method: 'POST',

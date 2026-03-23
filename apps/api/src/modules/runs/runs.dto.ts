@@ -167,12 +167,29 @@ export class PatchRunStepDto {
 
   @ApiPropertyOptional({
     description:
-      'When true, playback skips this step (still shown in the list). Cannot set while run is RECORDING.',
+      'When true, playback skips this step (still shown in the list). Allowed while recording or completed.',
   })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   excludedFromPlayback?: boolean;
+}
+
+export class SuggestSkipAfterChangeDto {
+  @ApiProperty({ description: 'The step that was just added or edited (anchor)' })
+  @IsString()
+  anchorStepId!: string;
+}
+
+export class BulkSkipReplayDto {
+  @ApiProperty({ description: 'Anchor step; only steps after this sequence can be marked' })
+  @IsString()
+  anchorStepId!: string;
+
+  @ApiProperty({ description: 'Step IDs to mark as skip replay', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  stepIds!: string[];
 }
 
 export class CreateRunDto {

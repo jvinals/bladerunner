@@ -34,6 +34,8 @@ import {
   ReRecordStepDto,
   PatchRunStepDto,
   RunQueryDto,
+  SuggestSkipAfterChangeDto,
+  BulkSkipReplayDto,
 } from './runs.dto';
 import { Observable, Subject } from 'rxjs';
 
@@ -236,6 +238,38 @@ export class RunsController {
   async purgeSkippedSteps(@Req() req: any, @Param('id') id: string) {
     const userId = req.user.sub;
     return this.recordingService.purgeSkippedSteps(id, userId);
+  }
+
+  @Post(':id/steps/suggest-skip-after-change')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'LLM: suggest forward steps to mark skip replay after a step add/edit',
+    description:
+      'Returns steps strictly after the anchor that are not already skipped. Empty when no LLM or nothing to suggest.',
+  })
+  @ApiResponse({ status: 200, description: '{ suggestions: { stepId, reason }[] }' })
+  async suggestSkipAfterChange(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: SuggestSkipAfterChangeDto,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.suggestSkipReplayAfterChange(id, userId, dto.anchorStepId);
+  }
+
+  @Post(':id/steps/bulk-skip-replay')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Mark multiple steps as skip replay (validated against anchor sequence)',
+  })
+  @ApiResponse({ status: 200, description: '{ updated: number }' })
+  async bulkSkipReplay(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: BulkSkipReplayDto,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.bulkMarkSkipReplay(id, userId, dto.anchorStepId, dto.stepIds);
   }
 
   @Patch(':id/steps/:stepId')

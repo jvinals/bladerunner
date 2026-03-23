@@ -9,7 +9,9 @@ import {
   type AutoClerkOtpUiMode,
 } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
+import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
 import { useRecording } from '@/hooks/useRecording';
+import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
 import { usePlayback } from '@/hooks/usePlayback';
 import {
   effectivePlaybackHighlightSequence,
@@ -146,6 +148,15 @@ export default function RunsPage() {
 
   const selectedRun = selectedRunId ? runs.find((r) => r.id === selectedRunId) : undefined;
   const effectiveRunId = isRecording ? runId : selectedRunId;
+  const {
+    skipReplayModalOpen,
+    skipReplayAnchorStepId,
+    skipReplaySuggestions,
+    skipReplayBusy,
+    promptAfterStepChange,
+    dismissSkipReplayModal,
+    confirmSkipReplaySuggestions,
+  } = useSkipReplayAfterStepChange({ runId: effectiveRunId ?? undefined, queryClient });
   const canPlaybackSelected =
     !!selectedRunId &&
     steps.length > 0 &&
@@ -328,11 +339,7 @@ export default function RunsPage() {
     ],
   );
 
-  const canEditPlaybackExclusionRuns =
-    !!effectiveRunId &&
-    !isRecording &&
-    selectedRun != null &&
-    selectedRun.status !== 'RECORDING';
+  const canEditPlaybackExclusionRuns = !!effectiveRunId;
 
   const handleTogglePlaybackExclusionRuns = useCallback(
     async (stepId: string, next: boolean) => {
@@ -384,21 +391,23 @@ export default function RunsPage() {
     if (!instructionText.trim() || isSendingInstruction) return;
     setIsSendingInstruction(true);
     try {
-      await sendInstruction(instructionText.trim());
+      const step = await sendInstruction(instructionText.trim());
       setInstructionText('');
+      if (step?.id) void promptAfterStepChange(step.id);
     } catch (err) {
       console.error('Instruction failed:', err);
     } finally {
       setIsSendingInstruction(false);
     }
-  }, [instructionText, isSendingInstruction, sendInstruction]);
+  }, [instructionText, isSendingInstruction, sendInstruction, promptAfterStepChange]);
 
   const handleReRecordStep = useCallback(
     async (stepId: string, instruction: string) => {
       setReRecordBusyStepId(stepId);
       setReRecordError(null);
       try {
-        await reRecordStep(stepId, instruction);
+        const step = await reRecordStep(stepId, instruction);
+        if (step?.id) void promptAfterStepChange(step.id);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setReRecordError(msg);
@@ -407,7 +416,7 @@ export default function RunsPage() {
         setReRecordBusyStepId(null);
       }
     },
-    [reRecordStep],
+    [reRecordStep, promptAfterStepChange],
   );
 
   const handleSelectRun = useCallback(async (id: string) => {
@@ -1094,6 +1103,7 @@ export default function RunsPage() {
                             }
                           : undefined
                       }
+                      onStepMutationSuccess={promptAfterStepChange}
                     />
                   </div>
                 );
@@ -1130,6 +1140,20 @@ export default function RunsPage() {
           </div>
         )}
       </div>
+
+      <SkipReplaySuggestionsModal
+        open={skipReplayModalOpen}
+        anchorStepId={skipReplayAnchorStepId}
+        suggestions={skipReplaySuggestions}
+        stepsForLookup={steps.map((s) => ({
+          id: s.id,
+          sequence: s.sequence,
+          instruction: s.instruction,
+        }))}
+        busy={skipReplayBusy}
+        onConfirm={() => void confirmSkipReplaySuggestions()}
+        onDismiss={dismissSkipReplayModal}
+      />
     </div>
   );
 }
