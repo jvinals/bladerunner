@@ -10,6 +10,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
+import type { BrowserContext } from 'playwright-core';
+
+/** Return type of `BrowserContext.storageState()` (cookies + origins / localStorage). */
+type SnapshotStorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -164,6 +168,8 @@ export class RecordingService extends EventEmitter {
   private readonly logger = new Logger(RecordingService.name);
   private sessions = new Map<string, RecordingSession>();
   private playbackSessions = new Map<string, PlaybackSession>();
+  /** Before each AI prompt Test: URL + `storageState` for Reset (key `${runId}:${stepId}`). */
+  private aiPromptPreTestSnapshots = new Map<string, { url: string; state: SnapshotStorageState }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -300,6 +306,7 @@ export class RecordingService extends EventEmitter {
     }
 
     this.sessions.delete(runId);
+    this.clearAiPromptSnapshotsForRun(runId);
 
     /** Staging file written by ffmpeg on the API host (same process as this service). */
     let rawVideoPath: string | null = null;
@@ -414,6 +421,7 @@ export class RecordingService extends EventEmitter {
       this.logger.warn(`abortRecordingForDeletion ${runId} browser.close:`, err);
     }
     this.sessions.delete(runId);
+    this.clearAiPromptSnapshotsForRun(runId);
     this.emit('status', runId, { status: 'cancelled', runId });
     this.logger.log(`Recording session aborted for delete: ${runId}`);
   }
@@ -977,11 +985,13 @@ export class RecordingService extends EventEmitter {
 
   /**
    * Ephemeral: run LLM + vision + codegen on the current recording or playback page (same as playback for AI prompt steps).
+   * Optional `instruction` overrides the stored step text for this run only (draft testing). Captures URL + `storageState` before running so `resetAiPromptTest` can undo.
    */
   async testAiPromptStep(
     runId: string,
     userId: string,
     stepId: string,
+    opts?: { instruction?: string },
   ): Promise<{ ok: boolean; playwrightCode?: string; error?: string }> {
     const step = await this.prisma.runStep.findFirst({
       where: { id: stepId, runId, userId },
@@ -1000,8 +1010,23 @@ export class RecordingService extends EventEmitter {
       );
     }
 
+    const instructionOverride = opts?.instruction?.trim();
+    const instructionToRun = (instructionOverride ?? step.instruction).trim();
+    if (!instructionToRun) {
+      throw new BadRequestException('instruction is empty');
+    }
+
     try {
-      const { playwrightCode } = await this.playAiPromptStepOnPage(page, step.instruction, {
+      let url = '';
+      try {
+        url = page.url();
+      } catch {
+        /* */
+      }
+      const state = await page.context().storageState();
+      this.aiPromptPreTestSnapshots.set(this.aiPromptSnapshotKey(runId, stepId), { url, state });
+
+      const { playwrightCode } = await this.playAiPromptStepOnPage(page, instructionToRun, {
         skipClickForce: false,
         persistTranscript: { stepId, runId, userId, source: 'test' },
       });
@@ -1063,6 +1088,198 @@ export class RecordingService extends EventEmitter {
       }
     }
     return null;
+  }
+
+  private aiPromptSnapshotKey(runId: string, stepId: string): string {
+    return `${runId}:${stepId}`;
+  }
+
+  private clearAiPromptSnapshotsForRun(runId: string): void {
+    const prefix = `${runId}:`;
+    for (const k of this.aiPromptPreTestSnapshots.keys()) {
+      if (k.startsWith(prefix)) {
+        this.aiPromptPreTestSnapshots.delete(k);
+      }
+    }
+  }
+
+  /**
+   * Append an AI prompt step during an active recording (no DOM capture). Emits `step` like other recorded steps.
+   */
+  async appendAiPromptStepDuringRecording(
+    runId: string,
+    userId: string,
+    dto: { instruction: string; excludedFromPlayback?: boolean },
+  ): Promise<RunStep> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('No active recording session for this run');
+    }
+    const instr = dto.instruction?.trim();
+    if (!instr) {
+      throw new BadRequestException('instruction is required');
+    }
+    session.stepSequence += 1;
+    const step = await this.prisma.runStep.create({
+      data: {
+        runId,
+        userId,
+        sequence: session.stepSequence,
+        action: 'CUSTOM',
+        selector: null,
+        value: null,
+        instruction: instr,
+        playwrightCode: aiPromptStepSentinelPlaywrightCode(),
+        origin: 'AI_PROMPT',
+        metadata: {
+          kind: AI_PROMPT_STEP_KIND,
+          schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+        } as Prisma.InputJsonValue,
+        excludedFromPlayback: dto.excludedFromPlayback ?? false,
+        timestamp: new Date(),
+      },
+    });
+    void this.persistCheckpointAfterStep(session, step).catch((err) => {
+      this.logger.warn(`Checkpoint after AI prompt step ${step.sequence}: ${err}`);
+    });
+    this.emit('step', runId, step);
+    return step;
+  }
+
+  /**
+   * Remove the most recently recorded step while recording (e.g. cancel an “Add AI step” draft). Renumbers are not needed — only the tail step is allowed.
+   */
+  async deleteLastRunStepDuringRecording(runId: string, userId: string, stepId: string): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('No active recording session for this run');
+    }
+    const step = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!step) {
+      throw new NotFoundException('Step not found');
+    }
+    if (step.sequence !== session.stepSequence) {
+      throw new BadRequestException('Only the last recorded step can be removed during recording');
+    }
+    await this.prisma.runCheckpoint.deleteMany({
+      where: { runId, userId, afterStepSequence: step.sequence },
+    });
+    await this.prisma.runStep.delete({ where: { id: stepId } });
+    session.stepSequence -= 1;
+    this.aiPromptPreTestSnapshots.delete(this.aiPromptSnapshotKey(runId, stepId));
+  }
+
+  /**
+   * Restore the live browser to the state captured immediately before the last `testAiPromptStep` for this step,
+   * or fall back to the checkpoint after the previous step (`afterStepSequence === sequence - 1`).
+   */
+  async resetAiPromptTest(runId: string, userId: string, stepId: string): Promise<{ ok: boolean }> {
+    const step = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!step) {
+      throw new NotFoundException('Step not found');
+    }
+    if (!isAiPromptStepMetadata(step.metadata) && step.origin !== 'AI_PROMPT') {
+      throw new BadRequestException('Step is not an AI prompt step');
+    }
+    const page = this.findLivePageForRun(runId, userId);
+    if (!page) {
+      throw new BadRequestException(
+        'Start recording or playback for this run to reset — no active browser session',
+      );
+    }
+
+    const key = this.aiPromptSnapshotKey(runId, stepId);
+    const snap = this.aiPromptPreTestSnapshots.get(key);
+    let targetUrl: string;
+    let state: SnapshotStorageState;
+
+    if (snap) {
+      targetUrl = snap.url;
+      state = snap.state;
+    } else {
+      const prevSeq = step.sequence - 1;
+      if (prevSeq < 1) {
+        throw new BadRequestException('No checkpoint before this step');
+      }
+      const cp = await this.prisma.runCheckpoint.findFirst({
+        where: { runId, userId, afterStepSequence: prevSeq },
+      });
+      if (!cp?.storageStatePath) {
+        throw new BadRequestException(
+          'No snapshot to restore — enable recording checkpoints or run Test once so a pre-test snapshot is stored',
+        );
+      }
+      const base = getRecordingsBaseDir(this.configService);
+      const artifactDir = getRunArtifactDir(base, userId, runId);
+      const abs = path.join(artifactDir, cp.storageStatePath);
+      let raw: string;
+      try {
+        raw = await fs.readFile(abs, 'utf-8');
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        throw new BadRequestException(`Checkpoint file missing or unreadable: ${detail}`);
+      }
+      state = JSON.parse(raw) as SnapshotStorageState;
+      targetUrl = (cp.pageUrl && cp.pageUrl.trim()) || '';
+      if (!targetUrl) {
+        const runRow = await this.prisma.run.findFirst({
+          where: { id: runId, userId },
+          select: { url: true },
+        });
+        targetUrl = runRow?.url?.trim() || 'about:blank';
+      }
+    }
+
+    await this.applyStorageStateToPage(page, state, targetUrl);
+    return { ok: true };
+  }
+
+  private async applyStorageStateToPage(page: Page, state: SnapshotStorageState, targetUrl: string): Promise<void> {
+    const context = page.context();
+    await context.clearCookies();
+    if (state.cookies?.length) {
+      await context.addCookies(state.cookies);
+    }
+    const origins = state.origins ?? [];
+    for (const origin of origins) {
+      const o = origin.origin;
+      if (!o?.trim()) continue;
+      try {
+        await page.goto(o, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      } catch {
+        await page.goto(o, { waitUntil: 'load', timeout: 120_000 }).catch(() => {});
+      }
+      const ls = origin.localStorage ?? [];
+      await page.evaluate((items: Array<{ name: string; value: string }>) => {
+        try {
+          localStorage.clear();
+          for (const { name, value } of items) {
+            localStorage.setItem(name, value);
+          }
+        } catch {
+          /* storage may be blocked */
+        }
+      }, ls);
+    }
+    const dest =
+      targetUrl.trim() ||
+      origins[0]?.origin ||
+      (() => {
+        try {
+          return page.url();
+        } catch {
+          return 'about:blank';
+        }
+      })();
+    try {
+      await page.goto(dest, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+    } catch {
+      await page.goto(dest, { waitUntil: 'load', timeout: 120_000 });
+    }
   }
 
   /**

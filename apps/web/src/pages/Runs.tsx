@@ -28,7 +28,7 @@ import {
 } from '@/hooks/useRemotePreviewCanvas';
 import {
   Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2, Pause,
-  RotateCcw, StepForward, StepBack,
+  RotateCcw, StepForward, StepBack, Sparkles, FlaskConical,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -61,6 +61,11 @@ export default function RunsPage() {
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const [reRecordBusyStepId, setReRecordBusyStepId] = useState<string | null>(null);
   const [reRecordError, setReRecordError] = useState<string | null>(null);
+  const [aiStepModalOpen, setAiStepModalOpen] = useState(false);
+  const [aiStepPrompt, setAiStepPrompt] = useState('');
+  const [aiStepCreatedId, setAiStepCreatedId] = useState<string | null>(null);
+  const [aiStepBusy, setAiStepBusy] = useState(false);
+  const [aiStepError, setAiStepError] = useState<string | null>(null);
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
@@ -426,6 +431,117 @@ export default function RunsPage() {
     },
     [reRecordStep, promptAfterStepChange],
   );
+
+  const openAiStepModal = useCallback(() => {
+    setAiStepPrompt('');
+    setAiStepCreatedId(null);
+    setAiStepError(null);
+    setAiStepModalOpen(true);
+  }, []);
+
+  const closeAiStepModalDone = useCallback(() => {
+    setAiStepModalOpen(false);
+    setAiStepPrompt('');
+    setAiStepCreatedId(null);
+    setAiStepError(null);
+  }, []);
+
+  const closeAiStepModalCancel = useCallback(async () => {
+    if (aiStepBusy) return;
+    const rid = runId;
+    const sid = aiStepCreatedId;
+    if (sid && rid) {
+      setAiStepBusy(true);
+      try {
+        await runsApi.deleteLastRunStepDuringRecording(rid, sid);
+        await loadRunSteps(rid);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setAiStepError(msg);
+        setAiStepBusy(false);
+        return;
+      }
+      setAiStepBusy(false);
+    }
+    setAiStepModalOpen(false);
+    setAiStepPrompt('');
+    setAiStepCreatedId(null);
+    setAiStepError(null);
+  }, [aiStepBusy, aiStepCreatedId, runId, loadRunSteps]);
+
+  useEffect(() => {
+    if (!aiStepModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !aiStepBusy) void closeAiStepModalCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [aiStepModalOpen, aiStepBusy, closeAiStepModalCancel]);
+
+  const handleAiStepAddRow = useCallback(async () => {
+    if (!runId || !aiStepPrompt.trim() || aiStepBusy) return;
+    setAiStepBusy(true);
+    setAiStepError(null);
+    try {
+      const res = await runsApi.appendAiPromptStepRecording(runId, { instruction: aiStepPrompt.trim() });
+      const step = res.step as { id: string };
+      setAiStepCreatedId(step.id);
+      void promptAfterStepChange(step.id);
+      void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
+      void queryClient.invalidateQueries({ queryKey: ['run', runId] });
+      await loadRunSteps(runId);
+    } catch (e) {
+      setAiStepError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiStepBusy(false);
+    }
+  }, [runId, aiStepPrompt, aiStepBusy, loadRunSteps, queryClient, promptAfterStepChange]);
+
+  const handleAiStepTest = useCallback(async () => {
+    if (!runId || !aiStepCreatedId || aiStepBusy) return;
+    setAiStepBusy(true);
+    setAiStepError(null);
+    try {
+      const res = await runsApi.testAiPromptStep(runId, aiStepCreatedId, {
+        instruction: aiStepPrompt.trim(),
+      });
+      if (!res.ok) throw new Error(res.error || 'Test failed');
+      void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
+      await loadRunSteps(runId);
+    } catch (e) {
+      setAiStepError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiStepBusy(false);
+    }
+  }, [runId, aiStepCreatedId, aiStepPrompt, aiStepBusy, loadRunSteps, queryClient]);
+
+  const handleAiStepReset = useCallback(async () => {
+    if (!runId || !aiStepCreatedId || aiStepBusy) return;
+    setAiStepBusy(true);
+    setAiStepError(null);
+    try {
+      await runsApi.resetAiPromptTest(runId, aiStepCreatedId);
+    } catch (e) {
+      setAiStepError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiStepBusy(false);
+    }
+  }, [runId, aiStepCreatedId, aiStepBusy]);
+
+  const handleAiStepSavePrompt = useCallback(async () => {
+    if (!runId || !aiStepCreatedId || !aiStepPrompt.trim() || aiStepBusy) return;
+    setAiStepBusy(true);
+    setAiStepError(null);
+    try {
+      await runsApi.patchRunStep(runId, aiStepCreatedId, { instruction: aiStepPrompt.trim() });
+      void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
+      await loadRunSteps(runId);
+    } catch (e) {
+      setAiStepError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiStepBusy(false);
+    }
+  }, [runId, aiStepCreatedId, aiStepPrompt, aiStepBusy, loadRunSteps, queryClient]);
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
@@ -942,11 +1058,27 @@ export default function RunsPage() {
         <div ref={stepsListScrollRef} className="flex-1 overflow-y-auto p-4">
           {isRecording && (
             <div className="space-y-2 mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">
-                  Recording — {steps.length} steps
-                </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">
+                    Recording — {steps.length} steps
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={!socketConnected || !runId || aiStepBusy}
+                  onClick={openAiStepModal}
+                  title={
+                    !socketConnected
+                      ? 'Wait for preview connection'
+                      : 'Add a step that uses an AI prompt at playback'
+                  }
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-teal-200 bg-teal-50/80 text-[10px] font-medium text-teal-800 hover:bg-teal-100/80 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Sparkles size={12} />
+                  Add AI Step
+                </button>
               </div>
               <button
                 type="button"
@@ -1148,6 +1280,102 @@ export default function RunsPage() {
           </div>
         )}
       </div>
+
+      {aiStepModalOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="runs-ai-step-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+            aria-label="Dismiss"
+            disabled={aiStepBusy}
+            onClick={() => void closeAiStepModalCancel()}
+          />
+          <div className="relative w-full max-w-md rounded-lg border border-gray-200 bg-white p-4 shadow-xl">
+            <h2 id="runs-ai-step-title" className="text-sm font-semibold text-gray-900">
+              Add AI prompt step
+            </h2>
+            <p className="text-[10px] text-gray-500 mt-1 mb-2 leading-snug">
+              Playback runs the LLM with your prompt each time (stored Playwright is for debug only). Reset restores
+              the browser to before the last Test, or to the checkpoint after the previous step if you have not tested
+              yet.
+            </p>
+            <textarea
+              value={aiStepPrompt}
+              onChange={(e) => setAiStepPrompt(e.target.value)}
+              rows={4}
+              disabled={aiStepBusy}
+              placeholder="Describe what to do on the page at this step…"
+              className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
+            />
+            {aiStepError && (
+              <p className="mt-2 text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1" role="alert">
+                {aiStepError}
+              </p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                disabled={aiStepBusy || !aiStepPrompt.trim() || !!aiStepCreatedId}
+                onClick={() => void handleAiStepAddRow()}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-[#4B90FF]/40 bg-[#4B90FF]/5 text-[10px] font-medium text-[#2563EB] disabled:opacity-40 disabled:pointer-events-none"
+              >
+                Add step
+              </button>
+              <button
+                type="button"
+                disabled={aiStepBusy || !aiStepCreatedId || !socketConnected}
+                onClick={() => void handleAiStepSavePrompt()}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-teal-300 text-[10px] font-medium text-teal-800 hover:bg-teal-100/50 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                Save prompt
+              </button>
+              <button
+                type="button"
+                disabled={aiStepBusy || !aiStepCreatedId || !socketConnected}
+                title="Run LLM once on the live browser (uses textarea text)"
+                onClick={() => void handleAiStepTest()}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <FlaskConical size={12} />
+                Test
+              </button>
+              <button
+                type="button"
+                disabled={aiStepBusy || !aiStepCreatedId || !socketConnected}
+                title="Undo Test side effects (or restore prior checkpoint)"
+                onClick={() => void handleAiStepReset()}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <RotateCcw size={12} />
+                Reset
+              </button>
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={aiStepBusy}
+                onClick={() => void closeAiStepModalCancel()}
+                className="px-3 py-1.5 text-[11px] text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={aiStepBusy}
+                onClick={closeAiStepModalDone}
+                className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#4B90FF] rounded-md hover:bg-blue-500 disabled:opacity-40"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SkipReplaySuggestionsModal
         open={skipReplayModalOpen}

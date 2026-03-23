@@ -36,6 +36,8 @@ import {
   RunQueryDto,
   SuggestSkipAfterChangeDto,
   BulkSkipReplayDto,
+  AppendAiPromptStepRecordingDto,
+  TestAiPromptStepDto,
 } from './runs.dto';
 import { Observable, Subject } from 'rxjs';
 
@@ -112,6 +114,25 @@ export class RunsController {
     return this.recordingService.clerkAutoSignInDuringRecording(id, userId, {
       clerkOtpMode: dto?.clerkOtpMode,
     });
+  }
+
+  @Post(':id/recording/ai-prompt-step')
+  @HttpCode(201)
+  @ApiOperation({
+    summary: 'During recording: append an AI prompt step',
+    description:
+      'Requires an active recording session. Creates a RunStep with `AI_PROMPT` origin, persists a checkpoint, and emits `step` on the recording socket.',
+  })
+  @ApiResponse({ status: 201, description: 'Step created' })
+  @ApiResponse({ status: 400, description: 'No active recording session' })
+  async appendAiPromptStepRecording(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: AppendAiPromptStepRecordingDto,
+  ) {
+    const userId = req.user.sub;
+    const step = await this.recordingService.appendAiPromptStepDuringRecording(id, userId, dto);
+    return { step };
   }
 
   @Post('playback/stop')
@@ -294,16 +315,54 @@ export class RunsController {
   @HttpCode(200)
   @ApiOperation({
     summary: 'Test an AI prompt step on the live page (recording or playback session)',
-    description: 'Runs vision + LLM + codegen once; persists last generated Playwright when successful.',
+    description:
+      'Runs vision + LLM + codegen once; persists last generated Playwright when successful. Optional body `instruction` overrides the stored prompt for this run only.',
   })
   @ApiResponse({ status: 200, description: 'Test result' })
   async testAiPromptStep(
     @Req() req: any,
     @Param('id') id: string,
     @Param('stepId') stepId: string,
+    @Body() dto: TestAiPromptStepDto,
   ) {
     const userId = req.user.sub;
-    return this.recordingService.testAiPromptStep(id, userId, stepId);
+    return this.recordingService.testAiPromptStep(id, userId, stepId, {
+      instruction: dto?.instruction,
+    });
+  }
+
+  @Post(':id/steps/:stepId/reset-ai-test')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Reset browser to state before the last AI prompt Test',
+    description:
+      'Restores URL + cookies + storage from a snapshot taken at the start of the last test, or from the checkpoint after the previous step.',
+  })
+  @ApiResponse({ status: 200, description: '{ ok: true }' })
+  async resetAiPromptTest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('stepId') stepId: string,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.resetAiPromptTest(id, userId, stepId);
+  }
+
+  @Delete(':id/steps/:stepId')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'During recording: delete the last step',
+    description:
+      'Only allowed while recording and only for the most recently recorded step (e.g. discard an AI step draft).',
+  })
+  @ApiResponse({ status: 204, description: 'Step removed' })
+  async deleteLastRunStepDuringRecording(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('stepId') stepId: string,
+  ) {
+    const userId = req.user.sub;
+    await this.recordingService.deleteLastRunStepDuringRecording(id, userId, stepId);
   }
 
   @Post(':id/playback/start')

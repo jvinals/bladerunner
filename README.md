@@ -118,12 +118,15 @@ docker compose up
 | PATCH  | /settings           | Update workspace settings    |
 | GET    | /integrations       | List integrations            |
 | GET    | /agents             | List registered agents       |
+| POST   | /runs/:id/recording/ai-prompt-step | **Recording only:** append an **AI prompt** step (no DOM capture); emits **`step`** on the socket |
 | POST   | /runs/:id/steps/:stepId/re-record | Re-capture one step by instruction (active recording) |
 | POST   | /runs/:id/steps/purge-skipped | Permanently **delete** all steps with **`excludedFromPlayback`** (Skip replay); **renumbers** remaining steps and **remaps** checkpoints (not while `RECORDING`). |
 | POST   | /runs/:id/steps/suggest-skip-after-change | Body **`anchorStepId`** — LLM suggests **forward** steps (not already skipped) to mark **Skip replay**; returns **`{ suggestions: { stepId, reason }[] }`**. Empty when no provider or nothing to suggest. |
 | POST   | /runs/:id/steps/bulk-skip-replay | Body **`anchorStepId`**, **`stepIds`** — sets **`excludedFromPlayback: true`** for those steps **after** the anchor sequence (already skipped rows unchanged). |
 | PATCH  | /runs/:id/steps/:stepId | Update **instruction**; set **`aiPromptMode: true`** with **instruction** to store an **AI prompt step** (`StepOrigin.AI_PROMPT`, **`metadata.kind: ai_prompt_step`**) — playback uses **LLM + screenshot + a11y tree** on the live page each time (not fixed stored codegen). **`aiPromptMode: false`** reverts to manual. **`excludedFromPlayback`** toggles **Skip replay** (allowed during **`RECORDING`** or completed runs). |
-| POST   | /runs/:id/steps/:stepId/test-ai-step | **Test step**: run the same LLM path once on the **active recording** or **playback** browser (requires a session). |
+| POST   | /runs/:id/steps/:stepId/test-ai-step | **Test step**: run the same LLM path once on the **active recording** or **playback** browser (requires a session). Optional body **`instruction`** overrides the stored prompt for this run only. |
+| POST   | /runs/:id/steps/:stepId/reset-ai-test | Restore **URL + cookies + `localStorage`** to before the last Test (or prior **checkpoint**). |
+| DELETE | /runs/:id/steps/:stepId | **Recording only:** delete the **last** step (e.g. discard draft AI step). |
 | GET    | /runs/:id/checkpoints | List **app state checkpoints** (after-step browser storage + metadata) for a run |
 | POST   | /runs/:id/playback/start | Start live playback; body may include **`skipUntilSequence`**, **`playThroughSequence`** (stop after that step), **`skipStepIds`**, Clerk options |
 
@@ -192,7 +195,7 @@ Some steps should **not** replay fixed **Playwright** from recording time; they 
 
 - **Database:** **`StepOrigin.AI_PROMPT`**, **`action: CUSTOM`**, **`metadata`**: `{ kind: 'ai_prompt_step', schemaVersion: 1 }` (optional **`lastTestAt`**, **`lastTestOk`**). **`playwright_code`** holds a sentinel comment until **Test step** persists last generated codegen for debugging.
 - **Clerk auto-skip:** AI prompt steps are **never** dropped by MailSlurp/OTP skip heuristics.
-- **UI:** **Runs** (recording) and **Run detail** step cards: **Use AI prompt for this step**, **Save prompt**, **Test step** (needs recording or playback session), **Revert to Playwright**.
+- **UI:** **Runs** (recording) and **Run detail** step cards: **Use AI prompt for this step**, **Save prompt**, **Test step** (needs recording or playback session), **Revert to Playwright**. While **recording** on **Runs**, **Add AI Step** opens a modal to append an AI prompt row (**Add step**), **Test** / **Reset**, **Save prompt**, **Done** / **Cancel** (Cancel removes the row if you already added it).
 
 **While recording** on the **Runs** page, **Sign in automatically** runs **`performClerkPasswordEmail2FA`** once (OTP mode next to the button), **deletes manually captured steps after the initial navigate**, then persists **one** **`CUSTOM`** step with **`clerk_auto_sign_in`** metadata (recorded OTP mode + post-auth URL). DOM capture is paused during automation; capture callbacks stay **serial** so manual steps after sign-in stay ordered.
 
@@ -230,6 +233,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.8.2** — **Recording / AI prompt**: **`POST /runs/:id/recording/ai-prompt-step`** appends an AI prompt step during recording; **`POST .../reset-ai-test`** restores browser state before the last Test (or prior checkpoint); **`POST .../test-ai-step`** accepts optional **`instruction`** override; **`DELETE .../steps/:stepId`** removes the last step while recording. **Runs** page: **Add AI Step** modal. **`@bladerunner/api` `0.5.61`**, **`@bladerunner/web` `0.6.69`**.
 - **0.8.1** — **Recording / Clerk**: revert remote browser **`deviceScaleFactor`** to **1** — **`deviceScaleFactor: 2`** (0.8.0) broke **automatic sign-in** on the recording run page; **JPEG quality 85** + ordinal **instructionToAction** table rules unchanged. **`@bladerunner/api` `0.5.60`**.
 - **0.8.0** — **Vision LLM (AI prompt / instruct)**: remote browser uses **`deviceScaleFactor: 2`** (sharper captures); JPEG **quality 85** for screenshots sent to the model; **`instructionToAction`** rules for **ordinal table rows** (first/second/last — prefer `tbody tr` / `nth`, do not OCR MRNs from the image). **`@bladerunner/api` `0.5.59`**.
 - **0.7.99** — **AI prompt screenshot**: second modal opens from the transcript preview (**full resolution**, scrollable); **Copy image** puts the JPEG on the clipboard (falls back to raw base64 text if the browser blocks image clipboard). **`@bladerunner/web` `0.6.68`**.

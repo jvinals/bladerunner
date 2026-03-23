@@ -616,7 +616,9 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                         setAiBusy(true);
                         setAiError(null);
                         void runsApi
-                          .testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId)
+                          .testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
+                            instruction: promptDraft.trim(),
+                          })
                           .then((res) => {
                             if (!res.ok) throw new Error(res.error || 'Test failed');
                             aiPromptStep.onUpdated();

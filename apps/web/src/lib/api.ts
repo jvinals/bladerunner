@@ -226,12 +226,27 @@ export const runsApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  /** Ephemeral test on active recording or playback browser session. */
-  testAiPromptStep: (runId: string, stepId: string) =>
+  /** Ephemeral test on active recording or playback browser session. Optional `instruction` overrides the stored prompt for this run only. */
+  testAiPromptStep: (runId: string, stepId: string, body?: { instruction?: string }) =>
     apiFetch<{ ok: boolean; playwrightCode?: string; error?: string }>(
       `/runs/${runId}/steps/${stepId}/test-ai-step`,
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify(body ?? {}) },
     ),
+  /** Active recording only: append an AI prompt step (no DOM capture). */
+  appendAiPromptStepRecording: (
+    runId: string,
+    body: { instruction: string; excludedFromPlayback?: boolean },
+  ) =>
+    apiFetch<{ step: unknown }>(`/runs/${runId}/recording/ai-prompt-step`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  /** Restore browser to state before last AI prompt Test (or prior checkpoint). */
+  resetAiPromptTest: (runId: string, stepId: string) =>
+    apiFetch<{ ok: boolean }>(`/runs/${runId}/steps/${stepId}/reset-ai-test`, { method: 'POST' }),
+  /** Active recording only: remove the most recently recorded step (e.g. cancel draft AI step). */
+  deleteLastRunStepDuringRecording: (runId: string, stepId: string) =>
+    apiFetchVoid(`/runs/${runId}/steps/${stepId}`, { method: 'DELETE' }),
   /** Permanently delete all steps marked skip replay; renumbers remaining steps. */
   purgeSkippedSteps: (runId: string) =>
     apiFetch<{ deleted: number }>(`/runs/${runId}/steps/purge-skipped`, { method: 'POST' }),

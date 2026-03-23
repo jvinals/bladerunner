@@ -175,6 +175,31 @@ export class PatchRunStepDto {
   excludedFromPlayback?: boolean;
 }
 
+export class AppendAiPromptStepRecordingDto {
+  @ApiProperty({
+    description:
+      'Natural-language prompt for this AI step (playback uses LLM + live page; stored codegen is a sentinel / debug only)',
+  })
+  @IsString()
+  instruction!: string;
+
+  @ApiPropertyOptional({ description: 'When true, playback skips this step' })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  excludedFromPlayback?: boolean;
+}
+
+export class TestAiPromptStepDto {
+  @ApiPropertyOptional({
+    description:
+      'Optional instruction for this test run only (does not update the step row unless you PATCH)',
+  })
+  @IsOptional()
+  @IsString()
+  instruction?: string;
+}
+
 export class SuggestSkipAfterChangeDto {
   @ApiProperty({ description: 'The step that was just added or edited (anchor)' })
   @IsString()
