@@ -621,15 +621,6 @@ export default function RunsPage() {
                   <div className="flex flex-wrap items-center gap-1.5 justify-end w-full">
                     <button
                       type="button"
-                      onClick={() => void advancePlaybackOne()}
-                      className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50"
-                      title="Run the next step, then pause again"
-                    >
-                      <StepForward size={11} />
-                      Next step
-                    </button>
-                    <button
-                      type="button"
                       disabled={!canPlaybackPreviousStep}
                       onClick={() => void advancePlaybackPrevious(steps)}
                       className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -637,6 +628,15 @@ export default function RunsPage() {
                     >
                       <StepBack size={11} />
                       Previous step
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void advancePlaybackOne()}
+                      className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50"
+                      title="Run the next step, then pause again"
+                    >
+                      <StepForward size={11} />
+                      Next step
                     </button>
                     <input
                       type="number"
