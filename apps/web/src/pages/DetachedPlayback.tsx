@@ -150,7 +150,7 @@ export default function DetachedPlayback() {
     socket.on('playbackProgress', (payload: PlaybackProgressPayload) => {
       const rid = payload.runId ?? payload.playbackSessionId;
       if (rid !== playbackSessionId) return;
-      if (payload.phase === 'after' && payload.sourceRunId) {
+      if ((payload.phase === 'after' || payload.phase === 'transcript') && payload.sourceRunId) {
         void queryClient.invalidateQueries({ queryKey: ['run-steps-detached', payload.sourceRunId] });
         void queryClient.invalidateQueries({ queryKey: ['run-steps', payload.sourceRunId] });
       }

@@ -53,6 +53,10 @@ export interface InstructionToActionLlmTranscript {
   rawResponse: string;
   /** User message included a vision attachment (JPEG) when calling the provider. */
   visionAttached: boolean;
+  /**
+   * Same base64 JPEG passed to the vision API (optional persistence for Run step metadata / modal).
+   */
+  screenshotBase64?: string;
 }
 
 export interface InstructionToActionResult {

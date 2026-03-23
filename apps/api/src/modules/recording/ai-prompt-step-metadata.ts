@@ -5,7 +5,7 @@ export const AI_PROMPT_STEP_KIND = 'ai_prompt_step' as const;
 
 export const AI_PROMPT_STEP_SCHEMA_VERSION = 1;
 
-/** Last LLM request/response persisted for the AI prompt modal (exact strings; screenshot bytes not stored). */
+/** Last LLM request/response persisted for the AI prompt modal (exact strings + optional JPEG base64 for the modal). */
 export type AiPromptLlmTranscriptStored = InstructionToActionLlmTranscript & {
   capturedAt: string;
   source: 'test' | 'playback';

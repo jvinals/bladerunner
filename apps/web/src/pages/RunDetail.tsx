@@ -514,7 +514,7 @@ export default function RunDetailPage() {
   const queryClient = useQueryClient();
   const invalidateStepsAfterPlaybackStep = useCallback(
     (p: PlaybackProgressPayload) => {
-      if (p.phase === 'after' && p.sourceRunId) {
+      if ((p.phase === 'after' || p.phase === 'transcript') && p.sourceRunId) {
         void queryClient.invalidateQueries({ queryKey: ['run-steps', p.sourceRunId] });
         void queryClient.invalidateQueries({ queryKey: ['run', p.sourceRunId] });
       }

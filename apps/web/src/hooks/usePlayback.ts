@@ -4,7 +4,7 @@ import { runsApi, playbackBodyFromSnapshot, type StartPlaybackBody } from '@/lib
 import { effectivePlaybackHighlightSequence, previousPlayThroughTarget } from '@/lib/playbackStepTone';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 
-export type PlaybackProgressPhase = 'before' | 'after' | 'error' | 'skipped';
+export type PlaybackProgressPhase = 'before' | 'transcript' | 'after' | 'error' | 'skipped';
 
 export interface PlaybackProgressPayload {
   runId: string;

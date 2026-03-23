@@ -69,6 +69,13 @@ import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './rec
 const AI_PROMPT_PW_TIMEOUT_MS = 120_000;
 const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Remote Chromium (recording + playback): CSS viewport for layout. */
+const REMOTE_BROWSER_VIEWPORT = { width: 1280, height: 720 } as const;
+/** Sharper screenshots for vision LLM (pixel buffer is viewport × DPR). */
+const REMOTE_BROWSER_DEVICE_SCALE_FACTOR = 2;
+/** JPEG quality for screenshots sent to the vision LLM (AI prompt, executeInstruction, reRecord). */
+const LLM_VISION_SCREENSHOT_JPEG_QUALITY = 85;
+
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
   autoClerkSignIn?: boolean;
@@ -199,10 +206,10 @@ export class RecordingService extends EventEmitter {
     try {
       const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
       const browser = await chromium.connect(wsEndpoint);
-      const viewport = { width: 1280, height: 720 };
       screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
       const context = await browser.newContext({
-        viewport,
+        viewport: REMOTE_BROWSER_VIEWPORT,
+        deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
       });
       const page = await context.newPage();
       const cdpSession = await context.newCDPSession(page);
@@ -574,7 +581,7 @@ export class RecordingService extends EventEmitter {
 
     let screenshotBase64: string | undefined;
     try {
-      const buf = await session.page.screenshot({ type: 'jpeg', quality: 60 });
+      const buf = await session.page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
       screenshotBase64 = buf.toString('base64');
     } catch {
       // Continue without screenshot
@@ -643,7 +650,7 @@ export class RecordingService extends EventEmitter {
 
     let screenshotBase64: string | undefined;
     try {
-      const buf = await session.page.screenshot({ type: 'jpeg', quality: 60 });
+      const buf = await session.page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
       screenshotBase64 = buf.toString('base64');
     } catch {
       /* continue */
@@ -1091,7 +1098,7 @@ export class RecordingService extends EventEmitter {
     pageAccessibilityTree = await this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
     let screenshotBase64: string | undefined;
     try {
-      const buf = await page.screenshot({ type: 'jpeg', quality: 60 });
+      const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
       screenshotBase64 = buf.toString('base64');
     } catch {
       /* optional */
@@ -1105,7 +1112,21 @@ export class RecordingService extends EventEmitter {
     instruction: string,
     opts: {
       skipClickForce: boolean;
-      persistTranscript?: { stepId: string; runId: string; userId: string; source: 'test' | 'playback' };
+      persistTranscript?: {
+        stepId: string;
+        runId: string;
+        userId: string;
+        source: 'test' | 'playback';
+        /**
+         * After persisting `lastLlmTranscript` (incl. screenshot), emit so clients refetch steps **before**
+         * generated Playwright runs (which can take minutes).
+         */
+        playbackEmit?: {
+          playbackSessionId: string;
+          sourceRunId: string;
+          step: { id: string; sequence: number; action: string; instruction: string };
+        };
+      };
     },
   ): Promise<{ playwrightCode: string }> {
     const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page);
@@ -1117,8 +1138,16 @@ export class RecordingService extends EventEmitter {
     });
     const out = llmResult.output;
     if (opts.persistTranscript) {
-      const { stepId, runId, userId, source } = opts.persistTranscript;
-      await this.persistAiPromptLlmTranscript(stepId, runId, userId, llmResult.transcript, source);
+      const { stepId, runId, userId, source, playbackEmit } = opts.persistTranscript;
+      const ok = await this.persistAiPromptLlmTranscript(stepId, runId, userId, llmResult.transcript, source);
+      if (ok && playbackEmit) {
+        this.emit('playbackProgress', playbackEmit.playbackSessionId, {
+          playbackSessionId: playbackEmit.playbackSessionId,
+          sourceRunId: playbackEmit.sourceRunId,
+          step: playbackEmit.step,
+          phase: 'transcript',
+        });
+      }
     }
     try {
       page.setDefaultTimeout(AI_PROMPT_PW_TIMEOUT_MS);
@@ -1133,31 +1162,32 @@ export class RecordingService extends EventEmitter {
     return { playwrightCode: out.playwrightCode };
   }
 
+  /** @returns true if metadata was written (false on lookup mismatch / skip). */
   private async persistAiPromptLlmTranscript(
     stepId: string,
     runId: string,
     userId: string,
     transcript: InstructionToActionLlmTranscript,
     source: 'test' | 'playback',
-  ): Promise<void> {
+  ): Promise<boolean> {
     const row = await this.prisma.runStep.findFirst({
       where: { id: stepId },
     });
     if (!row) {
       this.logger.warn(`persistAiPromptLlmTranscript: no RunStep ${stepId}`);
-      return;
+      return false;
     }
     if (row.runId !== runId) {
       this.logger.warn(
         `persistAiPromptLlmTranscript: runId mismatch step=${stepId} expected=${runId} actual=${row.runId}`,
       );
-      return;
+      return false;
     }
     if (row.userId !== userId) {
       this.logger.warn(
         `persistAiPromptLlmTranscript: userId mismatch step=${stepId} — skip metadata write (playback user may differ from step owner)`,
       );
-      return;
+      return false;
     }
     const baseMeta =
       row.metadata && typeof row.metadata === 'object' ? { ...(row.metadata as Record<string, unknown>) } : {};
@@ -1177,6 +1207,7 @@ export class RecordingService extends EventEmitter {
         } as unknown as Prisma.InputJsonValue,
       },
     });
+    return true;
   }
 
   /** Forward pointer from the UI preview (canvas) into the Playwright page viewport. */
@@ -1673,7 +1704,8 @@ export class RecordingService extends EventEmitter {
 
     try {
       const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
+        viewport: REMOTE_BROWSER_VIEWPORT,
+        deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
       });
       const page = await context.newPage();
       const cdpSession = await context.newCDPSession(page);
@@ -2032,6 +2064,11 @@ export class RecordingService extends EventEmitter {
                 runId: sourceRunId,
                 userId: session.userId,
                 source: 'playback',
+                playbackEmit: {
+                  playbackSessionId,
+                  sourceRunId,
+                  step: stepPayload,
+                },
               },
             });
           } else {
