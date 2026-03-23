@@ -233,6 +233,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.8.6** — **Runs / AI prompt step**: **Add AI prompt step** UI is a **right slide-in drawer** (`w-96`) with **no full-screen dimmer** — the **Playwright preview** on the left stays fully visible and unobscured. **`@bladerunner/web` `0.6.72`**.
 - **0.8.5** — **Runs / AI prompt modal (recording)**: **Add AI Step** creates the row on open (placeholder instruction); **Save prompt** = PATCH + Test; **Test** = Test without PATCH first; **Done** = Save pipeline then close + skip-replay prompt on success; live **socket** progress line + in-modal **Cancel** (abort); **preview** icon opens **`AiPromptReviewModal`** (transcript, screenshot, **Result of the LLM call**, suggested prompt, adopt). **`useRecording`** listens for **`aiPromptTestProgress`**. **`@bladerunner/web` `0.6.71`**.
 - **0.8.4** — **Recording / AI prompt Test**: While **recording**, **`test-ai-step`** runs generated Playwright on the live page — DOM capture is **paused** for the duration (same mechanism as Clerk auto sign-in) so those actions are **not** appended as new steps. **Save prompt** was already DB-only; no server change. **`@bladerunner/api` `0.5.62`**.
 - **0.8.3** — **AI prompt test failure UI**: **Add AI Step** modal matches **StepCard** — when **`test-ai-step`** returns **`failureHelp`**, a dialog shows the technical error, **What went wrong**, **Suggested prompt**, and **Adopt this prompt** (patch step, **reset-ai-test**, re-test). **`@bladerunner/web` `0.6.70`**.

@@ -1388,113 +1388,125 @@ export default function RunsPage() {
 
       {aiStepModalOpen && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6"
+          className="runs-ai-step-drawer fixed inset-y-0 right-0 z-[120] flex w-96 max-w-[100vw] flex-col border-l border-gray-200 bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.07)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="runs-ai-step-title"
         >
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
-            aria-label="Dismiss"
-            disabled={aiStepBusy || aiStepOpeningBusy}
-            onClick={() => void closeAiStepModalCancel()}
-          />
-          <div className="relative w-full max-w-md rounded-lg border border-gray-200 bg-white p-4 shadow-xl">
-            <div className="flex items-start justify-between gap-2">
-              <h2 id="runs-ai-step-title" className="text-sm font-semibold text-gray-900">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex flex-shrink-0 items-start justify-between gap-2 border-b border-gray-100 px-3 py-2.5">
+              <h2 id="runs-ai-step-title" className="text-sm font-semibold leading-snug text-gray-900 pr-1">
                 Add AI prompt step
               </h2>
-              <button
-                type="button"
-                title="Review LLM transcript, screenshot, and last test result"
-                disabled={!aiStepCreatedId}
-                onClick={() => setAiStepReviewOpen(true)}
-                className="shrink-0 rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-              >
-                <Eye size={16} aria-hidden />
-              </button>
-            </div>
-            <p className="text-[10px] text-gray-500 mt-1 mb-2 leading-snug">
-              Playback runs the LLM with your prompt each time (stored Playwright is for debug only). Reset restores the
-              browser to before the last Test, or to the checkpoint after the previous step if you have not tested yet.{' '}
-              <strong>Save prompt</strong> updates the stored text and runs Test; <strong>Test</strong> runs once without
-              saving the draft to the server first.
-            </p>
-            <textarea
-              value={aiStepPrompt}
-              onChange={(e) => setAiStepPrompt(e.target.value)}
-              rows={4}
-              disabled={aiStepBusy || aiStepOpeningBusy}
-              placeholder="Describe what to do on the page at this step…"
-              className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
-            />
-            {aiStepBusy ? (
-              <div
-                className="mt-2 flex items-center gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
-                role="status"
-                aria-live="polite"
-              >
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-600" aria-hidden />
-                <p className="min-w-0 flex-1 truncate text-[10px] text-gray-800" title={aiStepSocketLine ?? undefined}>
-                  {aiStepSocketLine || 'Starting test…'}
-                </p>
+              <div className="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => void handleAbortAiStepTest()}
-                  className="shrink-0 rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-800 hover:bg-gray-50"
+                  title="Review LLM transcript, screenshot, and last test result"
+                  disabled={!aiStepCreatedId}
+                  onClick={() => setAiStepReviewOpen(true)}
+                  className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
                 >
-                  Cancel
+                  <Eye size={16} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  title="Close panel"
+                  disabled={aiStepBusy || aiStepOpeningBusy}
+                  onClick={() => void closeAiStepModalCancel()}
+                  className="rounded-md border border-gray-200 p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-800 disabled:opacity-40"
+                >
+                  <X size={16} aria-hidden />
                 </button>
               </div>
-            ) : null}
-            {aiStepError && !aiStepFailure ? (
-              <p className="mt-2 text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1" role="alert">
-                {aiStepError}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                disabled={aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()}
-                onClick={() => void handleAiStepSavePrompt()}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-teal-300 text-[10px] font-medium text-teal-800 hover:bg-teal-100/50 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                Save prompt
-              </button>
-              <button
-                type="button"
-                disabled={aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()}
-                title="Test without saving the draft prompt to the server first"
-                onClick={() => void handleAiStepTest()}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <FlaskConical size={12} />
-                Test
-              </button>
-              <button
-                type="button"
-                disabled={aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected}
-                title="Undo Test side effects (or restore prior checkpoint)"
-                onClick={() => void handleAiStepReset()}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <RotateCcw size={12} />
-                Reset
-              </button>
             </div>
-            <div className="mt-3 flex justify-end gap-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-2.5">
+              <p className="text-[10px] text-gray-500 mb-2 leading-snug">
+                Playback runs the LLM with your prompt each time (stored Playwright is for debug only). Reset restores the
+                browser to before the last Test, or to the checkpoint after the previous step if you have not tested yet.{' '}
+                <strong>Save prompt</strong> updates the stored text and runs Test; <strong>Test</strong> runs once without
+                saving the draft to the server first.
+              </p>
+              <textarea
+                value={aiStepPrompt}
+                onChange={(e) => setAiStepPrompt(e.target.value)}
+                rows={5}
+                disabled={aiStepBusy || aiStepOpeningBusy}
+                placeholder="Describe what to do on the page at this step…"
+                className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
+              />
+              {aiStepBusy ? (
+                <div
+                  className="mt-2 flex items-center gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-600" aria-hidden />
+                  <p className="min-w-0 flex-1 truncate text-[10px] text-gray-800" title={aiStepSocketLine ?? undefined}>
+                    {aiStepSocketLine || 'Starting test…'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleAbortAiStepTest()}
+                    className="shrink-0 rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-800 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+              {aiStepError && !aiStepFailure ? (
+                <p className="mt-2 text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1" role="alert">
+                  {aiStepError}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  disabled={
+                    aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()
+                  }
+                  onClick={() => void handleAiStepSavePrompt()}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-teal-300 text-[10px] font-medium text-teal-800 hover:bg-teal-100/50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  Save prompt
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()
+                  }
+                  title="Test without saving the draft prompt to the server first"
+                  onClick={() => void handleAiStepTest()}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <FlaskConical size={12} />
+                  Test
+                </button>
+                <button
+                  type="button"
+                  disabled={aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected}
+                  title="Undo Test side effects (or restore prior checkpoint)"
+                  onClick={() => void handleAiStepReset()}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <RotateCcw size={12} />
+                  Reset
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-shrink-0 justify-end gap-2 border-t border-gray-100 px-3 py-2.5 bg-gray-50/80">
               <button
                 type="button"
                 disabled={aiStepOpeningBusy}
                 onClick={() => void closeAiStepModalCancel()}
-                className="px-3 py-1.5 text-[11px] text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
+                className="px-3 py-1.5 text-[11px] text-gray-600 border border-gray-200 rounded-md bg-white hover:bg-gray-50 disabled:opacity-40"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()}
+                disabled={
+                  aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()
+                }
                 onClick={() => void handleAiStepDone()}
                 className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#4B90FF] rounded-md hover:bg-blue-500 disabled:opacity-40"
               >
