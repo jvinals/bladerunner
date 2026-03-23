@@ -368,6 +368,37 @@ export default function RunsPage() {
 
   const canEditPlaybackExclusionRuns = !!effectiveRunId;
 
+  const skippedStepsCount = useMemo(
+    () => steps.filter((s) => s.excludedFromPlayback).length,
+    [steps],
+  );
+
+  const [purgeSkippedBusy, setPurgeSkippedBusy] = useState(false);
+
+  const handlePurgeSkippedRuns = useCallback(async () => {
+    if (!effectiveRunId || skippedStepsCount === 0 || isRecording) return;
+    if (
+      !window.confirm(
+        `Permanently remove ${skippedStepsCount} skipped step(s) from this run? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setPurgeSkippedBusy(true);
+    try {
+      await runsApi.purgeSkippedSteps(effectiveRunId);
+      await queryClient.invalidateQueries({ queryKey: ['run-steps', effectiveRunId] });
+      await queryClient.invalidateQueries({ queryKey: ['run', effectiveRunId] });
+      await queryClient.invalidateQueries({ queryKey: ['run-checkpoints', effectiveRunId] });
+      await queryClient.invalidateQueries({ queryKey: ['runs'] });
+      await loadRunSteps(effectiveRunId);
+    } catch (e) {
+      console.error('Purge skipped steps failed', e);
+    } finally {
+      setPurgeSkippedBusy(false);
+    }
+  }, [effectiveRunId, skippedStepsCount, isRecording, queryClient, loadRunSteps]);
+
   const handleTogglePlaybackExclusionRuns = useCallback(
     async (stepId: string, next: boolean) => {
       if (!effectiveRunId) return;
@@ -1166,6 +1197,23 @@ export default function RunsPage() {
 
         {/* Steps List */}
         <div ref={stepsListScrollRef} className="flex-1 overflow-y-auto p-4">
+          {canEditPlaybackExclusionRuns && skippedStepsCount > 0 && (
+            <div className="mb-3 flex min-w-0 items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handlePurgeSkippedRuns()}
+                disabled={purgeSkippedBusy || isRecording}
+                className="shrink-0 rounded border border-red-200 bg-white px-2 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                title={
+                  isRecording
+                    ? 'Finish recording before purging skipped steps'
+                    : 'Permanently delete all steps marked Skip replay'
+                }
+              >
+                {purgeSkippedBusy ? 'Purging…' : 'Purge'}
+              </button>
+            </div>
+          )}
           {isRecording && (
             <div className="space-y-2 mb-3">
               <div className="flex items-center gap-2 flex-wrap">

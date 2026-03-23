@@ -233,6 +233,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.8.9** — **Runs**: **Purge** (remove all **Skip replay** steps) at the **top of the steps column**, matching Run detail. Disabled while **recording** (API requires recording to finish first). **`@bladerunner/web` `0.6.75`**.
 - **0.8.8** — **Runs / AI prompt Test**: After capture, **`aiPromptTestProgress`** includes **`screenshotBase64`** (the JPEG passed to the vision model). The **Add AI prompt step** drawer shows a **thumbnail** with **click to enlarge** (full-screen modal with copy). **`@bladerunner/api` `0.5.64`**, **`@bladerunner/web` `0.6.74`**.
 - **0.8.7** — **Runs / AI prompt Test**: Socket **`aiPromptTestProgress`** may include **`thinking`** (model reasoning when the provider returns it); the in-drawer **status strip** shows a **scrollable log** beside the spinner. **`lastLlmTranscript`** and **AI prompt review** modal include **Model thinking** when stored. **`@bladerunner/api` `0.5.63`**, **`@bladerunner/web` `0.6.73`**.
 - **0.8.6** — **Runs / AI prompt step**: **Add AI prompt step** UI is a **right slide-in drawer** (`w-96`) with **no full-screen dimmer** — the **Playwright preview** on the left stays fully visible and unobscured. **`@bladerunner/web` `0.6.72`**.
