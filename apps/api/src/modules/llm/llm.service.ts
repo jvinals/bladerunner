@@ -161,30 +161,6 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     input: InstructionToActionInput,
     opts?: { signal?: AbortSignal },
   ): Promise<InstructionToActionResult> {
-    // #region agent log
-    {
-      const rawCfg = this.configService?.get<string>('GEMINI_API_KEY');
-      const rawProc = process.env.GEMINI_API_KEY;
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          location: 'llm.service.ts:instructionToAction:entry',
-          message: 'Gemini env probe',
-          data: {
-            hypothesisId: 'H1-H5',
-            configServiceDefined: this.configService != null,
-            configKeyLen: rawCfg?.length ?? 0,
-            processEnvKeyLen: rawProc?.length ?? 0,
-            configKeyTrimEmpty: !rawCfg?.trim(),
-            cwd: process.cwd(),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     const apiKey = this.configService?.get<string>('GEMINI_API_KEY')?.trim();
     if (!apiKey) {
       throw new Error(
