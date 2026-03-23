@@ -39,6 +39,7 @@ Guidelines:
 - NEVER emit page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') with only a tag name — strict mode will fail when multiple elements match. Prefer getByRole with name, or locator with hasText, or .first() only as a last resort.
 - For navigation, use page.goto()
 - For typing, use page.fill() or page.getByLabel().fill()
+- **Date inputs (\`input[type="date"]\`)**: Playwright \`fill()\` only accepts **ISO 8601** values: \`YYYY-MM-DD\` (e.g. \`1980-01-01\`). Slash formats like \`01/01/1980\` or \`MM/DD/YYYY\` cause **"Malformed value"**. If the user prompt gives a human date, **convert it to ISO** in the generated fill string. Use the screenshot/a11y tree to confirm \`type="date"\`.
 - Handle waiting implicitly (Playwright auto-waits)
 - Only generate safe Playwright API calls (no eval, no fs, no network)`;
 

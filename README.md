@@ -227,6 +227,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.77** — **LLM / AI prompt steps**: **`instructionToAction`** system prompt now requires **ISO `YYYY-MM-DD`** for **`input[type="date"]`** fills (avoids Playwright **Malformed value** on slash dates like `01/01/1980`). **`@bladerunner/api` `0.5.40`**.
 - **0.7.76** — **AI prompt steps**: **`StepOrigin.AI_PROMPT`**, **`metadata.kind: ai_prompt_step`**; **`PATCH /runs/:id/steps/:stepId`**, **`POST .../test-ai-step`**; playback runs **LLM + vision** per step; **Runs** + **Run detail** **StepCard** (**Test step**, revert). **`@bladerunner/api` `0.5.39`**, **`@bladerunner/web` `0.6.50`**, **`@bladerunner/types` `0.2.1`**.
 - **0.7.75** — **Run detail**: Playback toolbar controls **taller** (`py-1.5`, seq input aligned); card padding **`py-0.5`**. **`@bladerunner/web` `0.6.49`**.
 - **0.7.74** — **Run detail**: Playback toolbar **shorter** (`py-0`, `leading-none`); metrics card **no max-width** on large screens, **`lg:flex-nowrap`** so Duration–Run Details stay **one line** (with **`overflow-x-auto`** if the viewport is tight). **`@bladerunner/web` `0.6.48`**.
