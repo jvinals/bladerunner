@@ -623,7 +623,7 @@ export default function RunsPage() {
                       type="button"
                       disabled={!canPlaybackPreviousStep}
                       onClick={() => void advancePlaybackPrevious(steps)}
-                      className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex w-36 shrink-0 justify-center items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Replay from the start and pause after the previous completed step"
                     >
                       <StepBack size={11} />
@@ -632,7 +632,7 @@ export default function RunsPage() {
                     <button
                       type="button"
                       onClick={() => void advancePlaybackOne()}
-                      className="flex items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50"
+                      className="flex w-36 shrink-0 justify-center items-center gap-1 px-2 py-1 border border-indigo-200 text-indigo-800 text-[11px] font-medium rounded-md hover:bg-indigo-50"
                       title="Run the next step, then pause again"
                     >
                       <StepForward size={11} />

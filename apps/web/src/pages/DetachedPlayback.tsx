@@ -397,7 +397,7 @@ export default function DetachedPlayback() {
                 type="button"
                 disabled={!canDetachedPreviousStep}
                 onClick={() => void handlePreviousStep()}
-                className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex w-36 shrink-0 justify-center items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Replay from the start and pause after the previous completed step"
               >
                 <StepBack size={12} />
@@ -406,7 +406,7 @@ export default function DetachedPlayback() {
               <button
                 type="button"
                 onClick={handleAdvanceOne}
-                className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500"
+                className="flex w-36 shrink-0 justify-center items-center gap-1 px-2 py-1 rounded bg-indigo-600/90 text-white text-[11px] font-medium hover:bg-indigo-500"
                 title="Run the next step, then pause again"
               >
                 <StepForward size={12} />
