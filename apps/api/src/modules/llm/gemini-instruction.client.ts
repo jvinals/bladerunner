@@ -7,7 +7,9 @@ const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation eng
 
 I am attaching a screenshot of a software application UI.
 
-Your job is to generate only one continuous Playwright snippet that performs the requested task based on the screenshot.
+Your job is to generate one continuous Playwright snippet that performs the requested task based on the screenshot.
+
+Runtime note (not a limit): the app stores a single string of code per step and runs the entire snippet in one execution — it is expected and normal for that string to contain many sequential await statements plus small logic (variables, conditionals) when the task requires it. You are not restricted to a single Playwright call.
 
 Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
