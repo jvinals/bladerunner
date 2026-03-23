@@ -53,6 +53,7 @@ import {
   relaxClickForceForPlayback,
   relaxPageLocatorFirstForPlayback,
   tightenGetByTextLocatorsForPlayback,
+  fixAmbiguousTableLastRowTdLocator,
 } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -2520,7 +2521,8 @@ export class RecordingService extends EventEmitter {
     }
 
     const relaxed = relaxPageLocatorFirstForPlayback(code);
-    const tightened = tightenGetByTextLocatorsForPlayback(relaxed);
+    const tableTdFixed = fixAmbiguousTableLastRowTdLocator(relaxed);
+    const tightened = tightenGetByTextLocatorsForPlayback(tableTdFixed);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
     const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);

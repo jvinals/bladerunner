@@ -111,3 +111,18 @@ export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string
 export function relaxClickForceForPlayback(playwrightCode: string): string {
   return playwrightCode.replace(/\.click\(\s*\)/g, '.click({ force: true })');
 }
+
+/**
+ * `locator('table tr:last-child td')` matches **every** `<td>` in the last row → strict mode violation.
+ * Append `.first()` when the chain is not already narrowed (first/nth/filter/locator/getBy).
+ */
+export function fixAmbiguousTableLastRowTdLocator(playwrightCode: string): string {
+  const notNarrowed = String.raw`(?!\s*\.(?:first|nth|last|filter|locator|getBy))`;
+  return playwrightCode.replace(
+    new RegExp(
+      String.raw`(\b(?:page\.)?locator\(\s*['"]table tr:last-child td['"]\s*\))${notNarrowed}`,
+      'g',
+    ),
+    '$1.first()',
+  );
+}
