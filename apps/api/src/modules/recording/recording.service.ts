@@ -71,8 +71,11 @@ const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Remote Chromium (recording + playback): CSS viewport for layout. */
 const REMOTE_BROWSER_VIEWPORT = { width: 1280, height: 720 } as const;
-/** Sharper screenshots for vision LLM (pixel buffer is viewport × DPR). */
-const REMOTE_BROWSER_DEVICE_SCALE_FACTOR = 2;
+/**
+ * Keep **1** here: `deviceScaleFactor: 2` caused **Clerk automatic sign-in during recording** to fail (hosted UI /
+ * layout differences). Vision quality is improved via **JPEG quality** on LLM screenshots instead.
+ */
+const REMOTE_BROWSER_DEVICE_SCALE_FACTOR = 1;
 /** JPEG quality for screenshots sent to the vision LLM (AI prompt, executeInstruction, reRecord). */
 const LLM_VISION_SCREENSHOT_JPEG_QUALITY = 85;
 

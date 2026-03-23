@@ -230,6 +230,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.8.1** — **Recording / Clerk**: revert remote browser **`deviceScaleFactor`** to **1** — **`deviceScaleFactor: 2`** (0.8.0) broke **automatic sign-in** on the recording run page; **JPEG quality 85** + ordinal **instructionToAction** table rules unchanged. **`@bladerunner/api` `0.5.60`**.
 - **0.8.0** — **Vision LLM (AI prompt / instruct)**: remote browser uses **`deviceScaleFactor: 2`** (sharper captures); JPEG **quality 85** for screenshots sent to the model; **`instructionToAction`** rules for **ordinal table rows** (first/second/last — prefer `tbody tr` / `nth`, do not OCR MRNs from the image). **`@bladerunner/api` `0.5.59`**.
 - **0.7.99** — **AI prompt screenshot**: second modal opens from the transcript preview (**full resolution**, scrollable); **Copy image** puts the JPEG on the clipboard (falls back to raw base64 text if the browser blocks image clipboard). **`@bladerunner/web` `0.6.68`**.
 - **0.7.98** — **AI prompt playback**: **`playbackProgress`** phase **`transcript`** fires right after **`lastLlmTranscript`** (incl. screenshot) is saved and **before** generated Playwright runs — clients invalidate **`run-steps`** so the modal can show the JPEG **during** the step, not only after completion. **`@bladerunner/api` `0.5.58`**, **`@bladerunner/web` `0.6.67`**.
