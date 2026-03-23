@@ -1,4 +1,5 @@
 import {
+  excludeFileInputFromFollowingInputXPath,
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
   relaxClickForceForPlayback,
@@ -107,6 +108,14 @@ assertEq(
   'playback relax: path[d] -> scoped to dialog (not global .first())',
   relaxPageLocatorFirstForPlayback(`await page.locator('path[d="M18 6 6 18"]').click();`),
   `await page.getByRole('dialog').last().locator('path[d="M18 6 6 18"]').first().click();`,
+);
+
+assertEq(
+  'playback: following::input excludes type=file',
+  excludeFileInputFromFollowingInputXPath(
+    `await page.locator('div').filter({ hasText: /^Add disease/ }).locator('xpath=following::input').first().click();`,
+  ),
+  `await page.locator('div').filter({ hasText: /^Add disease/ }).locator('xpath=following::input[not(@type="file")]').first().click();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

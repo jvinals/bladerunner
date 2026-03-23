@@ -34,6 +34,7 @@ Avoid brittle selectors such as exact text matches when text may vary, screen co
 Prefer stable locators such as role, label, placeholder, test id, aria attributes, stable attributes, and layered fallback locators.
 When reading or acting on a single HTML table, use page.locator('table').first() (or a more specific selector) so strict mode does not fail if multiple tables exist.
 For combobox or search-as-you-type dropdowns, prefer getByRole('option', { name: ... }) or options under the listbox/dialog over very broad tag unions (e.g. mixing div and li) that can match the wrong node.
+Do not use locator('xpath=following::input') after text or a div to reach the next field: the first following input is often a hidden type=file upload or other non-interactive control. Prefer getByPlaceholder, getByRole('textbox' or 'combobox'), getByLabel, or an XPath that excludes file inputs, e.g. xpath=following::input[not(@type="file")] when the locator string uses single quotes.
 If the snippet picks the next item from a list by scanning existing page text, handle the case when no item remains so the code does not silently skip work.
 Handle likely UI variations when relevant, including dialogs, menus, tabs, loading states, collapsed sections, empty or prefilled fields, and controls already in the desired state.
 Use only the minimum waits needed and follow Playwright best practices.
