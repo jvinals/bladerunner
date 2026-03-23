@@ -3,6 +3,8 @@ export type AiPromptLastLlmTranscript = {
   systemPrompt: string;
   userPrompt: string;
   rawResponse: string;
+  /** Model reasoning when the API returned it (separate from JSON Playwright output). */
+  thinking?: string;
   visionAttached?: boolean;
   screenshotBase64?: string;
   capturedAt?: string;
@@ -25,6 +27,7 @@ export function parseAiPromptLastLlmTranscript(metadata: unknown): AiPromptLastL
     systemPrompt: o.systemPrompt,
     userPrompt: o.userPrompt,
     rawResponse: o.rawResponse,
+    thinking: typeof o.thinking === 'string' && o.thinking.trim() ? o.thinking.trim() : undefined,
     visionAttached: typeof o.visionAttached === 'boolean' ? o.visionAttached : undefined,
     screenshotBase64: typeof o.screenshotBase64 === 'string' && o.screenshotBase64.trim() ? o.screenshotBase64 : undefined,
     capturedAt: typeof o.capturedAt === 'string' ? o.capturedAt : undefined,

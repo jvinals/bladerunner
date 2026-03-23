@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { ChatMessage, LlmChatOptions, LlmProvider } from './llm-provider.interface';
+import { ChatMessage, LlmChatOptions, LlmChatResult, LlmProvider } from './llm-provider.interface';
 
 export class OpenAiProvider implements LlmProvider {
   private client: OpenAI;
@@ -10,7 +10,7 @@ export class OpenAiProvider implements LlmProvider {
     this.model = model;
   }
 
-  async chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<string> {
+  async chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<LlmChatResult> {
     const openAiMessages: OpenAI.ChatCompletionMessageParam[] = messages.map(
       (msg) => {
         if (msg.role === 'user' && options?.imageBase64) {
@@ -54,6 +54,14 @@ export class OpenAiProvider implements LlmProvider {
 
     const choice = response.choices[0];
     const msg = choice?.message;
+    const msgExt = msg ? (msg as unknown as Record<string, unknown>) : undefined;
+    const thinkingRaw =
+      typeof msgExt?.reasoning === 'string'
+        ? msgExt.reasoning
+        : typeof msgExt?.thinking === 'string'
+          ? msgExt.thinking
+          : undefined;
+    const thinking = thinkingRaw?.trim() ? thinkingRaw.trim() : undefined;
     const content = typeof msg?.content === 'string' ? msg.content : '';
     const refusal = typeof msg?.refusal === 'string' ? msg.refusal : '';
     const finishReason = choice?.finish_reason;
@@ -74,6 +82,6 @@ export class OpenAiProvider implements LlmProvider {
           : '';
       throw new Error(bits.join(' | ') + hint);
     }
-    return content;
+    return { content, thinking };
   }
 }

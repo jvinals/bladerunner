@@ -640,10 +640,13 @@ export default function RunsPage() {
     }
   }, [runId, aiStepCreatedId, aiStepBusy]);
 
-  const aiStepSocketLine = useMemo(() => {
+  const aiPromptProgressBlock = useMemo(() => {
     if (!aiPromptTestProgress || !aiStepCreatedId || !runId) return null;
     if (aiPromptTestProgress.runId !== runId || aiPromptTestProgress.stepId !== aiStepCreatedId) return null;
-    return aiPromptTestProgress.message;
+    return {
+      message: aiPromptTestProgress.message,
+      thinking: aiPromptTestProgress.thinking,
+    };
   }, [aiPromptTestProgress, aiStepCreatedId, runId]);
 
   const handleSelectRun = useCallback(async (id: string) => {
@@ -1436,18 +1439,28 @@ export default function RunsPage() {
               />
               {aiStepBusy ? (
                 <div
-                  className="mt-2 flex items-center gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
+                  className="mt-2 flex items-stretch gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
                   role="status"
                   aria-live="polite"
                 >
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-600" aria-hidden />
-                  <p className="min-w-0 flex-1 truncate text-[10px] text-gray-800" title={aiStepSocketLine ?? undefined}>
-                    {aiStepSocketLine || 'Starting test…'}
-                  </p>
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin self-center text-teal-600" aria-hidden />
+                  <div className="min-h-0 min-w-0 flex-1 flex flex-col gap-1">
+                    <p
+                      className="text-[10px] text-gray-800 leading-snug"
+                      title={aiPromptProgressBlock?.message ?? undefined}
+                    >
+                      {aiPromptProgressBlock?.message || 'Starting test…'}
+                    </p>
+                    {aiPromptProgressBlock?.thinking ? (
+                      <pre className="max-h-32 overflow-y-auto rounded border border-teal-200/60 bg-white/80 p-1.5 text-[9px] leading-snug text-gray-700 whitespace-pre-wrap break-words font-mono">
+                        {aiPromptProgressBlock.thinking}
+                      </pre>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={() => void handleAbortAiStepTest()}
-                    className="shrink-0 rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-800 hover:bg-gray-50"
+                    className="shrink-0 self-start rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-800 hover:bg-gray-50"
                   >
                     Cancel
                   </button>

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { ChatMessage, LlmChatOptions, LlmProvider } from './llm-provider.interface';
+import { ChatMessage, LlmChatOptions, LlmChatResult, LlmProvider } from './llm-provider.interface';
 
 export class AnthropicProvider implements LlmProvider {
   private client: Anthropic;
@@ -10,7 +10,7 @@ export class AnthropicProvider implements LlmProvider {
     this.model = model;
   }
 
-  async chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<string> {
+  async chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<LlmChatResult> {
     const systemMsg = messages.find((m) => m.role === 'system');
     const nonSystemMsgs = messages.filter((m) => m.role !== 'system');
 
@@ -48,9 +48,18 @@ export class AnthropicProvider implements LlmProvider {
     const text = textBlock && 'text' in textBlock ? textBlock.text : '';
     const stopReason = response.stop_reason;
 
+    const thinkingParts: string[] = [];
+    for (const b of response.content) {
+      const o = b as unknown as Record<string, unknown>;
+      if (o.type === 'thinking' && typeof o.thinking === 'string') {
+        thinkingParts.push(o.thinking);
+      }
+    }
+    const thinking = thinkingParts.length > 0 ? thinkingParts.join('\n\n').trim() : undefined;
+
     if (!text.trim()) {
       throw new Error(`Anthropic returned empty text (stop_reason=${String(stopReason ?? 'unknown')})`);
     }
-    return text;
+    return { content: text, thinking };
   }
 }

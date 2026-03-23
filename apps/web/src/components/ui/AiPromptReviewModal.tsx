@@ -69,6 +69,14 @@ function TranscriptSections({ lastLlmTranscript }: { lastLlmTranscript: AiPrompt
               {lastLlmTranscript.userPrompt}
             </pre>
           </div>
+          {lastLlmTranscript.thinking ? (
+            <div>
+              <div className="mb-1 text-[10px] font-semibold text-gray-600">Model thinking</div>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                {lastLlmTranscript.thinking}
+              </pre>
+            </div>
+          ) : null}
           <div>
             <div className="mb-1 text-[10px] font-semibold text-gray-600">Raw response</div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">

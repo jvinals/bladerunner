@@ -8,7 +8,7 @@ import type { ChatMessage, LlmProvider } from './providers/llm-provider.interfac
 function makeProvider(responseText: string): LlmProvider {
   return {
     async chat(_messages: ChatMessage[]) {
-      return responseText;
+      return { content: responseText };
     },
   };
 }

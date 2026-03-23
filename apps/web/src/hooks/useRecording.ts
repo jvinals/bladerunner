@@ -40,6 +40,8 @@ export type AiPromptTestProgressPayload = {
   stepId: string;
   message: string;
   phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled';
+  /** Model reasoning / chain-of-thought when the API returns it (AI prompt test). */
+  thinking?: string;
 };
 
 interface UseRecordingReturn {
@@ -173,7 +175,9 @@ export function useRecording(): UseRecordingReturn {
       const message = typeof payload.message === 'string' ? payload.message : '';
       const phase = payload.phase as AiPromptTestProgressPayload['phase'];
       if (!stepId || !message) return;
-      const normalized: AiPromptTestProgressPayload = { runId, stepId, message, phase };
+      const thinking =
+        typeof payload.thinking === 'string' && payload.thinking.trim() ? payload.thinking.trim() : undefined;
+      const normalized: AiPromptTestProgressPayload = { runId, stepId, message, phase, ...(thinking ? { thinking } : {}) };
       setAiPromptTestProgress(normalized);
       if (phase === 'done' || phase === 'error' || phase === 'cancelled') {
         window.setTimeout(() => setAiPromptTestProgress(null), 400);

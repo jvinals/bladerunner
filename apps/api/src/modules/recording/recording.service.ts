@@ -1217,8 +1217,12 @@ export class RecordingService extends EventEmitter {
     stepId: string,
     message: string,
     phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled',
+    extras?: { thinking?: string },
   ): void {
-    const payload = { runId, stepId, message, phase };
+    const payload: Record<string, unknown> = { runId, stepId, message, phase };
+    if (extras?.thinking?.trim()) {
+      payload.thinking = extras.thinking.trim();
+    }
     this.emit('aiPromptTestProgress', runId, payload);
     for (const s of this.playbackSessions.values()) {
       if (s.sourceRunId === runId) {
@@ -1521,6 +1525,27 @@ export class RecordingService extends EventEmitter {
       { signal },
     );
     const out = llmResult.output;
+    if (progress) {
+      const thinkingRaw = llmResult.transcript.thinking?.trim();
+      if (thinkingRaw) {
+        const max = 12_000;
+        const t = thinkingRaw.length > max ? `${thinkingRaw.slice(0, max)}…` : thinkingRaw;
+        this.emitAiPromptTestProgress(
+          progress.runId,
+          progress.stepId,
+          'Vision model finished — reasoning below.',
+          'llm',
+          { thinking: t },
+        );
+      } else {
+        this.emitAiPromptTestProgress(
+          progress.runId,
+          progress.stepId,
+          'Vision model finished.',
+          'llm',
+        );
+      }
+    }
     if (opts.persistTranscript) {
       const { stepId, runId, userId, source, playbackEmit } = opts.persistTranscript;
       const ok = await this.persistAiPromptLlmTranscript(stepId, runId, userId, llmResult.transcript, source);
