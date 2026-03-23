@@ -49,6 +49,24 @@ export class LlmModule implements OnModuleInit {
     const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
     const geminiModel =
       this.configService.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+      body: JSON.stringify({
+        sessionId: '5cf234',
+        location: 'llm.module.ts:onModuleInit',
+        message: 'LlmModule Gemini startup probe',
+        data: {
+          hypothesisId: 'H2-H3',
+          geminiKeyLen: geminiKey?.length ?? 0,
+          processEnvGeminiLen: process.env.GEMINI_API_KEY?.length ?? 0,
+          geminiModel,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (geminiKey?.trim()) {
       this.logger.log(`Gemini Playwright instruction path: enabled (GEMINI_INSTRUCTION_MODEL=${geminiModel})`);
     } else {
