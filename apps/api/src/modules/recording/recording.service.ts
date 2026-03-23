@@ -61,7 +61,6 @@ import {
   relaxPageLocatorFirstForPlayback,
   tightenGetByTextLocatorsForPlayback,
   fixAmbiguousTableLastRowTdLocator,
-  excludeFileInputFromFollowingInputXPath,
 } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -3138,8 +3137,7 @@ export class RecordingService extends EventEmitter {
     }
 
     const relaxed = relaxPageLocatorFirstForPlayback(code);
-    const followingInputFixed = excludeFileInputFromFollowingInputXPath(relaxed);
-    const tableTdFixed = fixAmbiguousTableLastRowTdLocator(followingInputFixed);
+    const tableTdFixed = fixAmbiguousTableLastRowTdLocator(relaxed);
     const tightened = tightenGetByTextLocatorsForPlayback(tableTdFixed);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
@@ -3153,6 +3151,7 @@ export class RecordingService extends EventEmitter {
       message: 'pw codegen static heuristics before new Function',
       data: {
         safeCodeLen: safeCode.length,
+        safeCodePreview: safeCode.slice(0, 280),
         hasBareTableLocatorNoFirst: /\bpage\.locator\s*\(\s*['"]table['"]\s*\)(?!\s*\.first\b)/.test(
           safeCode,
         ),

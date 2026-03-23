@@ -105,24 +105,6 @@ export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string
 }
 
 /**
- * Playback: LLM codegen often chains `locator('xpath=following::input')` after a label `div`.
- * The first following `input` in DOM order is frequently a hidden `type="file"` upload control, not the visible
- * search/combobox field — Playwright then fails with "Element is not visible". Narrow the XPath.
- */
-export function excludeFileInputFromFollowingInputXPath(playwrightCode: string): string {
-  return playwrightCode.replace(
-    /\.locator\(\s*(['"])xpath=following::input\1\s*\)/gi,
-    (_full, quote: string) => {
-      const inner =
-        quote === "'"
-          ? `xpath=following::input[not(@type="file")]`
-          : `xpath=following::input[not(@type='file')]`;
-      return `.locator(${quote}${inner}${quote})`;
-    },
-  );
-}
-
-/**
  * Playback: Radix/modal layers often report "subtree intercepts pointer events" — Playwright refuses the click.
  * `force: true` skips that actionability check and dispatches to the locator’s element (see Playwright input docs).
  */
