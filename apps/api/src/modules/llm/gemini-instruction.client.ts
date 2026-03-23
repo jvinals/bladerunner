@@ -1,15 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-/** Placeholder replaced with the user’s natural-language instruction. */
-export const GEMINI_INSTRUCTION_ACTION_PLACEHOLDER = '[TEXT INTRODUCED BY THE USER IN "AI PROMPT"]';
+/** Placeholder replaced with the user’s natural-language task for the AI prompt step. */
+export const GEMINI_INSTRUCTION_ACTION_PLACEHOLDER = '[DESCRIBE THE TASK HERE]';
 
 const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation engineer.
 
 I am attaching a screenshot of a software application UI.
 
-Your job is to generate only one Playwright TypeScript instruction snippet that performs the exact action I request, using the screenshot as the main source of UI understanding.
+Your job is to generate only one continuous Playwright TypeScript snippet that performs the requested task based on the screenshot.
 
-Action to perform:
+Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
 
 Strict output rules:
@@ -21,18 +21,23 @@ Do not describe the screenshot.
 Do not output pseudocode.
 Do not output anything before or after the Playwright code.
 
+Execution requirements:
+The code may contain one or multiple sequential Playwright actions, depending on what is necessary to complete the task correctly.
+Do not artificially limit the solution to a single instruction if multiple steps are needed.
+Generate only the minimum necessary sequence of actions required to achieve the task reliably.
+
 Implementation requirements:
 Infer the most likely UI structure from the screenshot.
 Write the most robust production style Playwright snippet possible.
 Make it resilient to different content, dynamic values, user data, themes, settings, layouts, and configuration states.
 Avoid brittle selectors such as exact text matches when text may vary, screen coordinates, absolute positions, and fragile nth child chains.
 Prefer stable locators such as role, label, placeholder, test id, aria attributes, stable attributes, and layered fallback locators.
-Handle likely UI variations when relevant, including dialogs, menus, tabs, loading states, collapsed sections, empty or prefilled fields, and toggles already in the desired state.
+Handle likely UI variations when relevant, including dialogs, menus, tabs, loading states, collapsed sections, empty or prefilled fields, and controls already in the desired state.
 Use only the minimum waits needed and follow Playwright best practices.
 If the screenshot is not sufficient to know a perfect selector, still output the strongest practical Playwright snippet with intelligent fallback locators.
 
 Output format requirement:
-The response must be strictly the Playwright instruction snippet and nothing else. Your entire response must be executable Playwright TypeScript only.
+Your entire response must be executable Playwright TypeScript only, consisting of the full sequence of actions needed to complete the task.
 `;
 
 /** Full text sent to Gemini (user turn) including substituted action. */
