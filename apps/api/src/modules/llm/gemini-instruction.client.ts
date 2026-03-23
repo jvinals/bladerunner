@@ -51,7 +51,11 @@ export function normalizeGeminiPlaywrightSnippet(raw: string): string {
   return t.trim();
 }
 
-/** Extract incremental text / thought from one streamed chunk (avoids response.text() throwing on partial blocks). */
+/**
+ * Extract incremental answer vs thought-summary text from one streamed chunk.
+ * Gemini returns thought summaries with `thought: true` and the summary in `text` (not `thought` as a string).
+ * @see https://ai.google.dev/gemini-api/docs/thinking
+ */
 function extractChunkParts(chunk: unknown): { text: string; thought: string } {
   let text = '';
   let thought = '';
@@ -61,10 +65,13 @@ function extractChunkParts(chunk: unknown): { text: string; thought: string } {
   const parts = c.candidates?.[0]?.content?.parts;
   if (!parts) return { text: '', thought: '' };
   for (const part of parts) {
-    if (typeof part.thought === 'string') {
-      thought += part.thought;
-    } else if (typeof part.text === 'string') {
-      text += part.text;
+    const t = typeof part.text === 'string' ? part.text : '';
+    if (!t) continue;
+    const isThought = part.thought === true;
+    if (isThought) {
+      thought += t;
+    } else {
+      text += t;
     }
   }
   return { text, thought };
@@ -104,6 +111,11 @@ export async function generateGeminiPlaywrightSnippet(params: {
       generationConfig: {
         maxOutputTokens: 8192,
         temperature: 0.2,
+        thinkingConfig: {
+          includeThoughts: true,
+        },
+      } as import('@google/generative-ai').GenerationConfig & {
+        thinkingConfig?: { includeThoughts?: boolean };
       },
     },
     { signal },
@@ -112,24 +124,24 @@ export async function generateGeminiPlaywrightSnippet(params: {
   let accumulated = '';
   let thinkingAcc = '';
   let lastEmitAt = 0;
-  let lastEmittedLen = 0;
+  let lastEmittedCombined = 0;
   const THROTTLE_MS = 120;
   const MIN_CHARS = 220;
 
   const emitProgress = (force: boolean) => {
     if (!onProgress) return;
     const now = Date.now();
-    const len = accumulated.length;
+    const combined = accumulated.length + thinkingAcc.length;
     if (
       !force &&
       now - lastEmitAt < THROTTLE_MS &&
-      len - lastEmittedLen < MIN_CHARS &&
-      len > 0
+      combined - lastEmittedCombined < MIN_CHARS &&
+      combined > 0
     ) {
       return;
     }
     lastEmitAt = now;
-    lastEmittedLen = len;
+    lastEmittedCombined = combined;
     const t = thinkingAcc.trim();
     onProgress({
       rawText: accumulated,

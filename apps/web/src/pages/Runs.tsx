@@ -1659,18 +1659,20 @@ export default function RunsPage() {
                   >
                     <p className="text-[10px] font-semibold text-gray-800 mb-1">6. Live model output</p>
                     <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
-                      Updates in real time while Gemini streams. When generation finishes, the final text appears in §3
-                      and Playwright runs from §5.
+                      Thought summaries and answer text stream here. When generation finishes, the final transcript
+                      appears in §3 and Playwright runs from §5.
                     </p>
-                    {aiPromptDrawerSections.liveThinkingStream ? (
-                      <div className="mb-2">
-                        <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thinking</p>
-                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/60 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-                          {aiPromptDrawerSections.liveThinkingStream}
-                        </pre>
-                      </div>
-                    ) : null}
-                    <p className="text-[9px] font-medium text-gray-600 mb-0.5">Stream</p>
+                    <div className="mb-2">
+                      <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thought summary</p>
+                      <p className="text-[9px] text-gray-500 mb-1 leading-snug">
+                        Parts marked <code className="rounded bg-white/80 px-0.5">thought: true</code> from Gemini
+                        (requires includeThoughts).
+                      </p>
+                      <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/60 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2rem]">
+                        {aiPromptDrawerSections.liveThinkingStream || '—'}
+                      </pre>
+                    </div>
+                    <p className="text-[9px] font-medium text-gray-600 mb-0.5">Answer / Playwright stream</p>
                     <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/80 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
                       {aiPromptDrawerSections.liveRawStream || '…'}
                     </pre>
