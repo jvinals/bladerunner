@@ -22,6 +22,7 @@ import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
+import type { AiPromptTestFailureHelp } from '../llm/llm.service';
 import { EventEmitter } from 'events';
 import {
   clerkSignInUrlLooksLike,
@@ -170,6 +171,8 @@ export class RecordingService extends EventEmitter {
   private playbackSessions = new Map<string, PlaybackSession>();
   /** Before each AI prompt Test: URL + `storageState` for Reset (key `${runId}:${stepId}`). */
   private aiPromptPreTestSnapshots = new Map<string, { url: string; state: SnapshotStorageState }>();
+  /** Active `test-ai-step` HTTP request — `POST .../abort-ai-test` or client disconnect calls `abort()`. */
+  private aiPromptTestAbortControllers = new Map<string, AbortController>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -991,8 +994,14 @@ export class RecordingService extends EventEmitter {
     runId: string,
     userId: string,
     stepId: string,
-    opts?: { instruction?: string },
-  ): Promise<{ ok: boolean; playwrightCode?: string; error?: string }> {
+    opts?: { instruction?: string; signal?: AbortSignal },
+  ): Promise<{
+    ok: boolean;
+    playwrightCode?: string;
+    error?: string;
+    cancelled?: boolean;
+    failureHelp?: AiPromptTestFailureHelp;
+  }> {
     const step = await this.prisma.runStep.findFirst({
       where: { id: stepId, runId, userId },
     });
@@ -1016,7 +1025,12 @@ export class RecordingService extends EventEmitter {
       throw new BadRequestException('instruction is empty');
     }
 
+    const signal = opts?.signal;
+
     try {
+      this.emitAiPromptTestProgress(runId, stepId, 'Preparing snapshot for undo (Reset)…', 'capturing');
+      this.throwIfAborted(signal);
+
       let url = '';
       try {
         url = page.url();
@@ -1029,6 +1043,8 @@ export class RecordingService extends EventEmitter {
       const { playwrightCode } = await this.playAiPromptStepOnPage(page, instructionToRun, {
         skipClickForce: false,
         persistTranscript: { stepId, runId, userId, source: 'test' },
+        signal,
+        progress: { runId, stepId },
       });
       const fresh = await this.prisma.runStep.findFirst({
         where: { id: stepId, runId, userId },
@@ -1050,9 +1066,20 @@ export class RecordingService extends EventEmitter {
           playwrightCode,
         },
       });
+      this.emitAiPromptTestProgress(runId, stepId, 'Test completed.', 'done');
       return { ok: true, playwrightCode };
     } catch (e) {
+      if (signal?.aborted || this.isAbortError(e)) {
+        this.emitAiPromptTestProgress(runId, stepId, 'Cancelled.', 'cancelled');
+        return { ok: false, error: 'Cancelled', cancelled: true };
+      }
       const msg = e instanceof Error ? e.message : String(e);
+      this.emitAiPromptTestProgress(
+        runId,
+        stepId,
+        msg.length > 140 ? `${msg.slice(0, 137)}…` : msg,
+        'error',
+      );
       const fresh = await this.prisma.runStep.findFirst({
         where: { id: stepId, runId, userId },
       });
@@ -1072,7 +1099,28 @@ export class RecordingService extends EventEmitter {
           } as Prisma.InputJsonValue,
         },
       });
-      return { ok: false, error: msg };
+
+      let failureHelp: AiPromptTestFailureHelp | undefined;
+      try {
+        const ctx = await this.captureLlmPageContext(page, signal);
+        const hint = await this.llmService.explainAiPromptTestFailure(
+          {
+            instruction: instructionToRun,
+            technicalError: msg,
+            pageUrl: ctx.pageUrl,
+            pageAccessibilityTree: ctx.pageAccessibilityTree,
+            screenshotBase64: ctx.screenshotBase64,
+          },
+          { signal },
+        );
+        if (hint) {
+          failureHelp = hint;
+        }
+      } catch (explainErr) {
+        this.logger.debug(`explainAiPromptTestFailure skipped: ${explainErr}`);
+      }
+
+      return { ok: false, error: msg, failureHelp };
     }
   }
 
@@ -1092,6 +1140,60 @@ export class RecordingService extends EventEmitter {
 
   private aiPromptSnapshotKey(runId: string, stepId: string): string {
     return `${runId}:${stepId}`;
+  }
+
+  /** @internal Used by `RunsController` when starting `test-ai-step` so cancel / client disconnect can abort. */
+  registerAiPromptTestAbort(runId: string, stepId: string, ac: AbortController): void {
+    this.aiPromptTestAbortControllers.set(this.aiPromptSnapshotKey(runId, stepId), ac);
+  }
+
+  unregisterAiPromptTestAbort(runId: string, stepId: string): void {
+    this.aiPromptTestAbortControllers.delete(this.aiPromptSnapshotKey(runId, stepId));
+  }
+
+  /**
+   * Best-effort abort for an in-flight `test-ai-step` (vision request or between phases).
+   * Generated Playwright may still run briefly after the model returns.
+   */
+  async abortAiPromptTest(runId: string, userId: string, stepId: string): Promise<{ ok: boolean }> {
+    const row = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+      select: { id: true },
+    });
+    if (!row) {
+      throw new NotFoundException('Step not found');
+    }
+    this.aiPromptTestAbortControllers.get(this.aiPromptSnapshotKey(runId, stepId))?.abort();
+    return { ok: true };
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+  }
+
+  private isAbortError(e: unknown): boolean {
+    if (e instanceof Error && e.name === 'AbortError') return true;
+    const msg = e instanceof Error ? e.message : String(e);
+    return /aborted|AbortError/i.test(msg);
+  }
+
+  private emitAiPromptTestProgress(
+    runId: string,
+    stepId: string,
+    message: string,
+    phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled',
+  ): void {
+    const payload = { runId, stepId, message, phase };
+    this.emit('aiPromptTestProgress', runId, payload);
+    for (const s of this.playbackSessions.values()) {
+      if (s.sourceRunId === runId) {
+        this.emit('aiPromptTestProgress', s.playbackSessionId, payload);
+      }
+    }
   }
 
   private clearAiPromptSnapshotsForRun(runId: string): void {
@@ -1302,11 +1404,15 @@ export class RecordingService extends EventEmitter {
     return base;
   }
 
-  private async captureLlmPageContext(page: Page): Promise<{
+  private async captureLlmPageContext(
+    page: Page,
+    signal?: AbortSignal,
+  ): Promise<{
     pageUrl: string;
     pageAccessibilityTree: string;
     screenshotBase64?: string;
   }> {
+    this.throwIfAborted(signal);
     const pageUrl = page.url();
     let pageAccessibilityTree = '';
     try {
@@ -1316,6 +1422,7 @@ export class RecordingService extends EventEmitter {
       pageAccessibilityTree = 'Unable to capture accessibility tree';
     }
     pageAccessibilityTree = await this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
+    this.throwIfAborted(signal);
     let screenshotBase64: string | undefined;
     try {
       const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
@@ -1332,6 +1439,8 @@ export class RecordingService extends EventEmitter {
     instruction: string,
     opts: {
       skipClickForce: boolean;
+      signal?: AbortSignal;
+      progress?: { runId: string; stepId: string };
       persistTranscript?: {
         stepId: string;
         runId: string;
@@ -1349,13 +1458,37 @@ export class RecordingService extends EventEmitter {
       };
     },
   ): Promise<{ playwrightCode: string }> {
-    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page);
-    const llmResult = await this.llmService.instructionToAction({
-      instruction: instruction.trim(),
-      pageUrl,
-      pageAccessibilityTree,
-      screenshotBase64,
-    });
+    const { signal, progress } = opts;
+    if (progress) {
+      this.emitAiPromptTestProgress(
+        progress.runId,
+        progress.stepId,
+        'Capturing accessibility tree and viewport screenshot…',
+        'capturing',
+      );
+    }
+    this.throwIfAborted(signal);
+
+    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page, signal);
+    if (progress) {
+      this.emitAiPromptTestProgress(
+        progress.runId,
+        progress.stepId,
+        'Calling vision model (this may take a minute)…',
+        'llm',
+      );
+    }
+    this.throwIfAborted(signal);
+
+    const llmResult = await this.llmService.instructionToAction(
+      {
+        instruction: instruction.trim(),
+        pageUrl,
+        pageAccessibilityTree,
+        screenshotBase64,
+      },
+      { signal },
+    );
     const out = llmResult.output;
     if (opts.persistTranscript) {
       const { stepId, runId, userId, source, playbackEmit } = opts.persistTranscript;
@@ -1369,6 +1502,15 @@ export class RecordingService extends EventEmitter {
         });
       }
     }
+    if (progress) {
+      this.emitAiPromptTestProgress(
+        progress.runId,
+        progress.stepId,
+        'Running generated Playwright actions on the page…',
+        'executing',
+      );
+    }
+    this.throwIfAborted(signal);
     try {
       page.setDefaultTimeout(AI_PROMPT_PW_TIMEOUT_MS);
       page.setDefaultNavigationTimeout(AI_PROMPT_PW_TIMEOUT_MS);
@@ -2279,6 +2421,7 @@ export class RecordingService extends EventEmitter {
           if (isAiPromptStep) {
             await this.playAiPromptStepOnPage(session.page, step.instruction, {
               skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
+              progress: { runId: sourceRunId, stepId: step.id },
               persistTranscript: {
                 stepId: step.id,
                 runId: sourceRunId,

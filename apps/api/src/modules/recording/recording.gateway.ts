@@ -40,6 +40,10 @@ export class RecordingGateway implements OnGatewayInit {
       });
     });
 
+    this.recordingService.on('aiPromptTestProgress', (roomId: string, payload: Record<string, unknown>) => {
+      this.server.to(`run:${roomId}`).emit('aiPromptTestProgress', payload);
+    });
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 

@@ -9,6 +9,8 @@ export interface LlmChatOptions {
   maxTokens?: number;
   /** OpenAI reasoning models only: lowers internal reasoning so visible JSON still fits in the completion budget. */
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+  /** When aborted, the provider request should reject (best-effort). */
+  signal?: AbortSignal;
 }
 
 export interface LlmProvider {

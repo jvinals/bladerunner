@@ -59,6 +59,22 @@ Guidelines:
 - **Never** respond with a refusal: always return the JSON object above. If something is ambiguous, pick the most likely locators from the page context and screenshot.
 - **Match the instruction’s requested values** (date formats, name suffix patterns, phone/email patterns) in the **string literals** you pass to \`fill()\` — do not substitute unrelated example text.`;
 
+const EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM = `You help QA engineers understand why an AI-driven Playwright test step failed and how to fix the **natural-language instruction** (not the Playwright code).
+
+The user runs tests against **their own staging or demo app**; any names or data in the UI are synthetic fixtures.
+
+You MUST respond with ONLY valid JSON:
+{
+  "explanation": "<2–4 short paragraphs in plain English: what likely went wrong, referencing the error and page context when helpful>",
+  "suggestedPrompt": "<one complete replacement instruction the user can paste — concrete, uses getByRole/getByLabel style wording when the page context supports it>"
+}
+
+Rules:
+- suggestedPrompt must stand alone and target the **same user goal** as the original instruction.
+- Do not invent real patient or PII; use generic placeholders if needed.
+- Be concise; explanation under 600 words.
+- If the error is vague, still give your best hypothesis and a clearer, more specific prompt.`;
+
 const SUGGEST_SKIP_AFTER_CHANGE_SYSTEM = `You analyze a test run's steps after the user changed one step (the "anchor" step).
 The user may have re-recorded or replaced behavior so that some *later* steps are now redundant, wrong, or would replay obsolete UI paths.
 
@@ -88,6 +104,12 @@ export type SuggestSkipForwardStepInput = {
   instruction: string;
   action: string;
   origin: string;
+};
+
+/** Returned when an AI prompt Test fails and the server asks the LLM for guidance. */
+export type AiPromptTestFailureHelp = {
+  explanation: string;
+  suggestedPrompt: string;
 };
 
 function parseJsonFromLlmText(raw: string): unknown {
@@ -165,7 +187,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
   }
 
-  async instructionToAction(input: InstructionToActionInput): Promise<InstructionToActionResult> {
+  async instructionToAction(
+    input: InstructionToActionInput,
+    opts?: { signal?: AbortSignal },
+  ): Promise<InstructionToActionResult> {
     if (!this.provider) {
       throw new Error('LLM provider not configured. Set LLM_PROVIDER and the corresponding API key in .env');
     }
@@ -193,6 +218,7 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
         maxTokens: 16384,
         /** GPT-5.x defaults to `medium` reasoning effort, which can exhaust the completion budget with empty visible `content`. */
         reasoningEffort: 'low',
+        signal: opts?.signal,
       },
     );
 
@@ -208,6 +234,56 @@ ${input.pageAccessibilityTree.slice(0, 12000)}`;
         screenshotBase64: input.screenshotBase64?.trim() || undefined,
       },
     };
+  }
+
+  /**
+   * After a failed AI prompt Test, produce a human-readable explanation and a replacement instruction.
+   * Returns null if no LLM provider or parsing fails.
+   */
+  async explainAiPromptTestFailure(
+    input: {
+      instruction: string;
+      technicalError: string;
+      pageUrl: string;
+      pageAccessibilityTree: string;
+      screenshotBase64?: string;
+    },
+    opts?: { signal?: AbortSignal },
+  ): Promise<AiPromptTestFailureHelp | null> {
+    if (!this.provider) {
+      return null;
+    }
+
+    const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+
+    try {
+      const rawResponse = await this.provider.chat(
+        [
+          { role: 'system', content: EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM },
+          { role: 'user', content: user },
+        ],
+        {
+          imageBase64: input.screenshotBase64,
+          maxTokens: 4096,
+          reasoningEffort: 'low',
+          signal: opts?.signal,
+        },
+      );
+
+      const parsed = parseJsonFromLlmText(rawResponse) as { explanation?: unknown; suggestedPrompt?: unknown };
+      if (typeof parsed.explanation !== 'string' || typeof parsed.suggestedPrompt !== 'string') {
+        return null;
+      }
+      const explanation = parsed.explanation.trim();
+      const suggestedPrompt = parsed.suggestedPrompt.trim();
+      if (!explanation || !suggestedPrompt) {
+        return null;
+      }
+      return { explanation, suggestedPrompt };
+    } catch (err) {
+      this.logger.warn(`explainAiPromptTestFailure: ${err}`);
+      return null;
+    }
   }
 
   /**

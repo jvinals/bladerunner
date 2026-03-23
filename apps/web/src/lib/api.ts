@@ -226,12 +226,27 @@ export const runsApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  /** Ephemeral test on active recording or playback browser session. Optional `instruction` overrides the stored prompt for this run only. */
-  testAiPromptStep: (runId: string, stepId: string, body?: { instruction?: string }) =>
-    apiFetch<{ ok: boolean; playwrightCode?: string; error?: string }>(
-      `/runs/${runId}/steps/${stepId}/test-ai-step`,
-      { method: 'POST', body: JSON.stringify(body ?? {}) },
-    ),
+  /** Ephemeral test on active recording or playback browser session. Optional `instruction` overrides the stored prompt for this run only. Pass `signal` to cancel; progress arrives on the recording socket as `aiPromptTestProgress`. */
+  testAiPromptStep: (
+    runId: string,
+    stepId: string,
+    body?: { instruction?: string },
+    opts?: { signal?: AbortSignal },
+  ) =>
+    apiFetch<{
+      ok: boolean;
+      playwrightCode?: string;
+      error?: string;
+      cancelled?: boolean;
+      failureHelp?: { explanation: string; suggestedPrompt: string };
+    }>(`/runs/${runId}/steps/${stepId}/test-ai-step`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+      signal: opts?.signal,
+    }),
+  /** Best-effort abort of an in-flight test (also cancel the client `fetch` via `signal`). */
+  abortAiPromptTest: (runId: string, stepId: string) =>
+    apiFetch<{ ok: boolean }>(`/runs/${runId}/steps/${stepId}/abort-ai-test`, { method: 'POST' }),
   /** Active recording only: append an AI prompt step (no DOM capture). */
   appendAiPromptStepRecording: (
     runId: string,

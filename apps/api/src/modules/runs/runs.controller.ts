@@ -18,7 +18,7 @@ import {
 } from '@nestjs/common';
 import { createReadStream } from 'fs';
 import { access } from 'fs/promises';
-import { Response } from 'express';
+import { Response, type Request } from 'express';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { RunsService } from './runs.service';
@@ -316,19 +316,46 @@ export class RunsController {
   @ApiOperation({
     summary: 'Test an AI prompt step on the live page (recording or playback session)',
     description:
-      'Runs vision + LLM + codegen once; persists last generated Playwright when successful. Optional body `instruction` overrides the stored prompt for this run only.',
+      'Runs vision + LLM + codegen once; persists last generated Playwright when successful. Optional body `instruction` overrides the stored prompt for this run only. Progress is pushed over the recording socket as `aiPromptTestProgress`; cancel via `POST .../abort-ai-test` or by closing the HTTP connection.',
   })
   @ApiResponse({ status: 200, description: 'Test result' })
   async testAiPromptStep(
-    @Req() req: any,
+    @Req() req: Request & { user: { sub: string } },
     @Param('id') id: string,
     @Param('stepId') stepId: string,
     @Body() dto: TestAiPromptStepDto,
   ) {
     const userId = req.user.sub;
-    return this.recordingService.testAiPromptStep(id, userId, stepId, {
-      instruction: dto?.instruction,
-    });
+    const ac = new AbortController();
+    this.recordingService.registerAiPromptTestAbort(id, stepId, ac);
+    const onClose = () => ac.abort();
+    req.on('close', onClose);
+    try {
+      return await this.recordingService.testAiPromptStep(id, userId, stepId, {
+        instruction: dto?.instruction,
+        signal: ac.signal,
+      });
+    } finally {
+      req.off('close', onClose);
+      this.recordingService.unregisterAiPromptTestAbort(id, stepId);
+    }
+  }
+
+  @Post(':id/steps/:stepId/abort-ai-test')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Abort an in-flight AI prompt Test',
+    description:
+      'Best-effort abort of the vision/LLM request. Generated Playwright may still run briefly after the model returns.',
+  })
+  @ApiResponse({ status: 200, description: '{ ok: true }' })
+  async abortAiPromptTest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('stepId') stepId: string,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.abortAiPromptTest(id, userId, stepId);
   }
 
   @Post(':id/steps/:stepId/reset-ai-test')

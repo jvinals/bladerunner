@@ -41,6 +41,7 @@ export class AnthropicProvider implements LlmProvider {
       max_tokens: options?.maxTokens ?? 1024,
       system: systemMsg?.content,
       messages: anthropicMessages,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
 
     const textBlock = response.content.find((b) => b.type === 'text');
