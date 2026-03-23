@@ -57,30 +57,6 @@ export class OpenAiProvider implements LlmProvider {
     const usage = response.usage;
     const reasoningTok = usage?.completion_tokens_details?.reasoning_tokens;
 
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-      body: JSON.stringify({
-        sessionId: '5cf234',
-        location: 'openai.provider.ts:chat',
-        message: 'openai completion',
-        data: {
-          contentLen: content.length,
-          finishReason,
-          model: this.model,
-          maxCompletionTokens,
-          refusalLen: refusal.length,
-          reasoningTokens: reasoningTok,
-          completionTokens: usage?.completion_tokens,
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'H-openai',
-        runId: 'instruction-to-action',
-      }),
-    }).catch(() => {});
-    // #endregion
-
     if (!content.trim()) {
       const bits = [
         `OpenAI returned empty assistant message (finish_reason=${String(finishReason ?? 'unknown')})`,

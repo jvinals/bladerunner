@@ -256,15 +256,21 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
         playbackExclusion?.excluded ? 'ring-1 ring-amber-200/90 bg-amber-50/40' : ''
       }`}
     >
-      <div className="flex items-start gap-2 px-2 py-1.5">
+      <div
+        className={`flex items-start gap-2 px-2 ${
+          !detailsOpen ? 'max-h-[80px] min-h-0 overflow-hidden py-1' : 'py-1.5'
+        }`}
+      >
         <div
           className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${originCircle}`}
         >
           {sequence}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 mb-0.5 flex-wrap">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          <div
+            className={`flex items-center gap-1 flex-wrap flex-shrink-0 ${!detailsOpen ? 'mb-0' : 'mb-0.5'}`}
+          >
             <Icon size={11} className="text-gray-400 flex-shrink-0" />
             <span className="text-[9px] text-gray-400 ce-mono">{formatTime(timestamp)}</span>
             {playbackExclusion && (
@@ -357,18 +363,28 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
             )}
           </div>
           <p
-            className={`text-[11px] leading-snug ${
+            className={`text-[11px] leading-snug min-w-0 ${
+              !detailsOpen ? 'line-clamp-1' : ''
+            } ${
               playbackExclusion?.excluded ? 'text-gray-400 line-through decoration-gray-300/90' : 'text-gray-700'
             }`}
+            title={!detailsOpen && instruction.length > 80 ? instruction : undefined}
           >
-            {isAiPromptStep ? 'Prompt: ' : ''}
-            {instruction}
+            {isAiPromptStep ? (
+              <>
+                Prompt: {instruction}
+              </>
+            ) : (
+              instruction
+            )}
           </p>
           <button
             type="button"
             onClick={() => setDetailsOpen((v) => !v)}
             aria-expanded={detailsOpen}
-            className="mt-1 inline-flex items-center gap-1 text-[9px] font-medium text-[#4D65FF] hover:text-[#3d54e8] hover:underline"
+            className={`inline-flex shrink-0 items-center gap-1 text-[9px] font-medium text-[#4D65FF] hover:text-[#3d54e8] hover:underline ${
+              !detailsOpen ? 'mt-0.5' : 'mt-1'
+            }`}
           >
             {detailsOpen ? (
               <>

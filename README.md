@@ -230,6 +230,8 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.94** — **StepCard**: collapsed step row **`max-h-[80px]`**; **AI prompt** shows **one line** `Prompt: …` with **`line-clamp-1`** until **Show step details**; full instruction when expanded. **`@bladerunner/web` `0.6.65`**.
+- **0.7.93** — Remove temporary **debug** NDJSON **fetch** instrumentation from **OpenAI** / **Anthropic** LLM providers. **`@bladerunner/api` `0.5.56`**.
 - **0.7.92** — **Playback / AI prompt**: **`fixAmbiguousTableLastRowTdLocator`** — LLM **`locator('table tr:last-child td')`** matches **all** cells in the row (strict violation); auto-**\`.first()\`**. **`instructionToAction`** rules for **table rows** and **sidebar** (\`getByRole('navigation').getByRole('link', …)\`). **`@bladerunner/api` `0.5.55`**.
 - **0.7.91** — **AI prompt transcript after playback**: **`playbackProgress`** **`after`** now **invalidates** **`run-steps`** (Run detail, Runs, detached) so **`metadata.lastLlmTranscript`** appears without a manual refresh; **`persistAiPromptLlmTranscript`** logs lookup mismatches. **`instructionToAction`** guideline to **match instruction literals**. **`@bladerunner/api` `0.5.54`**, **`@bladerunner/web` `0.6.64`**.
 - **0.7.90** — **AI prompt / safety refusals**: **`instructionToAction`** system + user framing (**authorized QA**, **synthetic fixtures**, **staging app**) to avoid empty JSON when the model returns **`refusal`** on health-like UIs. Clearer empty-message errors (**refusal** vs **reasoning**). **`@bladerunner/api` `0.5.53`**.
