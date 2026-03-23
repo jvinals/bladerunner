@@ -45,5 +45,16 @@ export class LlmModule implements OnModuleInit {
       default:
         this.logger.warn(`Unknown LLM_PROVIDER "${provider}" — LLM features disabled`);
     }
+
+    const geminiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const geminiModel =
+      this.configService.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-2.0-flash';
+    if (geminiKey?.trim()) {
+      this.logger.log(`Gemini Playwright instruction path: enabled (GEMINI_INSTRUCTION_MODEL=${geminiModel})`);
+    } else {
+      this.logger.warn(
+        'GEMINI_API_KEY not set — instructionToAction (AI prompt / instruct Playwright codegen) will fail until it is set',
+      );
+    }
   }
 }

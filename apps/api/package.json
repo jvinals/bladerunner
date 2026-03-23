@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.5.65",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
@@ -25,6 +25,7 @@
     "@anthropic-ai/sdk": "^0.80.0",
     "@bladerunner/clerk-agentmail-signin": "workspace:*",
     "@clerk/clerk-sdk-node": "^5.1.6",
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.0",
