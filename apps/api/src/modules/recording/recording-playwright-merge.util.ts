@@ -105,6 +105,26 @@ export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string
 }
 
 /**
+ * Playback: `executePwCode` runs snippets via `new Function` (plain JavaScript). LLM output sometimes includes
+ * TypeScript non-null assertions (`expr!.prop`), which throw `SyntaxError: Unexpected token '!'` at parse time.
+ */
+export function stripTypeScriptNonNullAssertionsForPlayback(playwrightCode: string): string {
+  let s = playwrightCode;
+  for (let i = 0; i < 12; i++) {
+    const before = s;
+    s = s.replace(/\)\s*!\s*\./g, ').');
+    s = s.replace(/\]\s*!\s*\./g, '].');
+    s = s.replace(/(\w+)\s*!\s*\./g, '$1.');
+    s = s.replace(/\)\s*!\s*\(/g, ')(');
+    s = s.replace(/\]\s*!\s*\(/g, '](');
+    s = s.replace(/(\w+)\s*!\s*\(/g, '$1(');
+    s = s.replace(/\]\s*!\s*\[/g, '][');
+    if (s === before) break;
+  }
+  return s;
+}
+
+/**
  * Playback: Radix/modal layers often report "subtree intercepts pointer events" — Playwright refuses the click.
  * `force: true` skips that actionability check and dispatches to the locator’s element (see Playwright input docs).
  */

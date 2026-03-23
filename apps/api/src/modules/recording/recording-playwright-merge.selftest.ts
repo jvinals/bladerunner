@@ -3,6 +3,7 @@ import {
   preferRecordedCssSelectorForBarePageLocator,
   relaxClickForceForPlayback,
   relaxPageLocatorFirstForPlayback,
+  stripTypeScriptNonNullAssertionsForPlayback,
   tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
 
@@ -107,6 +108,18 @@ assertEq(
   'playback relax: path[d] -> scoped to dialog (not global .first())',
   relaxPageLocatorFirstForPlayback(`await page.locator('path[d="M18 6 6 18"]').click();`),
   `await page.getByRole('dialog').last().locator('path[d="M18 6 6 18"]').first().click();`,
+);
+
+assertEq(
+  'playback strip: TS non-null assertion before .click',
+  stripTypeScriptNonNullAssertionsForPlayback(`await page.locator('button')!.click();`),
+  `await page.locator('button').click();`,
+);
+
+assertEq(
+  'playback strip: chained !. before property',
+  stripTypeScriptNonNullAssertionsForPlayback(`await page.getByRole('dialog')!.locator('input')!.fill('x');`),
+  `await page.getByRole('dialog').locator('input').fill('x');`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

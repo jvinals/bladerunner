@@ -7,13 +7,13 @@ const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation eng
 
 I am attaching a screenshot of a software application UI.
 
-Your job is to generate only one continuous Playwright TypeScript snippet that performs the requested task based on the screenshot.
+Your job is to generate only one continuous Playwright snippet that performs the requested task based on the screenshot.
 
 Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
 
 Strict output rules:
-Return only valid Playwright TypeScript code.
+Return only valid Playwright JavaScript code (syntax that runs in a JavaScript engine without transpilation). Do not use TypeScript-only syntax: no non-null assertions (expr!.prop), no type assertions (as Type), no interface/type declarations, and no satisfies/as const unless you emit plain JavaScript equivalents.
 Do not include explanations.
 Do not include markdown fences.
 Do not include titles, notes, assumptions, comments, or alternatives.
@@ -41,7 +41,7 @@ Use only the minimum waits needed and follow Playwright best practices.
 If the screenshot is not sufficient to know a perfect selector, still output the strongest practical Playwright snippet with intelligent fallback locators.
 
 Output format requirement:
-Your entire response must be executable Playwright TypeScript only, consisting of the full sequence of actions needed to complete the task.
+Your entire response must be executable Playwright JavaScript only, consisting of the full sequence of actions needed to complete the task.
 `;
 
 /** Full text sent to Gemini (user turn) including substituted action. */

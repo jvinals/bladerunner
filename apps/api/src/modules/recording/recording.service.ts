@@ -61,6 +61,7 @@ import {
   relaxPageLocatorFirstForPlayback,
   tightenGetByTextLocatorsForPlayback,
   fixAmbiguousTableLastRowTdLocator,
+  stripTypeScriptNonNullAssertionsForPlayback,
 } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -3141,7 +3142,8 @@ export class RecordingService extends EventEmitter {
     const tightened = tightenGetByTextLocatorsForPlayback(tableTdFixed);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
-    const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);
+    const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
+    const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
     // #region agent log
     emitAgentDebugLog({
       sessionId: '5cf234',
