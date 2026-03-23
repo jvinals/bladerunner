@@ -32,6 +32,9 @@ Write the most robust production style Playwright snippet possible.
 Make it resilient to different content, dynamic values, user data, themes, settings, layouts, and configuration states.
 Avoid brittle selectors such as exact text matches when text may vary, screen coordinates, absolute positions, and fragile nth child chains.
 Prefer stable locators such as role, label, placeholder, test id, aria attributes, stable attributes, and layered fallback locators.
+When reading or acting on a single HTML table, use page.locator('table').first() (or a more specific selector) so strict mode does not fail if multiple tables exist.
+For combobox or search-as-you-type dropdowns, prefer getByRole('option', { name: ... }) or options under the listbox/dialog over very broad tag unions (e.g. mixing div and li) that can match the wrong node.
+If the snippet picks the next item from a list by scanning existing page text, handle the case when no item remains so the code does not silently skip work.
 Handle likely UI variations when relevant, including dialogs, menus, tabs, loading states, collapsed sections, empty or prefilled fields, and controls already in the desired state.
 Use only the minimum waits needed and follow Playwright best practices.
 If the screenshot is not sufficient to know a perfect selector, still output the strongest practical Playwright snippet with intelligent fallback locators.

@@ -3106,6 +3106,21 @@ export class RecordingService extends EventEmitter {
     }
     try {
       await fn(page);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+        body: JSON.stringify({
+          sessionId: '5cf234',
+          runId: 'post-fix',
+          hypothesisId: 'H-complete',
+          location: 'recording.service.ts:executePwCode',
+          message: 'executePwCode finished without throwing',
+          data: {},
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       // #region agent log

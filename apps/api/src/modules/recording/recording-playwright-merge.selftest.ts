@@ -86,6 +86,12 @@ assertEq(
 );
 
 assertEq(
+  'playback relax: bare table -> .first()',
+  relaxPageLocatorFirstForPlayback(`const t = await page.locator('table').innerText();`),
+  `const t = await page.locator('table').first().innerText();`,
+);
+
+assertEq(
   'playback relax: svg class chain -> .first()',
   relaxPageLocatorFirstForPlayback(`await page.locator('svg.lucide-triangle-alert').click();`),
   `await page.locator('svg.lucide-triangle-alert').first().click();`,

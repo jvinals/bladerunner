@@ -87,7 +87,7 @@ export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): str
 export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string {
   const alreadyNarrowed = String.raw`(?!\s*\.(?:first|nth|filter|locator|last|getBy))`;
   let s = playwrightCode;
-  const bareTag = String.raw`\bpage\.locator\s*\(\s*(['"\`])(span|div|p|a|button|input)\1\s*\)${alreadyNarrowed}`;
+  const bareTag = String.raw`\bpage\.locator\s*\(\s*(['"\`])(span|div|p|a|button|input|table|tr|td|tbody|thead)\1\s*\)${alreadyNarrowed}`;
   s = s.replace(new RegExp(bareTag, 'gi'), (_full, quote: string, tag: string) => `page.locator(${quote}${tag}${quote}).first()`);
   const compoundClassChain = String.raw`\bpage\.locator\s*\(\s*(['"\`])([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_-]+)+)\1\s*\)${alreadyNarrowed}`;
   s = s.replace(
