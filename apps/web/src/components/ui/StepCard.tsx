@@ -19,6 +19,7 @@ import {
   FlaskConical,
   Copy,
   X,
+  Wand2,
 } from 'lucide-react';
 import { runsApi } from '@/lib/api';
 import type { CheckpointData } from '@/components/ui/CheckpointDivider';
@@ -202,6 +203,12 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   const [aiPromptLlmOpen, setAiPromptLlmOpen] = useState(false);
   const [aiPromptScreenshotZoomOpen, setAiPromptScreenshotZoomOpen] = useState(false);
   const [screenshotCopyStatus, setScreenshotCopyStatus] = useState<'idle' | 'copied' | 'copiedText' | 'error'>('idle');
+  /** Structured failure from API (LLM explanation + suggested prompt). */
+  const [aiTestFailureDialog, setAiTestFailureDialog] = useState<{
+    error: string;
+    explanation: string;
+    suggestedPrompt: string;
+  } | null>(null);
 
   useEffect(() => {
     setPromptDraft(instruction);
@@ -238,6 +245,41 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
       }
     }
   }, []);
+
+  const adoptSuggestedAiPrompt = useCallback(async () => {
+    if (!aiPromptStep || !aiTestFailureDialog) return;
+    const next = aiTestFailureDialog.suggestedPrompt.trim();
+    if (!next) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      await runsApi.patchRunStep(aiPromptStep.runId, aiPromptStep.stepId, { instruction: next });
+      setPromptDraft(next);
+      await runsApi.resetAiPromptTest(aiPromptStep.runId, aiPromptStep.stepId);
+      const res = await runsApi.testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
+        instruction: next,
+      });
+      setAiTestFailureDialog(null);
+      if (res.cancelled) return;
+      if (!res.ok) {
+        if (res.failureHelp) {
+          setAiTestFailureDialog({
+            error: res.error || 'Test failed',
+            explanation: res.failureHelp.explanation,
+            suggestedPrompt: res.failureHelp.suggestedPrompt,
+          });
+        } else {
+          setAiError(res.error || 'Test failed');
+        }
+        return;
+      }
+      aiPromptStep.onUpdated();
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiBusy(false);
+    }
+  }, [aiPromptStep, aiTestFailureDialog]);
 
   const Icon = ACTION_ICONS[action] || Hand;
   const isAiPromptStep =
@@ -288,6 +330,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   const lastLlmTranscript = isAiPromptStep ? parseAiPromptLastLlmTranscript(metadata) : null;
 
   return (
+    <>
     <div
       ref={ref}
       className={`group relative border-l-3 rounded-r-lg bg-white border border-gray-100 mb-1.5 transition-all duration-200 hover:shadow-sm ${originBorder} ${highlightClass} ${
@@ -615,12 +658,25 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                       onClick={() => {
                         setAiBusy(true);
                         setAiError(null);
+                        setAiTestFailureDialog(null);
                         void runsApi
                           .testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
                             instruction: promptDraft.trim(),
                           })
                           .then((res) => {
-                            if (!res.ok) throw new Error(res.error || 'Test failed');
+                            if (res.cancelled) return;
+                            if (!res.ok) {
+                              if (res.failureHelp) {
+                                setAiTestFailureDialog({
+                                  error: res.error || 'Test failed',
+                                  explanation: res.failureHelp.explanation,
+                                  suggestedPrompt: res.failureHelp.suggestedPrompt,
+                                });
+                              } else {
+                                setAiError(res.error || 'Test failed');
+                              }
+                              return;
+                            }
                             aiPromptStep.onUpdated();
                           })
                           .catch((e) => {
@@ -720,7 +776,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                   )}
                 </>
               )}
-              {aiError && (
+              {aiError && !aiTestFailureDialog && (
                 <p className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-1.5 py-1" role="alert">
                   {aiError}
                 </p>
@@ -736,5 +792,56 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
         </div>
       )}
     </div>
+
+    <Dialog.Root open={!!aiTestFailureDialog} onOpenChange={(open) => !open && setAiTestFailureDialog(null)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[102] bg-black/45" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[103] flex max-h-[85vh] w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-xl outline-none">
+          <Dialog.Title className="text-sm font-semibold text-gray-900">Test failed</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            Explanation and suggested prompt from the model. You can adopt the suggested prompt to replace yours and re-run the test.
+          </Dialog.Description>
+          {aiTestFailureDialog && (
+            <>
+              <p className="mt-1 text-[10px] text-red-700/90 font-mono leading-snug break-words border border-red-100 bg-red-50/80 rounded px-2 py-1.5">
+                {aiTestFailureDialog.error}
+              </p>
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[10px] font-semibold text-gray-600">What went wrong</p>
+                <div className="max-h-[min(40vh,240px)] overflow-y-auto rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[11px] text-gray-800 leading-relaxed whitespace-pre-wrap">
+                  {aiTestFailureDialog.explanation}
+                </div>
+              </div>
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[10px] font-semibold text-gray-600">Suggested prompt</p>
+                <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5 font-mono text-[10px] text-gray-800 leading-snug">
+                  {aiTestFailureDialog.suggestedPrompt}
+                </pre>
+              </div>
+              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-3">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="button"
+                  disabled={aiBusy}
+                  onClick={() => void adoptSuggestedAiPrompt()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-teal-500 bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-40"
+                >
+                  <Wand2 size={14} aria-hidden />
+                  Adopt this prompt
+                </button>
+              </div>
+            </>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+    </>
   );
 });

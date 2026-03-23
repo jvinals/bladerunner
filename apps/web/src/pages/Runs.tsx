@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import {
@@ -28,7 +29,7 @@ import {
 } from '@/hooks/useRemotePreviewCanvas';
 import {
   Search, Plus, Square, Send, ExternalLink, X, Play, ChevronDown, LogIn, Trash2, Pause,
-  RotateCcw, StepForward, StepBack, Sparkles, FlaskConical,
+  RotateCcw, StepForward, StepBack, Sparkles, FlaskConical, Wand2,
 } from 'lucide-react';
 
 export default function RunsPage() {
@@ -66,6 +67,11 @@ export default function RunsPage() {
   const [aiStepCreatedId, setAiStepCreatedId] = useState<string | null>(null);
   const [aiStepBusy, setAiStepBusy] = useState(false);
   const [aiStepError, setAiStepError] = useState<string | null>(null);
+  const [aiStepFailureDialog, setAiStepFailureDialog] = useState<{
+    error: string;
+    explanation: string;
+    suggestedPrompt: string;
+  } | null>(null);
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
@@ -436,6 +442,7 @@ export default function RunsPage() {
     setAiStepPrompt('');
     setAiStepCreatedId(null);
     setAiStepError(null);
+    setAiStepFailureDialog(null);
     setAiStepModalOpen(true);
   }, []);
 
@@ -444,6 +451,7 @@ export default function RunsPage() {
     setAiStepPrompt('');
     setAiStepCreatedId(null);
     setAiStepError(null);
+    setAiStepFailureDialog(null);
   }, []);
 
   const closeAiStepModalCancel = useCallback(async () => {
@@ -467,6 +475,7 @@ export default function RunsPage() {
     setAiStepPrompt('');
     setAiStepCreatedId(null);
     setAiStepError(null);
+    setAiStepFailureDialog(null);
   }, [aiStepBusy, aiStepCreatedId, runId, loadRunSteps]);
 
   useEffect(() => {
@@ -501,11 +510,24 @@ export default function RunsPage() {
     if (!runId || !aiStepCreatedId || aiStepBusy) return;
     setAiStepBusy(true);
     setAiStepError(null);
+    setAiStepFailureDialog(null);
     try {
       const res = await runsApi.testAiPromptStep(runId, aiStepCreatedId, {
         instruction: aiStepPrompt.trim(),
       });
-      if (!res.ok) throw new Error(res.error || 'Test failed');
+      if (res.cancelled) return;
+      if (!res.ok) {
+        if (res.failureHelp) {
+          setAiStepFailureDialog({
+            error: res.error || 'Test failed',
+            explanation: res.failureHelp.explanation,
+            suggestedPrompt: res.failureHelp.suggestedPrompt,
+          });
+        } else {
+          setAiStepError(res.error || 'Test failed');
+        }
+        return;
+      }
       void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
       await loadRunSteps(runId);
     } catch (e) {
@@ -514,6 +536,40 @@ export default function RunsPage() {
       setAiStepBusy(false);
     }
   }, [runId, aiStepCreatedId, aiStepPrompt, aiStepBusy, loadRunSteps, queryClient]);
+
+  const handleAiStepAdoptSuggestedPrompt = useCallback(async () => {
+    if (!runId || !aiStepCreatedId || !aiStepFailureDialog || aiStepBusy) return;
+    const next = aiStepFailureDialog.suggestedPrompt.trim();
+    if (!next) return;
+    setAiStepBusy(true);
+    setAiStepError(null);
+    try {
+      await runsApi.patchRunStep(runId, aiStepCreatedId, { instruction: next });
+      setAiStepPrompt(next);
+      await runsApi.resetAiPromptTest(runId, aiStepCreatedId);
+      const res = await runsApi.testAiPromptStep(runId, aiStepCreatedId, { instruction: next });
+      setAiStepFailureDialog(null);
+      if (res.cancelled) return;
+      if (!res.ok) {
+        if (res.failureHelp) {
+          setAiStepFailureDialog({
+            error: res.error || 'Test failed',
+            explanation: res.failureHelp.explanation,
+            suggestedPrompt: res.failureHelp.suggestedPrompt,
+          });
+        } else {
+          setAiStepError(res.error || 'Test failed');
+        }
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
+      await loadRunSteps(runId);
+    } catch (e) {
+      setAiStepError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiStepBusy(false);
+    }
+  }, [runId, aiStepCreatedId, aiStepFailureDialog, aiStepBusy, loadRunSteps, queryClient]);
 
   const handleAiStepReset = useCallback(async () => {
     if (!runId || !aiStepCreatedId || aiStepBusy) return;
@@ -1312,7 +1368,7 @@ export default function RunsPage() {
               placeholder="Describe what to do on the page at this step…"
               className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
             />
-            {aiStepError && (
+            {aiStepError && !aiStepFailureDialog && (
               <p className="mt-2 text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1" role="alert">
                 {aiStepError}
               </p>
@@ -1376,6 +1432,56 @@ export default function RunsPage() {
           </div>
         </div>
       )}
+
+      <Dialog.Root open={!!aiStepFailureDialog} onOpenChange={(open) => !open && setAiStepFailureDialog(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[130] bg-black/45" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex max-h-[85vh] w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-xl outline-none">
+            <Dialog.Title className="text-sm font-semibold text-gray-900">Test failed</Dialog.Title>
+            <Dialog.Description className="sr-only">
+              Model explanation and suggested prompt. Adopt replaces your prompt, resets the browser, and re-runs the test.
+            </Dialog.Description>
+            {aiStepFailureDialog && (
+              <>
+                <p className="mt-1 text-[10px] text-red-700/90 font-mono leading-snug break-words border border-red-100 bg-red-50/80 rounded px-2 py-1.5">
+                  {aiStepFailureDialog.error}
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-[10px] font-semibold text-gray-600">What went wrong</p>
+                  <div className="max-h-[min(40vh,240px)] overflow-y-auto rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[11px] text-gray-800 leading-relaxed whitespace-pre-wrap">
+                    {aiStepFailureDialog.explanation}
+                  </div>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-[10px] font-semibold text-gray-600">Suggested prompt</p>
+                  <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5 font-mono text-[10px] text-gray-800 leading-snug">
+                    {aiStepFailureDialog.suggestedPrompt}
+                  </pre>
+                </div>
+                <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-3">
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                  </Dialog.Close>
+                  <button
+                    type="button"
+                    disabled={aiStepBusy}
+                    onClick={() => void handleAiStepAdoptSuggestedPrompt()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-teal-500 bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-40"
+                  >
+                    <Wand2 size={14} aria-hidden />
+                    Adopt this prompt
+                  </button>
+                </div>
+              </>
+            )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <SkipReplaySuggestionsModal
         open={skipReplayModalOpen}

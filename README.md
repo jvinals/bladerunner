@@ -233,6 +233,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.8.3** — **AI prompt test failure UI**: **Add AI Step** modal matches **StepCard** — when **`test-ai-step`** returns **`failureHelp`**, a dialog shows the technical error, **What went wrong**, **Suggested prompt**, and **Adopt this prompt** (patch step, **reset-ai-test**, re-test). **`@bladerunner/web` `0.6.70`**.
 - **0.8.2** — **Recording / AI prompt**: **`POST /runs/:id/recording/ai-prompt-step`** appends an AI prompt step during recording; **`POST .../reset-ai-test`** restores browser state before the last Test (or prior checkpoint); **`POST .../test-ai-step`** accepts optional **`instruction`** override; **`DELETE .../steps/:stepId`** removes the last step while recording. **Runs** page: **Add AI Step** modal. **`@bladerunner/api` `0.5.61`**, **`@bladerunner/web` `0.6.69`**.
 - **0.8.1** — **Recording / Clerk**: revert remote browser **`deviceScaleFactor`** to **1** — **`deviceScaleFactor: 2`** (0.8.0) broke **automatic sign-in** on the recording run page; **JPEG quality 85** + ordinal **instructionToAction** table rules unchanged. **`@bladerunner/api` `0.5.60`**.
 - **0.8.0** — **Vision LLM (AI prompt / instruct)**: remote browser uses **`deviceScaleFactor: 2`** (sharper captures); JPEG **quality 85** for screenshots sent to the model; **`instructionToAction`** rules for **ordinal table rows** (first/second/last — prefer `tbody tr` / `nth`, do not OCR MRNs from the image). **`@bladerunner/api` `0.5.59`**.
