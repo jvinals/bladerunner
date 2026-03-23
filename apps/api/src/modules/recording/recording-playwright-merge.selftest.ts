@@ -1,6 +1,8 @@
 import {
+  excludeFileInputFromFollowingInputXPath,
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
+  preferSearchConditionsPlaceholderOverFollowingInputLabel,
   relaxClickForceForPlayback,
   relaxPageLocatorFirstForPlayback,
   stripTypeScriptNonNullAssertionsForPlayback,
@@ -120,6 +122,20 @@ assertEq(
   'playback strip: chained !. before property',
   stripTypeScriptNonNullAssertionsForPlayback(`await page.getByRole('dialog')!.locator('input')!.fill('x');`),
   `await page.getByRole('dialog').locator('input').fill('x');`,
+);
+
+assertEq(
+  'playback: Add disease label + following::input -> Search conditions placeholder',
+  preferSearchConditionsPlaceholderOverFollowingInputLabel(
+    `await page.locator('div, label, p').filter({ hasText: /^Add disease to today's encounter$/ }).locator('xpath=following::input').first().click();`,
+  ),
+  `await page.getByPlaceholder('Search conditions...').first().click();`,
+);
+
+assertEq(
+  'playback: following::input excludes type=file',
+  excludeFileInputFromFollowingInputXPath(`await page.locator('section').locator('xpath=following::input').fill('x');`),
+  `await page.locator('section').locator('xpath=following::input[not(@type="file")]').fill('x');`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

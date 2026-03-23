@@ -105,6 +105,34 @@ export function relaxPageLocatorFirstForPlayback(playwrightCode: string): string
 }
 
 /**
+ * Playback: EHR-style UIs often place a hidden `type=file` import input immediately after a section label.
+ * `xpath=following::input` then targets that node → "Element is not visible". Prefer the real search field when
+ * the label text matches the common "Add disease…" heading and the UI uses the standard placeholder.
+ */
+export function preferSearchConditionsPlaceholderOverFollowingInputLabel(playwrightCode: string): string {
+  const re =
+    /\bpage\.locator\(\s*(['"])(?:div|div,\s*label,\s*p)\1\s*\)\s*\.filter\(\s*\{\s*hasText:\s*\/[^/]*Add disease to today[^/]*\/\s*\}\s*\)\s*\.locator\(\s*\1xpath=following::input\1\s*\)/gi;
+  return playwrightCode.replace(re, `page.getByPlaceholder('Search conditions...')`);
+}
+
+/**
+ * Playback: `locator('xpath=following::input')` often resolves to a hidden `type=file` before the real field.
+ * Narrow the XPath; use {@link preferSearchConditionsPlaceholderOverFollowingInputLabel} when the placeholder is known.
+ */
+export function excludeFileInputFromFollowingInputXPath(playwrightCode: string): string {
+  return playwrightCode.replace(
+    /\.locator\(\s*(['"])xpath=following::input\1\s*\)/gi,
+    (_full, quote: string) => {
+      const inner =
+        quote === "'"
+          ? `xpath=following::input[not(@type="file")]`
+          : `xpath=following::input[not(@type='file')]`;
+      return `.locator(${quote}${inner}${quote})`;
+    },
+  );
+}
+
+/**
  * Playback: `executePwCode` runs snippets via `new Function` (plain JavaScript). LLM output sometimes includes
  * TypeScript non-null assertions (`expr!.prop`), which throw `SyntaxError: Unexpected token '!'` at parse time.
  */

@@ -62,6 +62,8 @@ import {
   tightenGetByTextLocatorsForPlayback,
   fixAmbiguousTableLastRowTdLocator,
   stripTypeScriptNonNullAssertionsForPlayback,
+  preferSearchConditionsPlaceholderOverFollowingInputLabel,
+  excludeFileInputFromFollowingInputXPath,
 } from './recording-playwright-merge.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -3138,7 +3140,9 @@ export class RecordingService extends EventEmitter {
     }
 
     const relaxed = relaxPageLocatorFirstForPlayback(code);
-    const tableTdFixed = fixAmbiguousTableLastRowTdLocator(relaxed);
+    const searchPlaceholderFixed = preferSearchConditionsPlaceholderOverFollowingInputLabel(relaxed);
+    const followingInputFixed = excludeFileInputFromFollowingInputXPath(searchPlaceholderFixed);
+    const tableTdFixed = fixAmbiguousTableLastRowTdLocator(followingInputFixed);
     const tightened = tightenGetByTextLocatorsForPlayback(tableTdFixed);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
