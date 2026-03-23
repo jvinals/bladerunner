@@ -43,3 +43,17 @@ export interface InstructionToActionOutput {
   selector?: string;
   value?: string;
 }
+
+/** Exact strings sent to the LLM for debugging / UI (AI prompt modal). */
+export interface InstructionToActionLlmTranscript {
+  systemPrompt: string;
+  userPrompt: string;
+  rawResponse: string;
+  /** User message included a vision attachment (JPEG) when calling the provider. */
+  visionAttached: boolean;
+}
+
+export interface InstructionToActionResult {
+  output: InstructionToActionOutput;
+  transcript: InstructionToActionLlmTranscript;
+}

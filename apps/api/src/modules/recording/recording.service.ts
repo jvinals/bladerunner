@@ -44,7 +44,9 @@ import {
   AI_PROMPT_STEP_SCHEMA_VERSION,
   aiPromptStepSentinelPlaywrightCode,
   isAiPromptStepMetadata,
+  type AiPromptLlmTranscriptStored,
 } from './ai-prompt-step-metadata';
+import type { InstructionToActionLlmTranscript } from '../llm/providers/llm-provider.interface';
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
@@ -582,9 +584,10 @@ export class RecordingService extends EventEmitter {
       pageAccessibilityTree: accessibilityTree,
       screenshotBase64,
     });
+    const out = llmResult.output;
 
     try {
-      await this.executePwCode(session.page, llmResult.playwrightCode);
+      await this.executePwCode(session.page, out.playwrightCode);
     } catch (err) {
       this.logger.error(`Playwright execution failed: ${err}`);
       throw new Error(`Failed to execute action: ${err}`);
@@ -593,11 +596,11 @@ export class RecordingService extends EventEmitter {
     await session.page.waitForLoadState('domcontentloaded').catch(() => {});
 
     const step = await this.recordStep(session, {
-      action: (llmResult.action?.toUpperCase() || 'CUSTOM') as any,
-      selector: llmResult.selector || null,
-      value: llmResult.value || null,
+      action: (out.action?.toUpperCase() || 'CUSTOM') as any,
+      selector: out.selector || null,
+      value: out.value || null,
       instruction,
-      playwrightCode: llmResult.playwrightCode,
+      playwrightCode: out.playwrightCode,
       origin: 'AI_DRIVEN',
     });
 
@@ -649,9 +652,10 @@ export class RecordingService extends EventEmitter {
       pageAccessibilityTree: accessibilityTree,
       screenshotBase64,
     });
+    const out = llmResult.output;
 
     try {
-      await this.executePwCode(session.page, llmResult.playwrightCode);
+      await this.executePwCode(session.page, out.playwrightCode);
     } catch (err) {
       this.logger.error(`reRecordStep Playwright execution failed: ${err}`);
       throw new BadRequestException(`Failed to execute action: ${err}`);
@@ -660,11 +664,11 @@ export class RecordingService extends EventEmitter {
     await session.page.waitForLoadState('domcontentloaded').catch(() => {});
 
     const data = {
-      action: (llmResult.action?.toUpperCase() || 'CUSTOM') as string,
-      selector: llmResult.selector || null,
-      value: llmResult.value || null,
+      action: (out.action?.toUpperCase() || 'CUSTOM') as string,
+      selector: out.selector || null,
+      value: out.value || null,
       instruction: trimmed,
-      playwrightCode: llmResult.playwrightCode,
+      playwrightCode: out.playwrightCode,
       origin: 'AI_DRIVEN' as const,
     };
 
@@ -986,10 +990,14 @@ export class RecordingService extends EventEmitter {
     try {
       const { playwrightCode } = await this.playAiPromptStepOnPage(page, step.instruction, {
         skipClickForce: false,
+        persistTranscript: { stepId, runId, userId, source: 'test' },
+      });
+      const fresh = await this.prisma.runStep.findFirst({
+        where: { id: stepId, runId, userId },
       });
       const baseMeta =
-        step.metadata && typeof step.metadata === 'object'
-          ? (step.metadata as Record<string, unknown>)
+        fresh?.metadata && typeof fresh.metadata === 'object'
+          ? (fresh.metadata as Record<string, unknown>)
           : {};
       await this.prisma.runStep.update({
         where: { id: stepId },
@@ -1007,9 +1015,12 @@ export class RecordingService extends EventEmitter {
       return { ok: true, playwrightCode };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      const fresh = await this.prisma.runStep.findFirst({
+        where: { id: stepId, runId, userId },
+      });
       const baseMeta =
-        step.metadata && typeof step.metadata === 'object'
-          ? (step.metadata as Record<string, unknown>)
+        fresh?.metadata && typeof fresh.metadata === 'object'
+          ? (fresh.metadata as Record<string, unknown>)
           : {};
       await this.prisma.runStep.update({
         where: { id: stepId },
@@ -1068,7 +1079,10 @@ export class RecordingService extends EventEmitter {
   private async playAiPromptStepOnPage(
     page: Page,
     instruction: string,
-    opts: { skipClickForce: boolean },
+    opts: {
+      skipClickForce: boolean;
+      persistTranscript?: { stepId: string; runId: string; userId: string; source: 'test' | 'playback' };
+    },
   ): Promise<{ playwrightCode: string }> {
     const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page);
     const llmResult = await this.llmService.instructionToAction({
@@ -1077,17 +1091,53 @@ export class RecordingService extends EventEmitter {
       pageAccessibilityTree,
       screenshotBase64,
     });
+    const out = llmResult.output;
+    if (opts.persistTranscript) {
+      const { stepId, runId, userId, source } = opts.persistTranscript;
+      await this.persistAiPromptLlmTranscript(stepId, runId, userId, llmResult.transcript, source);
+    }
     try {
       page.setDefaultTimeout(AI_PROMPT_PW_TIMEOUT_MS);
       page.setDefaultNavigationTimeout(AI_PROMPT_PW_TIMEOUT_MS);
-      await this.executePwCode(page, llmResult.playwrightCode, {
+      await this.executePwCode(page, out.playwrightCode, {
         skipClickForce: opts.skipClickForce,
       });
     } finally {
       page.setDefaultTimeout(PLAYWRIGHT_DEFAULT_TIMEOUT_MS);
       page.setDefaultNavigationTimeout(PLAYWRIGHT_DEFAULT_TIMEOUT_MS);
     }
-    return { playwrightCode: llmResult.playwrightCode };
+    return { playwrightCode: out.playwrightCode };
+  }
+
+  private async persistAiPromptLlmTranscript(
+    stepId: string,
+    runId: string,
+    userId: string,
+    transcript: InstructionToActionLlmTranscript,
+    source: 'test' | 'playback',
+  ): Promise<void> {
+    const row = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!row) return;
+    const baseMeta =
+      row.metadata && typeof row.metadata === 'object' ? { ...(row.metadata as Record<string, unknown>) } : {};
+    const stored: AiPromptLlmTranscriptStored = {
+      ...transcript,
+      capturedAt: new Date().toISOString(),
+      source,
+    };
+    await this.prisma.runStep.update({
+      where: { id: stepId },
+      data: {
+        metadata: {
+          ...baseMeta,
+          kind: AI_PROMPT_STEP_KIND,
+          schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+          lastLlmTranscript: stored,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
   }
 
   /** Forward pointer from the UI preview (canvas) into the Playwright page viewport. */
@@ -1938,6 +1988,12 @@ export class RecordingService extends EventEmitter {
           if (isAiPromptStep) {
             await this.playAiPromptStepOnPage(session.page, step.instruction, {
               skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
+              persistTranscript: {
+                stepId: step.id,
+                runId: sourceRunId,
+                userId: session.userId,
+                source: 'playback',
+              },
             });
           } else {
             await this.executePwCode(session.page, step.playwrightCode, {

@@ -5,6 +5,7 @@ import {
   ActionToInstructionOutput,
   InstructionToActionInput,
   InstructionToActionOutput,
+  InstructionToActionResult,
 } from './providers/llm-provider.interface';
 
 const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
@@ -134,9 +135,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
   }
 
-  async instructionToAction(
-    input: InstructionToActionInput,
-  ): Promise<InstructionToActionOutput> {
+  async instructionToAction(input: InstructionToActionInput): Promise<InstructionToActionResult> {
     if (!this.provider) {
       throw new Error('LLM provider not configured. Set LLM_PROVIDER and the corresponding API key in .env');
     }
@@ -146,7 +145,9 @@ Current page URL: ${input.pageUrl}
 Page context (accessibility tree):
 ${input.pageAccessibilityTree.slice(0, 4000)}`;
 
-    const response = await this.provider.chat(
+    const visionAttached = !!input.screenshotBase64?.trim();
+
+    const rawResponse = await this.provider.chat(
       [
         { role: 'system', content: INSTRUCTION_TO_ACTION_SYSTEM },
         { role: 'user', content: userPrompt },
@@ -156,7 +157,17 @@ ${input.pageAccessibilityTree.slice(0, 4000)}`;
       },
     );
 
-    return JSON.parse(response);
+    const output = JSON.parse(rawResponse) as InstructionToActionOutput;
+
+    return {
+      output,
+      transcript: {
+        systemPrompt: INSTRUCTION_TO_ACTION_SYSTEM,
+        userPrompt,
+        rawResponse,
+        visionAttached,
+      },
+    };
   }
 
   /**

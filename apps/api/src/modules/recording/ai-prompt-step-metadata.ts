@@ -1,7 +1,15 @@
+import type { InstructionToActionLlmTranscript } from '../llm/providers/llm-provider.interface';
+
 /** `RunStep.metadata.kind` for prompt-driven steps (vision + LLM at playback, not stored codegen). */
 export const AI_PROMPT_STEP_KIND = 'ai_prompt_step' as const;
 
 export const AI_PROMPT_STEP_SCHEMA_VERSION = 1;
+
+/** Last LLM request/response persisted for the AI prompt modal (exact strings; screenshot bytes not stored). */
+export type AiPromptLlmTranscriptStored = InstructionToActionLlmTranscript & {
+  capturedAt: string;
+  source: 'test' | 'playback';
+};
 
 export type AiPromptStepMetadata = {
   kind: typeof AI_PROMPT_STEP_KIND;
@@ -9,6 +17,8 @@ export type AiPromptStepMetadata = {
   /** Optional: last Test Step run (UX only). */
   lastTestAt?: string;
   lastTestOk?: boolean;
+  /** Last successful LLM round-trip (updated before Playwright runs; includes failed-PW cases when LLM succeeded). */
+  lastLlmTranscript?: AiPromptLlmTranscriptStored;
 };
 
 export function isAiPromptStepMetadata(m: unknown): m is AiPromptStepMetadata {

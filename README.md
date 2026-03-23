@@ -230,6 +230,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.85** — **AI prompt steps**: Persist **`lastLlmTranscript`** (exact **system** / **user** text and **raw** model string) on **Test step** and **playback**; **StepCard** **AI prompt** badge opens a **modal** with the transcript. **`@bladerunner/api` `0.5.48`**, **`@bladerunner/web` `0.6.63`**.
 - **0.7.84** — **LLM**: Default **`OPENAI_MODEL`** is **`gpt-5.4-mini`** (was **`gpt-4o`**). **`@bladerunner/api` `0.5.47`**.
 - **0.7.83** — Remove temporary **debug** instrumentation (**NDJSON** + ingest **fetch** on **Prev** rewind); **AI prompt** **120s** Playwright timeout unchanged. **`@bladerunner/api` `0.5.46`**, **`@bladerunner/web` `0.6.62`**.
 - **0.7.82** — **AI prompt steps**: **`playAiPromptStepOnPage`** uses **120s** default action/navigation timeout during generated **Playwright** (avoids **30s** false timeouts); debug timing logs (removed in **0.7.83**). **`@bladerunner/api` `0.5.45`**.

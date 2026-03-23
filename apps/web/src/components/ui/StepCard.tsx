@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, forwardRef } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 import {
   ChevronDown,
   ChevronRight,
@@ -83,6 +84,36 @@ function formatTime(ts: string): string {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+/** From `RunStep.metadata.lastLlmTranscript` (AI prompt steps). */
+function parseAiPromptLastLlmTranscript(metadata: unknown): {
+  systemPrompt: string;
+  userPrompt: string;
+  rawResponse: string;
+  visionAttached?: boolean;
+  capturedAt?: string;
+  source?: string;
+} | null {
+  if (!metadata || typeof metadata !== 'object') return null;
+  const t = (metadata as Record<string, unknown>).lastLlmTranscript;
+  if (!t || typeof t !== 'object') return null;
+  const o = t as Record<string, unknown>;
+  if (
+    typeof o.systemPrompt !== 'string' ||
+    typeof o.userPrompt !== 'string' ||
+    typeof o.rawResponse !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    systemPrompt: o.systemPrompt,
+    userPrompt: o.userPrompt,
+    rawResponse: o.rawResponse,
+    visionAttached: typeof o.visionAttached === 'boolean' ? o.visionAttached : undefined,
+    capturedAt: typeof o.capturedAt === 'string' ? o.capturedAt : undefined,
+    source: typeof o.source === 'string' ? o.source : undefined,
+  };
+}
+
 const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
   current: 'ring-2 ring-[#4B90FF] ring-offset-2 ring-offset-white shadow-md',
   past: 'opacity-55',
@@ -164,6 +195,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [showEnableAi, setShowEnableAi] = useState(false);
+  const [aiPromptLlmOpen, setAiPromptLlmOpen] = useState(false);
 
   useEffect(() => {
     setPromptDraft(instruction);
@@ -215,6 +247,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
         : 'Manual';
 
   const showAfterThumb = checkpointAfterStep && checkpointRunId;
+  const lastLlmTranscript = isAiPromptStep ? parseAiPromptLastLlmTranscript(metadata) : null;
 
   return (
     <div
@@ -249,9 +282,79 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                 <span className="text-[8px] font-medium text-amber-900/80">Skip replay</span>
               </label>
             )}
-            <span className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
-              {originLabel}
-            </span>
+            {isAiPromptStep ? (
+              <Dialog.Root open={aiPromptLlmOpen} onOpenChange={setAiPromptLlmOpen}>
+                <Dialog.Trigger asChild>
+                  <button
+                    type="button"
+                    title="View exact LLM prompt and response"
+                    className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg} border-0 p-0 font-inherit cursor-pointer hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/80 rounded-full`}
+                  >
+                    {originLabel}
+                  </button>
+                </Dialog.Trigger>
+                <Dialog.Portal>
+                  <Dialog.Overlay className="fixed inset-0 z-[100] bg-black/45" />
+                  <Dialog.Content className="fixed left-1/2 top-1/2 z-[101] flex max-h-[85vh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-xl outline-none">
+                    <Dialog.Title className="text-sm font-semibold text-gray-900">AI prompt — LLM transcript</Dialog.Title>
+                    <Dialog.Description className="sr-only">
+                      Exact system prompt, user prompt, and raw model response from the last test or playback run.
+                    </Dialog.Description>
+                    {lastLlmTranscript?.visionAttached ? (
+                      <p className="mt-2 text-[10px] leading-snug text-amber-900/90 rounded bg-amber-50 px-2 py-1.5 border border-amber-100">
+                        A JPEG screenshot was attached to this LLM request (image bytes are not stored here).
+                      </p>
+                    ) : null}
+                    {lastLlmTranscript?.capturedAt ? (
+                      <p className="mt-2 text-[10px] text-gray-500">
+                        Last captured {new Date(lastLlmTranscript.capturedAt).toLocaleString()}
+                        {lastLlmTranscript.source ? ` (${lastLlmTranscript.source})` : ''}
+                      </p>
+                    ) : null}
+                    {!lastLlmTranscript ? (
+                      <p className="mt-3 text-sm text-gray-600">
+                        No transcript yet. Run Test step or playback once to capture the exact prompt and response.
+                      </p>
+                    ) : (
+                      <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto text-left">
+                        <div>
+                          <div className="mb-1 text-[10px] font-semibold text-gray-600">System prompt</div>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                            {lastLlmTranscript.systemPrompt}
+                          </pre>
+                        </div>
+                        <div>
+                          <div className="mb-1 text-[10px] font-semibold text-gray-600">User prompt</div>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                            {lastLlmTranscript.userPrompt}
+                          </pre>
+                        </div>
+                        <div>
+                          <div className="mb-1 text-[10px] font-semibold text-gray-600">Raw response</div>
+                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                            {lastLlmTranscript.rawResponse}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-4 flex justify-end border-t border-gray-100 pt-3">
+                      <Dialog.Close asChild>
+                        <button
+                          type="button"
+                          className="rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-200"
+                        >
+                          Close
+                        </button>
+                      </Dialog.Close>
+                    </div>
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
+            ) : (
+              <span className={`text-[8px] font-semibold uppercase tracking-wider ${originBadgeBg}`}>
+                {originLabel}
+              </span>
+            )}
           </div>
           <p
             className={`text-[11px] leading-snug ${
