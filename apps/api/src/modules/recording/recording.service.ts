@@ -1589,6 +1589,11 @@ export class RecordingService extends EventEmitter {
         paused: false,
         playbackResumeWaiters: [],
         replaySnapshot,
+        /** Pause after this step completes when `playThroughSequence` caps the run (step-through + Prev rewind). */
+        pauseAfterSequenceInclusive:
+          opts?.playThroughSequence != null && Number.isFinite(opts.playThroughSequence)
+            ? Math.floor(opts.playThroughSequence)
+            : null,
       };
 
       this.playbackSessions.set(playbackSessionId, session);
