@@ -185,7 +185,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   const originBadgeBg = showAsAutomatic
     ? 'rounded-full px-2 py-0.5 bg-[#4B90FF] text-white shadow-sm'
     : isAiPromptStep
-      ? 'rounded-full px-2 py-0.5 bg-teal-500/15 text-teal-700'
+      ? 'rounded-full px-2 py-0.5 bg-emerald-600 text-white shadow-sm'
       : isAILlmGenerated
         ? 'rounded-full px-2 py-0.5 bg-[#4D65FF]/10 text-[#4D65FF]'
         : 'rounded-full px-2 py-0.5 bg-gray-100 text-gray-400';
