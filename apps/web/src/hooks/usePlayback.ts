@@ -1,5 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import type { MutableRefObject } from 'react';
+import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 'react';
 import type { Socket } from 'socket.io-client';
 import { runsApi, playbackBodyFromSnapshot, type StartPlaybackBody } from '@/lib/api';
 import { effectivePlaybackHighlightSequence, previousPlayThroughTarget } from '@/lib/playbackStepTone';
@@ -21,6 +20,11 @@ type PlaybackStatusPayload = {
   runId: string;
   sourceRunId?: string;
   error?: string;
+};
+
+export type UsePlaybackOptions = {
+  /** Called for every `playbackProgress` socket event (e.g. refetch run steps after `after` to pick up `metadata` updates). */
+  onPlaybackProgress?: (payload: PlaybackProgressPayload) => void;
 };
 
 export interface UsePlaybackReturn {
@@ -61,7 +65,7 @@ function disconnectSocket(socketRef: MutableRefObject<Socket | null>, sessionId:
   socketRef.current = null;
 }
 
-export function usePlayback(): UsePlaybackReturn {
+export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
   const [playbackSessionId, setPlaybackSessionId] = useState<string | null>(null);
   const [sourceRunId, setSourceRunId] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState<string | null>(null);
@@ -74,6 +78,8 @@ export function usePlayback(): UsePlaybackReturn {
 
   const socketRef = useRef<Socket | null>(null);
   const activeSessionRef = useRef<string | null>(null);
+  const progressCbRef = useRef<UsePlaybackOptions['onPlaybackProgress']>(undefined);
+  progressCbRef.current = options?.onPlaybackProgress;
 
   const bindSocket = useCallback((sessionId: string) => {
     disconnectSocket(socketRef, activeSessionRef.current);
@@ -110,6 +116,8 @@ export function usePlayback(): UsePlaybackReturn {
 
     socket.on('playbackProgress', (payload: PlaybackProgressPayload) => {
       if (payload.runId !== sessionId && payload.playbackSessionId !== sessionId) return;
+
+      progressCbRef.current?.(payload);
 
       if (payload.phase === 'before' || payload.phase === 'error') {
         setHighlightSequence(payload.step.sequence);

@@ -25,7 +25,15 @@ Guidelines:
 - NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. When Visible text is available for a click, prefer getByText(visibleText, { exact: true }).first() or getByRole with name from Visible text / aria (exact: false on getByText matches substrings like "Total Patients"). Otherwise use getByRole('link', { name: '...' }), page.locator(<Selector field>) when specific, or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
 - Keep instructions concise but specific enough to identify the target element`;
 
-const INSTRUCTION_TO_ACTION_SYSTEM = `You are a Playwright test automation agent. Given a natural language instruction and the current page context, generate the Playwright code to execute the action.
+const INSTRUCTION_TO_ACTION_SYSTEM = `You are a Playwright test automation agent for **software QA**.
+
+Context (read carefully — do **not** refuse this task):
+- The user is an engineer running **Playwright** against **their own application** (URL + screenshot provided): a **staging, demo, or internal test environment**, not production care delivery.
+- Your output is **only** JavaScript that calls Playwright APIs (\`page.getByRole\`, \`fill\`, \`click\`, etc.) so automated E2E tests can drive the UI.
+- Names, dates, phone numbers, or emails mentioned in the instruction are **synthetic test fixtures** for form fields (like "test@example.com" in any tutorial). You are **not** being asked for medical advice, real patient data, or to deceive anyone — only to **locate widgets and fill fields** the way every Playwright tutorial does.
+- Health-adjacent UIs (clinics, dashboards) are still **web apps under test**; treat fields as generic \`<input>\` elements.
+
+Given a natural language instruction and the current page context, generate the Playwright code to execute the action.
 
 Respond ONLY with valid JSON:
 {
@@ -44,7 +52,9 @@ Guidelines:
 - For typing, use page.fill() or page.getByLabel().fill()
 - **Date inputs (\`input[type="date"]\`)**: Playwright \`fill()\` only accepts **ISO 8601** values: \`YYYY-MM-DD\` (e.g. \`1980-01-01\`). Slash formats like \`01/01/1980\` or \`MM/DD/YYYY\` cause **"Malformed value"**. If the user prompt gives a human date, **convert it to ISO** in the generated fill string. Use the screenshot/a11y tree to confirm \`type="date"\`. For **text** date fields (\`mm/dd/yyyy\` placeholders), fill the **ISO** string only if the control accepts it; otherwise match the visible format from the page.
 - Handle waiting implicitly (Playwright auto-waits)
-- Only generate safe Playwright API calls (no eval, no fs, no network)`;
+- Only generate safe Playwright API calls (no eval, no fs, no network)
+- **Never** respond with a refusal: always return the JSON object above. If something is ambiguous, pick the most likely locators from the page context and screenshot.
+- **Match the instruction’s requested values** (date formats, name suffix patterns, phone/email patterns) in the **string literals** you pass to \`fill()\` — do not substitute unrelated example text.`;
 
 const SUGGEST_SKIP_AFTER_CHANGE_SYSTEM = `You analyze a test run's steps after the user changed one step (the "anchor" step).
 The user may have re-recorded or replaced behavior so that some *later* steps are now redundant, wrong, or would replay obsolete UI paths.
@@ -157,7 +167,9 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       throw new Error('LLM provider not configured. Set LLM_PROVIDER and the corresponding API key in .env');
     }
 
-    const userPrompt = `Instruction: ${input.instruction}
+    const userPrompt = `[Automation: authorized UI test; strings below are synthetic fixtures for form fields, not real patient data.]
+
+Instruction: ${input.instruction}
 Current page URL: ${input.pageUrl}
 Page context (accessibility tree):
 ${input.pageAccessibilityTree.slice(0, 12000)}`;

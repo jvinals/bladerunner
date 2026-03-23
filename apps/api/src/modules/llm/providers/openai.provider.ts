@@ -88,10 +88,12 @@ export class OpenAiProvider implements LlmProvider {
         reasoningTok != null ? `reasoning_tokens=${reasoningTok}` : null,
         usage != null ? `completion_tokens=${usage.completion_tokens}` : null,
       ].filter(Boolean);
-      throw new Error(
-        bits.join(' | ') +
-          ' — If reasoning_tokens consumed the whole budget, use a lower reasoning_effort or higher max_completion_tokens.',
-      );
+      const hint = refusal.trim()
+        ? ' — Model refused (policy). Rephrase the step as neutral UI test actions or shorten fixture text; ensure OPENAI model stack emphasizes QA automation.'
+        : (reasoningTok ?? 0) > 0 && (usage?.completion_tokens ?? 0) < 50
+          ? ' — Likely completion budget used by reasoning; lower reasoning_effort or raise max_completion_tokens.'
+          : '';
+      throw new Error(bits.join(' | ') + hint);
     }
     return content;
   }

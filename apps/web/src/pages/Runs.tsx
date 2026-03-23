@@ -12,7 +12,7 @@ import { StepCard } from '@/components/ui/StepCard';
 import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
 import { useRecording } from '@/hooks/useRecording';
 import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
-import { usePlayback } from '@/hooks/usePlayback';
+import { usePlayback, type PlaybackProgressPayload } from '@/hooks/usePlayback';
 import {
   effectivePlaybackHighlightSequence,
   playbackToneForStep,
@@ -33,6 +33,16 @@ import {
 
 export default function RunsPage() {
   const { user } = useUser();
+  const queryClient = useQueryClient();
+  const invalidateStepsAfterPlaybackStep = useCallback(
+    (p: PlaybackProgressPayload) => {
+      if (p.phase === 'after' && p.sourceRunId) {
+        void queryClient.invalidateQueries({ queryKey: ['run-steps', p.sourceRunId] });
+        void queryClient.invalidateQueries({ queryKey: ['run', p.sourceRunId] });
+      }
+    },
+    [queryClient],
+  );
   const [search, setSearch] = useState('');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [newPanelOpen, setNewPanelOpen] = useState(false);
@@ -103,12 +113,10 @@ export default function RunsPage() {
     advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
-  } = usePlayback();
+  } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const detachedPlaybackWindowRef = useRef<Window | null>(null);
-
-  const queryClient = useQueryClient();
 
   const { data: runsData, isLoading, error, refetch } = useQuery({
     queryKey: ['runs', search],

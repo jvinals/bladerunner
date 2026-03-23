@@ -11,7 +11,7 @@ import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StepCard } from '@/components/ui/StepCard';
 import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
 import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
-import { usePlayback } from '@/hooks/usePlayback';
+import { usePlayback, type PlaybackProgressPayload } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
 import {
   effectivePlaybackHighlightSequence,
@@ -512,6 +512,15 @@ function SessionRecordingModal({
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const invalidateStepsAfterPlaybackStep = useCallback(
+    (p: PlaybackProgressPayload) => {
+      if (p.phase === 'after' && p.sourceRunId) {
+        void queryClient.invalidateQueries({ queryKey: ['run-steps', p.sourceRunId] });
+        void queryClient.invalidateQueries({ queryKey: ['run', p.sourceRunId] });
+      }
+    },
+    [queryClient],
+  );
   const {
     skipReplayModalOpen,
     skipReplayAnchorStepId,
@@ -552,7 +561,7 @@ export default function RunDetailPage() {
     advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
-  } = usePlayback();
+  } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   /** Clear stepped-advance input whenever there is no active playback session (covers stop → idle, complete, navigate back). */
   useEffect(() => {

@@ -1140,9 +1140,24 @@ export class RecordingService extends EventEmitter {
     source: 'test' | 'playback',
   ): Promise<void> {
     const row = await this.prisma.runStep.findFirst({
-      where: { id: stepId, runId, userId },
+      where: { id: stepId },
     });
-    if (!row) return;
+    if (!row) {
+      this.logger.warn(`persistAiPromptLlmTranscript: no RunStep ${stepId}`);
+      return;
+    }
+    if (row.runId !== runId) {
+      this.logger.warn(
+        `persistAiPromptLlmTranscript: runId mismatch step=${stepId} expected=${runId} actual=${row.runId}`,
+      );
+      return;
+    }
+    if (row.userId !== userId) {
+      this.logger.warn(
+        `persistAiPromptLlmTranscript: userId mismatch step=${stepId} — skip metadata write (playback user may differ from step owner)`,
+      );
+      return;
+    }
     const baseMeta =
       row.metadata && typeof row.metadata === 'object' ? { ...(row.metadata as Record<string, unknown>) } : {};
     const stored: AiPromptLlmTranscriptStored = {

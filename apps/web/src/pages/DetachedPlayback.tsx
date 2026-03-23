@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 import { runsApi, playbackBodyFromSnapshot, type ClerkOtpMode } from '@/lib/api';
@@ -10,6 +10,7 @@ import {
 } from '@/lib/clerkAutoSignInStep';
 import { Pause, Play, RotateCcw, Square, StepBack, StepForward } from 'lucide-react';
 import { effectivePlaybackHighlightSequence, previousPlayThroughTarget } from '@/lib/playbackStepTone';
+import type { PlaybackProgressPayload } from '@/hooks/usePlayback';
 
 type ReplaySnapshot = {
   sourceRunId: string;
@@ -39,6 +40,7 @@ function isFullReplaySnapshot(s: ReplaySnapshot | null): s is ReplaySnapshot & {
  * Open with `/playback/:playbackSessionId` after starting playback from run detail.
  */
 export default function DetachedPlayback() {
+  const queryClient = useQueryClient();
   const { playbackSessionId: routePlaybackId } = useParams<{ playbackSessionId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -145,24 +147,20 @@ export default function DetachedPlayback() {
       img.src = `data:image/jpeg;base64,${data.data}`;
     });
 
-    socket.on(
-      'playbackProgress',
-      (payload: {
-        runId?: string;
-        playbackSessionId?: string;
-        step: { sequence: number };
-        phase: string;
-      }) => {
-        const rid = payload.runId ?? payload.playbackSessionId;
-        if (rid !== playbackSessionId) return;
-        if (payload.phase === 'before' || payload.phase === 'error') {
-          setActiveStepSequence(payload.step.sequence);
-        }
-        if (payload.phase === 'after' || payload.phase === 'skipped') {
-          setCompletedSequences((prev) => new Set(prev).add(payload.step.sequence));
-        }
-      },
-    );
+    socket.on('playbackProgress', (payload: PlaybackProgressPayload) => {
+      const rid = payload.runId ?? payload.playbackSessionId;
+      if (rid !== playbackSessionId) return;
+      if (payload.phase === 'after' && payload.sourceRunId) {
+        void queryClient.invalidateQueries({ queryKey: ['run-steps-detached', payload.sourceRunId] });
+        void queryClient.invalidateQueries({ queryKey: ['run-steps', payload.sourceRunId] });
+      }
+      if (payload.phase === 'before' || payload.phase === 'error') {
+        setActiveStepSequence(payload.step.sequence);
+      }
+      if (payload.phase === 'after' || payload.phase === 'skipped') {
+        setCompletedSequences((prev) => new Set(prev).add(payload.step.sequence));
+      }
+    });
 
     socket.on('status', (data: { status: string; runId?: string; sourceRunId?: string }) => {
       if (data.runId && data.runId !== playbackSessionId) return;
@@ -191,7 +189,7 @@ export default function DetachedPlayback() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [playbackSessionId]);
+  }, [playbackSessionId, queryClient]);
 
   const handlePause = () => {
     if (!playbackSessionId) return;
