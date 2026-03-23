@@ -14,6 +14,7 @@ import type { BrowserContext } from 'playwright-core';
 
 /** Return type of `BrowserContext.storageState()` (cookies + origins / localStorage). */
 type SnapshotStorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
+import { appendFileSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -74,6 +75,35 @@ import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './rec
 /** AI-generated Playwright often needs longer than Playwright's default 30s action timeout. */
 const AI_PROMPT_PW_TIMEOUT_MS = 120_000;
 const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * Agent debug NDJSON: Cursor ingest HTTP may only persist the first POST; mirror to disk for full traces.
+ * Set BLADERUNNER_DEBUG_LOG_PATH to force the file path (otherwise tries cwd and repo-root `.cursor/`).
+ */
+function emitAgentDebugLog(payload: Record<string, unknown>): void {
+  const body = JSON.stringify(payload);
+  const line = `${body}\n`;
+  const extra = process.env.BLADERUNNER_DEBUG_LOG_PATH?.trim();
+  const candidates = [
+    extra,
+    path.join(process.cwd(), '.cursor', 'debug-5cf234.log'),
+    path.join(process.cwd(), '..', '.cursor', 'debug-5cf234.log'),
+    path.join(process.cwd(), '..', '..', '.cursor', 'debug-5cf234.log'),
+  ].filter((p): p is string => Boolean(p));
+  for (const p of candidates) {
+    try {
+      appendFileSync(p, line);
+      break;
+    } catch {
+      // try next path
+    }
+  }
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
+    body,
+  }).catch(() => {});
+}
 
 /** Remote Chromium (recording + playback): CSS viewport for layout. */
 const REMOTE_BROWSER_VIEWPORT = { width: 1280, height: 720 } as const;
@@ -3058,25 +3088,21 @@ export class RecordingService extends EventEmitter {
     const withForce = applyForce ? relaxClickForceForPlayback(tightened) : tightened;
     const safeCode = escapeLocatorCssInPlaywrightSnippet(withForce);
     // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-      body: JSON.stringify({
-        sessionId: '5cf234',
-        runId: 'pre-exec',
-        hypothesisId: 'H1',
-        location: 'recording.service.ts:executePwCode',
-        message: 'pw codegen static heuristics before new Function',
-        data: {
-          safeCodeLen: safeCode.length,
-          hasBareTableLocatorNoFirst: /\bpage\.locator\s*\(\s*['"]table['"]\s*\)(?!\s*\.first\b)/.test(
-            safeCode,
-          ),
-          hasInnerTextOnLocator: /\.innerText\s*\(/.test(safeCode),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
+    emitAgentDebugLog({
+      sessionId: '5cf234',
+      runId: 'pre-exec',
+      hypothesisId: 'H1',
+      location: 'recording.service.ts:executePwCode',
+      message: 'pw codegen static heuristics before new Function',
+      data: {
+        safeCodeLen: safeCode.length,
+        hasBareTableLocatorNoFirst: /\bpage\.locator\s*\(\s*['"]table['"]\s*\)(?!\s*\.first\b)/.test(
+          safeCode,
+        ),
+        hasInnerTextOnLocator: /\.innerText\s*\(/.test(safeCode),
+      },
+      timestamp: Date.now(),
+    });
     // #endregion
     let fn: (page: Page) => Promise<unknown>;
     try {
@@ -3085,65 +3111,64 @@ export class RecordingService extends EventEmitter {
       ) => Promise<unknown>;
     } catch (e) {
       // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          runId: 'pre-exec',
-          hypothesisId: 'H3',
-          location: 'recording.service.ts:executePwCode',
-          message: 'new Function parse failed',
-          data: {
-            name: e instanceof Error ? e.name : 'unknown',
-            message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
+      emitAgentDebugLog({
+        sessionId: '5cf234',
+        runId: 'pre-exec',
+        hypothesisId: 'H3',
+        location: 'recording.service.ts:executePwCode',
+        message: 'new Function parse failed',
+        data: {
+          name: e instanceof Error ? e.name : 'unknown',
+          message: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500),
+        },
+        timestamp: Date.now(),
+      });
       // #endregion
       throw e;
     }
     try {
+      // #region agent log
+      emitAgentDebugLog({
+        sessionId: '5cf234',
+        runId: 'pre-exec',
+        hypothesisId: 'H-hang',
+        location: 'recording.service.ts:executePwCode',
+        message: 'about to await generated Playwright IIFE',
+        data: { safeCodeLen: safeCode.length },
+        timestamp: Date.now(),
+      });
+      // #endregion
       await fn(page);
       // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          runId: 'post-fix',
-          hypothesisId: 'H-complete',
-          location: 'recording.service.ts:executePwCode',
-          message: 'executePwCode finished without throwing',
-          data: {},
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
+      emitAgentDebugLog({
+        sessionId: '5cf234',
+        runId: 'post-fix',
+        hypothesisId: 'H-complete',
+        location: 'recording.service.ts:executePwCode',
+        message: 'executePwCode finished without throwing',
+        data: {},
+        timestamp: Date.now(),
+      });
       // #endregion
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-        body: JSON.stringify({
-          sessionId: '5cf234',
-          runId: 'pre-exec',
-          hypothesisId: 'H1-H4',
-          location: 'recording.service.ts:executePwCode',
-          message: 'executePwCode runtime error',
-          data: {
-            name: err.name,
-            message: err.message.slice(0, 800),
-            looksStrict:
-              /strict|strict mode|resolved to \d+ elements/i.test(err.message) ||
-              err.name === 'Error' /* Playwright often uses Error */,
-            looksTimeout: /timeout|exceeded/i.test(err.message),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
+      emitAgentDebugLog({
+        sessionId: '5cf234',
+        runId: 'pre-exec',
+        hypothesisId: 'H1-H4',
+        location: 'recording.service.ts:executePwCode',
+        message: 'executePwCode runtime error',
+        data: {
+          name: err.name,
+          message: err.message.slice(0, 800),
+          looksStrict:
+            /strict|strict mode|resolved to \d+ elements/i.test(err.message) ||
+            err.name === 'Error' /* Playwright often uses Error */,
+          looksTimeout: /timeout|exceeded/i.test(err.message),
+        },
+        timestamp: Date.now(),
+      });
       // #endregion
       throw e;
     }
