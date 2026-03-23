@@ -3,6 +3,7 @@ import {
   CLERK_AUTO_SIGN_IN_KIND,
   CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
 } from './clerk-auto-sign-in-step-metadata';
+import { AI_PROMPT_STEP_KIND, AI_PROMPT_STEP_SCHEMA_VERSION } from './ai-prompt-step-metadata';
 import { filterStepsForPlaybackExecutionChain, stepInPlaybackExecutionChain } from './playback-execution-chain.util';
 
 const mk = (id: string, seq: number, meta?: Record<string, unknown>) =>
@@ -28,6 +29,13 @@ assert.equal(
       otpMode: 'mailslurp',
       postAuthPageUrl: 'https://x.com/',
     }),
+    true,
+  ),
+  true,
+);
+assert.equal(
+  stepInPlaybackExecutionChain(
+    mk('ap', 6, { kind: AI_PROMPT_STEP_KIND, schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION }),
     true,
   ),
   true,

@@ -1010,6 +1010,29 @@ export default function RunsPage() {
                       }
                       checkpointAfterStep={cp ?? undefined}
                       checkpointRunId={cp && effectiveRunId ? effectiveRunId : undefined}
+                      aiPromptStep={
+                        effectiveRunId && step.runId === effectiveRunId
+                          ? {
+                              runId: effectiveRunId,
+                              stepId: step.id,
+                              canTestLive:
+                                (isRecording && runId === effectiveRunId) ||
+                                (!!playbackSessionId &&
+                                  playbackSourceRunId === effectiveRunId),
+                              onUpdated: () => {
+                                void queryClient.invalidateQueries({
+                                  queryKey: ['run-steps', effectiveRunId],
+                                });
+                                void queryClient.invalidateQueries({
+                                  queryKey: ['run', effectiveRunId],
+                                });
+                                if (isRecording && runId === effectiveRunId) {
+                                  void loadRunSteps(effectiveRunId);
+                                }
+                              },
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                 );

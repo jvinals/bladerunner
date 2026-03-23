@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useEffect, useCallback, useState, useMemo, type ReactNode } from 'react';
 import { runsApi, buildStartPlaybackBody, type AutoClerkOtpUiMode } from '@/lib/api';
 import {
@@ -505,6 +505,7 @@ function SessionRecordingModal({
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const [sessionRecordingModalOpen, setSessionRecordingModalOpen] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(false);
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
@@ -1159,6 +1160,20 @@ export default function RunDetailPage() {
                         }
                         checkpointAfterStep={cp ?? undefined}
                         checkpointRunId={cp && id ? id : undefined}
+                        aiPromptStep={
+                          id
+                            ? {
+                                runId: id,
+                                stepId: step.id,
+                                canTestLive:
+                                  !!playbackSessionId && playbackSourceRunId === id,
+                                onUpdated: () => {
+                                  void queryClient.invalidateQueries({ queryKey: ['run-steps', id] });
+                                  void queryClient.invalidateQueries({ queryKey: ['run', id] });
+                                },
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                   );
@@ -1210,6 +1225,20 @@ export default function RunDetailPage() {
                         }
                         checkpointAfterStep={cp ?? undefined}
                         checkpointRunId={cp && id ? id : undefined}
+                        aiPromptStep={
+                          id
+                            ? {
+                                runId: id,
+                                stepId: step.id,
+                                canTestLive:
+                                  !!playbackSessionId && playbackSourceRunId === id,
+                                onUpdated: () => {
+                                  void queryClient.invalidateQueries({ queryKey: ['run-steps', id] });
+                                  void queryClient.invalidateQueries({ queryKey: ['run', id] });
+                                },
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                   );

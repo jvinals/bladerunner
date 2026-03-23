@@ -275,7 +275,17 @@ export enum StepAction {
 export enum StepOrigin {
   Manual = 'MANUAL',
   AiDriven = 'AI_DRIVEN',
+  /** Prompt-only: playback uses LLM + vision on live DOM; not stored Playwright replay. */
+  AiPrompt = 'AI_PROMPT',
   Automatic = 'AUTOMATIC',
+}
+
+/** `RunStep.metadata` when `origin` is `AI_PROMPT` (see API README). */
+export interface AiPromptStepMetadata {
+  kind: 'ai_prompt_step';
+  schemaVersion: 1;
+  lastTestAt?: string;
+  lastTestOk?: boolean;
 }
 
 export interface RecordingRun {

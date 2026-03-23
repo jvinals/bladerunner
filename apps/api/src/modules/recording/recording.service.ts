@@ -13,7 +13,7 @@ import { chromium, Browser, Page, CDPSession } from 'playwright-core';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { RunStep, Prisma } from '@prisma/client';
+import { Prisma, type RunStep } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
@@ -39,6 +39,12 @@ import {
   isClerkAutoSignInMetadata,
   postAuthUrlsRoughlyMatch,
 } from './clerk-auto-sign-in-step-metadata';
+import {
+  AI_PROMPT_STEP_KIND,
+  AI_PROMPT_STEP_SCHEMA_VERSION,
+  aiPromptStepSentinelPlaywrightCode,
+  isAiPromptStepMetadata,
+} from './ai-prompt-step-metadata';
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
@@ -683,6 +689,196 @@ export class RecordingService extends EventEmitter {
     this.emit('step', runId, step);
     this.logger.log(`Recording ${runId}: re-recorded step ${step.sequence} (${stepId})`);
     return step;
+  }
+
+  /**
+   * Update a step row: set human prompt, enable/disable AI prompt mode (metadata + `AI_PROMPT` origin).
+   */
+  async patchRunStep(
+    runId: string,
+    userId: string,
+    stepId: string,
+    dto: { instruction?: string; aiPromptMode?: boolean },
+  ): Promise<RunStep> {
+    const existing = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Step not found');
+    }
+
+    if (dto.aiPromptMode === true) {
+      const instr = (dto.instruction ?? existing.instruction).trim();
+      if (!instr) {
+        throw new BadRequestException('instruction is required when enabling AI prompt mode');
+      }
+      return this.prisma.runStep.update({
+        where: { id: stepId },
+        data: {
+          instruction: instr,
+          action: 'CUSTOM',
+          origin: 'AI_PROMPT',
+          playwrightCode: aiPromptStepSentinelPlaywrightCode(),
+          metadata: {
+            kind: AI_PROMPT_STEP_KIND,
+            schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    if (dto.aiPromptMode === false) {
+      const pw = existing.playwrightCode ?? '';
+      const keepPw = pw && !pw.includes('ai_prompt_step: execution');
+      return this.prisma.runStep.update({
+        where: { id: stepId },
+        data: {
+          origin: 'MANUAL',
+          metadata: Prisma.JsonNull,
+          playwrightCode: keepPw
+            ? pw
+            : '// Reverted from AI prompt — use Re-record to capture Playwright',
+        },
+      });
+    }
+
+    if (dto.instruction !== undefined) {
+      const t = dto.instruction.trim();
+      if (!t) {
+        throw new BadRequestException('instruction cannot be empty');
+      }
+      return this.prisma.runStep.update({
+        where: { id: stepId },
+        data: { instruction: t },
+      });
+    }
+
+    throw new BadRequestException('Provide instruction and/or aiPromptMode');
+  }
+
+  /**
+   * Ephemeral: run LLM + vision + codegen on the current recording or playback page (same as playback for AI prompt steps).
+   */
+  async testAiPromptStep(
+    runId: string,
+    userId: string,
+    stepId: string,
+  ): Promise<{ ok: boolean; playwrightCode?: string; error?: string }> {
+    const step = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!step) {
+      throw new NotFoundException('Step not found');
+    }
+    if (!isAiPromptStepMetadata(step.metadata) && step.origin !== 'AI_PROMPT') {
+      throw new BadRequestException('Step is not an AI prompt step');
+    }
+
+    const page = this.findLivePageForRun(runId, userId);
+    if (!page) {
+      throw new BadRequestException(
+        'Start recording or playback for this run to test — no active browser session',
+      );
+    }
+
+    try {
+      const { playwrightCode } = await this.playAiPromptStepOnPage(page, step.instruction, {
+        skipClickForce: false,
+      });
+      const baseMeta =
+        step.metadata && typeof step.metadata === 'object'
+          ? (step.metadata as Record<string, unknown>)
+          : {};
+      await this.prisma.runStep.update({
+        where: { id: stepId },
+        data: {
+          metadata: {
+            ...baseMeta,
+            kind: AI_PROMPT_STEP_KIND,
+            schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+            lastTestAt: new Date().toISOString(),
+            lastTestOk: true,
+          } as Prisma.InputJsonValue,
+          playwrightCode,
+        },
+      });
+      return { ok: true, playwrightCode };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const baseMeta =
+        step.metadata && typeof step.metadata === 'object'
+          ? (step.metadata as Record<string, unknown>)
+          : {};
+      await this.prisma.runStep.update({
+        where: { id: stepId },
+        data: {
+          metadata: {
+            ...baseMeta,
+            kind: AI_PROMPT_STEP_KIND,
+            schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+            lastTestAt: new Date().toISOString(),
+            lastTestOk: false,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return { ok: false, error: msg };
+    }
+  }
+
+  /** Recording session page, or any active playback session sourced from this run. */
+  findLivePageForRun(runId: string, userId: string): Page | null {
+    const rec = this.sessions.get(runId);
+    if (rec && rec.userId === userId) {
+      return rec.page;
+    }
+    for (const s of this.playbackSessions.values()) {
+      if (s.sourceRunId === runId && s.userId === userId) {
+        return s.page;
+      }
+    }
+    return null;
+  }
+
+  private async captureLlmPageContext(page: Page): Promise<{
+    pageUrl: string;
+    pageAccessibilityTree: string;
+    screenshotBase64?: string;
+  }> {
+    const pageUrl = page.url();
+    let pageAccessibilityTree = '';
+    try {
+      const snapshot = await (page as any).accessibility?.snapshot();
+      pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await page.title();
+    } catch {
+      pageAccessibilityTree = 'Unable to capture accessibility tree';
+    }
+    let screenshotBase64: string | undefined;
+    try {
+      const buf = await page.screenshot({ type: 'jpeg', quality: 60 });
+      screenshotBase64 = buf.toString('base64');
+    } catch {
+      /* optional */
+    }
+    return { pageUrl, pageAccessibilityTree, screenshotBase64 };
+  }
+
+  /** Vision + LLM → Playwright, then execute (used by playback and Test Step). */
+  private async playAiPromptStepOnPage(
+    page: Page,
+    instruction: string,
+    opts: { skipClickForce: boolean },
+  ): Promise<{ playwrightCode: string }> {
+    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page);
+    const llmResult = await this.llmService.instructionToAction({
+      instruction: instruction.trim(),
+      pageUrl,
+      pageAccessibilityTree,
+      screenshotBase64,
+    });
+    await this.executePwCode(page, llmResult.playwrightCode, {
+      skipClickForce: opts.skipClickForce,
+    });
+    return { playwrightCode: llmResult.playwrightCode };
   }
 
   /** Forward pointer from the UI preview (canvas) into the Playwright page viewport. */
@@ -1518,11 +1714,20 @@ export class RecordingService extends EventEmitter {
           continue;
         }
 
+        const isAiPromptStep =
+          isAiPromptStepMetadata(step.metadata) || step.origin === 'AI_PROMPT';
+
         try {
-          await this.executePwCode(session.page, step.playwrightCode, {
-            /** Prevents `click({ force: true })` on steps before recorded `clerk_auto_sign_in` — force can break Clerk UI. */
-            skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
-          });
+          if (isAiPromptStep) {
+            await this.playAiPromptStepOnPage(session.page, step.instruction, {
+              skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
+            });
+          } else {
+            await this.executePwCode(session.page, step.playwrightCode, {
+              /** Prevents `click({ force: true })` on steps before recorded `clerk_auto_sign_in` — force can break Clerk UI. */
+              skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
+            });
+          }
         } catch (execErr) {
           const msg = execErr instanceof Error ? execErr.message : String(execErr);
           this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);

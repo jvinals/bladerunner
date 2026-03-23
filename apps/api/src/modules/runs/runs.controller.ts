@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -31,6 +32,7 @@ import {
   AdvancePlaybackToDto,
   InstructDto,
   ReRecordStepDto,
+  PatchRunStepDto,
   RunQueryDto,
 } from './runs.dto';
 import { Observable, Subject } from 'rxjs';
@@ -223,6 +225,40 @@ export class RunsController {
     const userId = req.user.sub;
     const step = await this.recordingService.reRecordStep(id, userId, stepId, dto.instruction);
     return { step };
+  }
+
+  @Patch(':id/steps/:stepId')
+  @ApiOperation({
+    summary: 'Update step instruction and/or enable/disable AI prompt mode',
+    description:
+      'AI prompt steps store a human prompt; playback runs LLM + screenshot against the live DOM (not fixed codegen).',
+  })
+  @ApiResponse({ status: 200, description: 'Step updated' })
+  async patchRunStep(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('stepId') stepId: string,
+    @Body() dto: PatchRunStepDto,
+  ) {
+    const userId = req.user.sub;
+    const step = await this.recordingService.patchRunStep(id, userId, stepId, dto);
+    return { step };
+  }
+
+  @Post(':id/steps/:stepId/test-ai-step')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Test an AI prompt step on the live page (recording or playback session)',
+    description: 'Runs vision + LLM + codegen once; persists last generated Playwright when successful.',
+  })
+  @ApiResponse({ status: 200, description: 'Test result' })
+  async testAiPromptStep(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('stepId') stepId: string,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.testAiPromptStep(id, userId, stepId);
   }
 
   @Post(':id/playback/start')

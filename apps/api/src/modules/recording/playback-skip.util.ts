@@ -1,4 +1,5 @@
 import { isClerkAutoSignInMetadata } from './clerk-auto-sign-in-step-metadata';
+import { isAiPromptStepMetadata } from './ai-prompt-step-metadata';
 
 export interface PlaybackSkipStepLike {
   id: string;
@@ -60,6 +61,8 @@ export function shouldSkipStoredPlaywrightForClerk(
   step: PlaybackSkipStepLike,
   wantAutoClerk: boolean,
 ): boolean {
+  /** AI prompt steps use LLM at playback — never treat as Clerk-skipped OTP rows. */
+  if (isAiPromptStepMetadata(step.metadata) || step.origin === 'AI_PROMPT') return false;
   if (!wantAutoClerk) return false;
   /** Single-step `clerk_auto_sign_in` is executed explicitly in the playback loop — never skip via heuristic. */
   if (isClerkAutoSignInMetadata(step.metadata)) return false;
@@ -124,6 +127,7 @@ export function buildPlaybackSkipSet(input: BuildPlaybackSkipSetInput): Set<stri
   }
   if (input.wantAutoClerkSkip) {
     for (const s of input.steps) {
+      if (isAiPromptStepMetadata(s.metadata) || s.origin === 'AI_PROMPT') continue;
       if (shouldSkipStoredPlaywrightForClerk(s, true)) out.add(s.id);
     }
   }

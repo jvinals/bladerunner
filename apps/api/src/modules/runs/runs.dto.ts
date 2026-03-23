@@ -148,6 +148,24 @@ export class ReRecordStepDto {
   instruction!: string;
 }
 
+export class PatchRunStepDto {
+  @ApiPropertyOptional({
+    description: 'Human-readable prompt for this step (required when enabling AI prompt mode)',
+  })
+  @IsOptional()
+  @IsString()
+  instruction?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'true: store as AI prompt step (LLM + vision at playback). false: revert to manual row (clears ai metadata).',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  aiPromptMode?: boolean;
+}
+
 export class CreateRunDto {
   @ApiProperty({ description: 'Name of the run' })
   @IsString()

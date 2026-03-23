@@ -119,6 +119,8 @@ docker compose up
 | GET    | /integrations       | List integrations            |
 | GET    | /agents             | List registered agents       |
 | POST   | /runs/:id/steps/:stepId/re-record | Re-capture one step by instruction (active recording) |
+| PATCH  | /runs/:id/steps/:stepId | Update **instruction**; set **`aiPromptMode: true`** with **instruction** to store an **AI prompt step** (`StepOrigin.AI_PROMPT`, **`metadata.kind: ai_prompt_step`**) — playback uses **LLM + screenshot + a11y tree** on the live page each time (not fixed stored codegen). **`aiPromptMode: false`** reverts to manual. |
+| POST   | /runs/:id/steps/:stepId/test-ai-step | **Test step**: run the same LLM path once on the **active recording** or **playback** browser (requires a session). |
 | GET    | /runs/:id/checkpoints | List **app state checkpoints** (after-step browser storage + metadata) for a run |
 | POST   | /runs/:id/playback/start | Start live playback; body may include **`skipUntilSequence`**, **`playThroughSequence`** (stop after that step), **`skipStepIds`**, Clerk options |
 
@@ -181,6 +183,14 @@ When **Clerk auto playback is enabled** — the client sends **`autoClerkSignIn:
 
 **Step-scoped playback:** **`skipUntilSequence: N`** runs stored steps starting at sequence **N** (skips earlier steps). **`playThroughSequence: M`** stops playback after executing step **M** (use with the same **`skipUntilSequence`** for “this step only”). **Runs** and **Run detail** step cards expose **Play from here** / **This step only** when playback is available.
 
+### AI prompt steps
+
+Some steps should **not** replay fixed **Playwright** from recording time; they should **re-plan** from a **human prompt** using the **current** DOM (viewport **JPEG** + accessibility snapshot) via **`LlmService.instructionToAction`**, then **`executePwCode`** — same path for **live playback**, **detached playback**, and **Test step** (no separate headless worker in-repo).
+
+- **Database:** **`StepOrigin.AI_PROMPT`**, **`action: CUSTOM`**, **`metadata`**: `{ kind: 'ai_prompt_step', schemaVersion: 1 }` (optional **`lastTestAt`**, **`lastTestOk`**). **`playwright_code`** holds a sentinel comment until **Test step** persists last generated codegen for debugging.
+- **Clerk auto-skip:** AI prompt steps are **never** dropped by MailSlurp/OTP skip heuristics.
+- **UI:** **Runs** (recording) and **Run detail** step cards: **Use AI prompt for this step**, **Save prompt**, **Test step** (needs recording or playback session), **Revert to Playwright**.
+
 **While recording** on the **Runs** page, **Sign in automatically** runs **`performClerkPasswordEmail2FA`** once (OTP mode next to the button), **deletes manually captured steps after the initial navigate**, then persists **one** **`CUSTOM`** step with **`clerk_auto_sign_in`** metadata (recorded OTP mode + post-auth URL). DOM capture is paused during automation; capture callbacks stay **serial** so manual steps after sign-in stay ordered.
 
 Secrets stay on the **server**; the browser never receives test passwords.
@@ -217,6 +227,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.7.76** — **AI prompt steps**: **`StepOrigin.AI_PROMPT`**, **`metadata.kind: ai_prompt_step`**; **`PATCH /runs/:id/steps/:stepId`**, **`POST .../test-ai-step`**; playback runs **LLM + vision** per step; **Runs** + **Run detail** **StepCard** (**Test step**, revert). **`@bladerunner/api` `0.5.39`**, **`@bladerunner/web` `0.6.50`**, **`@bladerunner/types` `0.2.1`**.
 - **0.7.75** — **Run detail**: Playback toolbar controls **taller** (`py-1.5`, seq input aligned); card padding **`py-0.5`**. **`@bladerunner/web` `0.6.49`**.
 - **0.7.74** — **Run detail**: Playback toolbar **shorter** (`py-0`, `leading-none`); metrics card **no max-width** on large screens, **`lg:flex-nowrap`** so Duration–Run Details stay **one line** (with **`overflow-x-auto`** if the viewport is tight). **`@bladerunner/web` `0.6.48`**.
 - **0.7.73** — **Run detail**: Playback toolbar **slightly shorter** (`py-0.5` controls, tighter `gap`); metrics card **slightly wider** (`max-w` ~30rem). **`@bladerunner/web` `0.6.47`**.

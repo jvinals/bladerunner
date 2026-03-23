@@ -6,6 +6,7 @@ import {
   CLERK_AUTO_SIGN_IN_KIND,
   CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
 } from './clerk-auto-sign-in-step-metadata';
+import { AI_PROMPT_STEP_KIND, AI_PROMPT_STEP_SCHEMA_VERSION } from './ai-prompt-step-metadata';
 import {
   buildPlaybackSkipSet,
   normalizePlaybackUrl,
@@ -132,5 +133,19 @@ const clerkAutoSignInStep = {
 assert.equal(shouldSkipStoredPlaywrightForClerk(clerkAutoSignInStep, true), false);
 s = buildPlaybackSkipSet({ steps: [clerkAutoSignInStep], wantAutoClerkSkip: true });
 assert.equal(s.has('cas'), false);
+
+const aiPromptStep = {
+  id: 'ai1',
+  sequence: 6,
+  metadata: { kind: AI_PROMPT_STEP_KIND, schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION },
+  action: 'CUSTOM',
+  origin: 'AI_PROMPT' as const,
+  instruction: 'Type the verification code',
+  playwrightCode: '/* ai_prompt_step */',
+};
+assert.equal(shouldSkipStoredPlaywrightForClerk(aiPromptStep, true), false);
+s = buildPlaybackSkipSet({ steps: [llmOtpNoPrefix, aiPromptStep], wantAutoClerkSkip: true });
+assert.equal(s.has('otp5'), true);
+assert.equal(s.has('ai1'), false);
 
 console.log('playback-skip.selftest: ok');

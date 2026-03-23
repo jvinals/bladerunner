@@ -216,6 +216,22 @@ export const runsApi = {
       method: 'POST',
       body: JSON.stringify({ instruction }),
     }),
+  /** Update instruction and/or enable/disable AI prompt mode (LLM + vision at playback). */
+  patchRunStep: (
+    runId: string,
+    stepId: string,
+    body: { instruction?: string; aiPromptMode?: boolean },
+  ) =>
+    apiFetch<{ step: unknown }>(`/runs/${runId}/steps/${stepId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  /** Ephemeral test on active recording or playback browser session. */
+  testAiPromptStep: (runId: string, stepId: string) =>
+    apiFetch<{ ok: boolean; playwrightCode?: string; error?: string }>(
+      `/runs/${runId}/steps/${stepId}/test-ai-step`,
+      { method: 'POST' },
+    ),
   startPlayback: (runId: string, opts?: StartPlaybackBody) =>
     apiFetch<{ playbackSessionId: string; sourceRunId: string }>(`/runs/${runId}/playback/start`, {
       method: 'POST',

@@ -13,7 +13,7 @@ export interface RecordedStep {
   value?: string;
   instruction: string;
   playwrightCode: string;
-  origin: 'MANUAL' | 'AI_DRIVEN' | 'AUTOMATIC';
+  origin: 'MANUAL' | 'AI_DRIVEN' | 'AI_PROMPT' | 'AUTOMATIC';
   timestamp: string;
   /** Optional JSON from API (e.g. `clerk_auto_sign_in` step). */
   metadata?: unknown;

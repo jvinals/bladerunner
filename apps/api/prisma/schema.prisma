@@ -43,6 +43,8 @@ enum StepAction {
 enum StepOrigin {
   MANUAL
   AI_DRIVEN
+  /// Prompt-only step: playback runs LLM + vision against live DOM each time (not stored Playwright).
+  AI_PROMPT
   AUTOMATIC
 }
 
