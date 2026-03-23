@@ -98,11 +98,7 @@ function emitAgentDebugLog(payload: Record<string, unknown>): void {
       // try next path
     }
   }
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '5cf234' },
-    body,
-  }).catch(() => {});
+  // Do not also POST to the Cursor ingest URL: the ingest server writes the same NDJSON file, which duplicates lines.
 }
 
 /** Remote Chromium (recording + playback): CSS viewport for layout. */
