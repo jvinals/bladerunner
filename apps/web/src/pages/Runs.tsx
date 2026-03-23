@@ -12,7 +12,8 @@ import { StepCard } from '@/components/ui/StepCard';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
 import { LlmVisionScreenshotPreview } from '@/components/ui/LlmVisionScreenshotPreview';
 import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
-import { useRecording } from '@/hooks/useRecording';
+import { useRecording, type AiPromptTestProgressPayload } from '@/hooks/useRecording';
+import { parseAiPromptLastLlmTranscript } from '@/lib/aiPromptLastLlmTranscript';
 import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
 import { usePlayback, type PlaybackProgressPayload } from '@/hooks/usePlayback';
 import {
@@ -674,15 +675,50 @@ export default function RunsPage() {
     }
   }, [runId, aiStepCreatedId, aiStepBusy]);
 
-  const aiPromptProgressBlock = useMemo(() => {
+  const aiPromptProgressBlock = useMemo((): AiPromptTestProgressPayload | null => {
     if (!aiPromptTestProgress || !aiStepCreatedId || !runId) return null;
     if (aiPromptTestProgress.runId !== runId || aiPromptTestProgress.stepId !== aiStepCreatedId) return null;
-    return {
-      message: aiPromptTestProgress.message,
-      thinking: aiPromptTestProgress.thinking,
-      screenshotBase64: aiPromptTestProgress.screenshotBase64,
-    };
+    return aiPromptTestProgress;
   }, [aiPromptTestProgress, aiStepCreatedId, runId]);
+
+  const aiPromptDrawerSections = useMemo(() => {
+    const step = steps.find((s) => s.id === aiStepCreatedId);
+    const cached = step ? parseAiPromptLastLlmTranscript(step.metadata) : null;
+    const metaPw = step?.playwrightCode?.trim() ?? '';
+
+    const live = aiPromptProgressBlock;
+
+    if (live) {
+      return {
+        screenshotBase64: live.screenshotBase64 ?? cached?.screenshotBase64,
+        promptText: (live.fullUserPrompt || live.promptSent || cached?.userPrompt || '').trim(),
+        thinking: live.thinking ?? cached?.thinking,
+        rawResponse: (live.rawResponse ?? cached?.rawResponse ?? '').trim(),
+        suggestedPrompt: (live.suggestedPrompt ?? aiStepFailure?.suggestedPrompt ?? '').trim(),
+        playwrightCode: (live.playwrightCode || metaPw).trim(),
+      };
+    }
+
+    if (aiStepBusy) {
+      return {
+        screenshotBase64: undefined,
+        promptText: '',
+        thinking: undefined,
+        rawResponse: '',
+        suggestedPrompt: (aiStepFailure?.suggestedPrompt ?? '').trim(),
+        playwrightCode: '',
+      };
+    }
+
+    return {
+      screenshotBase64: cached?.screenshotBase64,
+      promptText: (cached?.userPrompt ?? '').trim(),
+      thinking: cached?.thinking,
+      rawResponse: (cached?.rawResponse ?? '').trim(),
+      suggestedPrompt: (aiStepFailure?.suggestedPrompt ?? '').trim(),
+      playwrightCode: metaPw,
+    };
+  }, [steps, aiStepCreatedId, aiPromptProgressBlock, aiStepBusy, aiStepFailure]);
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
@@ -1489,50 +1525,6 @@ export default function RunsPage() {
                 placeholder="Describe what to do on the page at this step…"
                 className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 disabled:opacity-50"
               />
-              {aiStepBusy ? (
-                <div
-                  className="mt-2 flex items-stretch gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin self-center text-teal-600" aria-hidden />
-                  <div className="min-h-0 min-w-0 flex-1 flex flex-col gap-1">
-                    <p
-                      className="text-[10px] text-gray-800 leading-snug"
-                      title={aiPromptProgressBlock?.message ?? undefined}
-                    >
-                      {aiPromptProgressBlock?.message || 'Starting test…'}
-                    </p>
-                    {aiPromptProgressBlock?.thinking ? (
-                      <pre className="max-h-32 overflow-y-auto rounded border border-teal-200/60 bg-white/80 p-1.5 text-[9px] leading-snug text-gray-700 whitespace-pre-wrap break-words font-mono">
-                        {aiPromptProgressBlock.thinking}
-                      </pre>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleAbortAiStepTest()}
-                    className="shrink-0 self-start rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-800 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
-              {aiStepBusy && aiPromptProgressBlock?.screenshotBase64 ? (
-                <div className="mt-2 space-y-1">
-                  <p className="text-[10px] font-medium text-gray-600">Viewport sent to the vision model (JPEG)</p>
-                  <p className="text-[9px] text-gray-500 leading-snug">Same image the API attaches for analysis — click to enlarge.</p>
-                  <LlmVisionScreenshotPreview
-                    b64={aiPromptProgressBlock.screenshotBase64}
-                    modalTitle="Vision input — full resolution"
-                  />
-                </div>
-              ) : null}
-              {aiStepError && !aiStepFailure ? (
-                <p className="mt-2 text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1" role="alert">
-                  {aiStepError}
-                </p>
-              ) : null}
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <button
                   type="button"
@@ -1566,6 +1558,85 @@ export default function RunsPage() {
                   <RotateCcw size={12} />
                   Reset
                 </button>
+              </div>
+              {aiStepBusy ? (
+                <div
+                  className="mt-3 flex items-stretch gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin self-center text-teal-600" aria-hidden />
+                  <p
+                    className="min-w-0 flex-1 text-[10px] text-gray-800 leading-snug"
+                    title={aiPromptProgressBlock?.message ?? undefined}
+                  >
+                    {aiPromptProgressBlock?.message || 'Starting test…'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleAbortAiStepTest()}
+                    className="shrink-0 self-start rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-800 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+              {aiStepError && !aiStepFailure ? (
+                <p className="mt-3 text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1" role="alert">
+                  {aiStepError}
+                </p>
+              ) : null}
+              <div className="mt-4 space-y-3">
+                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">1. Viewport sent to the vision model</p>
+                  <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
+                    JPEG attached to the vision API for this run — click to enlarge.
+                  </p>
+                  {aiPromptDrawerSections.screenshotBase64 ? (
+                    <LlmVisionScreenshotPreview
+                      b64={aiPromptDrawerSections.screenshotBase64}
+                      modalTitle="Vision input — full resolution"
+                    />
+                  ) : (
+                    <p className="text-[10px] text-gray-400 italic">—</p>
+                  )}
+                </div>
+                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">2. Prompt sent to the LLM</p>
+                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
+                    {aiPromptDrawerSections.promptText || '—'}
+                  </pre>
+                </div>
+                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">3. Information received from the LLM</p>
+                  {aiPromptDrawerSections.thinking ? (
+                    <div className="mb-2">
+                      <p className="text-[9px] font-medium text-gray-600 mb-0.5">Model thinking</p>
+                      <pre className="max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
+                        {aiPromptDrawerSections.thinking}
+                      </pre>
+                    </div>
+                  ) : null}
+                  <p className="text-[9px] font-medium text-gray-600 mb-0.5">Raw model output</p>
+                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
+                    {aiPromptDrawerSections.rawResponse || '—'}
+                  </pre>
+                </div>
+                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">4. Suggested prompt</p>
+                  <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
+                    If Test fails, a revised prompt may appear here (from the failure explainer).
+                  </p>
+                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-dashed border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2.5rem]">
+                    {aiPromptDrawerSections.suggestedPrompt || '—'}
+                  </pre>
+                </div>
+                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">5. Playwright code to run</p>
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
+                    {aiPromptDrawerSections.playwrightCode || '—'}
+                  </pre>
+                </div>
               </div>
             </div>
             <div className="flex flex-shrink-0 justify-end gap-2 border-t border-gray-100 px-3 py-2.5 bg-gray-50/80">

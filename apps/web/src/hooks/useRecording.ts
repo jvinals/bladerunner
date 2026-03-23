@@ -44,6 +44,16 @@ export type AiPromptTestProgressPayload = {
   thinking?: string;
   /** JPEG base64 sent to the vision model (AI prompt test), after capture. */
   screenshotBase64?: string;
+  /** Instruction string for this test run. */
+  promptSent?: string;
+  /** Full user message sent to the vision LLM. */
+  fullUserPrompt?: string;
+  /** Raw assistant output (usually JSON). */
+  rawResponse?: string;
+  /** Generated Playwright before execution. */
+  playwrightCode?: string;
+  /** From failure-help LLM when Test fails. */
+  suggestedPrompt?: string;
 };
 
 interface UseRecordingReturn {
@@ -179,18 +189,22 @@ export function useRecording(): UseRecordingReturn {
       if (!stepId || !message) return;
       setAiPromptTestProgress((prev) => {
         const sameStep = prev?.runId === runId && prev?.stepId === stepId;
-        const thinkingRaw = typeof payload.thinking === 'string' ? payload.thinking.trim() : '';
-        const thinking = thinkingRaw
-          ? thinkingRaw
-          : sameStep && prev?.thinking
-            ? prev.thinking
-            : undefined;
-        const shotRaw = typeof payload.screenshotBase64 === 'string' ? payload.screenshotBase64.trim() : '';
-        const screenshotBase64 = shotRaw
-          ? shotRaw
-          : sameStep && prev?.screenshotBase64
-            ? prev.screenshotBase64
-            : undefined;
+        const pick = (key: keyof AiPromptTestProgressPayload): string | undefined => {
+          const v = payload[key];
+          if (typeof v === 'string' && v.trim()) return v.trim();
+          if (sameStep) {
+            const p = prev?.[key];
+            if (typeof p === 'string' && p.trim()) return p.trim();
+          }
+          return undefined;
+        };
+        const thinking = pick('thinking');
+        const screenshotBase64 = pick('screenshotBase64');
+        const promptSent = pick('promptSent');
+        const fullUserPrompt = pick('fullUserPrompt');
+        const rawResponse = pick('rawResponse');
+        const playwrightCode = pick('playwrightCode');
+        const suggestedPrompt = pick('suggestedPrompt');
         const normalized: AiPromptTestProgressPayload = {
           runId,
           stepId,
@@ -198,12 +212,14 @@ export function useRecording(): UseRecordingReturn {
           phase,
           ...(thinking ? { thinking } : {}),
           ...(screenshotBase64 ? { screenshotBase64 } : {}),
+          ...(promptSent ? { promptSent } : {}),
+          ...(fullUserPrompt ? { fullUserPrompt } : {}),
+          ...(rawResponse ? { rawResponse } : {}),
+          ...(playwrightCode ? { playwrightCode } : {}),
+          ...(suggestedPrompt ? { suggestedPrompt } : {}),
         };
         return normalized;
       });
-      if (phase === 'done' || phase === 'error' || phase === 'cancelled') {
-        window.setTimeout(() => setAiPromptTestProgress(null), 400);
-      }
     });
 
     socketRef.current = socket;

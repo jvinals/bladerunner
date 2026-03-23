@@ -1091,11 +1091,33 @@ export class RecordingService extends EventEmitter {
           return { ok: false, error: 'Cancelled', cancelled: true };
         }
         const msg = e instanceof Error ? e.message : String(e);
+        let failureHelp: AiPromptTestFailureHelp | undefined;
+        try {
+          const ctx = await this.captureLlmPageContext(page, signal);
+          const hint = await this.llmService.explainAiPromptTestFailure(
+            {
+              instruction: instructionToRun,
+              technicalError: msg,
+              pageUrl: ctx.pageUrl,
+              pageAccessibilityTree: ctx.pageAccessibilityTree,
+              screenshotBase64: ctx.screenshotBase64,
+            },
+            { signal },
+          );
+          if (hint) {
+            failureHelp = hint;
+          }
+        } catch (explainErr) {
+          this.logger.debug(`explainAiPromptTestFailure skipped: ${explainErr}`);
+        }
         this.emitAiPromptTestProgress(
           runId,
           stepId,
           msg.length > 140 ? `${msg.slice(0, 137)}…` : msg,
           'error',
+          failureHelp?.suggestedPrompt?.trim()
+            ? { suggestedPrompt: failureHelp.suggestedPrompt.trim() }
+            : undefined,
         );
         const fresh = await this.prisma.runStep.findFirst({
           where: { id: stepId, runId, userId },
@@ -1116,26 +1138,6 @@ export class RecordingService extends EventEmitter {
             } as Prisma.InputJsonValue,
           },
         });
-
-        let failureHelp: AiPromptTestFailureHelp | undefined;
-        try {
-          const ctx = await this.captureLlmPageContext(page, signal);
-          const hint = await this.llmService.explainAiPromptTestFailure(
-            {
-              instruction: instructionToRun,
-              technicalError: msg,
-              pageUrl: ctx.pageUrl,
-              pageAccessibilityTree: ctx.pageAccessibilityTree,
-              screenshotBase64: ctx.screenshotBase64,
-            },
-            { signal },
-          );
-          if (hint) {
-            failureHelp = hint;
-          }
-        } catch (explainErr) {
-          this.logger.debug(`explainAiPromptTestFailure skipped: ${explainErr}`);
-        }
 
         return { ok: false, error: msg, failureHelp };
       }
@@ -1212,12 +1214,34 @@ export class RecordingService extends EventEmitter {
     return /aborted|AbortError/i.test(msg);
   }
 
+  /** Keep socket payloads bounded (JPEG is separate). */
+  private static readonly AI_PROMPT_SOCKET_TEXT_MAX = 120_000;
+
+  private clipAiPromptSocketText(s: string, max = RecordingService.AI_PROMPT_SOCKET_TEXT_MAX): string {
+    const t = s.trim();
+    if (!t) return '';
+    return t.length > max ? `${t.slice(0, max)}…` : t;
+  }
+
   private emitAiPromptTestProgress(
     runId: string,
     stepId: string,
     message: string,
     phase: 'capturing' | 'llm' | 'executing' | 'done' | 'error' | 'cancelled',
-    extras?: { thinking?: string; screenshotBase64?: string },
+    extras?: {
+      thinking?: string;
+      screenshotBase64?: string;
+      /** Instruction text for this test (draft / override). */
+      promptSent?: string;
+      /** Full user message sent to the vision LLM. */
+      fullUserPrompt?: string;
+      /** Raw assistant string from the model (usually JSON). */
+      rawResponse?: string;
+      /** Generated Playwright source to run next. */
+      playwrightCode?: string;
+      /** When Test fails with failure-help from the explain LLM. */
+      suggestedPrompt?: string;
+    },
   ): void {
     const payload: Record<string, unknown> = { runId, stepId, message, phase };
     if (extras?.thinking?.trim()) {
@@ -1225,6 +1249,21 @@ export class RecordingService extends EventEmitter {
     }
     if (extras?.screenshotBase64?.trim()) {
       payload.screenshotBase64 = extras.screenshotBase64.trim();
+    }
+    if (extras?.promptSent?.trim()) {
+      payload.promptSent = this.clipAiPromptSocketText(extras.promptSent, 16_384);
+    }
+    if (extras?.fullUserPrompt?.trim()) {
+      payload.fullUserPrompt = this.clipAiPromptSocketText(extras.fullUserPrompt);
+    }
+    if (extras?.rawResponse?.trim()) {
+      payload.rawResponse = this.clipAiPromptSocketText(extras.rawResponse);
+    }
+    if (extras?.playwrightCode?.trim()) {
+      payload.playwrightCode = this.clipAiPromptSocketText(extras.playwrightCode);
+    }
+    if (extras?.suggestedPrompt?.trim()) {
+      payload.suggestedPrompt = this.clipAiPromptSocketText(extras.suggestedPrompt, 16_384);
     }
     this.emit('aiPromptTestProgress', runId, payload);
     for (const s of this.playbackSessions.values()) {
@@ -1514,9 +1553,10 @@ export class RecordingService extends EventEmitter {
         progress.stepId,
         'Calling vision model (this may take a minute)…',
         'llm',
-        screenshotBase64?.trim()
-          ? { screenshotBase64: screenshotBase64.trim() }
-          : undefined,
+        {
+          ...(screenshotBase64?.trim() ? { screenshotBase64: screenshotBase64.trim() } : {}),
+          promptSent: instruction.trim(),
+        },
       );
     }
     this.throwIfAborted(signal);
@@ -1531,26 +1571,26 @@ export class RecordingService extends EventEmitter {
       { signal },
     );
     const out = llmResult.output;
+    const transcript = llmResult.transcript;
     if (progress) {
-      const thinkingRaw = llmResult.transcript.thinking?.trim();
-      if (thinkingRaw) {
-        const max = 12_000;
-        const t = thinkingRaw.length > max ? `${thinkingRaw.slice(0, max)}…` : thinkingRaw;
-        this.emitAiPromptTestProgress(
-          progress.runId,
-          progress.stepId,
-          'Vision model finished — reasoning below.',
-          'llm',
-          { thinking: t },
-        );
-      } else {
-        this.emitAiPromptTestProgress(
-          progress.runId,
-          progress.stepId,
-          'Vision model finished.',
-          'llm',
-        );
-      }
+      const thinkingRaw = transcript.thinking?.trim();
+      const maxThink = 12_000;
+      const thinking =
+        thinkingRaw && thinkingRaw.length > maxThink ? `${thinkingRaw.slice(0, maxThink)}…` : thinkingRaw;
+      this.emitAiPromptTestProgress(
+        progress.runId,
+        progress.stepId,
+        thinking ? 'Vision model finished — reasoning below.' : 'Vision model finished.',
+        'llm',
+        {
+          ...(screenshotBase64?.trim() ? { screenshotBase64: screenshotBase64.trim() } : {}),
+          promptSent: instruction.trim(),
+          fullUserPrompt: transcript.userPrompt,
+          rawResponse: transcript.rawResponse,
+          playwrightCode: out.playwrightCode,
+          ...(thinking ? { thinking } : {}),
+        },
+      );
     }
     if (opts.persistTranscript) {
       const { stepId, runId, userId, source, playbackEmit } = opts.persistTranscript;
