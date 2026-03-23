@@ -1,6 +1,10 @@
 import type { BrowserContext, Page } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
-import { waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
+import {
+  deleteMailSlurpEmail,
+  nextNotBeforeMsAfterEmail,
+  waitForClerkOtpFromMailSlurp,
+} from './mailslurp-otp';
 
 /** Locators for Clerk / app email OTP fields (broader than legacy `detectClerkSignInUi`). */
 function otpInputLocator(page: Page) {
@@ -310,6 +314,11 @@ export type FillClerkOtpFromMailSlurpOpts = {
    * Use `Date.now()` right after password submit in full flow; for OTP-only screens use a recent window.
    */
   notBeforeMs: number;
+  /**
+   * After filling an OTP from MailSlurp, if redirect to the app never succeeds, retry with a newer
+   * email (delete the failed message and advance `notBeforeMs`). Default: 3.
+   */
+  maxOtpApplyAttempts?: number;
 };
 
 /** Clerk dev test emails: append `+clerk_test` to the local part; OTP is always this (no real email). */
@@ -326,6 +335,19 @@ async function ensureOtpInputsVisible(page: Page): Promise<ReturnType<typeof otp
     await anyOtp.waitFor({ state: 'visible', timeout: 45_000 });
   }
   return otpSingle;
+}
+
+async function clearClerkOtpFields(page: Page): Promise<void> {
+  const otpSingle = await ensureOtpInputsVisible(page);
+  const multi = page.locator('input[inputmode="numeric"]');
+  const count = await multi.count();
+  if (count >= 6) {
+    for (let i = 0; i < count; i++) {
+      await multi.nth(i).fill('');
+    }
+  } else {
+    await otpSingle.fill('');
+  }
 }
 
 /** Shared: fill OTP digits and wait for return to app host (after MailSlurp or fixed test code). */
@@ -400,12 +422,36 @@ export async function fillClerkOtpFromMailSlurp(
 
   await ensureOtpInputsVisible(page);
 
-  const otp = await waitForClerkOtpFromMailSlurp({
-    notBeforeMs: opts.notBeforeMs,
-    timeoutMs: 120_000,
-  });
+  const maxAttempts = Math.max(1, opts.maxOtpApplyAttempts ?? 3);
+  let notBeforeMs = opts.notBeforeMs;
+  let lastError: unknown;
 
-  await applyClerkOtpDigitsAndWaitForApp(page, otp, opts.runUrl);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { otp, emailId, receivedAtMs } = await waitForClerkOtpFromMailSlurp({
+      notBeforeMs,
+      timeoutMs: 120_000,
+    });
+
+    try {
+      await applyClerkOtpDigitsAndWaitForApp(page, otp, opts.runUrl);
+      return;
+    } catch (e) {
+      lastError = e;
+      try {
+        await deleteMailSlurpEmail(emailId);
+      } catch {
+        /* best-effort — inbox may still return same id until deleted */
+      }
+      if (attempt < maxAttempts - 1) {
+        notBeforeMs = nextNotBeforeMsAfterEmail(receivedAtMs);
+        await clearClerkOtpFields(page);
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? 'Clerk OTP apply failed after MailSlurp'));
 }
 
 export type PerformClerkPasswordEmail2FAOpts = {

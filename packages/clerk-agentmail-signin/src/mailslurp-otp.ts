@@ -5,7 +5,7 @@ import type { Email } from 'mailslurp-client';
 const OTP_REGEX = /\b(\d{6,8})\b/;
 
 /** Allow a few seconds of clock skew between MailSlurp timestamps and `Date.now()`. */
-const CLOCK_SKEW_MS = 5_000;
+export const MAILSURP_CLOCK_SKEW_MS = 5_000;
 
 function extractOtpFromText(text: string): string | null {
   const m = text.match(OTP_REGEX);
@@ -16,6 +16,14 @@ function emailReceivedAtMs(email: Email): number {
   const raw = email.createdAt;
   const t = raw instanceof Date ? raw.getTime() : Date.parse(String(raw));
   return Number.isFinite(t) ? t : 0;
+}
+
+/**
+ * Minimum `notBeforeMs` for the next `waitForClerkOtpFromMailSlurp` call so an email received at
+ * `receivedAtMs` is excluded by the `notBefore - MAILSURP_CLOCK_SKEW_MS` filter.
+ */
+export function nextNotBeforeMsAfterEmail(receivedAtMs: number): number {
+  return receivedAtMs + MAILSURP_CLOCK_SKEW_MS + 1;
 }
 
 function looksLikeClerkMail(blob: string): boolean {
@@ -59,17 +67,36 @@ export async function resolveMailSlurpInboxId(apiKey: string): Promise<string> {
   );
 }
 
+/** Result of a successful Clerk OTP read from MailSlurp (used for retries after apply failure). */
+export type ClerkOtpFromMailSlurpResult = {
+  otp: string;
+  emailId: string;
+  receivedAtMs: number;
+};
+
+/**
+ * Delete a MailSlurp message by id (e.g. after a rejected OTP so the next wait can fetch a newer one).
+ */
+export async function deleteMailSlurpEmail(emailId: string): Promise<void> {
+  const apiKey = process.env.MAILSLURP_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error('MAILSLURP_API_KEY is required for email 2FA (MailSlurp).');
+  }
+  const ms = new MailSlurp({ apiKey });
+  await ms.deleteEmail(emailId);
+}
+
 /**
  * Wait for a **new** Clerk verification email after `notBeforeMs` (typically set right after
  * submitting the password). Uses MailSlurp `since` on `waitForLatestEmail` so we never read the
  * inbox’s previous “latest” OTP from an earlier sign-in attempt.
  */
 export async function waitForClerkOtpFromMailSlurp(options: {
-  /** Only accept emails received at or after this time (minus {@link CLOCK_SKEW_MS}). */
+  /** Only accept emails received at or after this time (minus {@link MAILSURP_CLOCK_SKEW_MS}). */
   notBeforeMs: number;
   timeoutMs?: number;
   pollMs?: number;
-}): Promise<string> {
+}): Promise<ClerkOtpFromMailSlurpResult> {
   const apiKey = process.env.MAILSLURP_API_KEY?.trim();
   if (!apiKey) {
     throw new Error('MAILSLURP_API_KEY is required for email 2FA (MailSlurp).');
@@ -81,7 +108,7 @@ export async function waitForClerkOtpFromMailSlurp(options: {
   const deadline = Date.now() + (options.timeoutMs ?? 120_000);
   const pollMs = options.pollMs ?? 2_500;
   const notBefore = options.notBeforeMs;
-  const sinceDate = new Date(notBefore - CLOCK_SKEW_MS);
+  const sinceDate = new Date(notBefore - MAILSURP_CLOCK_SKEW_MS);
 
   while (Date.now() < deadline) {
     const remaining = deadline - Date.now();
@@ -99,7 +126,7 @@ export async function waitForClerkOtpFromMailSlurp(options: {
       continue;
     }
 
-    if (emailReceivedAtMs(email) < notBefore - CLOCK_SKEW_MS) {
+    if (emailReceivedAtMs(email) < notBefore - MAILSURP_CLOCK_SKEW_MS) {
       try {
         await ms.deleteEmail(email.id);
       } catch {
@@ -122,7 +149,13 @@ export async function waitForClerkOtpFromMailSlurp(options: {
     }
 
     const otp = extractOtpFromText(blob);
-    if (otp) return otp;
+    if (otp) {
+      return {
+        otp,
+        emailId: email.id,
+        receivedAtMs: emailReceivedAtMs(email),
+      };
+    }
 
     try {
       await ms.deleteEmail(email.id);

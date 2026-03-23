@@ -1,4 +1,11 @@
-export { resolveMailSlurpInboxId, waitForClerkOtpFromMailSlurp } from './mailslurp-otp';
+export {
+  deleteMailSlurpEmail,
+  MAILSURP_CLOCK_SKEW_MS,
+  nextNotBeforeMsAfterEmail,
+  resolveMailSlurpInboxId,
+  waitForClerkOtpFromMailSlurp,
+  type ClerkOtpFromMailSlurpResult,
+} from './mailslurp-otp';
 
 export {
   CLERK_TEST_EMAIL_OTP,
