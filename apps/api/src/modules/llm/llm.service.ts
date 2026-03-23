@@ -38,9 +38,11 @@ Respond ONLY with valid JSON:
 Guidelines:
 - Use modern Playwright locator APIs (getByRole, getByText, getByLabel, getByPlaceholder) when possible
 - NEVER emit page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') with only a tag name — strict mode will fail when multiple elements match. Prefer getByRole with name, or locator with hasText, or .first() only as a last resort.
+- **Do not invent selectors from example names in the instruction.** Example: if the user says to type "John" as first name, **do not** use \`input[placeholder="John"]\` or \`getByPlaceholder('John')\` unless the **page context** explicitly shows that exact placeholder. Prefer \`page.getByLabel(/first name/i)\`, \`getByRole('textbox', { name: /first name/i })\`, or labels from the accessibility tree / visible text excerpt.
+- **Sparse tree:** If the page context is short, rely on the **screenshot** and any **"Visible page text"** section — use **regex** labels (\`/date of birth|dob/i\`, \`/phone|mobile/i\`, \`/save/i\`) with \`getByLabel\` / \`getByRole\` instead of guessing CSS attributes.
 - For navigation, use page.goto()
 - For typing, use page.fill() or page.getByLabel().fill()
-- **Date inputs (\`input[type="date"]\`)**: Playwright \`fill()\` only accepts **ISO 8601** values: \`YYYY-MM-DD\` (e.g. \`1980-01-01\`). Slash formats like \`01/01/1980\` or \`MM/DD/YYYY\` cause **"Malformed value"**. If the user prompt gives a human date, **convert it to ISO** in the generated fill string. Use the screenshot/a11y tree to confirm \`type="date"\`.
+- **Date inputs (\`input[type="date"]\`)**: Playwright \`fill()\` only accepts **ISO 8601** values: \`YYYY-MM-DD\` (e.g. \`1980-01-01\`). Slash formats like \`01/01/1980\` or \`MM/DD/YYYY\` cause **"Malformed value"**. If the user prompt gives a human date, **convert it to ISO** in the generated fill string. Use the screenshot/a11y tree to confirm \`type="date"\`. For **text** date fields (\`mm/dd/yyyy\` placeholders), fill the **ISO** string only if the control accepts it; otherwise match the visible format from the page.
 - Handle waiting implicitly (Playwright auto-waits)
 - Only generate safe Playwright API calls (no eval, no fs, no network)`;
 
@@ -158,7 +160,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     const userPrompt = `Instruction: ${input.instruction}
 Current page URL: ${input.pageUrl}
 Page context (accessibility tree):
-${input.pageAccessibilityTree.slice(0, 4000)}`;
+${input.pageAccessibilityTree.slice(0, 12000)}`;
 
     const visionAttached = !!input.screenshotBase64?.trim();
 
@@ -174,6 +176,8 @@ ${input.pageAccessibilityTree.slice(0, 4000)}`;
          * `max_completion_tokens` (reasoning + output share this budget on GPT-5.x).
          */
         maxTokens: 16384,
+        /** GPT-5.x defaults to `medium` reasoning effort, which can exhaust the completion budget with empty visible `content`. */
+        reasoningEffort: 'low',
       },
     );
 

@@ -7,6 +7,8 @@ export interface LlmChatOptions {
   imageBase64?: string;
   temperature?: number;
   maxTokens?: number;
+  /** OpenAI reasoning models only: lowers internal reasoning so visible JSON still fits in the completion budget. */
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
 }
 
 export interface LlmProvider {

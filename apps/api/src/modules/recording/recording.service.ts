@@ -569,6 +569,7 @@ export class RecordingService extends EventEmitter {
     } catch {
       accessibilityTree = 'Unable to capture accessibility tree';
     }
+    accessibilityTree = await this.enrichAccessibilityTreeForLlm(session.page, accessibilityTree);
 
     let screenshotBase64: string | undefined;
     try {
@@ -637,6 +638,7 @@ export class RecordingService extends EventEmitter {
     } catch {
       accessibilityTree = 'Unable to capture accessibility tree';
     }
+    accessibilityTree = await this.enrichAccessibilityTreeForLlm(session.page, accessibilityTree);
 
     let screenshotBase64: string | undefined;
     try {
@@ -1052,6 +1054,26 @@ export class RecordingService extends EventEmitter {
     return null;
   }
 
+  /**
+   * CDP accessibility snapshots are often sparse on SPAs (title only), so the LLM invents
+   * `placeholder="John"`-style selectors → Playwright auto-waits until timeout. Append body text.
+   */
+  private async enrichAccessibilityTreeForLlm(page: Page, base: string): Promise<string> {
+    if (base.length >= 2000) return base;
+    try {
+      /** Runs in browser; string form avoids Node `tsc` needing DOM lib for `document`. */
+      const vis = (await page.evaluate(
+        "() => { const t = (document.body?.innerText || '').replace(/\\s+/g, ' ').trim(); return t.slice(0, 12000); }",
+      )) as string;
+      if (vis.length > 40) {
+        return `${base}\n\n---\nVisible page text (use for getByLabel/getByRole/getByPlaceholder; do not invent placeholders from example names in the instruction):\n${vis}`;
+      }
+    } catch {
+      /* */
+    }
+    return base;
+  }
+
   private async captureLlmPageContext(page: Page): Promise<{
     pageUrl: string;
     pageAccessibilityTree: string;
@@ -1065,6 +1087,7 @@ export class RecordingService extends EventEmitter {
     } catch {
       pageAccessibilityTree = 'Unable to capture accessibility tree';
     }
+    pageAccessibilityTree = await this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
     let screenshotBase64: string | undefined;
     try {
       const buf = await page.screenshot({ type: 'jpeg', quality: 60 });
@@ -2340,6 +2363,8 @@ export class RecordingService extends EventEmitter {
             const snapshot = await (session.page as any).accessibility?.snapshot();
             accessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : '';
           } catch {}
+
+          accessibilityTree = await this.enrichAccessibilityTreeForLlm(session.page, accessibilityTree);
 
           const translated = await this.llmService.actionToInstruction({
             action: data.type,

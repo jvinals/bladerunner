@@ -35,17 +35,27 @@ export class OpenAiProvider implements LlmProvider {
     /** `max_tokens` is deprecated; GPT-5.x / reasoning models use `max_completion_tokens` (includes reasoning + visible text). */
     const maxCompletionTokens = options?.maxTokens ?? 1024;
 
+    const supportsReasoningEffort =
+      this.model.includes('gpt-5') || /^o[0-9]/i.test(this.model);
+
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: openAiMessages,
       temperature: options?.temperature ?? 0.1,
       max_completion_tokens: maxCompletionTokens,
       response_format: { type: 'json_object' },
+      ...(options?.reasoningEffort != null && supportsReasoningEffort
+        ? { reasoning_effort: options.reasoningEffort }
+        : {}),
     });
 
     const choice = response.choices[0];
-    const content = choice?.message?.content ?? '';
+    const msg = choice?.message;
+    const content = typeof msg?.content === 'string' ? msg.content : '';
+    const refusal = typeof msg?.refusal === 'string' ? msg.refusal : '';
     const finishReason = choice?.finish_reason;
+    const usage = response.usage;
+    const reasoningTok = usage?.completion_tokens_details?.reasoning_tokens;
 
     // #region agent log
     fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
@@ -60,6 +70,9 @@ export class OpenAiProvider implements LlmProvider {
           finishReason,
           model: this.model,
           maxCompletionTokens,
+          refusalLen: refusal.length,
+          reasoningTokens: reasoningTok,
+          completionTokens: usage?.completion_tokens,
         },
         timestamp: Date.now(),
         hypothesisId: 'H-openai',
@@ -69,8 +82,15 @@ export class OpenAiProvider implements LlmProvider {
     // #endregion
 
     if (!content.trim()) {
-      throw new Error(
+      const bits = [
         `OpenAI returned empty assistant message (finish_reason=${String(finishReason ?? 'unknown')})`,
+        refusal.trim() ? `refusal=${refusal}` : null,
+        reasoningTok != null ? `reasoning_tokens=${reasoningTok}` : null,
+        usage != null ? `completion_tokens=${usage.completion_tokens}` : null,
+      ].filter(Boolean);
+      throw new Error(
+        bits.join(' | ') +
+          ' — If reasoning_tokens consumed the whole budget, use a lower reasoning_effort or higher max_completion_tokens.',
       );
     }
     return content;
