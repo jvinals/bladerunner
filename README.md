@@ -242,6 +242,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.4** — **Runs / Add AI Step**: **Done** saves the prompt and closes without re-running vision + Playwright when a **Test** (or adopt-suggested + test) already succeeded for the **same** prompt text; editing the textarea or **Reset** clears that so **Done** runs the full test again. **`@bladerunner/web` `0.7.4`**.
 - **0.10.3** — **LLM / vision**: **Authorized QA framing** in the Gemini template (staging/synthetic data, UI validation only); **recorder** `actionToInstruction` system prompt aligned; **clearer errors** when Gemini returns empty text (**`finishReason`**, **`promptFeedback`**, safety hints + rephrase guidance). README: **Writing prompts** to avoid model refusals. **`@bladerunner/api` `0.6.20`**.
 - **0.10.2** — **LLM / vision**: **Set-of-Marks** — before the Gemini JPEG, the API injects numbered high-contrast badges on viewport-visible interactives and sends the **tag-aligned manifest** with the task in the user prompt; **`instructionToAction`** no longer ignores **`pageAccessibilityTree`**. **SPA Playwright** rules in prompts; generated snippets may use **`expect`** (injected in **`executePwCode`**). **`@bladerunner/api` `0.6.19`**.
 - **0.10.1** — **LLM**: Default **`GEMINI_INSTRUCTION_MODEL`** is **`gemini-3-flash-preview`** (was **`gemini-2.0-flash`**). **`@bladerunner/api` `0.6.1`**.

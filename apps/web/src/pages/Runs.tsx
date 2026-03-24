@@ -80,6 +80,8 @@ export default function RunsPage() {
   const [aiStepReviewOpen, setAiStepReviewOpen] = useState(false);
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const aiStepAbortRef = useRef<AbortController | null>(null);
+  /** Trimmed prompt that last completed Test (or adopt+test) succeeded for; cleared on edit / reset / modal close. Used to skip LLM+Playwright re-run on Done. */
+  const aiLastTestedPromptRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
@@ -529,6 +531,7 @@ export default function RunsPage() {
           }
           return false;
         }
+        aiLastTestedPromptRef.current = instr;
         setAiStepFailure(null);
         void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
         await loadRunSteps(runId);
@@ -554,6 +557,7 @@ export default function RunsPage() {
       const res = await runsApi.appendAiPromptStepRecording(runId, { instruction: AI_STEP_DRAFT_PLACEHOLDER });
       const step = res.step as { id: string };
       setAiStepCreatedId(step.id);
+      aiLastTestedPromptRef.current = null;
       setAiStepPrompt(AI_STEP_DRAFT_PLACEHOLDER);
       setAiStepFailure(null);
       setAiStepModalOpen(true);
@@ -586,6 +590,7 @@ export default function RunsPage() {
       }
       setAiStepBusy(false);
     }
+    aiLastTestedPromptRef.current = null;
     setAiStepModalOpen(false);
     setAiStepPrompt('');
     setAiStepCreatedId(null);
@@ -608,9 +613,44 @@ export default function RunsPage() {
   const handleAiStepSavePrompt = useCallback(() => void runAiTestPipeline(true), [runAiTestPipeline]);
 
   const handleAiStepDone = useCallback(async () => {
+    const sid = aiStepCreatedId;
+    const rid = runId;
+    if (!rid || !sid) return;
+    const instr = aiStepPrompt.trim();
+    if (!instr) {
+      setAiStepError('Prompt is required');
+      return;
+    }
+
+    const canSkipTestRun =
+      aiLastTestedPromptRef.current !== null && aiLastTestedPromptRef.current === instr;
+
+    if (canSkipTestRun) {
+      setAiStepBusy(true);
+      setAiStepError(null);
+      try {
+        await runsApi.patchRunStep(rid, sid, { instruction: instr });
+        void queryClient.invalidateQueries({ queryKey: ['run-steps', rid] });
+        await loadRunSteps(rid);
+        aiLastTestedPromptRef.current = null;
+        setAiStepModalOpen(false);
+        setAiStepPrompt('');
+        setAiStepCreatedId(null);
+        setAiStepError(null);
+        setAiStepFailure(null);
+        setAiStepReviewOpen(false);
+        void promptAfterStepChange(sid);
+      } catch (e) {
+        setAiStepError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setAiStepBusy(false);
+      }
+      return;
+    }
+
     const ok = await runAiTestPipeline(true);
     if (!ok) return;
-    const sid = aiStepCreatedId;
+    aiLastTestedPromptRef.current = null;
     setAiStepModalOpen(false);
     setAiStepPrompt('');
     setAiStepCreatedId(null);
@@ -618,7 +658,15 @@ export default function RunsPage() {
     setAiStepFailure(null);
     setAiStepReviewOpen(false);
     if (sid) void promptAfterStepChange(sid);
-  }, [runAiTestPipeline, aiStepCreatedId, promptAfterStepChange]);
+  }, [
+    runAiTestPipeline,
+    aiStepCreatedId,
+    runId,
+    aiStepPrompt,
+    queryClient,
+    loadRunSteps,
+    promptAfterStepChange,
+  ]);
 
   const handleAiStepAdoptSuggestedPrompt = useCallback(async () => {
     if (!runId || !aiStepCreatedId || !aiStepFailure || aiStepBusy) return;
@@ -649,6 +697,7 @@ export default function RunsPage() {
         }
         return;
       }
+      aiLastTestedPromptRef.current = next;
       void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
       await loadRunSteps(runId);
     } catch (e) {
@@ -668,6 +717,7 @@ export default function RunsPage() {
     setAiStepError(null);
     try {
       await runsApi.resetAiPromptTest(runId, aiStepCreatedId);
+      aiLastTestedPromptRef.current = null;
     } catch (e) {
       setAiStepError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1526,11 +1576,15 @@ export default function RunsPage() {
                 Playback runs the LLM with your prompt each time (stored Playwright is for debug only). Reset restores the
                 browser to before the last Test, or to the checkpoint after the previous step if you have not tested yet.{' '}
                 <strong>Save prompt</strong> updates the stored text and runs Test; <strong>Test</strong> runs once without
-                saving the draft to the server first.
+                saving the draft to the server first. <strong>Done</strong> saves the prompt and closes; if you already ran a
+                successful Test for this exact text, Done skips re-running the vision model and Playwright.
               </p>
               <textarea
                 value={aiStepPrompt}
-                onChange={(e) => setAiStepPrompt(e.target.value)}
+                onChange={(e) => {
+                  aiLastTestedPromptRef.current = null;
+                  setAiStepPrompt(e.target.value);
+                }}
                 rows={5}
                 disabled={aiStepBusy || aiStepOpeningBusy}
                 placeholder="Describe what to do on the page at this step…"
