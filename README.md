@@ -80,6 +80,8 @@ cd apps/api && pnpm exec prisma migrate deploy
 - **`GEMINI_API_KEY`** (required for AI prompt and instruct flows) — Google **Gemini** API key. Playwright snippets are generated only via Gemini using the server-side vision template. Create a key in [Google AI Studio](https://aistudio.google.com/).
 - **`GEMINI_INSTRUCTION_MODEL`** (optional) — Defaults to **`gemini-3-flash-preview`**. Override with any model id from [Google AI Studio](https://aistudio.google.com/) if needed.
 - **`GEMINI_INSTRUCTION_VERIFY`** (optional) — When **`true`** or unset, after vision codegen the API runs a **second** Gemini pass (text-only) to check the draft Playwright against the **same** Set-of-Marks manifest and accessibility snapshot and correct it if needed. Set to **`false`** or **`0`** to skip that pass (faster local iteration).
+- **`LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX`** (optional, default **16384**) — Vision captures a **full-page** JPEG for Gemini; if the decoded height exceeds this value, the API **downscales** the image uniformly (Set-of-Marks badges stay aligned). Lower this if the model rejects very large images.
+- **`LLM_VISION_FULL_PAGE_MAX_WIDTH_PX`** (optional) — When set, the API also downscales if the full-page JPEG width exceeds this value (same uniform resize as height).
 
 Skip-replay suggestions and AI prompt **failure explanations** still use **`LLM_PROVIDER`** with **`OPENAI_API_KEY`** or **`ANTHROPIC_API_KEY`**.
 
@@ -199,7 +201,7 @@ When **Clerk auto playback is enabled** — the client sends **`autoClerkSignIn:
 
 ### AI prompt steps
 
-Some steps should **not** replay fixed **Playwright** from recording time; they should **re-plan** from a **human prompt** using the **current** DOM (viewport **JPEG** + accessibility snapshot) via **`LlmService.instructionToAction`**, then **`executePwCode`** — same path for **live playback**, **detached playback**, and **Test step** (no separate headless worker in-repo).
+Some steps should **not** replay fixed **Playwright** from recording time; they should **re-plan** from a **human prompt** using the **current** DOM (full-page **JPEG** + accessibility snapshot) via **`LlmService.instructionToAction`**, then **`executePwCode`** — same path for **live playback**, **detached playback**, and **Test step** (no separate headless worker in-repo).
 
 **Writing prompts (reduce Gemini / vision refusals):** Describe **neutral QA behavior** on your **staging or demo** app. The vision model is framed for authorized UI automation; wording that sounds like real attacks, abuse, exploitation, or policy-sensitive scenarios may yield an empty response. Prefer outcomes such as *verify unauthorized access shows the correct error*, *confirm the audit log records the event*, or *test the invalid-permission flow*—instead of imperative language that could be read as harmful. Shorten or generalize long realistic “scenario” copy if the model blocks the request.
 
@@ -243,6 +245,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.17** — **LLM / vision**: AI prompt and instruct flows capture a **full-page** JPEG for Gemini (Set-of-Marks across the scrollable page), with optional **`LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX`** / **`LLM_VISION_FULL_PAGE_MAX_WIDTH_PX`** to cap oversized images via uniform downscaling. **`@bladerunner/api` `0.6.26`**.
 - **0.10.16** — **Runs / Add AI prompt step**: Removed **Raw model output (final)** from the drawer **`AiPromptProgressSections`** (section 3 still shows live stream + model thinking; section 4 is Playwright code). **`@bladerunner/web` `0.7.14`**.
 - **0.10.15** — **LLM / AI prompt**: Vision codegen always receives **Set-of-Marks manifest** + **Playwright CDP accessibility snapshot** (captured before badges) + **JPEG** + task; optional **`GEMINI_INSTRUCTION_VERIFY`** (default on) runs a **DOM verify** pass to fix draft Playwright against the same DOM text. **AI prompt review** modal can show draft, verify prompt, and final code. **`@bladerunner/api` `0.6.25`**, **`@bladerunner/web` `0.7.13`**.
 - **0.10.14** — **Clerk / MailSlurp 2FA**: Tighter **`MAILSURP_CLOCK_SKEW_MS`** (2s), **`MAILSLURP_POST_PASSWORD_DELAY_MS`** (2.5s) after password submit or OTP-only assist before polling, so **`waitForLatestEmail`** is less likely to return a **previous** inbox message. **`@bladerunner/api` `0.6.24`**, **`@bladerunner/clerk-agentmail-signin` `0.5.1`**.

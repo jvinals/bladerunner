@@ -3,8 +3,8 @@ import type { Page } from 'playwright-core';
 /** Injected overlay root; removed after screenshot. */
 export const SOM_CONTAINER_ID = '__bladerunner_som_overlay_root';
 
-/** Max numbered tags (viewport-visible interactives); deterministic overflow drop. */
-export const SOM_MAX_TAGS = 250;
+/** Max numbered tags (full-page interactives); deterministic overflow drop. */
+export const SOM_MAX_TAGS = 350;
 
 /** Max characters of manifest text sent to Gemini (avoid huge prompts). */
 export const SOM_MANIFEST_MAX_CHARS = 28000;
@@ -15,7 +15,8 @@ export type SetOfMarkInjectResult = {
 };
 
 /**
- * Injects high-contrast numeric badges on viewport-visible interactive elements.
+ * Injects high-contrast numeric badges on interactive elements across the full document
+ * (aligned with Playwright `page.screenshot({ fullPage: true })`).
  * Call {@link removeSetOfMarkOverlay} after screenshot, typically in `finally`.
  */
 export async function injectSetOfMarkOverlay(
@@ -64,19 +65,18 @@ export async function injectSetOfMarkOverlay(
         }
       }
 
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-
-      function intersectsViewport(r: DOMRect): boolean {
-        return (
-          r.width >= 1 &&
-          r.height >= 1 &&
-          r.bottom > 0 &&
-          r.right > 0 &&
-          r.top < vh &&
-          r.left < vw
-        );
-      }
+      const scrollH = Math.max(
+        doc.documentElement?.scrollHeight ?? 0,
+        doc.body?.scrollHeight ?? 0,
+        1,
+      );
+      const scrollW = Math.max(
+        doc.documentElement?.scrollWidth ?? 0,
+        doc.body?.scrollWidth ?? 0,
+        1,
+      );
+      const sx = window.scrollX;
+      const sy = window.scrollY;
 
       function isSkipped(el: Element): boolean {
         if (!(el instanceof HTMLElement)) return true;
@@ -90,7 +90,7 @@ export async function injectSetOfMarkOverlay(
         const st = window.getComputedStyle(el);
         if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') return true;
         const r = el.getBoundingClientRect();
-        if (!intersectsViewport(r)) return true;
+        if (r.width < 1 || r.height < 1) return true;
         return false;
       }
 
@@ -99,12 +99,20 @@ export async function injectSetOfMarkOverlay(
         if (!isSkipped(el)) candidates.push(el);
       }
 
+      function docXY(el: Element): { docLeft: number; docTop: number } {
+        const r = el.getBoundingClientRect();
+        return {
+          docLeft: r.left + sx,
+          docTop: r.top + sy,
+        };
+      }
+
       candidates.sort((a, b) => {
-        const ra = a.getBoundingClientRect();
-        const rb = b.getBoundingClientRect();
-        const dy = ra.top - rb.top;
+        const pa = docXY(a);
+        const pb = docXY(b);
+        const dy = pa.docTop - pb.docTop;
         if (Math.abs(dy) > 1) return dy;
-        return ra.left - rb.left;
+        return pa.docLeft - pb.docLeft;
       });
 
       const picked = candidates.slice(0, cap);
@@ -137,16 +145,19 @@ export async function injectSetOfMarkOverlay(
       root.id = containerId;
       root.setAttribute('data-bladerunner-som', 'true');
       root.style.cssText = [
-        'position:fixed',
-        'inset:0',
+        'position:absolute',
+        'left:0',
+        'top:0',
+        `width:${scrollW}px`,
+        `min-height:${scrollH}px`,
         'pointer-events:none',
         'z-index:2147483646',
-        'overflow:hidden',
+        'overflow:visible',
       ].join(';');
 
       picked.forEach((el, i) => {
         const n = i + 1;
-        const r = el.getBoundingClientRect();
+        const { docLeft, docTop } = docXY(el);
         const tag = el.tagName.toLowerCase();
         const role = el.getAttribute('role') || '';
         let type = '';
@@ -163,10 +174,12 @@ export async function injectSetOfMarkOverlay(
 
         const badge = doc.createElement('div');
         badge.textContent = String(n);
+        const leftPx = Math.min(Math.max(0, docLeft), scrollW - 8);
+        const topPx = Math.max(0, docTop - 2);
         badge.style.cssText = [
-          'position:fixed',
-          `left:${Math.min(Math.max(0, r.left), vw - 28)}px`,
-          `top:${Math.max(0, r.top - 2)}px`,
+          'position:absolute',
+          `left:${leftPx}px`,
+          `top:${topPx}px`,
           'min-width:18px',
           'height:18px',
           'padding:0 4px',
@@ -186,7 +199,7 @@ export async function injectSetOfMarkOverlay(
 
       doc.body.appendChild(root);
       const header =
-        'Interactive elements (viewport-visible; numeric badges on the screenshot match [n] below; order is top-to-bottom, then left-to-right):';
+        'Interactive elements (full scrollable page; numeric badges on the screenshot match [n] below; order is top-to-bottom, then left-to-right):';
       return { manifestText: [header, ...lines].join('\n') };
     },
     { maxTags, containerId: SOM_CONTAINER_ID },

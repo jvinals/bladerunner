@@ -47,7 +47,7 @@ const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation eng
 
 Context (required): The user is running authorized automated UI / QA tests against their own application (staging, demo, or local). Names and data visible in the UI are synthetic test fixtures, not real individuals or production secrets. Your only deliverable is Playwright JavaScript that drives the browser for UI validation (clicks, fills, assertions)—not guidance on harming systems, bypassing security in production, or exfiltrating data. If the task below could be read as sensitive, interpret it as neutral QA coverage (for example: verify that unauthorized access is rejected and the expected message is shown) and still output the automation code.
 
-I am attaching a Set-of-Marks screenshot: high-contrast numeric badges are drawn on viewport-visible interactive controls. The interactive manifest below uses the same numbers [n] as the badges. The accessibility snapshot is a separate Playwright CDP tree (captured before badges were drawn). Use the screenshot, the interactive manifest, and the accessibility snapshot together; emitted Playwright code must use normal locators (getByRole, getByLabel, getByPlaceholder, getByText, etc.) — do not reference badge numbers in the final code.
+I am attaching a Set-of-Marks screenshot of the full scrollable page: high-contrast numeric badges are drawn on interactive controls across the page (not only what was in the initial viewport). The interactive manifest below uses the same numbers [n] as the badges. The accessibility snapshot is a separate Playwright CDP tree (captured before badges were drawn). Use the screenshot, the interactive manifest, and the accessibility snapshot together; emitted Playwright code must use normal locators (getByRole, getByLabel, getByPlaceholder, getByText, etc.) — do not reference badge numbers in the final code.
 
 Page URL:
 ${GEMINI_PAGE_URL_PLACEHOLDER}
@@ -55,7 +55,7 @@ ${GEMINI_PAGE_URL_PLACEHOLDER}
 Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
 
-Interactive manifest (viewport-visible interactives; aligned with screenshot badges):
+Interactive manifest (interactives on the full page; aligned with screenshot badges):
 ${GEMINI_MANIFEST_PLACEHOLDER}
 
 Playwright CDP accessibility snapshot (JSON or enriched text; structural DOM / a11y distillation):

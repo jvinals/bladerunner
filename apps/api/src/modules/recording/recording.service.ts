@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
+import sharp from 'sharp';
 import type { BrowserContext } from 'playwright-core';
 import { expect } from '@playwright/test';
 
@@ -147,6 +148,8 @@ const REMOTE_BROWSER_VIEWPORT = { width: 1280, height: 720 } as const;
 const REMOTE_BROWSER_DEVICE_SCALE_FACTOR = 1;
 /** JPEG quality for screenshots sent to the vision LLM (AI prompt, executeInstruction, reRecord). */
 const LLM_VISION_SCREENSHOT_JPEG_QUALITY = 85;
+/** Default max height (px) for LLM vision JPEG after full-page capture; larger images are downscaled uniformly (badges stay aligned). */
+const LLM_VISION_FULL_PAGE_MAX_HEIGHT_DEFAULT = 16384;
 
 export type StartPlaybackServiceOpts = {
   delayMs?: number;
@@ -1695,6 +1698,50 @@ export class RecordingService extends EventEmitter {
     return base;
   }
 
+  /** Parsed env for full-page vision JPEG caps; invalid values fall back to defaults / unset width. */
+  private llmVisionFullPageMaxHeightPx(): number {
+    const raw = this.configService.get<string>('LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX')?.trim();
+    const n = raw ? Number(raw) : NaN;
+    if (Number.isFinite(n) && n >= 256) return Math.floor(n);
+    return LLM_VISION_FULL_PAGE_MAX_HEIGHT_DEFAULT;
+  }
+
+  private llmVisionFullPageMaxWidthPx(): number | undefined {
+    const raw = this.configService.get<string>('LLM_VISION_FULL_PAGE_MAX_WIDTH_PX')?.trim();
+    const n = raw ? Number(raw) : NaN;
+    if (Number.isFinite(n) && n >= 256) return Math.floor(n);
+    return undefined;
+  }
+
+  /**
+   * Full-page screenshots can exceed model limits; uniform downscale keeps Set-of-Marks badges aligned with controls.
+   */
+  private async maybeResizeLlmVisionJpeg(buf: Buffer): Promise<Buffer> {
+    const maxH = this.llmVisionFullPageMaxHeightPx();
+    const maxW = this.llmVisionFullPageMaxWidthPx();
+    try {
+      const meta = await sharp(buf).metadata();
+      const h = meta.height ?? 0;
+      const w = meta.width ?? 0;
+      if (!h || !w) return buf;
+      const overH = h > maxH;
+      const overW = maxW != null && w > maxW;
+      if (!overH && !overW) return buf;
+      this.logger.debug(
+        `LLM vision JPEG ${w}×${h}px exceeds cap; resizing (max ${maxW ?? '∞'}×${maxH})`,
+      );
+      const resized = sharp(buf).resize(
+        maxW != null
+          ? { width: maxW, height: maxH, fit: 'inside', withoutEnlargement: true }
+          : { height: maxH, fit: 'inside', withoutEnlargement: true },
+      );
+      return await resized.jpeg({ quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY }).toBuffer();
+    } catch (e) {
+      this.logger.warn(`maybeResizeLlmVisionJpeg failed, using original buffer: ${e}`);
+      return buf;
+    }
+  }
+
   private async captureLlmPageContext(
     page: Page,
     signal?: AbortSignal,
@@ -1717,13 +1764,25 @@ export class RecordingService extends EventEmitter {
       const { manifestText } = await injectSetOfMarkOverlay(page);
       somManifest = manifestText;
       this.throwIfAborted(signal);
-      const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
+      const rawBuf = await page.screenshot({
+        type: 'jpeg',
+        quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY,
+        fullPage: true,
+        animations: 'disabled',
+      });
+      const buf = await this.maybeResizeLlmVisionJpeg(Buffer.from(rawBuf));
       screenshotBase64 = buf.toString('base64');
     } catch (err) {
       /** Tagged screenshot is best-effort when overlay/screenshot fails; a11y snapshot was already captured. */
       this.logger.warn(`captureLlmPageContext: Set-of-Marks or screenshot failed (${err})`);
       try {
-        const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
+        const rawBuf = await page.screenshot({
+          type: 'jpeg',
+          quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY,
+          fullPage: true,
+          animations: 'disabled',
+        });
+        const buf = await this.maybeResizeLlmVisionJpeg(Buffer.from(rawBuf));
         screenshotBase64 = buf.toString('base64');
       } catch {
         /* optional */
