@@ -242,6 +242,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.9** — **Playback / AI prompt steps**: During live replay, each **AI prompt** step row shows **LLM** and **Playwright** status icons (idle grey → blinking blue/grey while active → solid blue when done). **`usePlayback`** subscribes to **`aiPromptTestProgress`** on the playback socket. **`@bladerunner/web` `0.7.8`**.
 - **0.10.8** — **Playback**: Detaching live replay to a window now **hides the inline preview** and shows **Reattach here** (same pattern as recording detach) on **Runs** and **Run detail**; toolbar detach is disabled while detached. **`@bladerunner/web` `0.7.7`**.
 - **0.10.7** — **Playback / AI codegen**: Tailwind class chains in `page.locator('…')` use **`:`** (e.g. `focus-visible:`, `file:`). Escaped **`\\:`** for `querySelector` was lost when snippets ran inside **`new Function`** (inner `'\:'` parses as `':'`). Emit **`page.locator(JSON.stringify(…))`** instead; skip double-processing when the string already contains **`\\:`**. Fixes **`SyntaxError: … is not a valid selector`**. **`@bladerunner/api` `0.6.22`**.
 - **0.10.6** — **Runs / Add AI Step** drawer: section **3** titled **Model Thinking**; **live streaming** (answer + thought) moved to the **top** of that section with **auto-scroll** to follow new tokens; final transcript below; removed duplicate **section 5 — Live model output** block. **`@bladerunner/web` `0.7.6`**.

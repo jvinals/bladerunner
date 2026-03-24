@@ -17,6 +17,7 @@ import { parseAiPromptLastLlmTranscript } from '@/lib/aiPromptLastLlmTranscript'
 import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
 import { usePlayback, type PlaybackProgressPayload } from '@/hooks/usePlayback';
 import {
+  derivePlaybackAiPromptStatus,
   effectivePlaybackHighlightSequence,
   playbackToneForStep,
   previousPlayThroughTarget,
@@ -159,6 +160,8 @@ export default function RunsPage() {
     advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
+    lastAiPromptProgress,
+    lastPlaybackProgress,
   } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -1534,6 +1537,22 @@ export default function RunsPage() {
                         effectiveHighlightSequence,
                         completedSequences,
                       )}
+                      playbackAiPromptStatus={derivePlaybackAiPromptStatus(step, {
+                        playbackActive:
+                          !!playbackSessionId &&
+                          !!effectiveRunId &&
+                          playbackSourceRunId === effectiveRunId,
+                        playbackSourceRunId,
+                        effectiveRunId,
+                        tone: playbackToneForStep(
+                          step.sequence,
+                          showReplayChrome,
+                          effectiveHighlightSequence,
+                          completedSequences,
+                        ),
+                        lastAiPromptProgress,
+                        lastPlaybackProgress,
+                      })}
                       reRecord={
                         isRecording
                           ? {

@@ -14,6 +14,7 @@ import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChan
 import { usePlayback, type PlaybackProgressPayload } from '@/hooks/usePlayback';
 import type { RecordedStep } from '@/hooks/useRecording';
 import {
+  derivePlaybackAiPromptStatus,
   effectivePlaybackHighlightSequence,
   playbackToneForStep,
   previousPlayThroughTarget,
@@ -563,6 +564,8 @@ export default function RunDetailPage() {
     advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
+    lastAiPromptProgress,
+    lastPlaybackProgress,
   } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   /** Clear stepped-advance input whenever there is no active playback session (covers stop → idle, complete, navigate back). */
@@ -1290,6 +1293,20 @@ export default function RunDetailPage() {
                           effectiveHighlightSequence,
                           completedSequences,
                         )}
+                        playbackAiPromptStatus={derivePlaybackAiPromptStatus(step, {
+                          playbackActive:
+                            !!playbackSessionId && !!id && playbackSourceRunId === id,
+                          playbackSourceRunId,
+                          effectiveRunId: id ?? null,
+                          tone: playbackToneForStep(
+                            step.sequence,
+                            showReplayChrome,
+                            effectiveHighlightSequence,
+                            completedSequences,
+                          ),
+                          lastAiPromptProgress,
+                          lastPlaybackProgress,
+                        })}
                         stepPlayback={
                           canShowStepActions
                             ? {
@@ -1382,6 +1399,20 @@ export default function RunDetailPage() {
                           effectiveHighlightSequence,
                           completedSequences,
                         )}
+                        playbackAiPromptStatus={derivePlaybackAiPromptStatus(step, {
+                          playbackActive:
+                            !!playbackSessionId && !!id && playbackSourceRunId === id,
+                          playbackSourceRunId,
+                          effectiveRunId: id ?? null,
+                          tone: playbackToneForStep(
+                            step.sequence,
+                            showReplayChrome,
+                            effectiveHighlightSequence,
+                            completedSequences,
+                          ),
+                          lastAiPromptProgress,
+                          lastPlaybackProgress,
+                        })}
                         stepPlayback={
                           canShowStepActions
                             ? {

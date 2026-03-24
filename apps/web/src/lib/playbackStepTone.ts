@@ -1,4 +1,6 @@
-import type { PlaybackHighlight } from '@/components/ui/StepCard';
+import type { PlaybackAiPromptStatus, PlaybackHighlight } from '@/components/ui/StepCard';
+import type { PlaybackProgressPayload } from '@/hooks/usePlayback';
+import type { AiPromptTestProgressPayload } from '@/hooks/useRecording';
 
 /**
  * Socket `highlightSequence` tracks `before`/`error` (step in progress) or, after `after`/`skipped`,
@@ -45,4 +47,65 @@ export function playbackToneForStep(
   if (highlightSequence !== null && sequence === highlightSequence) return 'current';
   if (completed.has(sequence)) return 'past';
   return 'future';
+}
+
+export function isAiPromptStepRow(origin: string, metadata?: unknown): boolean {
+  return (
+    origin === 'AI_PROMPT' ||
+    (!!metadata &&
+      typeof metadata === 'object' &&
+      (metadata as { kind?: string }).kind === 'ai_prompt_step')
+  );
+}
+
+/**
+ * Per-step LLM vs Playwright icon state during live playback (AI prompt steps only).
+ */
+export function derivePlaybackAiPromptStatus(
+  step: { id: string; sequence: number; origin: string; metadata?: unknown },
+  opts: {
+    playbackActive: boolean;
+    playbackSourceRunId: string | null;
+    effectiveRunId: string | null;
+    tone: PlaybackHighlight | undefined;
+    lastAiPromptProgress: AiPromptTestProgressPayload | null;
+    lastPlaybackProgress: PlaybackProgressPayload | null;
+  },
+): PlaybackAiPromptStatus | undefined {
+  if (
+    !opts.playbackActive ||
+    !opts.playbackSourceRunId ||
+    !opts.effectiveRunId ||
+    opts.playbackSourceRunId !== opts.effectiveRunId
+  ) {
+    return undefined;
+  }
+  if (!isAiPromptStepRow(step.origin, step.metadata)) return undefined;
+
+  const tone = opts.tone;
+  if (tone === 'past') return { ai: 'done', playwright: 'done' };
+  if (tone === 'future') return { ai: 'idle', playwright: 'idle' };
+  if (tone !== 'current') return undefined;
+
+  const sid = step.id;
+  const lp = opts.lastPlaybackProgress;
+  const la = opts.lastAiPromptProgress;
+
+  if (lp?.step.id === sid && lp.phase === 'transcript') {
+    return { ai: 'done', playwright: 'idle' };
+  }
+
+  if (la?.stepId === sid && la.phase === 'llm') {
+    return { ai: 'busy', playwright: 'idle' };
+  }
+
+  if (la?.stepId === sid && la.phase === 'executing') {
+    return { ai: 'done', playwright: 'busy' };
+  }
+
+  if (la?.stepId === sid && la.phase === 'capturing') {
+    return { ai: 'idle', playwright: 'idle' };
+  }
+
+  return { ai: 'idle', playwright: 'idle' };
 }

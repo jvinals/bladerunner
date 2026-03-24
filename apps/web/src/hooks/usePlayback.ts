@@ -3,6 +3,7 @@ import type { Socket } from 'socket.io-client';
 import { runsApi, playbackBodyFromSnapshot, type StartPlaybackBody } from '@/lib/api';
 import { effectivePlaybackHighlightSequence, previousPlayThroughTarget } from '@/lib/playbackStepTone';
 import { createRecordingSocket } from '@/lib/recordingSocket';
+import type { AiPromptTestProgressPayload } from '@/hooks/useRecording';
 
 export type PlaybackProgressPhase = 'before' | 'transcript' | 'after' | 'error' | 'skipped';
 
@@ -50,6 +51,10 @@ export interface UsePlaybackReturn {
   advancePlaybackTo: (stopAfterSequence: number) => Promise<void>;
   /** Stop and start a new session with the same options */
   restartPlayback: () => Promise<void>;
+  /** Latest `aiPromptTestProgress` for the source run (playback socket); filter by `stepId` in UI. */
+  lastAiPromptProgress: AiPromptTestProgressPayload | null;
+  /** Latest `playbackProgress` payload (for `transcript` / phase boundaries). */
+  lastPlaybackProgress: PlaybackProgressPayload | null;
 }
 
 function disconnectSocket(socketRef: MutableRefObject<Socket | null>, sessionId: string | null) {
@@ -75,15 +80,22 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
   const [highlightSequence, setHighlightSequence] = useState<number | null>(null);
   const [completedSequences, setCompletedSequences] = useState<Set<number>>(() => new Set());
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [lastAiPromptProgress, setLastAiPromptProgress] = useState<AiPromptTestProgressPayload | null>(null);
+  const [lastPlaybackProgress, setLastPlaybackProgress] = useState<PlaybackProgressPayload | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const activeSessionRef = useRef<string | null>(null);
+  /** Source run id for filtering `aiPromptTestProgress` (payload.runId is source run, not playback session). */
+  const playbackSourceRunIdRef = useRef<string | null>(null);
   const progressCbRef = useRef<UsePlaybackOptions['onPlaybackProgress']>(undefined);
   progressCbRef.current = options?.onPlaybackProgress;
 
-  const bindSocket = useCallback((sessionId: string) => {
+  const bindSocket = useCallback((sessionId: string, sourceRunIdForEvents: string) => {
     disconnectSocket(socketRef, activeSessionRef.current);
     activeSessionRef.current = sessionId;
+    playbackSourceRunIdRef.current = sourceRunIdForEvents;
+    setLastAiPromptProgress(null);
+    setLastPlaybackProgress(null);
 
     const socket = createRecordingSocket();
     socketRef.current = socket;
@@ -93,8 +105,11 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       setIsPlaying(false);
       setIsPaused(false);
       setStatus('idle');
+      setLastAiPromptProgress(null);
+      setLastPlaybackProgress(null);
       disconnectSocket(socketRef, sessionId);
       activeSessionRef.current = null;
+      playbackSourceRunIdRef.current = null;
       setPlaybackSessionId(null);
       setSourceRunId(null);
     };
@@ -117,7 +132,15 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     socket.on('playbackProgress', (payload: PlaybackProgressPayload) => {
       if (payload.runId !== sessionId && payload.playbackSessionId !== sessionId) return;
 
+      setLastPlaybackProgress(payload);
       progressCbRef.current?.(payload);
+
+      if (payload.phase === 'before') {
+        setLastAiPromptProgress(null);
+      }
+      if (payload.phase === 'after' || payload.phase === 'skipped') {
+        setLastAiPromptProgress(null);
+      }
 
       if (payload.phase === 'before' || payload.phase === 'error') {
         setHighlightSequence(payload.step.sequence);
@@ -129,6 +152,13 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       if (payload.phase === 'error' && payload.error) {
         setPlaybackError(payload.error);
       }
+    });
+
+    socket.on('aiPromptTestProgress', (payload: Record<string, unknown>) => {
+      const src = playbackSourceRunIdRef.current;
+      const runId = typeof payload.runId === 'string' ? payload.runId : '';
+      if (!src || runId !== src) return;
+      setLastAiPromptProgress(payload as AiPromptTestProgressPayload);
     });
 
     socket.on('status', (data: PlaybackStatusPayload) => {
@@ -150,8 +180,11 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
         }
         setIsPlaying(false);
         setIsPaused(false);
+        setLastAiPromptProgress(null);
+        setLastPlaybackProgress(null);
         disconnectSocket(socketRef, sessionId);
         activeSessionRef.current = null;
+        playbackSourceRunIdRef.current = null;
         setPlaybackSessionId(null);
         setSourceRunId(null);
         /* keep highlight + completed so the failed step stays visible */
@@ -160,8 +193,11 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       if (data.status === 'completed' || data.status === 'stopped') {
         setIsPlaying(false);
         setIsPaused(false);
+        setLastAiPromptProgress(null);
+        setLastPlaybackProgress(null);
         disconnectSocket(socketRef, sessionId);
         activeSessionRef.current = null;
+        playbackSourceRunIdRef.current = null;
         setPlaybackSessionId(null);
         setSourceRunId(null);
         setHighlightSequence(null);
@@ -192,7 +228,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
         setSourceRunId(result.sourceRunId);
         setIsPlaying(true);
         setStatus('playback');
-        bindSocket(result.playbackSessionId);
+        bindSocket(result.playbackSessionId, result.sourceRunId);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setPlaybackError(msg);
@@ -222,6 +258,9 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     setStatus('idle');
     setPlaybackSessionId(null);
     setSourceRunId(null);
+    playbackSourceRunIdRef.current = null;
+    setLastAiPromptProgress(null);
+    setLastPlaybackProgress(null);
     setHighlightSequence(null);
     setCompletedSequences(new Set());
     setCurrentFrame(null);
@@ -289,7 +328,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
         setCompletedSequences(new Set());
         setHighlightSequence(null);
         setCurrentFrame(null);
-        bindSocket(result.playbackSessionId);
+        bindSocket(result.playbackSessionId, result.sourceRunId);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setPlaybackError(msg);
@@ -329,7 +368,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       setCompletedSequences(new Set());
       setHighlightSequence(null);
       setCurrentFrame(null);
-      bindSocket(result.playbackSessionId);
+      bindSocket(result.playbackSessionId, result.sourceRunId);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setPlaybackError(msg);
@@ -368,5 +407,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     advancePlaybackPrevious,
     advancePlaybackTo,
     restartPlayback,
+    lastAiPromptProgress,
+    lastPlaybackProgress,
   };
 }

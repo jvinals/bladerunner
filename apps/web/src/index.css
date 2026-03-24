@@ -139,6 +139,20 @@
     }
   }
 
+  /** Live replay: AI prompt step LLM / Playwright icons while active */
+  @keyframes playback-ai-pw-blink {
+    0%,
+    100% {
+      color: rgb(96 165 250);
+    }
+    50% {
+      color: rgb(209 213 219);
+    }
+  }
+  .playback-ai-pw-blink {
+    animation: playback-ai-pw-blink 1s ease-in-out infinite;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }

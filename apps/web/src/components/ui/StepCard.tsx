@@ -18,12 +18,20 @@ import {
   Play,
   FlaskConical,
   Wand2,
+  Terminal,
 } from 'lucide-react';
 import { runsApi } from '@/lib/api';
 import type { CheckpointData } from '@/components/ui/CheckpointDivider';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
 
 export type PlaybackHighlight = 'past' | 'current' | 'future';
+
+export type PlaybackAiPromptIconPhase = 'idle' | 'busy' | 'done';
+
+export type PlaybackAiPromptStatus = {
+  ai: PlaybackAiPromptIconPhase;
+  playwright: PlaybackAiPromptIconPhase;
+};
 
 interface StepCardProps {
   sequence: number;
@@ -66,6 +74,8 @@ interface StepCardProps {
     disabled?: boolean;
     onToggle: () => void;
   };
+  /** Live replay: LLM vs Playwright progress for AI prompt steps only. */
+  playbackAiPromptStatus?: PlaybackAiPromptStatus;
 }
 
 const ACTION_ICONS: Record<string, typeof Mouse> = {
@@ -91,6 +101,25 @@ const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
   past: 'opacity-55',
   future: 'opacity-90',
 };
+
+function playbackAiPromptPhaseClass(phase: PlaybackAiPromptIconPhase): string {
+  if (phase === 'idle') return 'text-gray-300';
+  if (phase === 'busy') return 'playback-ai-pw-blink';
+  return 'text-blue-600';
+}
+
+function PlaybackAiPromptIcons({ status }: { status: PlaybackAiPromptStatus }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 shrink-0" aria-hidden>
+      <span className="inline-flex" title="LLM">
+        <Sparkles size={11} className={playbackAiPromptPhaseClass(status.ai)} strokeWidth={2} />
+      </span>
+      <span className="inline-flex" title="Playwright">
+        <Terminal size={11} className={playbackAiPromptPhaseClass(status.playwright)} strokeWidth={2} />
+      </span>
+    </span>
+  );
+}
 
 function AfterStepThumbnail({ runId, checkpoint }: { runId: string; checkpoint: CheckpointData }) {
   const [thumbUrl, setThumbUrl] = useState<string | null>(null);
@@ -156,6 +185,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
     checkpointRunId,
     playbackExclusion,
     onStepMutationSuccess,
+    playbackAiPromptStatus,
   },
   ref,
 ) {
@@ -287,6 +317,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
           >
             <Icon size={11} className="text-gray-400 flex-shrink-0" />
             <span className="text-[9px] text-gray-400 ce-mono">{formatTime(timestamp)}</span>
+            {playbackAiPromptStatus && <PlaybackAiPromptIcons status={playbackAiPromptStatus} />}
             {playbackExclusion && (
               <label
                 className="inline-flex items-center gap-0.5 shrink-0 cursor-pointer select-none"
