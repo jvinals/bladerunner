@@ -198,6 +198,15 @@ export class TestAiPromptStepDto {
   @IsOptional()
   @IsString()
   instruction?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '`full` (default): vision + codegen + execute on the live page. `generate`: vision + codegen only (persists Playwright). `run`: execute stored Playwright for the current instruction (requires a successful generate for the same instruction).',
+    enum: ['full', 'generate', 'run'],
+  })
+  @IsOptional()
+  @IsIn(['full', 'generate', 'run'])
+  phase?: 'full' | 'generate' | 'run';
 }
 
 export class SuggestSkipAfterChangeDto {

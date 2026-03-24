@@ -1007,7 +1007,7 @@ export class RecordingService extends EventEmitter {
     runId: string,
     userId: string,
     stepId: string,
-    opts?: { instruction?: string; signal?: AbortSignal },
+    opts?: { instruction?: string; signal?: AbortSignal; phase?: 'full' | 'generate' | 'run' },
   ): Promise<{
     ok: boolean;
     playwrightCode?: string;
@@ -1059,6 +1059,7 @@ export class RecordingService extends EventEmitter {
     try {
       const testFlightKey = this.aiPromptSnapshotKey(runId, stepId);
       const playbackSessionForTest = this.findPlaybackSessionByPage(page);
+      const apiPhase = opts?.phase ?? 'full';
       const testPromise = (async () => {
         try {
           this.emitAiPromptTestProgress(runId, stepId, 'Preparing snapshot for undo (Reset)…', 'capturing');
@@ -1073,33 +1074,125 @@ export class RecordingService extends EventEmitter {
           const state = await page.context().storageState();
           this.aiPromptPreTestSnapshots.set(this.aiPromptSnapshotKey(runId, stepId), { url, state });
 
-          const { playwrightCode } = await this.playAiPromptStepOnPage(page, instructionToRun, {
-            skipClickForce: false,
-            persistTranscript: { stepId, runId, userId, source: 'test' },
-            signal,
-            progress: { runId, stepId },
-          });
-          const fresh = await this.prisma.runStep.findFirst({
-            where: { id: stepId, runId, userId },
-          });
-          const baseMeta =
-            fresh?.metadata && typeof fresh.metadata === 'object'
-              ? (fresh.metadata as Record<string, unknown>)
-              : {};
-          await this.prisma.runStep.update({
-            where: { id: stepId },
-            data: {
-              metadata: {
-                ...baseMeta,
-                kind: AI_PROMPT_STEP_KIND,
-                schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
-                lastTestAt: new Date().toISOString(),
-                lastTestOk: true,
-              } as Prisma.InputJsonValue,
-              playwrightCode,
-            },
-          });
-          this.emitAiPromptTestProgress(runId, stepId, 'Test completed.', 'done');
+          let playwrightCode: string;
+
+          if (apiPhase === 'run') {
+            const row = await this.prisma.runStep.findFirst({
+              where: { id: stepId, runId, userId },
+            });
+            const meta =
+              row?.metadata && typeof row.metadata === 'object'
+                ? (row.metadata as Record<string, unknown>)
+                : {};
+            if (meta.lastAiPromptCodegenOk !== true) {
+              throw new BadRequestException(
+                'Generate Playwright first — use the generate (vision + codegen) step before Run on page.',
+              );
+            }
+            if ((meta.lastAiPromptCodegenInstruction as string | undefined)?.trim() !== instructionToRun) {
+              throw new BadRequestException(
+                'Prompt changed since last generate — generate Playwright again before running on the page.',
+              );
+            }
+            const pw = row?.playwrightCode?.trim() ?? '';
+            const sentinel = aiPromptStepSentinelPlaywrightCode().trim();
+            if (!pw || pw === sentinel) {
+              throw new BadRequestException('No generated Playwright to run — generate first.');
+            }
+            const runResult = await this.playAiPromptStepOnPage(page, instructionToRun, {
+              skipClickForce: false,
+              signal,
+              progress: { runId, stepId },
+              phase: 'executeOnly',
+              executePlaywrightCode: pw,
+            });
+            playwrightCode = runResult.playwrightCode;
+
+            const freshAfter = await this.prisma.runStep.findFirst({
+              where: { id: stepId, runId, userId },
+            });
+            const baseMetaRun =
+              freshAfter?.metadata && typeof freshAfter.metadata === 'object'
+                ? (freshAfter.metadata as Record<string, unknown>)
+                : {};
+            await this.prisma.runStep.update({
+              where: { id: stepId },
+              data: {
+                metadata: {
+                  ...baseMetaRun,
+                  kind: AI_PROMPT_STEP_KIND,
+                  schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+                  lastAiPromptRunOk: true,
+                  lastAiPromptRunInstruction: instructionToRun,
+                  lastTestAt: new Date().toISOString(),
+                  lastTestOk: true,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          } else {
+            const playPhase = apiPhase === 'generate' ? 'generateOnly' : 'full';
+            const out = await this.playAiPromptStepOnPage(page, instructionToRun, {
+              skipClickForce: false,
+              persistTranscript: { stepId, runId, userId, source: 'test' },
+              signal,
+              progress: { runId, stepId },
+              phase: playPhase,
+            });
+            playwrightCode = out.playwrightCode;
+
+            const fresh = await this.prisma.runStep.findFirst({
+              where: { id: stepId, runId, userId },
+            });
+            const baseMeta =
+              fresh?.metadata && typeof fresh.metadata === 'object'
+                ? (fresh.metadata as Record<string, unknown>)
+                : {};
+            const nowIso = new Date().toISOString();
+            if (apiPhase === 'generate') {
+              await this.prisma.runStep.update({
+                where: { id: stepId },
+                data: {
+                  metadata: {
+                    ...baseMeta,
+                    kind: AI_PROMPT_STEP_KIND,
+                    schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+                    lastAiPromptCodegenOk: true,
+                    lastAiPromptCodegenInstruction: instructionToRun,
+                    lastAiPromptRunOk: false,
+                    lastTestAt: nowIso,
+                    lastTestOk: false,
+                  } as Prisma.InputJsonValue,
+                  playwrightCode,
+                },
+              });
+            } else {
+              await this.prisma.runStep.update({
+                where: { id: stepId },
+                data: {
+                  metadata: {
+                    ...baseMeta,
+                    kind: AI_PROMPT_STEP_KIND,
+                    schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+                    lastAiPromptCodegenOk: true,
+                    lastAiPromptCodegenInstruction: instructionToRun,
+                    lastAiPromptRunOk: true,
+                    lastAiPromptRunInstruction: instructionToRun,
+                    lastTestAt: nowIso,
+                    lastTestOk: true,
+                  } as Prisma.InputJsonValue,
+                  playwrightCode,
+                },
+              });
+            }
+          }
+
+          const doneMsg =
+            apiPhase === 'generate'
+              ? 'Playwright code generated.'
+              : apiPhase === 'run'
+                ? 'Playwright run completed on the page.'
+                : 'Test completed.';
+          this.emitAiPromptTestProgress(runId, stepId, doneMsg, 'done');
           return { ok: true, playwrightCode };
         } catch (e) {
           if (signal?.aborted || this.isAbortError(e)) {
@@ -1142,16 +1235,26 @@ export class RecordingService extends EventEmitter {
             fresh?.metadata && typeof fresh.metadata === 'object'
               ? (fresh.metadata as Record<string, unknown>)
               : {};
+          const failurePatch: Record<string, unknown> = {
+            ...baseMeta,
+            kind: AI_PROMPT_STEP_KIND,
+            schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+            lastTestAt: new Date().toISOString(),
+            lastTestOk: false,
+          };
+          if (apiPhase === 'generate') {
+            failurePatch.lastAiPromptCodegenOk = false;
+            failurePatch.lastAiPromptRunOk = false;
+          } else if (apiPhase === 'run') {
+            failurePatch.lastAiPromptRunOk = false;
+          } else {
+            failurePatch.lastAiPromptCodegenOk = false;
+            failurePatch.lastAiPromptRunOk = false;
+          }
           await this.prisma.runStep.update({
             where: { id: stepId },
             data: {
-              metadata: {
-                ...baseMeta,
-                kind: AI_PROMPT_STEP_KIND,
-                schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
-                lastTestAt: new Date().toISOString(),
-                lastTestOk: false,
-              } as Prisma.InputJsonValue,
+              metadata: failurePatch as Prisma.InputJsonValue,
             },
           });
 
@@ -1564,7 +1667,7 @@ export class RecordingService extends EventEmitter {
     return { pageUrl, pageAccessibilityTree, screenshotBase64 };
   }
 
-  /** Vision + LLM → Playwright, then execute (used by playback and Test Step). */
+  /** Vision + LLM → Playwright, then optionally execute (used by playback and Test Step). */
   private async playAiPromptStepOnPage(
     page: Page,
     instruction: string,
@@ -1572,6 +1675,10 @@ export class RecordingService extends EventEmitter {
       skipClickForce: boolean;
       signal?: AbortSignal;
       progress?: { runId: string; stepId: string };
+      /** Default `full`: vision + codegen + execute. `generateOnly`: vision + codegen. `executeOnly`: run `executePlaywrightCode` only. */
+      phase?: 'full' | 'generateOnly' | 'executeOnly';
+      /** Required when `phase` is `executeOnly`. */
+      executePlaywrightCode?: string;
       persistTranscript?: {
         stepId: string;
         runId: string;
@@ -1590,6 +1697,38 @@ export class RecordingService extends EventEmitter {
     },
   ): Promise<{ playwrightCode: string }> {
     const { signal, progress } = opts;
+    const phase = opts.phase ?? 'full';
+
+    if (phase === 'executeOnly') {
+      const code = opts.executePlaywrightCode?.trim() ?? '';
+      const sentinel = aiPromptStepSentinelPlaywrightCode().trim();
+      if (!code || code === sentinel || code.includes('ai_prompt_step: execution')) {
+        throw new BadRequestException(
+          'No generated Playwright to run — generate code first (vision + LLM step).',
+        );
+      }
+      if (progress) {
+        this.emitAiPromptTestProgress(
+          progress.runId,
+          progress.stepId,
+          'Running generated Playwright on the page…',
+          'executing',
+        );
+      }
+      this.throwIfAborted(signal);
+      try {
+        page.setDefaultTimeout(AI_PROMPT_PW_TIMEOUT_MS);
+        page.setDefaultNavigationTimeout(AI_PROMPT_PW_TIMEOUT_MS);
+        await this.executePwCode(page, code, {
+          skipClickForce: opts.skipClickForce,
+        });
+      } finally {
+        page.setDefaultTimeout(PLAYWRIGHT_DEFAULT_TIMEOUT_MS);
+        page.setDefaultNavigationTimeout(PLAYWRIGHT_DEFAULT_TIMEOUT_MS);
+      }
+      return { playwrightCode: code };
+    }
+
     if (progress) {
       this.emitAiPromptTestProgress(
         progress.runId,
@@ -1685,6 +1824,19 @@ export class RecordingService extends EventEmitter {
         });
       }
     }
+
+    if (phase === 'generateOnly') {
+      if (progress) {
+        this.emitAiPromptTestProgress(
+          progress.runId,
+          progress.stepId,
+          'Playwright code generated — use Run on page to execute.',
+          'done',
+        );
+      }
+      return { playwrightCode: out.playwrightCode };
+    }
+
     if (progress) {
       this.emitAiPromptTestProgress(
         progress.runId,

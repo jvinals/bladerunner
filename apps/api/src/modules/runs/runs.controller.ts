@@ -316,7 +316,7 @@ export class RunsController {
   @ApiOperation({
     summary: 'Test an AI prompt step on the live page (recording or playback session)',
     description:
-      'Runs vision + LLM + codegen once; persists last generated Playwright when successful. Optional body `instruction` overrides the stored prompt for this run only. Progress is pushed over the recording socket as `aiPromptTestProgress`; cancel via `POST .../abort-ai-test` or by closing the HTTP connection.',
+      'Runs AI prompt test: default `phase=full` is vision + LLM + codegen + execute on the page. `phase=generate` runs vision + codegen only; `phase=run` executes stored Playwright (after a successful generate for the same instruction). Optional body `instruction` overrides the stored prompt for this run only. Progress is pushed over the recording socket as `aiPromptTestProgress`; cancel via `POST .../abort-ai-test` or by closing the HTTP connection.',
   })
   @ApiResponse({ status: 200, description: 'Test result' })
   async testAiPromptStep(
@@ -334,6 +334,7 @@ export class RunsController {
       return await this.recordingService.testAiPromptStep(id, userId, stepId, {
         instruction: dto?.instruction,
         signal: ac.signal,
+        phase: dto?.phase,
       });
     } finally {
       req.off('close', onClose);

@@ -286,6 +286,10 @@ export interface AiPromptStepMetadata {
   schemaVersion: 1;
   lastTestAt?: string;
   lastTestOk?: boolean;
+  lastAiPromptCodegenOk?: boolean;
+  lastAiPromptCodegenInstruction?: string;
+  lastAiPromptRunOk?: boolean;
+  lastAiPromptRunInstruction?: string;
 }
 
 export interface RecordingRun {

@@ -191,6 +191,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
       await runsApi.resetAiPromptTest(aiPromptStep.runId, aiPromptStep.stepId);
       const res = await runsApi.testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
         instruction: next,
+        phase: 'full',
       });
       setAiTestFailureDialog(null);
       if (res.cancelled) return;
@@ -465,6 +466,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                         void runsApi
                           .testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
                             instruction: promptDraft.trim(),
+                            phase: 'full',
                           })
                           .then((res) => {
                             if (res.cancelled) return;

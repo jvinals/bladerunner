@@ -226,11 +226,11 @@ export const runsApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  /** Ephemeral test on active recording or playback browser session. Optional `instruction` overrides the stored prompt for this run only. Pass `signal` to cancel; progress arrives on the recording socket as `aiPromptTestProgress`. */
+  /** Ephemeral test on active recording or playback browser session. Optional `instruction` overrides the stored prompt for this run only. `phase`: `full` (default), `generate` (vision + codegen only), `run` (execute stored code). Pass `signal` to cancel; progress arrives on the recording socket as `aiPromptTestProgress`. */
   testAiPromptStep: (
     runId: string,
     stepId: string,
-    body?: { instruction?: string },
+    body?: { instruction?: string; phase?: 'full' | 'generate' | 'run' },
     opts?: { signal?: AbortSignal },
   ) =>
     apiFetch<{

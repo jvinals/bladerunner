@@ -36,6 +36,30 @@ import {
 
 const AI_STEP_DRAFT_PLACEHOLDER = '(AI prompt — edit below)';
 
+function aiPromptCodegenOkForInstruction(meta: unknown, instr: string): boolean {
+  if (!meta || typeof meta !== 'object') return false;
+  const m = meta as Record<string, unknown>;
+  const t = instr.trim();
+  return (
+    m.lastAiPromptCodegenOk === true &&
+    (m.lastAiPromptCodegenInstruction as string | undefined)?.trim() === t
+  );
+}
+
+function aiPromptRunOkForInstruction(meta: unknown, instr: string): boolean {
+  if (!meta || typeof meta !== 'object') return false;
+  const m = meta as Record<string, unknown>;
+  const t = instr.trim();
+  return (
+    m.lastAiPromptRunOk === true &&
+    (m.lastAiPromptRunInstruction as string | undefined)?.trim() === t
+  );
+}
+
+function aiPromptBothPhasesOkForInstruction(meta: unknown, instr: string): boolean {
+  return aiPromptCodegenOkForInstruction(meta, instr) && aiPromptRunOkForInstruction(meta, instr);
+}
+
 export default function RunsPage() {
   const { user } = useUser();
   const queryClient = useQueryClient();
@@ -80,8 +104,6 @@ export default function RunsPage() {
   const [aiStepReviewOpen, setAiStepReviewOpen] = useState(false);
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const aiStepAbortRef = useRef<AbortController | null>(null);
-  /** Trimmed prompt that last completed Test (or adopt+test) succeeded for; cleared on edit / reset / modal close. Used to skip LLM+Playwright re-run on Done. */
-  const aiLastTestedPromptRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewFocusRef = useRef<HTMLDivElement>(null);
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
@@ -493,8 +515,8 @@ export default function RunsPage() {
     setAiStepBusy(false);
   }, [runId, aiStepCreatedId, clearAiPromptTestProgress]);
 
-  const runAiTestPipeline = useCallback(
-    async (patchFirst: boolean): Promise<boolean> => {
+  const runAiPromptPhase = useCallback(
+    async (patchFirst: boolean, phase: 'full' | 'generate' | 'run'): Promise<boolean> => {
       if (!runId || !aiStepCreatedId) return false;
       const instr = aiStepPrompt.trim();
       if (!instr) {
@@ -514,7 +536,7 @@ export default function RunsPage() {
         const res = await runsApi.testAiPromptStep(
           runId,
           aiStepCreatedId,
-          { instruction: instr },
+          { instruction: instr, phase },
           { signal: ac.signal },
         );
         if (res.cancelled) return false;
@@ -531,7 +553,6 @@ export default function RunsPage() {
           }
           return false;
         }
-        aiLastTestedPromptRef.current = instr;
         setAiStepFailure(null);
         void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
         await loadRunSteps(runId);
@@ -557,7 +578,6 @@ export default function RunsPage() {
       const res = await runsApi.appendAiPromptStepRecording(runId, { instruction: AI_STEP_DRAFT_PLACEHOLDER });
       const step = res.step as { id: string };
       setAiStepCreatedId(step.id);
-      aiLastTestedPromptRef.current = null;
       setAiStepPrompt(AI_STEP_DRAFT_PLACEHOLDER);
       setAiStepFailure(null);
       setAiStepModalOpen(true);
@@ -590,7 +610,6 @@ export default function RunsPage() {
       }
       setAiStepBusy(false);
     }
-    aiLastTestedPromptRef.current = null;
     setAiStepModalOpen(false);
     setAiStepPrompt('');
     setAiStepCreatedId(null);
@@ -608,9 +627,11 @@ export default function RunsPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [aiStepModalOpen, aiStepOpeningBusy, closeAiStepModalCancel]);
 
-  const handleAiStepTest = useCallback(() => void runAiTestPipeline(false), [runAiTestPipeline]);
+  const handleAiStepGenerate = useCallback(() => void runAiPromptPhase(false, 'generate'), [runAiPromptPhase]);
 
-  const handleAiStepSavePrompt = useCallback(() => void runAiTestPipeline(true), [runAiTestPipeline]);
+  const handleAiStepRunOnPage = useCallback(() => void runAiPromptPhase(false, 'run'), [runAiPromptPhase]);
+
+  const handleAiStepSavePrompt = useCallback(() => void runAiPromptPhase(true, 'generate'), [runAiPromptPhase]);
 
   const handleAiStepDone = useCallback(async () => {
     const sid = aiStepCreatedId;
@@ -622,50 +643,84 @@ export default function RunsPage() {
       return;
     }
 
-    const canSkipTestRun =
-      aiLastTestedPromptRef.current !== null && aiLastTestedPromptRef.current === instr;
-
-    if (canSkipTestRun) {
-      setAiStepBusy(true);
-      setAiStepError(null);
-      try {
-        await runsApi.patchRunStep(rid, sid, { instruction: instr });
-        void queryClient.invalidateQueries({ queryKey: ['run-steps', rid] });
-        await loadRunSteps(rid);
-        aiLastTestedPromptRef.current = null;
-        setAiStepModalOpen(false);
-        setAiStepPrompt('');
-        setAiStepCreatedId(null);
-        setAiStepError(null);
-        setAiStepFailure(null);
-        setAiStepReviewOpen(false);
-        void promptAfterStepChange(sid);
-      } catch (e) {
-        setAiStepError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setAiStepBusy(false);
-      }
-      return;
-    }
-
-    const ok = await runAiTestPipeline(true);
-    if (!ok) return;
-    aiLastTestedPromptRef.current = null;
-    setAiStepModalOpen(false);
-    setAiStepPrompt('');
-    setAiStepCreatedId(null);
+    clearAiPromptTestProgress();
+    const ac = new AbortController();
+    aiStepAbortRef.current = ac;
+    setAiStepBusy(true);
     setAiStepError(null);
     setAiStepFailure(null);
-    setAiStepReviewOpen(false);
-    if (sid) void promptAfterStepChange(sid);
+
+    const runPhase = async (phase: 'generate' | 'run'): Promise<boolean> => {
+      const res = await runsApi.testAiPromptStep(
+        rid,
+        sid,
+        { instruction: instr, phase },
+        { signal: ac.signal },
+      );
+      if (res.cancelled) return false;
+      if (!res.ok) {
+        if (res.failureHelp) {
+          setAiStepFailure({
+            error: res.error || 'Test failed',
+            explanation: res.failureHelp.explanation,
+            suggestedPrompt: res.failureHelp.suggestedPrompt,
+          });
+          setAiStepReviewOpen(true);
+        } else {
+          setAiStepError(res.error || 'Test failed');
+        }
+        return false;
+      }
+      setAiStepFailure(null);
+      void queryClient.invalidateQueries({ queryKey: ['run-steps', rid] });
+      await loadRunSteps(rid);
+      return true;
+    };
+
+    try {
+      await runsApi.patchRunStep(rid, sid, { instruction: instr });
+      const list = (await runsApi.getSteps(rid)) as Array<{ id: string; metadata?: unknown }>;
+      let stepRow = list.find((s) => s.id === sid);
+
+      if (!aiPromptBothPhasesOkForInstruction(stepRow?.metadata, instr)) {
+        if (!aiPromptCodegenOkForInstruction(stepRow?.metadata, instr)) {
+          if (!(await runPhase('generate'))) return;
+          const list2 = (await runsApi.getSteps(rid)) as Array<{ id: string; metadata?: unknown }>;
+          stepRow = list2.find((s) => s.id === sid);
+        }
+        if (!aiPromptRunOkForInstruction(stepRow?.metadata, instr)) {
+          if (!aiPromptCodegenOkForInstruction(stepRow?.metadata, instr)) {
+            setAiStepError('Generate Playwright before finishing.');
+            return;
+          }
+          if (!(await runPhase('run'))) return;
+        }
+      }
+
+      setAiStepModalOpen(false);
+      setAiStepPrompt('');
+      setAiStepCreatedId(null);
+      setAiStepError(null);
+      setAiStepFailure(null);
+      setAiStepReviewOpen(false);
+      void promptAfterStepChange(sid);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.name !== 'AbortError' && !/aborted/i.test(err.message)) {
+        setAiStepError(err.message);
+      }
+    } finally {
+      aiStepAbortRef.current = null;
+      setAiStepBusy(false);
+    }
   }, [
-    runAiTestPipeline,
     aiStepCreatedId,
     runId,
     aiStepPrompt,
     queryClient,
     loadRunSteps,
     promptAfterStepChange,
+    clearAiPromptTestProgress,
   ]);
 
   const handleAiStepAdoptSuggestedPrompt = useCallback(async () => {
@@ -681,7 +736,12 @@ export default function RunsPage() {
       await runsApi.patchRunStep(runId, aiStepCreatedId, { instruction: next });
       setAiStepPrompt(next);
       await runsApi.resetAiPromptTest(runId, aiStepCreatedId);
-      const res = await runsApi.testAiPromptStep(runId, aiStepCreatedId, { instruction: next }, { signal: ac.signal });
+      const res = await runsApi.testAiPromptStep(
+        runId,
+        aiStepCreatedId,
+        { instruction: next, phase: 'full' },
+        { signal: ac.signal },
+      );
       setAiStepFailure(null);
       if (res.cancelled) return;
       if (!res.ok) {
@@ -697,7 +757,6 @@ export default function RunsPage() {
         }
         return;
       }
-      aiLastTestedPromptRef.current = next;
       void queryClient.invalidateQueries({ queryKey: ['run-steps', runId] });
       await loadRunSteps(runId);
     } catch (e) {
@@ -717,7 +776,6 @@ export default function RunsPage() {
     setAiStepError(null);
     try {
       await runsApi.resetAiPromptTest(runId, aiStepCreatedId);
-      aiLastTestedPromptRef.current = null;
     } catch (e) {
       setAiStepError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -780,6 +838,12 @@ export default function RunsPage() {
       liveThinkingStream: '',
     };
   }, [steps, aiStepCreatedId, aiPromptProgressBlock, aiStepBusy, aiStepFailure]);
+
+  const aiDrawerStep = useMemo(() => steps.find((s) => s.id === aiStepCreatedId), [steps, aiStepCreatedId]);
+  const canRunPlaywrightOnPage = aiPromptCodegenOkForInstruction(
+    aiDrawerStep?.metadata,
+    aiStepPrompt.trim(),
+  );
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
@@ -1574,15 +1638,16 @@ export default function RunsPage() {
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-2.5">
               <p className="text-[10px] text-gray-500 mb-2 leading-snug">
                 Playback runs the LLM with your prompt each time (stored Playwright is for debug only). Reset restores the
-                browser to before the last Test, or to the checkpoint after the previous step if you have not tested yet.{' '}
-                <strong>Save prompt</strong> updates the stored text and runs Test; <strong>Test</strong> runs once without
-                saving the draft to the server first. <strong>Done</strong> saves the prompt and closes; if you already ran a
-                successful Test for this exact text, Done skips re-running the vision model and Playwright.
+                browser to before the last run, or to the checkpoint after the previous step if you have not run yet.{' '}
+                <strong>Save prompt</strong> updates the stored text and runs <strong>Generate</strong> (vision + Playwright
+                codegen). <strong>Generate</strong> does the same without saving first. <strong>Run on page</strong> executes
+                the generated Playwright on the live browser (after a successful Generate for this exact text).{' '}
+                <strong>Done</strong> saves the prompt and closes; it runs any missing Generate or Run step first, or skips
+                both if this prompt already completed successfully.
               </p>
               <textarea
                 value={aiStepPrompt}
                 onChange={(e) => {
-                  aiLastTestedPromptRef.current = null;
                   setAiStepPrompt(e.target.value);
                 }}
                 rows={5}
@@ -1606,12 +1671,33 @@ export default function RunsPage() {
                   disabled={
                     aiStepBusy || aiStepOpeningBusy || !aiStepCreatedId || !socketConnected || !aiStepPrompt.trim()
                   }
-                  title="Test without saving the draft prompt to the server first"
-                  onClick={() => void handleAiStepTest()}
+                  title="Vision + LLM: generate Playwright only (does not run on the page yet)"
+                  onClick={() => void handleAiStepGenerate()}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <FlaskConical size={12} />
-                  Test
+                  Generate
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    aiStepBusy ||
+                    aiStepOpeningBusy ||
+                    !aiStepCreatedId ||
+                    !socketConnected ||
+                    !aiStepPrompt.trim() ||
+                    !canRunPlaywrightOnPage
+                  }
+                  title={
+                    canRunPlaywrightOnPage
+                      ? 'Run the generated Playwright on the live browser'
+                      : 'Generate Playwright for this prompt first (same text as the last successful codegen)'
+                  }
+                  onClick={() => void handleAiStepRunOnPage()}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Play size={12} />
+                  Run on page
                 </button>
                 <button
                   type="button"
@@ -1702,7 +1788,8 @@ export default function RunsPage() {
                     <p className="text-[10px] font-semibold text-gray-800 mb-1">5. Live model output</p>
                     <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
                       Thought summaries and answer text stream here. When generation finishes, the final transcript
-                      appears in §3 and Playwright runs from §4.
+                      appears in section 3 above; use <strong>Run on page</strong> to execute Playwright on the live browser
+                      (full test runs it automatically after codegen).
                     </p>
                     <div className="mb-2">
                       <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thought summary</p>

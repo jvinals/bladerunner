@@ -17,6 +17,13 @@ export type AiPromptStepMetadata = {
   /** Optional: last Test Step run (UX only). */
   lastTestAt?: string;
   lastTestOk?: boolean;
+  /** Last successful vision+codegen for the instruction (split Test flow). */
+  lastAiPromptCodegenOk?: boolean;
+  /** Instruction trimmed that last successful codegen used (must match to Run or Done). */
+  lastAiPromptCodegenInstruction?: string;
+  /** Last successful execute of generated Playwright on the live page. */
+  lastAiPromptRunOk?: boolean;
+  lastAiPromptRunInstruction?: string;
   /** Last successful LLM round-trip (updated before Playwright runs; includes failed-PW cases when LLM succeeded). */
   lastLlmTranscript?: AiPromptLlmTranscriptStored;
 };
