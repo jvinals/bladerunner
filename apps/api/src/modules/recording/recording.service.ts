@@ -3288,6 +3288,26 @@ export class RecordingService extends EventEmitter {
     const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
     const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
     // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+      body: JSON.stringify({
+        sessionId: '8e7bf9',
+        location: 'recording.service.ts:executePwCode',
+        message: 'post-escape locator quoting (H3 new Function embed)',
+        hypothesisId: 'H3',
+        data: {
+          firstLocatorHead: (() => {
+            const m = /\bpage\.locator\(\s*./.exec(safeCode);
+            return m ? safeCode.slice(m.index, m.index + 120) : null;
+          })(),
+          usesJsonStringifyLocatorArg: /\.locator\(\s*"/.test(safeCode),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    // #region agent log
     emitAgentDebugLog({
       sessionId: '5cf234',
       runId: 'pre-exec',

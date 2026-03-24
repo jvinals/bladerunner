@@ -89,13 +89,22 @@ export function escapeTailwindColonsInCssSelector(selector: string): string {
   return out.join('.');
 }
 
-/** Rewrite first-arg CSS strings in `page.locator('...')` / `page.locator("...")` for playback. */
+/**
+ * Rewrite first-arg CSS strings in `page.locator('...')` / `page.locator("...")` for playback.
+ * Uses `JSON.stringify` for the argument so backslashes from Tailwind `\\:` survive when the snippet is
+ * later embedded in `new Function('…', 'return (async () => { … })();')` — a single-quoted
+ * `page.locator('…\\:…')` would re-parse as `locator('…:…')` and drop the escape, breaking `querySelectorAll`.
+ */
 export function escapeLocatorCssInPlaywrightSnippet(code: string): string {
   let out = code.replace(/\.locator\(\s*'([^']*)'\)/g, (_m, css: string) => {
-    return `.locator('${escapeTailwindColonsInCssSelector(css)}')`;
+    return `.locator(${JSON.stringify(escapeTailwindColonsInCssSelector(css))})`;
   });
+  // Do not re-process strings produced above: they contain `\\:` sequences that would get a third `\` if we escaped again.
   out = out.replace(/\.locator\(\s*"([^"]*)"\)/g, (_m, css: string) => {
-    return `.locator("${escapeTailwindColonsInCssSelector(css)}")`;
+    if (/\\\\:/.test(css)) {
+      return _m;
+    }
+    return `.locator(${JSON.stringify(escapeTailwindColonsInCssSelector(css))})`;
   });
   return out;
 }

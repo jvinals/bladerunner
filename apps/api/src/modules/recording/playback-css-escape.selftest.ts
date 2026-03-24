@@ -24,6 +24,10 @@ assert.equal(
 
 const snippet = `await page.locator('${userCase}').click();`;
 const outSnippet = escapeLocatorCssInPlaywrightSnippet(snippet);
-assert.ok(outSnippet.includes('hover\\:bg-accent'), outSnippet);
+const jsonArg = outSnippet.match(/\.locator\(\s*("(?:\\.|[^"\\])*")\s*\)/)?.[1];
+assert.ok(jsonArg, `expected JSON-stringified locator arg, got: ${outSnippet.slice(0, 200)}`);
+const decoded = JSON.parse(jsonArg) as string;
+assert.ok(decoded.includes('hover\\:bg-accent'), decoded);
+assert.ok(decoded.includes('hover\\:text-foreground'), decoded);
 
 console.log('playback-css-escape.selftest: ok');
