@@ -89,6 +89,11 @@ interface StepCardProps {
    * Omit or leave true when not applicable (backward compatible).
    */
   aiPromptSocketConnected?: boolean;
+  /**
+   * Live playback only: after a successful **Run on page** or **Full pipeline** test, parent advances the
+   * replay cursor (same as completing the step via the playback loop).
+   */
+  onAiPromptPlaybackRunSucceeded?: (stepSequence: number) => void;
 }
 
 const ACTION_ICONS: Record<string, typeof Mouse> = {
@@ -201,6 +206,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
     playbackAiPromptStatus,
     aiPromptLiveProgress = null,
     aiPromptSocketConnected = true,
+    onAiPromptPlaybackRunSucceeded,
   },
   ref,
 ) {
@@ -253,12 +259,13 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
         return;
       }
       aiPromptStep.onUpdated();
+      onAiPromptPlaybackRunSucceeded?.(sequence);
     } catch (e) {
       setAiError(e instanceof Error ? e.message : String(e));
     } finally {
       setAiBusy(false);
     }
-  }, [aiPromptStep, aiTestFailureDialog]);
+  }, [aiPromptStep, aiTestFailureDialog, sequence, onAiPromptPlaybackRunSucceeded]);
 
   const aiPromptDrawerSections = useMemo(
     () =>
@@ -298,13 +305,16 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
           return;
         }
         aiPromptStep.onUpdated();
+        if (phase === 'run' || phase === 'full') {
+          onAiPromptPlaybackRunSucceeded?.(sequence);
+        }
       } catch (e) {
         setAiError(e instanceof Error ? e.message : String(e));
       } finally {
         setAiBusy(false);
       }
     },
-    [aiPromptStep, promptDraft],
+    [aiPromptStep, promptDraft, sequence, onAiPromptPlaybackRunSucceeded],
   );
 
   const handleAiPromptReset = useCallback(async () => {

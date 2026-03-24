@@ -568,6 +568,7 @@ export default function RunDetailPage() {
     lastAiPromptProgress,
     lastPlaybackProgress,
     playbackSocketConnected,
+    markPlaybackStepCompletedAfterManualAiRun,
   } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   /** Clear stepped-advance input whenever there is no active playback session (covers stop → idle, complete, navigate back). */
@@ -1380,6 +1381,11 @@ export default function RunDetailPage() {
                             ? playbackSocketConnected
                             : true
                         }
+                        onAiPromptPlaybackRunSucceeded={
+                          !!playbackSessionId && playbackSourceRunId === id && isPlaying && id
+                            ? markPlaybackStepCompletedAfterManualAiRun
+                            : undefined
+                        }
                       />
                     </div>
                   );
@@ -1499,6 +1505,11 @@ export default function RunDetailPage() {
                           id && playbackSessionId && playbackSourceRunId === id
                             ? playbackSocketConnected
                             : true
+                        }
+                        onAiPromptPlaybackRunSucceeded={
+                          !!playbackSessionId && playbackSourceRunId === id && isPlaying && id
+                            ? markPlaybackStepCompletedAfterManualAiRun
+                            : undefined
                         }
                       />
                     </div>

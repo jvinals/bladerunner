@@ -62,6 +62,11 @@ export interface UsePlaybackReturn {
   lastPlaybackProgress: PlaybackProgressPayload | null;
   /** True while the playback recording socket is connected (for AI prompt test buttons). */
   playbackSocketConnected: boolean;
+  /**
+   * After a successful **Run on page** (or full-pipeline) AI prompt test from StepCard, apply the same
+   * highlight/completed state as a normal `playbackProgress` `after` so the list advances to the next step.
+   */
+  markPlaybackStepCompletedAfterManualAiRun: (stepSequence: number) => void;
 }
 
 function disconnectSocket(socketRef: MutableRefObject<Socket | null>, sessionId: string | null) {
@@ -460,6 +465,12 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     };
   }, []);
 
+  const markPlaybackStepCompletedAfterManualAiRun = useCallback((stepSequence: number) => {
+    setCompletedSequences((prev) => new Set(prev).add(stepSequence));
+    setHighlightSequence(stepSequence);
+    setLastAiPromptProgress(null);
+  }, []);
+
   return {
     playbackSessionId,
     sourceRunId,
@@ -482,5 +493,6 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     lastAiPromptProgress,
     lastPlaybackProgress,
     playbackSocketConnected,
+    markPlaybackStepCompletedAfterManualAiRun,
   };
 }

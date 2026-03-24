@@ -146,6 +146,7 @@ export default function RunsPage() {
     lastAiPromptProgress,
     lastPlaybackProgress,
     playbackSocketConnected,
+    markPlaybackStepCompletedAfterManualAiRun,
   } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -1599,6 +1600,15 @@ export default function RunsPage() {
                             : playbackSessionId && playbackSourceRunId === effectiveRunId
                               ? playbackSocketConnected
                               : true
+                      }
+                      onAiPromptPlaybackRunSucceeded={
+                        !!playbackSessionId &&
+                        playbackSourceRunId === effectiveRunId &&
+                        isPlaying &&
+                        effectiveRunId &&
+                        step.runId === effectiveRunId
+                          ? markPlaybackStepCompletedAfterManualAiRun
+                          : undefined
                       }
                     />
                   </div>
