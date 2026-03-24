@@ -637,12 +637,14 @@ export class RecordingService extends EventEmitter {
       throw new Error('No active recording session found');
     }
 
-    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(session.page);
+    const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } =
+      await this.captureLlmPageContext(session.page);
 
     const llmResult = await this.llmService.instructionToAction({
       instruction,
       pageUrl,
-      pageAccessibilityTree,
+      somManifest,
+      accessibilitySnapshot,
       screenshotBase64,
     });
     const out = llmResult.output;
@@ -690,12 +692,14 @@ export class RecordingService extends EventEmitter {
       throw new NotFoundException('Step not found');
     }
 
-    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(session.page);
+    const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } =
+      await this.captureLlmPageContext(session.page);
 
     const llmResult = await this.llmService.instructionToAction({
       instruction: trimmed,
       pageUrl,
-      pageAccessibilityTree,
+      somManifest,
+      accessibilitySnapshot,
       screenshotBase64,
     });
     const out = llmResult.output;
@@ -1217,7 +1221,7 @@ export class RecordingService extends EventEmitter {
                 instruction: instructionToRun,
                 technicalError: msg,
                 pageUrl: ctx.pageUrl,
-                pageAccessibilityTree: ctx.pageAccessibilityTree,
+                pageAccessibilityTree: this.combineSomAndA11yForExplain(ctx),
                 screenshotBase64: ctx.screenshotBase64,
               },
               { signal },
@@ -1618,6 +1622,33 @@ export class RecordingService extends EventEmitter {
    * CDP accessibility snapshots are often sparse on SPAs (title only), so the LLM invents
    * `placeholder="John"`-style selectors → Playwright auto-waits until timeout. Append body text.
    */
+  /**
+   * Playwright CDP accessibility snapshot (+ body text enrichment), **before** Set-of-Marks overlay
+   * so the tree does not include badge UI.
+   */
+  private async captureAccessibilitySnapshotForLlm(page: Page): Promise<string> {
+    let pageAccessibilityTree = '';
+    try {
+      const snapshot = await (page as any).accessibility?.snapshot();
+      pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await page.title();
+    } catch {
+      pageAccessibilityTree = 'Unable to capture accessibility tree';
+    }
+    return this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
+  }
+
+  /** For failure-explain LLM: one string with both SOM and a11y sections (matches what codegen sees). */
+  private combineSomAndA11yForExplain(ctx: { somManifest: string; accessibilitySnapshot: string }): string {
+    const parts: string[] = [];
+    if (ctx.somManifest.trim()) {
+      parts.push(`=== Set-of-Marks manifest ===\n${ctx.somManifest.trim()}`);
+    }
+    if (ctx.accessibilitySnapshot.trim()) {
+      parts.push(`=== Accessibility snapshot ===\n${ctx.accessibilitySnapshot.trim()}`);
+    }
+    return parts.join('\n\n') || ctx.accessibilitySnapshot.trim() || '(no DOM context)';
+  }
+
   private async enrichAccessibilityTreeForLlm(page: Page, base: string): Promise<string> {
     if (base.length >= 2000) return base;
     try {
@@ -1639,30 +1670,28 @@ export class RecordingService extends EventEmitter {
     signal?: AbortSignal,
   ): Promise<{
     pageUrl: string;
-    pageAccessibilityTree: string;
+    /** Set-of-Marks lines `[n] …` aligned with numeric badges on the JPEG; empty if injection failed. */
+    somManifest: string;
+    /** CDP accessibility JSON (+ enrichment), captured before overlay. */
+    accessibilitySnapshot: string;
     screenshotBase64?: string;
   }> {
     this.throwIfAborted(signal);
     const pageUrl = page.url();
-    let pageAccessibilityTree = '';
+    const accessibilitySnapshot = await this.captureAccessibilitySnapshotForLlm(page);
+
+    let somManifest = '';
     let screenshotBase64: string | undefined;
 
     try {
       const { manifestText } = await injectSetOfMarkOverlay(page);
-      pageAccessibilityTree = manifestText;
+      somManifest = manifestText;
       this.throwIfAborted(signal);
       const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
       screenshotBase64 = buf.toString('base64');
     } catch (err) {
-      this.logger.warn(`captureLlmPageContext: Set-of-Marks failed, falling back to a11y + plain screenshot (${err})`);
-      try {
-        const snapshot = await (page as any).accessibility?.snapshot();
-        pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await page.title();
-      } catch {
-        pageAccessibilityTree = 'Unable to capture accessibility tree';
-      }
-      pageAccessibilityTree = await this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
-      this.throwIfAborted(signal);
+      /** Tagged screenshot is best-effort when overlay/screenshot fails; a11y snapshot was already captured. */
+      this.logger.warn(`captureLlmPageContext: Set-of-Marks or screenshot failed (${err})`);
       try {
         const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
         screenshotBase64 = buf.toString('base64');
@@ -1673,7 +1702,7 @@ export class RecordingService extends EventEmitter {
       await removeSetOfMarkOverlay(page).catch(() => {});
     }
 
-    return { pageUrl, pageAccessibilityTree, screenshotBase64 };
+    return { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 };
   }
 
   /** Vision + LLM → Playwright, then optionally execute (used by playback and Test Step). */
@@ -1748,7 +1777,10 @@ export class RecordingService extends EventEmitter {
     }
     this.throwIfAborted(signal);
 
-    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(page, signal);
+    const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } = await this.captureLlmPageContext(
+      page,
+      signal,
+    );
     if (progress) {
       this.emitAiPromptTestProgress(
         progress.runId,
@@ -1766,14 +1798,16 @@ export class RecordingService extends EventEmitter {
     const fullUserPrompt = buildGeminiInstructionPrompt({
       instruction: instruction.trim(),
       pageUrl,
-      pageAccessibilityTree,
+      somManifest,
+      accessibilitySnapshot,
     });
 
     const llmResult = await this.llmService.instructionToAction(
       {
         instruction: instruction.trim(),
         pageUrl,
-        pageAccessibilityTree,
+        somManifest,
+        accessibilitySnapshot,
         screenshotBase64,
       },
       {

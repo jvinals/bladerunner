@@ -4,30 +4,50 @@ import type { GenerateContentResponse } from '@google/generative-ai';
 /** Placeholder replaced with the user’s natural-language task for the AI prompt step. */
 export const GEMINI_INSTRUCTION_ACTION_PLACEHOLDER = '[DESCRIBE THE TASK HERE]';
 
-/** Keep Gemini text prompt bounded (manifest can be large). */
-const GEMINI_MANIFEST_MAX_CHARS = 28000;
+/** Per-section caps; combined budget matches {@link SOM_MANIFEST_MAX_CHARS} in set-of-mark-capture (28k total). */
+export const GEMINI_DOM_SOM_MAX_CHARS = 14000;
+export const GEMINI_DOM_A11Y_MAX_CHARS = 14000;
 
-function truncateSomManifestForGemini(text: string): string {
-  const t = text.trim();
-  if (t.length <= GEMINI_MANIFEST_MAX_CHARS) return t;
-  return `${t.slice(0, GEMINI_MANIFEST_MAX_CHARS)}\n… [manifest truncated]`;
+/**
+ * Truncate Set-of-Marks manifest and accessibility snapshot independently (14k + 14k max).
+ * Same truncation is used for pass 1 (vision) and pass 2 (DOM verify) so the model sees consistent DOM text.
+ */
+export function truncateDomSectionsForGemini(som: string, a11y: string): { som: string; a11y: string } {
+  const s = som.trim();
+  const a = a11y.trim();
+  if (s.length <= GEMINI_DOM_SOM_MAX_CHARS && a.length <= GEMINI_DOM_A11Y_MAX_CHARS) {
+    return { som: s, a11y: a };
+  }
+  return {
+    som:
+      s.length > GEMINI_DOM_SOM_MAX_CHARS
+        ? `${s.slice(0, GEMINI_DOM_SOM_MAX_CHARS)}\n… [SOM manifest truncated]`
+        : s,
+    a11y:
+      a.length > GEMINI_DOM_A11Y_MAX_CHARS
+        ? `${a.slice(0, GEMINI_DOM_A11Y_MAX_CHARS)}\n… [accessibility snapshot truncated]`
+        : a,
+  };
 }
 
 const GEMINI_PAGE_URL_PLACEHOLDER = '[PAGE_URL]';
 const GEMINI_MANIFEST_PLACEHOLDER = '[INTERACTIVE_MANIFEST]';
+const GEMINI_ACCESSIBILITY_PLACEHOLDER = '[ACCESSIBILITY_TREE]';
 
 export type GeminiVisionPromptInput = {
   instruction: string;
   pageUrl: string;
-  /** Set-of-Marks manifest or fallback accessibility/context text. */
-  pageAccessibilityTree: string;
+  /** Set-of-Marks lines `[n] …` aligned with screenshot badges. */
+  somManifest: string;
+  /** Playwright CDP accessibility snapshot JSON (+ enrichment). */
+  accessibilitySnapshot: string;
 };
 
 const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation engineer.
 
 Context (required): The user is running authorized automated UI / QA tests against their own application (staging, demo, or local). Names and data visible in the UI are synthetic test fixtures, not real individuals or production secrets. Your only deliverable is Playwright JavaScript that drives the browser for UI validation (clicks, fills, assertions)—not guidance on harming systems, bypassing security in production, or exfiltrating data. If the task below could be read as sensitive, interpret it as neutral QA coverage (for example: verify that unauthorized access is rejected and the expected message is shown) and still output the automation code.
 
-I am attaching a Set-of-Marks screenshot: high-contrast numeric badges are drawn on viewport-visible interactive controls. The list below uses the same numbers [n] as the badges. Use the screenshot plus the manifest together to choose targets; emitted Playwright code must use normal locators (getByRole, getByLabel, getByPlaceholder, getByText, etc.) — do not reference badge numbers in the final code.
+I am attaching a Set-of-Marks screenshot: high-contrast numeric badges are drawn on viewport-visible interactive controls. The interactive manifest below uses the same numbers [n] as the badges. The accessibility snapshot is a separate Playwright CDP tree (captured before badges were drawn). Use the screenshot, the interactive manifest, and the accessibility snapshot together; emitted Playwright code must use normal locators (getByRole, getByLabel, getByPlaceholder, getByText, etc.) — do not reference badge numbers in the final code.
 
 Page URL:
 ${GEMINI_PAGE_URL_PLACEHOLDER}
@@ -35,8 +55,11 @@ ${GEMINI_PAGE_URL_PLACEHOLDER}
 Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
 
-Interactive manifest (aligned with screenshot badges):
+Interactive manifest (viewport-visible interactives; aligned with screenshot badges):
 ${GEMINI_MANIFEST_PLACEHOLDER}
+
+Playwright CDP accessibility snapshot (JSON or enriched text; structural DOM / a11y distillation):
+${GEMINI_ACCESSIBILITY_PLACEHOLDER}
 
 Playwright coding guidelines for modern SPAs (avoid flakiness):
 - No locator.fill() on search inputs, comboboxes, or async dropdowns — use locator.pressSequentially(text, { delay: 50 }) so React/Vue input handlers and network requests fire.
@@ -60,7 +83,7 @@ Do not artificially limit the solution to a single instruction if multiple steps
 Generate only the minimum necessary sequence of actions required to achieve the task reliably.
 
 Implementation requirements:
-Infer the most likely UI structure from the screenshot and manifest.
+Infer the most likely UI structure from the screenshot, interactive manifest, and accessibility snapshot.
 Write the most robust production style Playwright snippet possible.
 Make it resilient to different content, dynamic values, user data, themes, settings, layouts, and configuration states.
 Avoid brittle selectors such as exact text matches when text may vary, screen coordinates, absolute positions, and fragile nth child chains.
@@ -77,19 +100,114 @@ Output format requirement:
 Your entire response must be executable Playwright JavaScript only, consisting of the full sequence of actions needed to complete the task.
 `;
 
-/** Full text sent to Gemini (user turn) including task, URL, and manifest. */
+/** Full text sent to Gemini (user turn) including task, URL, SOM manifest, and a11y snapshot. */
 export function buildGeminiInstructionPrompt(input: GeminiVisionPromptInput | string): string {
   const resolved: GeminiVisionPromptInput =
     typeof input === 'string'
-      ? { instruction: input, pageUrl: '', pageAccessibilityTree: '' }
+      ? { instruction: input, pageUrl: '', somManifest: '', accessibilitySnapshot: '' }
       : input;
   const action = resolved.instruction.trim();
   const url = resolved.pageUrl.trim() || '(unknown)';
-  const manifestRaw = resolved.pageAccessibilityTree.trim();
-  const manifest = manifestRaw ? truncateSomManifestForGemini(manifestRaw) : '(no manifest — rely on screenshot only)';
+  const { som, a11y } = truncateDomSectionsForGemini(resolved.somManifest, resolved.accessibilitySnapshot);
+  const manifestBlock = som.length ? som : '(none)';
+  const a11yBlock = a11y.length ? a11y : '(none)';
   return GEMINI_INSTRUCTION_TEMPLATE.replace(GEMINI_INSTRUCTION_ACTION_PLACEHOLDER, action)
     .replace(GEMINI_PAGE_URL_PLACEHOLDER, url)
-    .replace(GEMINI_MANIFEST_PLACEHOLDER, manifest);
+    .replace(GEMINI_MANIFEST_PLACEHOLDER, manifestBlock)
+    .replace(GEMINI_ACCESSIBILITY_PLACEHOLDER, a11yBlock);
+}
+
+const GEMINI_VERIFY_DRAFT_MAX_CHARS = 16000;
+
+const GEMINI_VERIFY_PAGE_URL = '[PAGE_URL]';
+const GEMINI_VERIFY_TASK = '[TASK]';
+const GEMINI_VERIFY_SOM = '[SOM_MANIFEST]';
+const GEMINI_VERIFY_A11Y = '[ACCESSIBILITY_TREE]';
+const GEMINI_VERIFY_DRAFT = '[DRAFT_PLAYWRIGHT]';
+
+const GEMINI_VERIFY_TEMPLATE = `You are an expert Playwright automation engineer performing a verification pass (no image).
+
+You are given the same page URL, task, interactive manifest, and accessibility snapshot that were used to generate draft Playwright code. Your job is to check whether the draft code only uses controls, roles, names, placeholders, labels, and test ids that are consistent with those DOM sections, and whether it avoids strict-mode pitfalls (multiple matches, overly broad locators) described in the codegen guidelines.
+
+Rules:
+- If the draft is already correct and consistent with the DOM text, output it **unchanged** (verbatim).
+- If you find mismatches (e.g. wrong role name, placeholder not present, locator that cannot match the described UI), output a **corrected** full Playwright JavaScript snippet that completes the same task.
+- Output **only** executable Playwright JavaScript (same rules as codegen: no TypeScript-only syntax, no markdown fences, no comments or explanation).
+
+Page URL:
+${GEMINI_VERIFY_PAGE_URL}
+
+Task:
+${GEMINI_VERIFY_TASK}
+
+Interactive manifest:
+${GEMINI_VERIFY_SOM}
+
+Accessibility snapshot:
+${GEMINI_VERIFY_A11Y}
+
+Draft Playwright code to verify:
+${GEMINI_VERIFY_DRAFT}
+`;
+
+export function buildGeminiVerifyPrompt(input: {
+  instruction: string;
+  pageUrl: string;
+  somManifest: string;
+  accessibilitySnapshot: string;
+  draftPlaywrightCode: string;
+}): string {
+  const { som, a11y } = truncateDomSectionsForGemini(input.somManifest, input.accessibilitySnapshot);
+  let draft = input.draftPlaywrightCode.trim();
+  if (draft.length > GEMINI_VERIFY_DRAFT_MAX_CHARS) {
+    draft = `${draft.slice(0, GEMINI_VERIFY_DRAFT_MAX_CHARS)}\n… [draft truncated for verify pass]`;
+  }
+  const url = input.pageUrl.trim() || '(unknown)';
+  return GEMINI_VERIFY_TEMPLATE.replace(GEMINI_VERIFY_PAGE_URL, url)
+    .replace(GEMINI_VERIFY_TASK, input.instruction.trim())
+    .replace(GEMINI_VERIFY_SOM, som.length ? som : '(none)')
+    .replace(GEMINI_VERIFY_A11Y, a11y.length ? a11y : '(none)')
+    .replace(GEMINI_VERIFY_DRAFT, draft);
+}
+
+export async function verifyGeminiPlaywrightAgainstDom(params: {
+  apiKey: string;
+  model: string;
+  instruction: string;
+  pageUrl: string;
+  somManifest: string;
+  accessibilitySnapshot: string;
+  draftPlaywrightCode: string;
+  signal?: AbortSignal;
+}): Promise<{ rawText: string; playwrightCode: string }> {
+  const { apiKey, model, signal } = params;
+  const fullPrompt = buildGeminiVerifyPrompt(params);
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const gm = genAI.getGenerativeModel({ model });
+  const result = await gm.generateContent(
+    {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: fullPrompt }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0.1,
+      },
+    },
+    { signal },
+  );
+  const aggregated = result.response;
+  const rawText = aggregated.text().trim();
+  if (!rawText) {
+    throw new Error(formatGeminiEmptyOutputError(aggregated as GenerateContentResponse));
+  }
+  return {
+    rawText,
+    playwrightCode: normalizeGeminiPlaywrightSnippet(rawText),
+  };
 }
 
 /** Strip accidental markdown fences; trim. Model should not emit them per template. */

@@ -43,7 +43,10 @@ export interface ActionToInstructionOutput {
 export interface InstructionToActionInput {
   instruction: string;
   pageUrl: string;
-  pageAccessibilityTree: string;
+  /** Set-of-Marks lines `[n] …` aligned with badges on the viewport JPEG. */
+  somManifest: string;
+  /** Playwright CDP accessibility snapshot JSON (+ enrichment), captured before SOM overlay. */
+  accessibilitySnapshot: string;
   screenshotBase64?: string;
 }
 
@@ -57,8 +60,16 @@ export interface InstructionToActionOutput {
 /** Exact strings sent to the LLM for debugging / UI (AI prompt modal). */
 export interface InstructionToActionLlmTranscript {
   systemPrompt: string;
+  /** Pass 1 (vision) user prompt text sent to Gemini. */
   userPrompt: string;
+  /** Final Playwright JavaScript after optional DOM verify pass (same as executed output). */
   rawResponse: string;
+  /** Pass 1 codegen only, before `verifyGeminiPlaywrightAgainstDom`. */
+  draftPlaywrightCode?: string;
+  /** Pass 2 (text-only verify) user prompt. */
+  verifyUserPrompt?: string;
+  /** Pass 2 raw model output. */
+  verifyRawResponse?: string;
   /** User message included a vision attachment (JPEG) when calling the provider. */
   visionAttached: boolean;
   /**

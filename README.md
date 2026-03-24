@@ -79,6 +79,7 @@ cd apps/api && pnpm exec prisma migrate deploy
 
 - **`GEMINI_API_KEY`** (required for AI prompt and instruct flows) — Google **Gemini** API key. Playwright snippets are generated only via Gemini using the server-side vision template. Create a key in [Google AI Studio](https://aistudio.google.com/).
 - **`GEMINI_INSTRUCTION_MODEL`** (optional) — Defaults to **`gemini-3-flash-preview`**. Override with any model id from [Google AI Studio](https://aistudio.google.com/) if needed.
+- **`GEMINI_INSTRUCTION_VERIFY`** (optional) — When **`true`** or unset, after vision codegen the API runs a **second** Gemini pass (text-only) to check the draft Playwright against the **same** Set-of-Marks manifest and accessibility snapshot and correct it if needed. Set to **`false`** or **`0`** to skip that pass (faster local iteration).
 
 Skip-replay suggestions and AI prompt **failure explanations** still use **`LLM_PROVIDER`** with **`OPENAI_API_KEY`** or **`ANTHROPIC_API_KEY`**.
 
@@ -242,6 +243,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.15** — **LLM / AI prompt**: Vision codegen always receives **Set-of-Marks manifest** + **Playwright CDP accessibility snapshot** (captured before badges) + **JPEG** + task; optional **`GEMINI_INSTRUCTION_VERIFY`** (default on) runs a **DOM verify** pass to fix draft Playwright against the same DOM text. **AI prompt review** modal can show draft, verify prompt, and final code. **`@bladerunner/api` `0.6.25`**, **`@bladerunner/web` `0.7.13`**.
 - **0.10.14** — **Clerk / MailSlurp 2FA**: Tighter **`MAILSURP_CLOCK_SKEW_MS`** (2s), **`MAILSLURP_POST_PASSWORD_DELAY_MS`** (2.5s) after password submit or OTP-only assist before polling, so **`waitForLatestEmail`** is less likely to return a **previous** inbox message. **`@bladerunner/api` `0.6.24`**, **`@bladerunner/clerk-agentmail-signin` `0.5.1`**.
 - **0.10.13** — **AI prompt StepCard**: Removed **Full pipeline** and **Revert to Playwright** buttons; **Save prompt**, **Generate**, **Run on page**, and **Reset** remain. **`@bladerunner/web` `0.7.12`**.
 - **0.10.12** — **Playback / AI prompt**: After a successful **Run on page** or **Full pipeline** (or **Adopt** full re-test) on an AI prompt step during live playback, the step list **advances** the replay highlight/completed state like a finished **`playbackProgress`** step (next step becomes current). **`@bladerunner/web` `0.7.11`**.

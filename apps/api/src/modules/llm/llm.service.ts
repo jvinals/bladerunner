@@ -8,7 +8,12 @@ import {
   InstructionToActionOutput,
   InstructionToActionResult,
 } from './providers/llm-provider.interface';
-import { buildGeminiInstructionPrompt, generateGeminiPlaywrightSnippet } from './gemini-instruction.client';
+import {
+  buildGeminiInstructionPrompt,
+  buildGeminiVerifyPrompt,
+  generateGeminiPlaywrightSnippet,
+  verifyGeminiPlaywrightAgainstDom,
+} from './gemini-instruction.client';
 
 const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
 1. A concise human-readable instruction describing what the user did
@@ -119,6 +124,13 @@ export class LlmService {
     return this.provider;
   }
 
+  /** When `GEMINI_INSTRUCTION_VERIFY` is `false` or `0`, skip the text-only DOM verify pass after codegen. */
+  private geminiInstructionVerifyEnabled(): boolean {
+    const v = this.configService?.get<string>('GEMINI_INSTRUCTION_VERIFY')?.trim().toLowerCase();
+    if (v === 'false' || v === '0') return false;
+    return true;
+  }
+
   async actionToInstruction(
     input: ActionToInstructionInput,
   ): Promise<ActionToInstructionOutput> {
@@ -187,9 +199,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     const fullPrompt = buildGeminiInstructionPrompt({
       instruction: input.instruction,
       pageUrl: input.pageUrl,
-      pageAccessibilityTree: input.pageAccessibilityTree,
+      somManifest: input.somManifest,
+      accessibilitySnapshot: input.accessibilitySnapshot,
     });
-    const { rawText, playwrightCode, thinking } = await generateGeminiPlaywrightSnippet({
+    const { rawText, playwrightCode: draftPlaywrightCode, thinking } = await generateGeminiPlaywrightSnippet({
       apiKey,
       model,
       fullPrompt,
@@ -198,8 +211,40 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       onProgress: opts?.onStream,
     });
 
+    const verifyOn = this.geminiInstructionVerifyEnabled();
+    let finalPlaywrightCode = draftPlaywrightCode;
+    let verifyUserPrompt: string | undefined;
+    let verifyRawResponse: string | undefined;
+
+    if (verifyOn) {
+      verifyUserPrompt = buildGeminiVerifyPrompt({
+        instruction: input.instruction,
+        pageUrl: input.pageUrl,
+        somManifest: input.somManifest,
+        accessibilitySnapshot: input.accessibilitySnapshot,
+        draftPlaywrightCode: draftPlaywrightCode,
+      });
+      try {
+        const verified = await verifyGeminiPlaywrightAgainstDom({
+          apiKey,
+          model,
+          instruction: input.instruction,
+          pageUrl: input.pageUrl,
+          somManifest: input.somManifest,
+          accessibilitySnapshot: input.accessibilitySnapshot,
+          draftPlaywrightCode: draftPlaywrightCode,
+          signal: opts?.signal,
+        });
+        verifyRawResponse = verified.rawText;
+        finalPlaywrightCode = verified.playwrightCode;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`Gemini DOM verify pass failed; using draft codegen only: ${msg}`);
+      }
+    }
+
     const output: InstructionToActionOutput = {
-      playwrightCode,
+      playwrightCode: finalPlaywrightCode,
       action: 'custom',
       selector: undefined,
       value: undefined,
@@ -210,7 +255,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       transcript: {
         systemPrompt: '',
         userPrompt: fullPrompt,
-        rawResponse: rawText,
+        rawResponse: finalPlaywrightCode,
+        ...(verifyOn ? { draftPlaywrightCode } : {}),
+        ...(verifyUserPrompt ? { verifyUserPrompt } : {}),
+        ...(verifyRawResponse ? { verifyRawResponse } : {}),
         visionAttached: true,
         screenshotBase64: shot,
         ...(thinking ? { thinking } : {}),

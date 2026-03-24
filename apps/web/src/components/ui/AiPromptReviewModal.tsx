@@ -83,8 +83,34 @@ function TranscriptSections({ lastLlmTranscript }: { lastLlmTranscript: AiPrompt
               </pre>
             </div>
           ) : null}
+          {lastLlmTranscript.draftPlaywrightCode ? (
+            <div>
+              <div className="mb-1 text-[10px] font-semibold text-gray-600">Draft Playwright (vision pass)</div>
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                {lastLlmTranscript.draftPlaywrightCode}
+              </pre>
+            </div>
+          ) : null}
+          {lastLlmTranscript.verifyUserPrompt ? (
+            <div>
+              <div className="mb-1 text-[10px] font-semibold text-gray-600">DOM verify prompt (pass 2)</div>
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                {lastLlmTranscript.verifyUserPrompt}
+              </pre>
+            </div>
+          ) : null}
+          {lastLlmTranscript.verifyRawResponse ? (
+            <div>
+              <div className="mb-1 text-[10px] font-semibold text-gray-600">DOM verify raw response</div>
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
+                {lastLlmTranscript.verifyRawResponse}
+              </pre>
+            </div>
+          ) : null}
           <div>
-            <div className="mb-1 text-[10px] font-semibold text-gray-600">Raw response</div>
+            <div className="mb-1 text-[10px] font-semibold text-gray-600">
+              {lastLlmTranscript.draftPlaywrightCode ? 'Final Playwright (after DOM verify)' : 'Raw response'}
+            </div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-100 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-800">
               {lastLlmTranscript.rawResponse}
             </pre>

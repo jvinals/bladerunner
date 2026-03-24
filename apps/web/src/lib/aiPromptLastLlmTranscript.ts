@@ -2,7 +2,12 @@
 export type AiPromptLastLlmTranscript = {
   systemPrompt: string;
   userPrompt: string;
+  /** Final Playwright after optional DOM verify pass (executable output). */
   rawResponse: string;
+  /** Vision codegen only, before pass-2 verify (when verify ran). */
+  draftPlaywrightCode?: string;
+  verifyUserPrompt?: string;
+  verifyRawResponse?: string;
   /** Model reasoning when the API returned it (separate from JSON Playwright output). */
   thinking?: string;
   visionAttached?: boolean;
@@ -27,6 +32,14 @@ export function parseAiPromptLastLlmTranscript(metadata: unknown): AiPromptLastL
     systemPrompt: o.systemPrompt,
     userPrompt: o.userPrompt,
     rawResponse: o.rawResponse,
+    draftPlaywrightCode:
+      typeof o.draftPlaywrightCode === 'string' && o.draftPlaywrightCode.trim()
+        ? o.draftPlaywrightCode.trim()
+        : undefined,
+    verifyUserPrompt:
+      typeof o.verifyUserPrompt === 'string' && o.verifyUserPrompt.trim() ? o.verifyUserPrompt.trim() : undefined,
+    verifyRawResponse:
+      typeof o.verifyRawResponse === 'string' && o.verifyRawResponse.trim() ? o.verifyRawResponse.trim() : undefined,
     thinking: typeof o.thinking === 'string' && o.thinking.trim() ? o.thinking.trim() : undefined,
     visionAttached: typeof o.visionAttached === 'boolean' ? o.visionAttached : undefined,
     screenshotBase64: typeof o.screenshotBase64 === 'string' && o.screenshotBase64.trim() ? o.screenshotBase64 : undefined,

@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.6.24",
+  "version": "0.6.25",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
@@ -19,6 +19,7 @@
     "test:clerk-auto-signin-metadata": "tsx src/modules/recording/clerk-auto-sign-in-step-metadata.selftest.ts",
     "test:recording-merge": "tsx src/modules/recording/recording-playwright-merge.selftest.ts",
     "test:llm-suggest-skip": "tsx src/modules/llm/llm-suggest-skip.selftest.ts",
+    "test:gemini-instruction": "tsx src/modules/llm/gemini-instruction.selftest.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
