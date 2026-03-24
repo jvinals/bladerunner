@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import type { GenerateContentResponse } from '@google/generative-ai';
 
 /** Placeholder replaced with the user’s natural-language task for the AI prompt step. */
 export const GEMINI_INSTRUCTION_ACTION_PLACEHOLDER = '[DESCRIBE THE TASK HERE]';
@@ -23,6 +24,8 @@ export type GeminiVisionPromptInput = {
 };
 
 const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation engineer.
+
+Context (required): The user is running authorized automated UI / QA tests against their own application (staging, demo, or local). Names and data visible in the UI are synthetic test fixtures, not real individuals or production secrets. Your only deliverable is Playwright JavaScript that drives the browser for UI validation (clicks, fills, assertions)—not guidance on harming systems, bypassing security in production, or exfiltrating data. If the task below could be read as sensitive, interpret it as neutral QA coverage (for example: verify that unauthorized access is rejected and the expected message is shown) and still output the automation code.
 
 I am attaching a Set-of-Marks screenshot: high-contrast numeric badges are drawn on viewport-visible interactive controls. The list below uses the same numbers [n] as the badges. Use the screenshot plus the manifest together to choose targets; emitted Playwright code must use normal locators (getByRole, getByLabel, getByPlaceholder, getByText, etc.) — do not reference badge numbers in the final code.
 
@@ -125,6 +128,33 @@ function extractChunkParts(chunk: unknown): { text: string; thought: string } {
   return { text, thought };
 }
 
+/** User-facing hint when Gemini returns no code (often safety / empty completion). */
+const GEMINI_EMPTY_REPHRASE_HINT =
+  ' If the model blocked the request, rephrase the step as neutral QA on a staging app (e.g. verify error messages or access denial); avoid attack-like or abusive wording; shorten or generalize sensitive fixture text in the instruction.';
+
+function formatGeminiEmptyOutputError(aggregated: GenerateContentResponse): string {
+  const parts: string[] = [];
+  const pf = aggregated.promptFeedback;
+  if (pf) {
+    parts.push(`promptBlockReason=${String(pf.blockReason)}`);
+    if (pf.blockReasonMessage?.trim()) {
+      parts.push(`blockReasonMessage=${pf.blockReasonMessage.trim().slice(0, 240)}`);
+    }
+  }
+  const c0 = aggregated.candidates?.[0];
+  if (c0?.finishReason != null) parts.push(`finishReason=${String(c0.finishReason)}`);
+  if (c0?.finishMessage?.trim()) parts.push(`finishMessage=${c0.finishMessage.trim().slice(0, 240)}`);
+  if (c0?.safetyRatings?.length) {
+    const brief = c0.safetyRatings.map((s) => ({
+      category: s.category,
+      probability: s.probability,
+    }));
+    parts.push(`safetyRatings=${JSON.stringify(brief)}`);
+  }
+  const detail = parts.length ? ` (${parts.join('; ')})` : '';
+  return `Gemini returned no usable text for Playwright snippet${detail}.${GEMINI_EMPTY_REPHRASE_HINT}`;
+}
+
 export type GeminiInstructionStreamProgress = { rawText: string; thinking?: string };
 
 export async function generateGeminiPlaywrightSnippet(params: {
@@ -204,12 +234,12 @@ export async function generateGeminiPlaywrightSnippet(params: {
     emitProgress(false);
   }
 
-  await response;
+  const aggregated = await response;
   emitProgress(true);
 
   const rawText = accumulated.trim();
   if (!rawText) {
-    throw new Error('Gemini returned empty text for Playwright snippet');
+    throw new Error(formatGeminiEmptyOutputError(aggregated));
   }
   const thinking = thinkingAcc.trim() || undefined;
   return {
