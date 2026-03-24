@@ -242,12 +242,48 @@ export interface SystemStatus {
 
 // ─── Settings Types ──────────────────────────────────────────────────────────
 
+export type LlmProviderId = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+
+export type LlmUsageKey =
+  | 'playwright_codegen'
+  | 'playwright_verify'
+  | 'action_to_instruction'
+  | 'explain_ai_prompt_failure'
+  | 'suggest_skip_after_change';
+
+export interface LlmPreferenceEntry {
+  provider: LlmProviderId;
+  model: string;
+}
+
+export interface LlmCapabilities {
+  hasGeminiKey: boolean;
+  hasOpenAiKey: boolean;
+  hasAnthropicKey: boolean;
+  hasOpenRouterKey: boolean;
+}
+
+export interface LlmSettingsSection {
+  usage: Record<string, LlmPreferenceEntry>;
+  userModelPresets?: string[];
+  capabilities: LlmCapabilities;
+  providerCatalog: Record<
+    LlmProviderId,
+    {
+      label: string;
+      suggestedModels: string[];
+    }
+  >;
+}
+
 export interface WorkspaceSettings {
   workspace: Workspace;
   defaultPlatform: PlatformType;
   notificationsEnabled: boolean;
   slackWebhookUrl?: string;
   retentionDays: number;
+  /** Per-user LLM routing (API keys remain server-side only). */
+  llm?: LlmSettingsSection;
 }
 
 // ─── Recording Types ─────────────────────────────────────────────────────────

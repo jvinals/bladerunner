@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   LlmProvider,
@@ -7,6 +7,8 @@ import {
   InstructionToActionInput,
   InstructionToActionOutput,
   InstructionToActionResult,
+  ChatMessage,
+  LlmChatOptions,
 } from './providers/llm-provider.interface';
 import {
   buildGeminiInstructionPrompt,
@@ -14,6 +16,13 @@ import {
   generateGeminiPlaywrightSnippet,
   verifyGeminiPlaywrightAgainstDom,
 } from './gemini-instruction.client';
+import { geminiChat } from './gemini-llm-chat.adapter';
+import { LlmConfigService } from './llm-config.service';
+import { createChatLlmProvider } from './llm-provider-factory';
+import {
+  generateNonGeminiVisionPlaywrightSnippet,
+  verifyPlaywrightAgainstDomNonGemini,
+} from './vision-playwright-codegen';
 
 const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
 1. A concise human-readable instruction describing what the user did
@@ -112,51 +121,95 @@ function parseJsonFromLlmText(raw: string): unknown {
 @Injectable()
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
-  private provider: LlmProvider | null = null;
+  /** Self-tests / dev: bypass per-user routing when set. */
+  private chatProviderOverride: LlmProvider | null = null;
 
-  constructor(@Optional() @Inject(ConfigService) private readonly configService?: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly llmConfig: LlmConfigService,
+  ) {}
 
+  /** @deprecated Prefer env + DB routing; used by llm-suggest-skip.selftest. */
   setProvider(provider: LlmProvider) {
-    this.provider = provider;
+    this.chatProviderOverride = provider;
   }
 
   getProvider(): LlmProvider | null {
-    return this.provider;
+    return this.chatProviderOverride;
   }
 
-  /** When `GEMINI_INSTRUCTION_VERIFY` is `false` or `0`, skip the text-only DOM verify pass after codegen. */
-  private geminiInstructionVerifyEnabled(): boolean {
-    const v = this.configService?.get<string>('GEMINI_INSTRUCTION_VERIFY')?.trim().toLowerCase();
-    if (v === 'false' || v === '0') return false;
-    return true;
+  private async chatJson(
+    userId: string | undefined,
+    usage: 'action_to_instruction' | 'explain_ai_prompt_failure' | 'suggest_skip_after_change',
+    messages: ChatMessage[],
+    options?: LlmChatOptions,
+  ): Promise<{ content: string; thinking?: string }> {
+    if (this.chatProviderOverride) {
+      return this.chatProviderOverride.chat(messages, options);
+    }
+
+    const resolved = await this.llmConfig.resolve(userId, usage);
+    const key = this.llmConfig.getApiKey(resolved.provider);
+    if (!key) {
+      throw new Error(`No API key for provider ${resolved.provider}`);
+    }
+
+    if (resolved.provider === 'gemini') {
+      return geminiChat(key, resolved.model, messages, options);
+    }
+
+    const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model);
+    return client.chat(messages, {
+      ...options,
+      responseFormat: 'json_object',
+    });
   }
 
   async actionToInstruction(
     input: ActionToInstructionInput,
+    opts?: { userId?: string },
   ): Promise<ActionToInstructionOutput> {
-    if (!this.provider) {
-      const label = input.elementVisibleText?.trim() || input.ariaLabel?.trim();
-      return {
-        instruction:
-          input.action === 'click' && label
-            ? `Click ${label}`
-            : `${input.action} on ${input.selector}`,
-        playwrightCode: `// ${input.action}: ${input.selector}`,
-      };
+    if (this.chatProviderOverride) {
+      const userPrompt = `Action: ${input.action}
+Selector: ${input.selector}
+Element HTML: ${input.elementHtml}
+${input.elementVisibleText ? `Visible text: ${input.elementVisibleText}\n` : ''}${input.ariaLabel ? `Aria label: ${input.ariaLabel}\n` : ''}${input.value ? `Value: ${input.value}\n` : ''}Page context (accessibility tree excerpt):
+${input.pageAccessibilityTree.slice(0, 3000)}`;
+      try {
+        const response = await this.chatProviderOverride.chat([
+          { role: 'system', content: ACTION_TO_INSTRUCTION_SYSTEM },
+          { role: 'user', content: userPrompt },
+        ]);
+        return JSON.parse(response.content);
+      } catch (err) {
+        this.logger.error('actionToInstruction failed', err);
+        const label = input.elementVisibleText?.trim() || input.ariaLabel?.trim();
+        return {
+          instruction:
+            input.action === 'click' && label
+              ? `Click ${label}`
+              : `${input.action} on ${input.selector}`,
+          playwrightCode: `// ${input.action}: ${input.selector}`,
+        };
+      }
     }
 
-    const userPrompt = `Action: ${input.action}
+    try {
+      const userPrompt = `Action: ${input.action}
 Selector: ${input.selector}
 Element HTML: ${input.elementHtml}
 ${input.elementVisibleText ? `Visible text: ${input.elementVisibleText}\n` : ''}${input.ariaLabel ? `Aria label: ${input.ariaLabel}\n` : ''}${input.value ? `Value: ${input.value}\n` : ''}Page context (accessibility tree excerpt):
 ${input.pageAccessibilityTree.slice(0, 3000)}`;
 
-    try {
-      const response = await this.provider.chat([
-        { role: 'system', content: ACTION_TO_INSTRUCTION_SYSTEM },
-        { role: 'user', content: userPrompt },
-      ]);
-
+      const response = await this.chatJson(
+        opts?.userId,
+        'action_to_instruction',
+        [
+          { role: 'system', content: ACTION_TO_INSTRUCTION_SYSTEM },
+          { role: 'user', content: userPrompt },
+        ],
+        { maxTokens: 4096, temperature: 0.2 },
+      );
       return JSON.parse(response.content);
     } catch (err) {
       this.logger.error('actionToInstruction failed', err);
@@ -174,27 +227,25 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
   async instructionToAction(
     input: InstructionToActionInput,
     opts?: {
+      userId?: string;
       signal?: AbortSignal;
-      /** Cumulative vision-model output while Gemini streams (AI prompt Test drawer). */
       onStream?: (ev: { rawText: string; thinking?: string }) => void;
     },
   ): Promise<InstructionToActionResult> {
-    const apiKey = this.configService?.get<string>('GEMINI_API_KEY')?.trim();
-    if (!apiKey) {
-      throw new Error(
-        'GEMINI_API_KEY is not set. Playwright instruction generation uses Google Gemini (set GEMINI_API_KEY and GEMINI_INSTRUCTION_MODEL in .env).',
-      );
-    }
-
     const shot = input.screenshotBase64?.trim();
     if (!shot) {
       throw new Error(
-        'A viewport screenshot is required for Gemini Playwright instruction generation (capture failed or was skipped).',
+        'A screenshot is required for Playwright instruction generation (capture failed or was skipped).',
       );
     }
 
-    const model =
-      this.configService?.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
+    const codegen = await this.llmConfig.resolve(opts?.userId, 'playwright_codegen');
+    const apiKey = this.llmConfig.getApiKey(codegen.provider);
+    if (!apiKey) {
+      throw new Error(
+        `No API key for provider "${codegen.provider}". Set the matching key in .env (see README).`,
+      );
+    }
 
     const fullPrompt = buildGeminiInstructionPrompt({
       instruction: input.instruction,
@@ -202,44 +253,86 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       somManifest: input.somManifest,
       accessibilitySnapshot: input.accessibilitySnapshot,
     });
-    const { rawText, playwrightCode: draftPlaywrightCode, thinking } = await generateGeminiPlaywrightSnippet({
-      apiKey,
-      model,
-      fullPrompt,
-      imageBase64: shot,
-      signal: opts?.signal,
-      onProgress: opts?.onStream,
-    });
 
-    const verifyOn = this.geminiInstructionVerifyEnabled();
+    let draftPlaywrightCode: string;
+    let thinking: string | undefined;
+
+    if (codegen.provider === 'gemini') {
+      const out = await generateGeminiPlaywrightSnippet({
+        apiKey,
+        model: codegen.model,
+        fullPrompt,
+        imageBase64: shot,
+        signal: opts?.signal,
+        onProgress: opts?.onStream,
+      });
+      draftPlaywrightCode = out.playwrightCode;
+      thinking = out.thinking;
+    } else {
+      const out = await generateNonGeminiVisionPlaywrightSnippet({
+        config: this.configService,
+        provider: codegen.provider,
+        model: codegen.model,
+        input,
+        imageBase64: shot,
+        signal: opts?.signal,
+        onProgress: opts?.onStream,
+      });
+      draftPlaywrightCode = out.playwrightCode;
+      thinking = out.thinking;
+    }
+
+    const verifyOn = this.llmConfig.geminiInstructionVerifyEnabled();
     let finalPlaywrightCode = draftPlaywrightCode;
     let verifyUserPrompt: string | undefined;
     let verifyRawResponse: string | undefined;
 
     if (verifyOn) {
+      const verify = await this.llmConfig.resolve(opts?.userId, 'playwright_verify');
       verifyUserPrompt = buildGeminiVerifyPrompt({
         instruction: input.instruction,
         pageUrl: input.pageUrl,
         somManifest: input.somManifest,
         accessibilitySnapshot: input.accessibilitySnapshot,
-        draftPlaywrightCode: draftPlaywrightCode,
+        draftPlaywrightCode,
       });
       try {
-        const verified = await verifyGeminiPlaywrightAgainstDom({
-          apiKey,
-          model,
-          instruction: input.instruction,
-          pageUrl: input.pageUrl,
-          somManifest: input.somManifest,
-          accessibilitySnapshot: input.accessibilitySnapshot,
-          draftPlaywrightCode: draftPlaywrightCode,
-          signal: opts?.signal,
-        });
-        verifyRawResponse = verified.rawText;
-        finalPlaywrightCode = verified.playwrightCode;
+        if (verify.provider === 'gemini') {
+          const vk = this.llmConfig.getApiKey('gemini');
+          if (!vk) {
+            this.logger.warn('DOM verify skipped: GEMINI_API_KEY not set');
+          } else {
+            const verified = await verifyGeminiPlaywrightAgainstDom({
+              apiKey: vk,
+              model: verify.model,
+              instruction: input.instruction,
+              pageUrl: input.pageUrl,
+              somManifest: input.somManifest,
+              accessibilitySnapshot: input.accessibilitySnapshot,
+              draftPlaywrightCode,
+              signal: opts?.signal,
+            });
+            verifyRawResponse = verified.rawText;
+            finalPlaywrightCode = verified.playwrightCode;
+          }
+        } else {
+          const verified = await verifyPlaywrightAgainstDomNonGemini({
+            config: this.configService,
+            provider: verify.provider,
+            model: verify.model,
+            instruction: input.instruction,
+            pageUrl: input.pageUrl,
+            somManifest: input.somManifest,
+            accessibilitySnapshot: input.accessibilitySnapshot,
+            draftPlaywrightCode,
+            signal: opts?.signal,
+          });
+          verifyRawResponse = verified.rawText;
+          finalPlaywrightCode = verified.playwrightCode;
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        this.logger.warn(`Gemini DOM verify pass failed; using draft codegen only: ${msg}`);
+        this.logger.warn(`DOM verify pass failed; using draft codegen only: ${msg}`);
       }
     }
 
@@ -266,10 +359,6 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     };
   }
 
-  /**
-   * After a failed AI prompt Test, produce a human-readable explanation and a replacement instruction.
-   * Returns null if no LLM provider or parsing fails.
-   */
   async explainAiPromptTestFailure(
     input: {
       instruction: string;
@@ -278,16 +367,39 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       pageAccessibilityTree: string;
       screenshotBase64?: string;
     },
-    opts?: { signal?: AbortSignal },
+    opts?: { signal?: AbortSignal; userId?: string },
   ): Promise<AiPromptTestFailureHelp | null> {
-    if (!this.provider) {
-      return null;
+    if (this.chatProviderOverride) {
+      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+      try {
+        const llm = await this.chatProviderOverride.chat(
+          [
+            { role: 'system', content: EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM },
+            { role: 'user', content: user },
+          ],
+          {
+            imageBase64: input.screenshotBase64,
+            maxTokens: 4096,
+            reasoningEffort: 'low',
+            signal: opts?.signal,
+          },
+        );
+        const parsed = parseJsonFromLlmText(llm.content) as { explanation?: unknown; suggestedPrompt?: unknown };
+        if (typeof parsed.explanation !== 'string' || typeof parsed.suggestedPrompt !== 'string') return null;
+        const explanation = parsed.explanation.trim();
+        const suggestedPrompt = parsed.suggestedPrompt.trim();
+        if (!explanation || !suggestedPrompt) return null;
+        return { explanation, suggestedPrompt };
+      } catch {
+        return null;
+      }
     }
 
-    const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
-
     try {
-      const llm = await this.provider.chat(
+      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+      const llm = await this.chatJson(
+        opts?.userId,
+        'explain_ai_prompt_failure',
         [
           { role: 'system', content: EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM },
           { role: 'user', content: user },
@@ -299,16 +411,11 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
           signal: opts?.signal,
         },
       );
-
       const parsed = parseJsonFromLlmText(llm.content) as { explanation?: unknown; suggestedPrompt?: unknown };
-      if (typeof parsed.explanation !== 'string' || typeof parsed.suggestedPrompt !== 'string') {
-        return null;
-      }
+      if (typeof parsed.explanation !== 'string' || typeof parsed.suggestedPrompt !== 'string') return null;
       const explanation = parsed.explanation.trim();
       const suggestedPrompt = parsed.suggestedPrompt.trim();
-      if (!explanation || !suggestedPrompt) {
-        return null;
-      }
+      if (!explanation || !suggestedPrompt) return null;
       return { explanation, suggestedPrompt };
     } catch (err) {
       this.logger.warn(`explainAiPromptTestFailure: ${err}`);
@@ -316,16 +423,50 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
   }
 
-  /**
-   * Suggests forward steps to mark "skip replay" after the anchor step was added or edited.
-   * Returns empty suggestions when no LLM provider is configured.
-   */
-  async suggestStepsToSkipAfterChange(input: {
-    anchor: SuggestSkipAnchorInput;
-    forwardSteps: SuggestSkipForwardStepInput[];
-  }): Promise<{ suggestions: Array<{ stepId: string; reason: string }> }> {
-    if (!this.provider) {
-      this.logger.warn('suggestStepsToSkipAfterChange: LLM provider not configured');
+  async suggestStepsToSkipAfterChange(
+    input: {
+      anchor: SuggestSkipAnchorInput;
+      forwardSteps: SuggestSkipForwardStepInput[];
+    },
+    opts?: { userId?: string },
+  ): Promise<{ suggestions: Array<{ stepId: string; reason: string }> }> {
+    if (this.chatProviderOverride) {
+      if (input.forwardSteps.length === 0) return { suggestions: [] };
+      const userPayload = JSON.stringify({ anchor: input.anchor, forwardSteps: input.forwardSteps }, null, 2);
+      const response = await this.chatProviderOverride.chat([
+        { role: 'system', content: SUGGEST_SKIP_AFTER_CHANGE_SYSTEM },
+        { role: 'user', content: userPayload },
+      ]);
+      let parsed: unknown;
+      try {
+        parsed = parseJsonFromLlmText(response.content);
+      } catch (err) {
+        this.logger.error('suggestStepsToSkipAfterChange: invalid JSON', err);
+        return { suggestions: [] };
+      }
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        !('suggestions' in parsed) ||
+        !Array.isArray((parsed as { suggestions: unknown }).suggestions)
+      ) {
+        return { suggestions: [] };
+      }
+      const out: Array<{ stepId: string; reason: string }> = [];
+      for (const item of (parsed as { suggestions: unknown[] }).suggestions) {
+        if (typeof item !== 'object' || item === null) continue;
+        const stepId = (item as { stepId?: unknown }).stepId;
+        const reason = (item as { reason?: unknown }).reason;
+        if (typeof stepId !== 'string' || typeof reason !== 'string' || !stepId.trim() || !reason.trim()) continue;
+        out.push({ stepId: stepId.trim(), reason: reason.trim() });
+      }
+      return { suggestions: out };
+    }
+
+    const resolved = await this.llmConfig.resolve(opts?.userId, 'suggest_skip_after_change');
+    const key = this.llmConfig.getApiKey(resolved.provider);
+    if (!key) {
+      this.logger.warn('suggestStepsToSkipAfterChange: no API key for configured provider');
       return { suggestions: [] };
     }
 
@@ -342,38 +483,48 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       2,
     );
 
-    const response = await this.provider.chat([
-      { role: 'system', content: SUGGEST_SKIP_AFTER_CHANGE_SYSTEM },
-      { role: 'user', content: userPayload },
-    ]);
-
-    let parsed: unknown;
     try {
-      parsed = parseJsonFromLlmText(response.content);
-    } catch (err) {
-      this.logger.error('suggestStepsToSkipAfterChange: invalid JSON', err);
-      return { suggestions: [] };
-    }
+      const response = await this.chatJson(
+        opts?.userId,
+        'suggest_skip_after_change',
+        [
+          { role: 'system', content: SUGGEST_SKIP_AFTER_CHANGE_SYSTEM },
+          { role: 'user', content: userPayload },
+        ],
+        { maxTokens: 4096, temperature: 0.2 },
+      );
 
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      !('suggestions' in parsed) ||
-      !Array.isArray((parsed as { suggestions: unknown }).suggestions)
-    ) {
-      return { suggestions: [] };
-    }
-
-    const out: Array<{ stepId: string; reason: string }> = [];
-    for (const item of (parsed as { suggestions: unknown[] }).suggestions) {
-      if (typeof item !== 'object' || item === null) continue;
-      const stepId = (item as { stepId?: unknown }).stepId;
-      const reason = (item as { reason?: unknown }).reason;
-      if (typeof stepId !== 'string' || typeof reason !== 'string' || !stepId.trim() || !reason.trim()) {
-        continue;
+      let parsed: unknown;
+      try {
+        parsed = parseJsonFromLlmText(response.content);
+      } catch (err) {
+        this.logger.error('suggestStepsToSkipAfterChange: invalid JSON', err);
+        return { suggestions: [] };
       }
-      out.push({ stepId: stepId.trim(), reason: reason.trim() });
+
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        !('suggestions' in parsed) ||
+        !Array.isArray((parsed as { suggestions: unknown }).suggestions)
+      ) {
+        return { suggestions: [] };
+      }
+
+      const out: Array<{ stepId: string; reason: string }> = [];
+      for (const item of (parsed as { suggestions: unknown[] }).suggestions) {
+        if (typeof item !== 'object' || item === null) continue;
+        const stepId = (item as { stepId?: unknown }).stepId;
+        const reason = (item as { reason?: unknown }).reason;
+        if (typeof stepId !== 'string' || typeof reason !== 'string' || !stepId.trim() || !reason.trim()) {
+          continue;
+        }
+        out.push({ stepId: stepId.trim(), reason: reason.trim() });
+      }
+      return { suggestions: out };
+    } catch (err) {
+      this.logger.warn(`suggestStepsToSkipAfterChange: ${err}`);
+      return { suggestions: [] };
     }
-    return { suggestions: out };
   }
 }

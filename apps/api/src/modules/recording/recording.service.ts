@@ -673,13 +673,16 @@ export class RecordingService extends EventEmitter {
     const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } =
       await this.captureLlmPageContext(session.page);
 
-    const llmResult = await this.llmService.instructionToAction({
-      instruction,
-      pageUrl,
-      somManifest,
-      accessibilitySnapshot,
-      screenshotBase64,
-    });
+    const llmResult = await this.llmService.instructionToAction(
+      {
+        instruction,
+        pageUrl,
+        somManifest,
+        accessibilitySnapshot,
+        screenshotBase64,
+      },
+      { userId },
+    );
     const out = llmResult.output;
 
     try {
@@ -728,13 +731,16 @@ export class RecordingService extends EventEmitter {
     const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } =
       await this.captureLlmPageContext(session.page);
 
-    const llmResult = await this.llmService.instructionToAction({
-      instruction: trimmed,
-      pageUrl,
-      somManifest,
-      accessibilitySnapshot,
-      screenshotBase64,
-    });
+    const llmResult = await this.llmService.instructionToAction(
+      {
+        instruction: trimmed,
+        pageUrl,
+        somManifest,
+        accessibilitySnapshot,
+        screenshotBase64,
+      },
+      { userId },
+    );
     const out = llmResult.output;
 
     try {
@@ -904,21 +910,24 @@ export class RecordingService extends EventEmitter {
       return { suggestions: [] };
     }
 
-    const llm = await this.llmService.suggestStepsToSkipAfterChange({
-      anchor: {
-        sequence: anchor.sequence,
-        instruction: anchor.instruction,
-        action: anchor.action,
-        origin: anchor.origin,
+    const llm = await this.llmService.suggestStepsToSkipAfterChange(
+      {
+        anchor: {
+          sequence: anchor.sequence,
+          instruction: anchor.instruction,
+          action: anchor.action,
+          origin: anchor.origin,
+        },
+        forwardSteps: forward.map((s) => ({
+          id: s.id,
+          sequence: s.sequence,
+          instruction: s.instruction,
+          action: s.action,
+          origin: s.origin,
+        })),
       },
-      forwardSteps: forward.map((s) => ({
-        id: s.id,
-        sequence: s.sequence,
-        instruction: s.instruction,
-        action: s.action,
-        origin: s.origin,
-      })),
-    });
+      { userId },
+    );
 
     const allowed = new Set(forward.map((s) => s.id));
     const suggestions: Array<{ stepId: string; reason: string }> = [];
@@ -1146,6 +1155,7 @@ export class RecordingService extends EventEmitter {
               throw new BadRequestException('No generated Playwright to run — generate first.');
             }
             const runResult = await this.playAiPromptStepOnPage(page, instructionToRun, {
+              userId,
               skipClickForce: false,
               signal,
               progress: { runId, stepId },
@@ -1178,6 +1188,7 @@ export class RecordingService extends EventEmitter {
           } else {
             const playPhase = apiPhase === 'generate' ? 'generateOnly' : 'full';
             const out = await this.playAiPromptStepOnPage(page, instructionToRun, {
+              userId,
               skipClickForce: false,
               persistTranscript: { stepId, runId, userId, source: 'test' },
               signal,
@@ -1257,7 +1268,7 @@ export class RecordingService extends EventEmitter {
                 pageAccessibilityTree: this.combineSomAndA11yForExplain(ctx),
                 screenshotBase64: ctx.screenshotBase64,
               },
-              { signal },
+              { signal, userId },
             );
             if (hint) {
               failureHelp = hint;
@@ -1799,6 +1810,8 @@ export class RecordingService extends EventEmitter {
     page: Page,
     instruction: string,
     opts: {
+      /** Clerk user id — selects per-user LLM model routing in Settings. */
+      userId?: string;
       skipClickForce: boolean;
       signal?: AbortSignal;
       progress?: { runId: string; stepId: string };
@@ -1891,6 +1904,8 @@ export class RecordingService extends EventEmitter {
       accessibilitySnapshot,
     });
 
+    const llmUserId = opts.userId ?? opts.persistTranscript?.userId;
+
     const llmResult = await this.llmService.instructionToAction(
       {
         instruction: instruction.trim(),
@@ -1900,6 +1915,7 @@ export class RecordingService extends EventEmitter {
         screenshotBase64,
       },
       {
+        userId: llmUserId,
         signal,
         onStream: progress
           ? (ev) => {
@@ -2905,6 +2921,7 @@ export class RecordingService extends EventEmitter {
           if (isAiPromptStep) {
             await this.runWithActivePlaybackStep(session, () =>
               this.playAiPromptStepOnPage(session.page, step.instruction, {
+                userId: session.userId,
                 skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
                 progress: { runId: sourceRunId, stepId: step.id },
                 persistTranscript: {
@@ -3272,16 +3289,19 @@ export class RecordingService extends EventEmitter {
 
           accessibilityTree = await this.enrichAccessibilityTreeForLlm(session.page, accessibilityTree);
 
-          const translated = await this.llmService.actionToInstruction({
-            action: data.type,
-            selector: data.selector || '',
-            elementHtml: data.elementHtml || '',
-            elementVisibleText:
-              typeof data.elementText === 'string' ? data.elementText : undefined,
-            ariaLabel: typeof data.ariaLabel === 'string' ? data.ariaLabel : undefined,
-            value: data.value,
-            pageAccessibilityTree: accessibilityTree,
-          });
+          const translated = await this.llmService.actionToInstruction(
+            {
+              action: data.type,
+              selector: data.selector || '',
+              elementHtml: data.elementHtml || '',
+              elementVisibleText:
+                typeof data.elementText === 'string' ? data.elementText : undefined,
+              ariaLabel: typeof data.ariaLabel === 'string' ? data.ariaLabel : undefined,
+              value: data.value,
+              pageAccessibilityTree: accessibilityTree,
+            },
+            { userId: session.userId },
+          );
 
           if (session.clerkDomCaptureBarrier !== barrierAtStart) {
             return;

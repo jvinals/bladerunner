@@ -77,13 +77,18 @@ cd apps/api && pnpm exec prisma migrate deploy
 
 ### LLM (AI prompt / instruct Playwright codegen)
 
-- **`GEMINI_API_KEY`** (required for AI prompt and instruct flows) — Google **Gemini** API key. Playwright snippets are generated only via Gemini using the server-side vision template. Create a key in [Google AI Studio](https://aistudio.google.com/).
-- **`GEMINI_INSTRUCTION_MODEL`** (optional) — Defaults to **`gemini-3-flash-preview`**. Override with any model id from [Google AI Studio](https://aistudio.google.com/) if needed.
-- **`GEMINI_INSTRUCTION_VERIFY`** (optional) — When **`true`** or unset, after vision codegen the API runs a **second** Gemini pass (text-only) to check the draft Playwright against the **same** Set-of-Marks manifest and accessibility snapshot and correct it if needed. Set to **`false`** or **`0`** to skip that pass (faster local iteration).
-- **`LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX`** (optional, default **16384**) — Vision captures a **full-page** JPEG for Gemini; if the decoded height exceeds this value, the API **downscales** the image uniformly (Set-of-Marks badges stay aligned). Lower this if the model rejects very large images.
-- **`LLM_VISION_FULL_PAGE_MAX_WIDTH_PX`** (optional) — When set, the API also downscales if the full-page JPEG width exceeds this value (same uniform resize as height).
+**Secrets** live only in **`.env`** (never in the database). **Settings → AI / LLM** in the web app stores **per-task** provider + model id (PostgreSQL `user_llm_preferences`); if unset, the server uses the env defaults below.
 
-Skip-replay suggestions and AI prompt **failure explanations** still use **`LLM_PROVIDER`** with **`OPENAI_API_KEY`** or **`ANTHROPIC_API_KEY`**.
+- **`GEMINI_API_KEY`** — Google **Gemini** (direct). Required when a routed task uses provider **Gemini**, or for env defaults for vision codegen / verify. Create a key in [Google AI Studio](https://aistudio.google.com/).
+- **`OPENAI_API_KEY`** — OpenAI (direct). Used when a task is set to **openai**, and as part of legacy defaults for text tasks.
+- **`ANTHROPIC_API_KEY`** — Anthropic (direct). Used when a task is set to **anthropic**.
+- **`OPENROUTER_API_KEY`** — [OpenRouter](https://openrouter.ai/) (OpenAI-compatible API) for many models (e.g. **Minimax** via slugs like `minimax/minimax-m2.5`). Optional: **`OPENROUTER_BASE_URL`** (default `https://openrouter.ai/api/v1`), **`OPENROUTER_HTTP_REFERER`** (recommended by OpenRouter for rankings).
+
+**Env defaults** (when the user has not saved Settings): **`GEMINI_INSTRUCTION_MODEL`** (optional, default **`gemini-3-flash-preview`**) for **`playwright_codegen`** and **`playwright_verify`**; **`LLM_PROVIDER`** (**`openai`** or **`anthropic`**) with **`OPENAI_MODEL`** / **`ANTHROPIC_MODEL`** for **`action_to_instruction`**, **`explain_ai_prompt_failure`**, and **`suggest_skip_after_change`**.
+
+- **`GEMINI_INSTRUCTION_VERIFY`** (optional) — When **`true`** or unset, after vision codegen the API runs a **second** pass (text-only DOM verify) using the **`playwright_verify`** provider/model from Settings. Set to **`false`** or **`0`** to skip (faster local iteration).
+- **`LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX`** (optional, default **16384**) — Vision captures a **full-page** JPEG; if the decoded height exceeds this value, the API **downscales** uniformly (Set-of-Marks badges stay aligned).
+- **`LLM_VISION_FULL_PAGE_MAX_WIDTH_PX`** (optional) — Same as height cap but for width.
 
 **After pulling new code:** always run **`pnpm migrate`** from `apps/api` (or `pnpm exec prisma migrate deploy`) so PostgreSQL matches `schema.prisma`. If the API logs **`invalid input value for enum "StepOrigin": "AUTOMATIC"`** (or recording shows **gaps** in step numbers like 1 → 6), pending migrations were not applied—run the command above against the same **`DATABASE_URL`** the API uses, then restart the API.
 
@@ -245,6 +250,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.18** — **LLM settings**: Per-user **Settings → AI / LLM** (provider + model per task) persisted in **`user_llm_preferences`**; supports **Gemini**, **OpenAI**, **Anthropic**, and **OpenRouter** (e.g. Minimax). API keys remain **`.env`-only**; vision codegen can use non-Gemini providers via the shared prompt + image path. **`@bladerunner/api` `0.6.27`**, **`@bladerunner/web` `0.7.15`**, **`@bladerunner/types` `0.2.4`**.
 - **0.10.17** — **LLM / vision**: AI prompt and instruct flows capture a **full-page** JPEG for Gemini (Set-of-Marks across the scrollable page), with optional **`LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX`** / **`LLM_VISION_FULL_PAGE_MAX_WIDTH_PX`** to cap oversized images via uniform downscaling. **`@bladerunner/api` `0.6.26`**.
 - **0.10.16** — **Runs / Add AI prompt step**: Removed **Raw model output (final)** from the drawer **`AiPromptProgressSections`** (section 3 still shows live stream + model thinking; section 4 is Playwright code). **`@bladerunner/web` `0.7.14`**.
 - **0.10.15** — **LLM / AI prompt**: Vision codegen always receives **Set-of-Marks manifest** + **Playwright CDP accessibility snapshot** (captured before badges) + **JPEG** + task; optional **`GEMINI_INSTRUCTION_VERIFY`** (default on) runs a **DOM verify** pass to fix draft Playwright against the same DOM text. **AI prompt review** modal can show draft, verify prompt, and final code. **`@bladerunner/api` `0.6.25`**, **`@bladerunner/web` `0.7.13`**.

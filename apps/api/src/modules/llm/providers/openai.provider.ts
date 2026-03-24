@@ -38,13 +38,15 @@ export class OpenAiProvider implements LlmProvider {
     const supportsReasoningEffort =
       this.model.includes('gpt-5') || /^o[0-9]/i.test(this.model);
 
+    const responseFormat = options?.responseFormat ?? 'json_object';
+
     const response = await this.client.chat.completions.create(
       {
         model: this.model,
         messages: openAiMessages,
         temperature: options?.temperature ?? 0.1,
         max_completion_tokens: maxCompletionTokens,
-        response_format: { type: 'json_object' },
+        ...(responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
         ...(options?.reasoningEffort != null && supportsReasoningEffort
           ? { reasoning_effort: options.reasoningEffort }
           : {}),

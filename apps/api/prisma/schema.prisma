@@ -153,3 +153,12 @@ model RunRecording {
   @@index([runId])
   @@map("run_recordings")
 }
+
+/// Per-user LLM routing (provider + model id per usage key). API keys stay in env only.
+model UserLlmPreferences {
+  userId          String   @id @map("user_id")
+  preferencesJson Json     @map("preferences_json")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("user_llm_preferences")
+}

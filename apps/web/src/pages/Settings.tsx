@@ -1,16 +1,48 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Settings as SettingsIcon, Globe, Bot, Bell, Server,
-  ExternalLink, Check, ChevronRight
+  ExternalLink, Check, ChevronRight, Sparkles,
 } from 'lucide-react';
+import { settingsApi } from '../lib/api';
 
 const TABS = [
   { id: 'workspace', label: 'Workspace', icon: SettingsIcon },
+  { id: 'ai', label: 'AI / LLM', icon: Sparkles },
   { id: 'integrations', label: 'Integrations', icon: Globe },
   { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'environments', label: 'Environments', icon: Server },
 ] as const;
+
+const LLM_USAGE_ROWS: { key: string; label: string }[] = [
+  { key: 'playwright_codegen', label: 'Generate Playwright from vision (AI prompt / instruct)' },
+  { key: 'playwright_verify', label: 'DOM verify pass (after draft codegen)' },
+  { key: 'action_to_instruction', label: 'Recording — action to instruction' },
+  { key: 'explain_ai_prompt_failure', label: 'Explain AI prompt test failure' },
+  { key: 'suggest_skip_after_change', label: 'Suggest steps to skip after edit' },
+];
+
+type LlmCap = {
+  hasGeminiKey: boolean;
+  hasOpenAiKey: boolean;
+  hasAnthropicKey: boolean;
+  hasOpenRouterKey: boolean;
+};
+
+function providerHasKey(caps: LlmCap, provider: string): boolean {
+  switch (provider) {
+    case 'gemini':
+      return caps.hasGeminiKey;
+    case 'openai':
+      return caps.hasOpenAiKey;
+    case 'anthropic':
+      return caps.hasAnthropicKey;
+    case 'openrouter':
+      return caps.hasOpenRouterKey;
+    default:
+      return false;
+  }
+}
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<string>('workspace');
@@ -49,10 +81,173 @@ export default function SettingsPage() {
         {/* Content */}
         <div className="flex-1 min-w-0">
           {activeTab === 'workspace' && <WorkspaceSettings />}
+          {activeTab === 'ai' && <AiLlmSettings />}
           {activeTab === 'integrations' && <IntegrationsSettings />}
           {activeTab === 'agents' && <AgentsSettings />}
           {activeTab === 'notifications' && <NotificationsSettings />}
           {activeTab === 'environments' && <EnvironmentsSettings />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AiLlmSettings() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<Record<string, { provider: string; model: string }>>({});
+  const [caps, setCaps] = useState<LlmCap | null>(null);
+  const [catalog, setCatalog] = useState<
+    Record<string, { label: string; suggestedModels: string[] }>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    settingsApi
+      .get()
+      .then((data) => {
+        if (cancelled) return;
+        const d = data as {
+          llm?: {
+            usage: Record<string, { provider: string; model: string }>;
+            capabilities: LlmCap;
+            providerCatalog: Record<string, { label: string; suggestedModels: string[] }>;
+          };
+        };
+        if (d.llm?.usage) setUsage({ ...d.llm.usage });
+        if (d.llm?.capabilities) setCaps(d.llm.capabilities);
+        if (d.llm?.providerCatalog) setCatalog(d.llm.providerCatalog);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load settings');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updateRow = (key: string, field: 'provider' | 'model', value: string) => {
+    setUsage((prev) => ({
+      ...prev,
+      [key]: {
+        provider: field === 'provider' ? value : prev[key]?.provider ?? 'gemini',
+        model: field === 'model' ? value : prev[key]?.model ?? '',
+      },
+    }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await settingsApi.update({ llm: { usage } });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-lg p-6 text-sm text-gray-500">Loading AI settings…</div>
+    );
+  }
+
+  const providerOptions = ['gemini', 'openai', 'anthropic', 'openrouter'] as const;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-100 rounded-lg p-6">
+        <h3 className="text-sm font-semibold text-gray-800 mb-1">Models by task</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Choose provider and model for each automation step. API keys are configured only in server{' '}
+          <code className="text-[11px] bg-gray-50 px-1 rounded">.env</code> — not stored here.
+        </p>
+        {error && (
+          <div className="mb-4 text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{error}</div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-500">
+                <th className="py-2 pr-3 font-medium">Task</th>
+                <th className="py-2 pr-3 font-medium">Provider</th>
+                <th className="py-2 pr-3 font-medium">Model id</th>
+                <th className="py-2 font-medium">Key</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LLM_USAGE_ROWS.map((row) => {
+                const u = usage[row.key];
+                const prov = u?.provider ?? 'gemini';
+                const suggestions = catalog[prov]?.suggestedModels ?? [];
+                const id = `llm-model-${row.key}`;
+                return (
+                  <tr key={row.key} className="border-b border-gray-50 align-top">
+                    <td className="py-3 pr-3 text-gray-700 max-w-[220px]">{row.label}</td>
+                    <td className="py-3 pr-3">
+                      <select
+                        value={prov}
+                        onChange={(e) => updateRow(row.key, 'provider', e.target.value)}
+                        className="w-full min-w-[120px] border border-gray-200 rounded-md px-2 py-1.5 text-gray-800 bg-white"
+                      >
+                        {providerOptions.map((p) => (
+                          <option key={p} value={p}>
+                            {catalog[p]?.label ?? p}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <input
+                        id={id}
+                        list={`${id}-list`}
+                        value={u?.model ?? ''}
+                        onChange={(e) => updateRow(row.key, 'model', e.target.value)}
+                        placeholder="Model id"
+                        className="w-full min-w-[180px] border border-gray-200 rounded-md px-2 py-1.5 text-gray-800 font-mono text-[11px]"
+                      />
+                      <datalist id={`${id}-list`}>
+                        {suggestions.map((m) => (
+                          <option key={m} value={m} />
+                        ))}
+                      </datalist>
+                    </td>
+                    <td className="py-3">
+                      {caps && (
+                        <span
+                          className={
+                            providerHasKey(caps, prov)
+                              ? 'text-[#56A34A] font-medium'
+                              : 'text-amber-600 font-medium'
+                          }
+                        >
+                          {providerHasKey(caps, prov) ? 'OK' : 'Missing key'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#4B90FF] text-white text-sm font-medium rounded-md hover:bg-blue-500 transition-colors disabled:opacity-50"
+          >
+            <Check size={14} /> {saving ? 'Saving…' : 'Save LLM settings'}
+          </button>
         </div>
       </div>
     </div>

@@ -2,8 +2,11 @@
  * Self-test: LLM skip-replay suggestion JSON parsing (no network).
  * Run: pnpm --filter @bladerunner/api run test:llm-suggest-skip
  */
+import { ConfigService } from '@nestjs/config';
+import { LlmConfigService } from './llm-config.service';
 import { LlmService } from './llm.service';
 import type { ChatMessage, LlmProvider } from './providers/llm-provider.interface';
+import type { PrismaService } from '../prisma/prisma.service';
 
 function makeProvider(responseText: string): LlmProvider {
   return {
@@ -13,8 +16,17 @@ function makeProvider(responseText: string): LlmProvider {
   };
 }
 
+function makeLlmService(): LlmService {
+  const mockConfig = new ConfigService({});
+  const mockPrisma = {
+    userLlmPreferences: { findUnique: async () => null },
+  } as unknown as PrismaService;
+  const llmConfig = new LlmConfigService(mockConfig, mockPrisma);
+  return new LlmService(mockConfig, llmConfig);
+}
+
 async function run() {
-  const svc = new LlmService();
+  const svc = makeLlmService();
 
   svc.setProvider(
     makeProvider(
@@ -46,7 +58,7 @@ async function run() {
     throw new Error('fenced JSON: unexpected result');
   }
 
-  const noProvider = new LlmService();
+  const noProvider = makeLlmService();
   const empty = await noProvider.suggestStepsToSkipAfterChange({
     anchor: { sequence: 1, instruction: 'x', action: 'CLICK', origin: 'MANUAL' },
     forwardSteps: [{ id: 'z', sequence: 2, instruction: 'y', action: 'CLICK', origin: 'MANUAL' }],
