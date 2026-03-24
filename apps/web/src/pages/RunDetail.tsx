@@ -563,6 +563,7 @@ export default function RunDetailPage() {
     advancePlaybackOne,
     advancePlaybackPrevious,
     advancePlaybackTo,
+    startPlaybackThenFirstAdvance,
     restartPlayback,
     lastAiPromptProgress,
     lastPlaybackProgress,
@@ -752,6 +753,20 @@ export default function RunDetailPage() {
   const showReplayChrome =
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
+  const playbackBodyForRun = useMemo(() => {
+    const skipRaw = playbackSkipUntilSeq.trim();
+    const skipNum = skipRaw === '' ? undefined : Number.parseInt(skipRaw, 10);
+    return buildStartPlaybackBody({
+      delayMs: playbackDelayMs,
+      autoClerkMode: playbackAutoClerkMode,
+      clerkOtpMode: playbackClerkOtpMode,
+      skipUntilSequence:
+        skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
+    });
+  }, [playbackDelayMs, playbackAutoClerkMode, playbackClerkOtpMode, playbackSkipUntilSeq]);
+
+  const canPlaybackNextStep = canPlayback && (!isPlaying || isPaused);
+
   useEffect(() => {
     if (playbackDetached) return;
     if (!currentFrame || !playbackCanvasRef.current) return;
@@ -776,30 +791,24 @@ export default function RunDetailPage() {
   const handleStartPlayback = useCallback(async () => {
     if (!id || !canPlayback) return;
     try {
-      const skipRaw = playbackSkipUntilSeq.trim();
-      const skipNum = skipRaw === '' ? undefined : Number.parseInt(skipRaw, 10);
-      await startPlayback(
-        id,
-        buildStartPlaybackBody({
-          delayMs: playbackDelayMs,
-          autoClerkMode: playbackAutoClerkMode,
-          clerkOtpMode: playbackClerkOtpMode,
-          skipUntilSequence:
-            skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
-        }),
-      );
+      await startPlayback(id, playbackBodyForRun);
     } catch (e) {
       console.error('Playback failed to start:', e);
     }
-  }, [
-    id,
-    canPlayback,
-    startPlayback,
-    playbackAutoClerkMode,
-    playbackClerkOtpMode,
-    playbackSkipUntilSeq,
-    playbackDelayMs,
-  ]);
+  }, [id, canPlayback, startPlayback, playbackBodyForRun]);
+
+  const handlePlaybackNext = useCallback(async () => {
+    if (!id || !canPlayback) return;
+    try {
+      if (!isPlaying) {
+        await startPlaybackThenFirstAdvance(id, playbackBodyForRun);
+      } else {
+        await advancePlaybackOne();
+      }
+    } catch (e) {
+      console.error('Playback next step failed:', e);
+    }
+  }, [id, canPlayback, isPlaying, startPlaybackThenFirstAdvance, advancePlaybackOne, playbackBodyForRun]);
 
   const handleDetachPlayback = useCallback(() => {
     if (!playbackSessionId) return;
@@ -1044,10 +1053,20 @@ export default function RunDetailPage() {
               </button>
               <button
                 type="button"
-                disabled={!isPlaying || !isPaused}
-                onClick={() => void advancePlaybackOne()}
+                disabled={!canPlaybackNextStep}
+                onClick={() => void handlePlaybackNext()}
                 className="flex w-[4.5rem] shrink-0 justify-center items-center gap-0.5 px-1.5 py-1.5 border border-indigo-200 text-indigo-800 text-[10px] font-medium rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Run the next step, then pause again"
+                title={
+                  !canPlayback
+                    ? 'No recorded steps or run not ready'
+                    : stepsQueryPending
+                      ? 'Loading steps…'
+                      : isPlaying && !isPaused
+                        ? 'Pause playback to step through, or wait for the current step to finish'
+                        : !isPlaying
+                          ? 'Start playback and run the first step, then pause after each step'
+                          : 'Run the next step, then pause again'
+                }
               >
                 <StepForward size={10} />
                 Next

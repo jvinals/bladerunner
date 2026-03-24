@@ -106,6 +106,15 @@ export class StartPlaybackDto {
   @IsInt()
   @Min(0)
   playThroughSequence?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Pause before the first recorded step (after Clerk pre-roll). Use with client advance-one to step from the start without continuous Play.',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  startPaused?: boolean;
 }
 
 export class ClerkAutoSignInRecordingDto {

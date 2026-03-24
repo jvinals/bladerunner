@@ -410,6 +410,7 @@ export class RunsController {
       skipUntilSequence: dto.skipUntilSequence,
       skipStepIds: dto.skipStepIds,
       playThroughSequence: dto.playThroughSequence,
+      startPaused: dto.startPaused,
     });
   }
 

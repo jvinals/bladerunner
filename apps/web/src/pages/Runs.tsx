@@ -141,6 +141,7 @@ export default function RunsPage() {
     advancePlaybackOne,
     advancePlaybackPrevious,
     advancePlaybackTo,
+    startPlaybackThenFirstAdvance,
     restartPlayback,
     lastAiPromptProgress,
     lastPlaybackProgress,
@@ -320,32 +321,45 @@ export default function RunsPage() {
     { isActive: isRecording && !isDetached && !isPlaying },
   );
 
+  const playbackBodyForSelectedRun = useMemo(() => {
+    const skipRaw = playbackSkipUntilSeq.trim();
+    const skipNum = skipRaw === '' ? undefined : Number.parseInt(skipRaw, 10);
+    return buildStartPlaybackBody({
+      delayMs: playbackDelayMs,
+      autoClerkMode: playbackAutoClerkMode,
+      clerkOtpMode: playbackClerkOtpMode,
+      skipUntilSequence:
+        skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
+    });
+  }, [playbackDelayMs, playbackAutoClerkMode, playbackClerkOtpMode, playbackSkipUntilSeq]);
+
   const handleStartPlaybackRuns = useCallback(async () => {
     if (!selectedRunId || !canPlaybackSelected) return;
     try {
-      const skipRaw = playbackSkipUntilSeq.trim();
-      const skipNum = skipRaw === '' ? undefined : Number.parseInt(skipRaw, 10);
-      await startPlayback(
-        selectedRunId,
-        buildStartPlaybackBody({
-          delayMs: playbackDelayMs,
-          autoClerkMode: playbackAutoClerkMode,
-          clerkOtpMode: playbackClerkOtpMode,
-          skipUntilSequence:
-            skipNum !== undefined && !Number.isNaN(skipNum) && skipNum >= 0 ? skipNum : undefined,
-        }),
-      );
+      await startPlayback(selectedRunId, playbackBodyForSelectedRun);
     } catch (err) {
       console.error('Playback failed to start:', err);
+    }
+  }, [selectedRunId, canPlaybackSelected, startPlayback, playbackBodyForSelectedRun]);
+
+  const handlePlaybackNextRuns = useCallback(async () => {
+    if (!selectedRunId || !canPlaybackSelected) return;
+    try {
+      if (!isPlaying) {
+        await startPlaybackThenFirstAdvance(selectedRunId, playbackBodyForSelectedRun);
+      } else {
+        await advancePlaybackOne();
+      }
+    } catch (err) {
+      console.error('Playback next step failed:', err);
     }
   }, [
     selectedRunId,
     canPlaybackSelected,
-    startPlayback,
-    playbackAutoClerkMode,
-    playbackClerkOtpMode,
-    playbackSkipUntilSeq,
-    playbackDelayMs,
+    isPlaying,
+    startPlaybackThenFirstAdvance,
+    advancePlaybackOne,
+    playbackBodyForSelectedRun,
   ]);
 
   const handleStepPlaybackRuns = useCallback(
@@ -1049,7 +1063,7 @@ export default function RunsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => void advancePlaybackOne()}
+                      onClick={() => void handlePlaybackNextRuns()}
                       className="flex w-[4.5rem] shrink-0 justify-center items-center gap-0.5 px-1.5 py-1 border border-indigo-200 text-indigo-800 text-[10px] font-medium rounded-md hover:bg-indigo-50"
                       title="Run the next step, then pause again"
                     >
@@ -1221,6 +1235,26 @@ export default function RunsPage() {
               >
                 <Play size={14} className="fill-white" />
                 Play
+              </button>
+              <button
+                type="button"
+                disabled={!canPlaybackSelected || isPlaying}
+                onClick={() => void handlePlaybackNextRuns()}
+                title={
+                  !selectedRunId
+                    ? 'Select a run first'
+                    : selectedRun?.status === 'RECORDING'
+                      ? 'Wait until recording finishes'
+                      : steps.length === 0
+                        ? 'This run has no steps yet'
+                        : 'Start playback and run the first step, then pause after each step (step-through)'
+                }
+                className={`shrink-0 flex items-center justify-center gap-1.5 px-3 py-2.5 border border-indigo-200 text-indigo-800 text-xs font-semibold rounded-md hover:bg-indigo-50 transition-colors ${
+                  !canPlaybackSelected || isPlaying ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
+                }`}
+              >
+                <StepForward size={14} />
+                Next
               </button>
               {canPlaybackSelected && !isPlaying && (
                 <button

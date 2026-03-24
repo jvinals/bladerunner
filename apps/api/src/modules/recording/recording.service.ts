@@ -128,6 +128,11 @@ export type StartPlaybackServiceOpts = {
   skipStepIds?: string[];
   /** Stop playback after this step sequence completes (inclusive). Omit = run all steps. */
   playThroughSequence?: number;
+  /**
+   * When true, pause before executing the first recorded step (after Clerk pre-roll). Clients typically call
+   * `advance-one` to run step-by-step from the beginning without pressing Play first.
+   */
+  startPaused?: boolean;
 };
 
 export interface RecordingSession {
@@ -194,6 +199,8 @@ export interface PlaybackSession {
   pauseAfterNextStepCompletes?: boolean;
   /** After resume, pause when a step with sequence >= this completes (advance-to). */
   pauseAfterSequenceInclusive?: number | null;
+  /** When true, emit `playback_paused` before the first step iteration (then clear). Used with `startPaused` on start. */
+  pauseBeforeFirstRecordedStepPending?: boolean;
   /**
    * Set while a Playwright-heavy step runs (AI prompt codegen, recorded step, Clerk auto sign-in).
    * `stopPlayback` awaits this before `browser.close()` so `executePwCode` is not torn down mid-flight.
@@ -2424,6 +2431,7 @@ export class RecordingService extends EventEmitter {
           opts?.playThroughSequence != null && Number.isFinite(opts.playThroughSequence)
             ? Math.floor(opts.playThroughSequence)
             : null,
+        pauseBeforeFirstRecordedStepPending: opts?.startPaused === true,
       };
 
       this.playbackSessions.set(playbackSessionId, session);
@@ -2658,6 +2666,16 @@ export class RecordingService extends EventEmitter {
       for (const step of steps) {
         if (ctx.playThroughSequence != null && step.sequence > ctx.playThroughSequence) {
           break;
+        }
+
+        if (session.pauseBeforeFirstRecordedStepPending) {
+          session.pauseBeforeFirstRecordedStepPending = false;
+          session.paused = true;
+          this.emit('status', playbackSessionId, {
+            status: 'playback_paused',
+            runId: playbackSessionId,
+            sourceRunId,
+          });
         }
 
         await this.waitUntilPlaybackNotPaused(session);

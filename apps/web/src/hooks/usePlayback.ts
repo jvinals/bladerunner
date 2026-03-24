@@ -49,6 +49,11 @@ export interface UsePlaybackReturn {
   advancePlaybackPrevious: (recordedSteps: { sequence: number }[]) => Promise<void>;
   /** Paused only: run until step sequence completes, then pause */
   advancePlaybackTo: (stopAfterSequence: number) => Promise<void>;
+  /**
+   * Start playback paused before the first recorded step, then run that step and pause again (same as Play + first Next).
+   * Use when the user clicks Next before any session exists.
+   */
+  startPlaybackThenFirstAdvance: (runId: string, opts?: StartPlaybackBody) => Promise<void>;
   /** Stop and start a new session with the same options */
   restartPlayback: () => Promise<void>;
   /** Latest `aiPromptTestProgress` for the source run (playback socket); filter by `stepId` in UI. */
@@ -87,6 +92,8 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
   const [playbackSocketConnected, setPlaybackSocketConnected] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
+  /** After `startPlaybackThenFirstAdvance`, auto-call `advance-one` on first `playback_paused` (or on socket connect if already paused). */
+  const autoAdvanceAfterInitialPauseRef = useRef(false);
   const activeSessionRef = useRef<string | null>(null);
   /** Source run id for filtering `aiPromptTestProgress` (payload.runId is source run, not playback session). */
   const playbackSourceRunIdRef = useRef<string | null>(null);
@@ -105,6 +112,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     socketRef.current = socket;
 
     const teardownAfterSocketFailure = (message: string) => {
+      autoAdvanceAfterInitialPauseRef.current = false;
       setPlaybackError(message);
       setIsPlaying(false);
       setIsPaused(false);
@@ -122,6 +130,20 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     socket.on('connect', () => {
       setPlaybackSocketConnected(true);
       socket.emit('join', { runId: sessionId });
+      /** Recover if `playback_paused` was emitted before the client finished connecting. */
+      if (autoAdvanceAfterInitialPauseRef.current) {
+        void runsApi
+          .getPlaybackSession(sessionId)
+          .then((snap) => {
+            if (!autoAdvanceAfterInitialPauseRef.current || !snap?.paused) return;
+            autoAdvanceAfterInitialPauseRef.current = false;
+            void runsApi.advancePlaybackOne(sessionId).catch((e) => {
+              const msg = e instanceof Error ? e.message : String(e);
+              setPlaybackError(msg);
+            });
+          })
+          .catch(() => {});
+      }
     });
 
     socket.on('connect_error', (err: Error) => {
@@ -172,6 +194,13 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       if (data.status === 'playback_paused') {
         setIsPaused(true);
         setStatus('playback_paused');
+        if (autoAdvanceAfterInitialPauseRef.current) {
+          autoAdvanceAfterInitialPauseRef.current = false;
+          void runsApi.advancePlaybackOne(sessionId).catch((e) => {
+            const msg = e instanceof Error ? e.message : String(e);
+            setPlaybackError(msg);
+          });
+        }
         return;
       }
       if (data.status === 'playback') {
@@ -225,6 +254,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
 
   const startPlayback = useCallback(
     async (runId: string, opts?: StartPlaybackBody) => {
+      autoAdvanceAfterInitialPauseRef.current = false;
       setPlaybackError(null);
       setCompletedSequences(new Set());
       setHighlightSequence(null);
@@ -250,9 +280,39 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     [bindSocket],
   );
 
+  const startPlaybackThenFirstAdvance = useCallback(
+    async (runId: string, opts?: StartPlaybackBody) => {
+      autoAdvanceAfterInitialPauseRef.current = true;
+      setPlaybackError(null);
+      setCompletedSequences(new Set());
+      setHighlightSequence(null);
+      setCurrentFrame(null);
+      setIsPaused(false);
+      try {
+        const result = await runsApi.startPlayback(runId, { ...opts, startPaused: true });
+        setPlaybackSessionId(result.playbackSessionId);
+        setSourceRunId(result.sourceRunId);
+        setIsPlaying(true);
+        setStatus('playback');
+        bindSocket(result.playbackSessionId, result.sourceRunId);
+      } catch (e) {
+        autoAdvanceAfterInitialPauseRef.current = false;
+        const msg = e instanceof Error ? e.message : String(e);
+        setPlaybackError(msg);
+        setIsPlaying(false);
+        setIsPaused(false);
+        setStatus('idle');
+        setPlaybackSessionId(null);
+        setSourceRunId(null);
+      }
+    },
+    [bindSocket],
+  );
+
   const stopPlayback = useCallback(async () => {
     const id = playbackSessionId;
     if (!id) return;
+    autoAdvanceAfterInitialPauseRef.current = false;
     try {
       await runsApi.stopPlayback(id);
     } catch {
@@ -316,6 +376,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       if (nextSeq == null) return;
       const target = previousPlayThroughTarget(completedSequences, nextSeq);
       if (target == null) return;
+      autoAdvanceAfterInitialPauseRef.current = false;
       setPlaybackError(null);
       try {
         const snap = await runsApi.getPlaybackSession(id);
@@ -366,6 +427,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
   const restartPlayback = useCallback(async () => {
     const id = playbackSessionId;
     if (!id) return;
+    autoAdvanceAfterInitialPauseRef.current = false;
     setPlaybackError(null);
     try {
       const result = await runsApi.restartPlayback(id);
@@ -415,6 +477,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     advancePlaybackOne,
     advancePlaybackPrevious,
     advancePlaybackTo,
+    startPlaybackThenFirstAdvance,
     restartPlayback,
     lastAiPromptProgress,
     lastPlaybackProgress,

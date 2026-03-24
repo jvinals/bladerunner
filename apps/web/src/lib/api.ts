@@ -13,6 +13,8 @@ export type StartPlaybackBody = {
   skipStepIds?: string[];
   /** Stop after this step sequence (inclusive). Pair with `skipUntilSequence` to play one step only. */
   playThroughSequence?: number;
+  /** Pause before the first recorded step; use with advance-one to step from the start. */
+  startPaused?: boolean;
 };
 
 export type AutoClerkPlaybackMode = 'default' | 'on' | 'off';

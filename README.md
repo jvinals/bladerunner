@@ -242,6 +242,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.11** — **Playback / Next before Play**: **`startPaused`** on **`POST .../playback/start`** pauses before the first recorded step (after Clerk pre-roll). **Next** on **Runs** and **Run detail** starts a session in that mode and auto-runs the first step, then **advance-one** pauses after each step as today. **`@bladerunner/api` `0.6.23`**, **`@bladerunner/web` `0.7.10`**.
 - **0.10.10** — **AI prompt step controls (Runs + Run detail)**: Expanded **StepCard** matches the **Add AI prompt step** drawer — **Generate**, **Run on page**, **Reset**, optional **Full pipeline**, shared **`AiPromptProgressSections`**, merged **`aiPromptTestProgress`** / **`lastAiPromptProgress`** per step, and **`playbackSocketConnected`** gating. **`@bladerunner/web` `0.7.9`**.
 - **0.10.9** — **Playback / AI prompt steps**: During live replay, each **AI prompt** step row shows **LLM** and **Playwright** status icons (idle grey → blinking blue/grey while active → solid blue when done). **`usePlayback`** subscribes to **`aiPromptTestProgress`** on the playback socket. **`@bladerunner/web` `0.7.8`**.
 - **0.10.8** — **Playback**: Detaching live replay to a window now **hides the inline preview** and shows **Reattach here** (same pattern as recording detach) on **Runs** and **Run detail**; toolbar detach is disabled while detached. **`@bladerunner/web` `0.7.7`**.
