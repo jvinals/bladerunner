@@ -566,6 +566,7 @@ export default function RunDetailPage() {
     restartPlayback,
     lastAiPromptProgress,
     lastPlaybackProgress,
+    playbackSocketConnected,
   } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   /** Clear stepped-advance input whenever there is no active playback session (covers stop → idle, complete, navigate back). */
@@ -1346,6 +1347,20 @@ export default function RunDetailPage() {
                             : undefined
                         }
                         onStepMutationSuccess={promptAfterStepChange}
+                        aiPromptLiveProgress={
+                          id &&
+                          playbackSessionId &&
+                          playbackSourceRunId === id &&
+                          lastAiPromptProgress?.runId === playbackSourceRunId &&
+                          lastAiPromptProgress?.stepId === step.id
+                            ? lastAiPromptProgress
+                            : null
+                        }
+                        aiPromptSocketConnected={
+                          id && playbackSessionId && playbackSourceRunId === id
+                            ? playbackSocketConnected
+                            : true
+                        }
                       />
                     </div>
                   );
@@ -1452,6 +1467,20 @@ export default function RunDetailPage() {
                             : undefined
                         }
                         onStepMutationSuccess={promptAfterStepChange}
+                        aiPromptLiveProgress={
+                          id &&
+                          playbackSessionId &&
+                          playbackSourceRunId === id &&
+                          lastAiPromptProgress?.runId === playbackSourceRunId &&
+                          lastAiPromptProgress?.stepId === step.id
+                            ? lastAiPromptProgress
+                            : null
+                        }
+                        aiPromptSocketConnected={
+                          id && playbackSessionId && playbackSourceRunId === id
+                            ? playbackSocketConnected
+                            : true
+                        }
                       />
                     </div>
                   );

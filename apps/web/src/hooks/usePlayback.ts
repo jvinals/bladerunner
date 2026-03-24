@@ -55,6 +55,8 @@ export interface UsePlaybackReturn {
   lastAiPromptProgress: AiPromptTestProgressPayload | null;
   /** Latest `playbackProgress` payload (for `transcript` / phase boundaries). */
   lastPlaybackProgress: PlaybackProgressPayload | null;
+  /** True while the playback recording socket is connected (for AI prompt test buttons). */
+  playbackSocketConnected: boolean;
 }
 
 function disconnectSocket(socketRef: MutableRefObject<Socket | null>, sessionId: string | null) {
@@ -82,6 +84,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [lastAiPromptProgress, setLastAiPromptProgress] = useState<AiPromptTestProgressPayload | null>(null);
   const [lastPlaybackProgress, setLastPlaybackProgress] = useState<PlaybackProgressPayload | null>(null);
+  const [playbackSocketConnected, setPlaybackSocketConnected] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const activeSessionRef = useRef<string | null>(null);
@@ -96,6 +99,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     playbackSourceRunIdRef.current = sourceRunIdForEvents;
     setLastAiPromptProgress(null);
     setLastPlaybackProgress(null);
+    setPlaybackSocketConnected(false);
 
     const socket = createRecordingSocket();
     socketRef.current = socket;
@@ -105,6 +109,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       setIsPlaying(false);
       setIsPaused(false);
       setStatus('idle');
+      setPlaybackSocketConnected(false);
       setLastAiPromptProgress(null);
       setLastPlaybackProgress(null);
       disconnectSocket(socketRef, sessionId);
@@ -115,6 +120,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     };
 
     socket.on('connect', () => {
+      setPlaybackSocketConnected(true);
       socket.emit('join', { runId: sessionId });
     });
 
@@ -180,6 +186,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
         }
         setIsPlaying(false);
         setIsPaused(false);
+        setPlaybackSocketConnected(false);
         setLastAiPromptProgress(null);
         setLastPlaybackProgress(null);
         disconnectSocket(socketRef, sessionId);
@@ -193,6 +200,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
       if (data.status === 'completed' || data.status === 'stopped') {
         setIsPlaying(false);
         setIsPaused(false);
+        setPlaybackSocketConnected(false);
         setLastAiPromptProgress(null);
         setLastPlaybackProgress(null);
         disconnectSocket(socketRef, sessionId);
@@ -211,7 +219,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     });
 
     socket.on('disconnect', () => {
-      /* keep state; user may see last frame */
+      setPlaybackSocketConnected(false);
     });
   }, []);
 
@@ -259,6 +267,7 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     setPlaybackSessionId(null);
     setSourceRunId(null);
     playbackSourceRunIdRef.current = null;
+    setPlaybackSocketConnected(false);
     setLastAiPromptProgress(null);
     setLastPlaybackProgress(null);
     setHighlightSequence(null);
@@ -409,5 +418,6 @@ export function usePlayback(options?: UsePlaybackOptions): UsePlaybackReturn {
     restartPlayback,
     lastAiPromptProgress,
     lastPlaybackProgress,
+    playbackSocketConnected,
   };
 }

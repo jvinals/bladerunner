@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useCallback } from 'react';
+import { useState, useEffect, useRef, forwardRef, useCallback, useMemo } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   ChevronDown,
@@ -19,10 +19,16 @@ import {
   FlaskConical,
   Wand2,
   Terminal,
+  Loader2,
 } from 'lucide-react';
 import { runsApi } from '@/lib/api';
 import type { CheckpointData } from '@/components/ui/CheckpointDivider';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
+import type { AiPromptTestProgressPayload } from '@/hooks/useRecording';
+import { parseAiPromptLastLlmTranscript } from '@/lib/aiPromptLastLlmTranscript';
+import { aiPromptCodegenOkForInstruction } from '@/lib/aiPromptStepMetadata';
+import { buildAiPromptDrawerSections } from '@/lib/buildAiPromptDrawerSections';
+import { AiPromptProgressSections } from '@/components/ui/AiPromptProgressSections';
 
 export type PlaybackHighlight = 'past' | 'current' | 'future';
 
@@ -55,7 +61,7 @@ interface StepCardProps {
     onPlayThisStepOnly: () => void;
     disabled?: boolean;
   };
-  /** AI prompt step: PATCH + Test Step (requires active recording or playback session for test). */
+  /** AI prompt step: PATCH + Generate / Run / Reset (requires active recording or playback session for test). */
   aiPromptStep?: {
     runId: string;
     stepId: string;
@@ -76,6 +82,13 @@ interface StepCardProps {
   };
   /** Live replay: LLM vs Playwright progress for AI prompt steps only. */
   playbackAiPromptStatus?: PlaybackAiPromptStatus;
+  /** Live AI prompt test progress for this step (recording or playback socket). */
+  aiPromptLiveProgress?: AiPromptTestProgressPayload | null;
+  /**
+   * Recording/playback socket connected — when false, disable Generate / Run / Reset.
+   * Omit or leave true when not applicable (backward compatible).
+   */
+  aiPromptSocketConnected?: boolean;
 }
 
 const ACTION_ICONS: Record<string, typeof Mouse> = {
@@ -186,6 +199,8 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
     playbackExclusion,
     onStepMutationSuccess,
     playbackAiPromptStatus,
+    aiPromptLiveProgress = null,
+    aiPromptSocketConnected = true,
   },
   ref,
 ) {
@@ -244,6 +259,69 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
       setAiBusy(false);
     }
   }, [aiPromptStep, aiTestFailureDialog]);
+
+  const aiPromptDrawerSections = useMemo(
+    () =>
+      buildAiPromptDrawerSections({
+        cached: parseAiPromptLastLlmTranscript(metadata),
+        metaPw: playwrightCode.trim(),
+        live: aiPromptLiveProgress,
+        busyWithNoLive: aiBusy && !aiPromptLiveProgress,
+      }),
+    [metadata, playwrightCode, aiPromptLiveProgress, aiBusy],
+  );
+
+  const canRunPlaywrightOnPage = aiPromptCodegenOkForInstruction(metadata, promptDraft.trim());
+
+  const runAiPromptPhase = useCallback(
+    async (phase: 'generate' | 'run' | 'full') => {
+      if (!aiPromptStep) return;
+      setAiBusy(true);
+      setAiError(null);
+      setAiTestFailureDialog(null);
+      try {
+        const res = await runsApi.testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
+          instruction: promptDraft.trim(),
+          phase,
+        });
+        if (res.cancelled) return;
+        if (!res.ok) {
+          if (res.failureHelp) {
+            setAiTestFailureDialog({
+              error: res.error || 'Test failed',
+              explanation: res.failureHelp.explanation,
+              suggestedPrompt: res.failureHelp.suggestedPrompt,
+            });
+          } else {
+            setAiError(res.error || 'Test failed');
+          }
+          return;
+        }
+        aiPromptStep.onUpdated();
+      } catch (e) {
+        setAiError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setAiBusy(false);
+      }
+    },
+    [aiPromptStep, promptDraft],
+  );
+
+  const handleAiPromptReset = useCallback(async () => {
+    if (!aiPromptStep || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      await runsApi.resetAiPromptTest(aiPromptStep.runId, aiPromptStep.stepId);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiBusy(false);
+    }
+  }, [aiPromptStep, aiBusy]);
+
+  const aiRemoteActionsDisabled =
+    aiBusy || !aiPromptStep?.canTestLive || !aiPromptSocketConnected;
 
   const Icon = ACTION_ICONS[action] || Hand;
   const isAiPromptStep =
@@ -450,6 +528,11 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
               </p>
               {isAiPromptStep ? (
                 <>
+                  <p className="text-[9px] text-gray-500 leading-snug">
+                    <strong>Save prompt</strong> updates stored text. <strong>Generate</strong> runs vision + codegen.{' '}
+                    <strong>Run on page</strong> executes generated Playwright on the live browser (after a successful
+                    Generate for this exact text). <strong>Reset</strong> undoes test side effects.
+                  </p>
                   <textarea
                     value={promptDraft}
                     onChange={(e) => setPromptDraft(e.target.value)}
@@ -461,7 +544,12 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      disabled={aiBusy || !promptDraft.trim() || promptDraft.trim() === instruction}
+                      disabled={
+                        aiBusy ||
+                        !promptDraft.trim() ||
+                        promptDraft.trim() === instruction ||
+                        !aiPromptSocketConnected
+                      }
                       onClick={() => {
                         setAiBusy(true);
                         setAiError(null);
@@ -484,46 +572,55 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                     </button>
                     <button
                       type="button"
-                      disabled={aiBusy || !aiPromptStep.canTestLive}
-                      title={
-                        aiPromptStep.canTestLive
-                          ? 'Run LLM + vision on the current browser page'
-                          : 'Start recording or playback for this run to test'
-                      }
-                      onClick={() => {
-                        setAiBusy(true);
-                        setAiError(null);
-                        setAiTestFailureDialog(null);
-                        void runsApi
-                          .testAiPromptStep(aiPromptStep.runId, aiPromptStep.stepId, {
-                            instruction: promptDraft.trim(),
-                            phase: 'full',
-                          })
-                          .then((res) => {
-                            if (res.cancelled) return;
-                            if (!res.ok) {
-                              if (res.failureHelp) {
-                                setAiTestFailureDialog({
-                                  error: res.error || 'Test failed',
-                                  explanation: res.failureHelp.explanation,
-                                  suggestedPrompt: res.failureHelp.suggestedPrompt,
-                                });
-                              } else {
-                                setAiError(res.error || 'Test failed');
-                              }
-                              return;
-                            }
-                            aiPromptStep.onUpdated();
-                          })
-                          .catch((e) => {
-                            setAiError(e instanceof Error ? e.message : String(e));
-                          })
-                          .finally(() => setAiBusy(false));
-                      }}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      disabled={aiRemoteActionsDisabled || !promptDraft.trim()}
+                      title="Vision + LLM: generate Playwright only (does not run on the page yet)"
+                      onClick={() => void runAiPromptPhase('generate')}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
                     >
                       <FlaskConical size={12} />
-                      {aiBusy ? 'Testing…' : 'Test step'}
+                      Generate
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        aiRemoteActionsDisabled ||
+                        !promptDraft.trim() ||
+                        !canRunPlaywrightOnPage
+                      }
+                      title={
+                        canRunPlaywrightOnPage
+                          ? 'Run the generated Playwright on the live browser'
+                          : 'Generate Playwright for this prompt first (same text as the last successful codegen)'
+                      }
+                      onClick={() => void runAiPromptPhase('run')}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <Play size={12} />
+                      Run on page
+                    </button>
+                    <button
+                      type="button"
+                      disabled={aiRemoteActionsDisabled}
+                      title="Undo test side effects (or restore prior checkpoint)"
+                      onClick={() => void handleAiPromptReset()}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <RotateCcw size={12} />
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      disabled={aiRemoteActionsDisabled || !promptDraft.trim()}
+                      title={
+                        aiPromptStep.canTestLive
+                          ? 'Run full pipeline: generate + run on page in one step'
+                          : 'Start recording or playback for this run to test'
+                      }
+                      onClick={() => void runAiPromptPhase('full')}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <FlaskConical size={12} />
+                      Full pipeline
                     </button>
                     <button
                       type="button"
@@ -548,6 +645,22 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                       Revert to Playwright
                     </button>
                   </div>
+                  {aiBusy ? (
+                    <div
+                      className="mt-2 flex items-stretch gap-2 rounded border border-teal-100 bg-teal-50/50 px-2 py-1.5"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin self-center text-teal-600" aria-hidden />
+                      <p
+                        className="min-w-0 flex-1 text-[10px] text-gray-800 leading-snug"
+                        title={aiPromptLiveProgress?.message ?? undefined}
+                      >
+                        {aiPromptLiveProgress?.message || 'Starting test…'}
+                      </p>
+                    </div>
+                  ) : null}
+                  <AiPromptProgressSections sections={aiPromptDrawerSections} className="mt-2 space-y-3" />
                 </>
               ) : (
                 <>
@@ -665,7 +778,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                 </Dialog.Close>
                 <button
                   type="button"
-                  disabled={aiBusy}
+                  disabled={aiBusy || !aiPromptSocketConnected}
                   onClick={() => void adoptSuggestedAiPrompt()}
                   className="inline-flex items-center gap-1.5 rounded-md border border-teal-500 bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-40"
                 >

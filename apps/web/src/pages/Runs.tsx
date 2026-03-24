@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import {
@@ -10,10 +10,16 @@ import {
 } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
-import { LlmVisionScreenshotPreview } from '@/components/ui/LlmVisionScreenshotPreview';
+import { AiPromptProgressSections } from '@/components/ui/AiPromptProgressSections';
 import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
 import { useRecording, type AiPromptTestProgressPayload } from '@/hooks/useRecording';
 import { parseAiPromptLastLlmTranscript } from '@/lib/aiPromptLastLlmTranscript';
+import {
+  aiPromptBothPhasesOkForInstruction,
+  aiPromptCodegenOkForInstruction,
+  aiPromptRunOkForInstruction,
+} from '@/lib/aiPromptStepMetadata';
+import { buildAiPromptDrawerSections } from '@/lib/buildAiPromptDrawerSections';
 import { useSkipReplayAfterStepChange } from '@/hooks/useSkipReplayAfterStepChange';
 import { usePlayback, type PlaybackProgressPayload } from '@/hooks/usePlayback';
 import {
@@ -36,30 +42,6 @@ import {
 } from 'lucide-react';
 
 const AI_STEP_DRAFT_PLACEHOLDER = '(AI prompt — edit below)';
-
-function aiPromptCodegenOkForInstruction(meta: unknown, instr: string): boolean {
-  if (!meta || typeof meta !== 'object') return false;
-  const m = meta as Record<string, unknown>;
-  const t = instr.trim();
-  return (
-    m.lastAiPromptCodegenOk === true &&
-    (m.lastAiPromptCodegenInstruction as string | undefined)?.trim() === t
-  );
-}
-
-function aiPromptRunOkForInstruction(meta: unknown, instr: string): boolean {
-  if (!meta || typeof meta !== 'object') return false;
-  const m = meta as Record<string, unknown>;
-  const t = instr.trim();
-  return (
-    m.lastAiPromptRunOk === true &&
-    (m.lastAiPromptRunInstruction as string | undefined)?.trim() === t
-  );
-}
-
-function aiPromptBothPhasesOkForInstruction(meta: unknown, instr: string): boolean {
-  return aiPromptCodegenOkForInstruction(meta, instr) && aiPromptRunOkForInstruction(meta, instr);
-}
 
 export default function RunsPage() {
   const { user } = useUser();
@@ -162,6 +144,7 @@ export default function RunsPage() {
     restartPlayback,
     lastAiPromptProgress,
     lastPlaybackProgress,
+    playbackSocketConnected,
   } = usePlayback({ onPlaybackProgress: invalidateStepsAfterPlaybackStep });
 
   const stepRefsPlayback = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -796,75 +779,21 @@ export default function RunsPage() {
     return aiPromptTestProgress;
   }, [aiPromptTestProgress, aiStepCreatedId, runId]);
 
-  const aiPromptDrawerSections = useMemo(() => {
-    const step = steps.find((s) => s.id === aiStepCreatedId);
-    const cached = step ? parseAiPromptLastLlmTranscript(step.metadata) : null;
-    const metaPw = step?.playwrightCode?.trim() ?? '';
-
-    const live = aiPromptProgressBlock;
-    const streamingPartial = live?.streamingPartial === true;
-
-    if (live) {
-      return {
-        screenshotBase64: live.screenshotBase64 ?? cached?.screenshotBase64,
-        promptText: (live.fullUserPrompt || live.promptSent || cached?.userPrompt || '').trim(),
-        thinking: streamingPartial
-          ? cached?.thinking
-          : (live.thinking ?? cached?.thinking),
-        rawResponse: streamingPartial
-          ? (cached?.rawResponse ?? '').trim()
-          : (live.rawResponse ?? cached?.rawResponse ?? '').trim(),
-        playwrightCode: (live.playwrightCode || metaPw).trim(),
-        streamingPartial,
-        liveRawStream: streamingPartial ? (live.rawResponse ?? '').trim() : '',
-        liveThinkingStream: streamingPartial ? (live.thinking ?? '').trim() : '',
-      };
-    }
-
-    if (aiStepBusy) {
-      return {
-        screenshotBase64: undefined,
-        promptText: '',
-        thinking: undefined,
-        rawResponse: '',
-        playwrightCode: '',
-        streamingPartial: false,
-        liveRawStream: '',
-        liveThinkingStream: '',
-      };
-    }
-
-    return {
-      screenshotBase64: cached?.screenshotBase64,
-      promptText: (cached?.userPrompt ?? '').trim(),
-      thinking: cached?.thinking,
-      rawResponse: (cached?.rawResponse ?? '').trim(),
-      playwrightCode: metaPw,
-      streamingPartial: false,
-      liveRawStream: '',
-      liveThinkingStream: '',
-    };
-  }, [steps, aiStepCreatedId, aiPromptProgressBlock, aiStepBusy, aiStepFailure]);
-
   const aiDrawerStep = useMemo(() => steps.find((s) => s.id === aiStepCreatedId), [steps, aiStepCreatedId]);
+  const aiPromptDrawerSections = useMemo(
+    () =>
+      buildAiPromptDrawerSections({
+        cached: aiDrawerStep ? parseAiPromptLastLlmTranscript(aiDrawerStep.metadata) : null,
+        metaPw: aiDrawerStep?.playwrightCode?.trim() ?? '',
+        live: aiPromptProgressBlock,
+        busyWithNoLive: aiStepBusy && !aiPromptProgressBlock,
+      }),
+    [aiDrawerStep, aiPromptProgressBlock, aiStepBusy],
+  );
   const canRunPlaywrightOnPage = aiPromptCodegenOkForInstruction(
     aiDrawerStep?.metadata,
     aiStepPrompt.trim(),
   );
-
-  const aiPromptAnswerStreamScrollRef = useRef<HTMLPreElement>(null);
-  const aiPromptThoughtStreamScrollRef = useRef<HTMLPreElement>(null);
-  useLayoutEffect(() => {
-    if (!aiPromptDrawerSections.streamingPartial) return;
-    const answerEl = aiPromptAnswerStreamScrollRef.current;
-    const thoughtEl = aiPromptThoughtStreamScrollRef.current;
-    if (answerEl) answerEl.scrollTop = answerEl.scrollHeight;
-    if (thoughtEl) thoughtEl.scrollTop = thoughtEl.scrollHeight;
-  }, [
-    aiPromptDrawerSections.streamingPartial,
-    aiPromptDrawerSections.liveRawStream,
-    aiPromptDrawerSections.liveThinkingStream,
-  ]);
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
@@ -1609,6 +1538,34 @@ export default function RunsPage() {
                           : undefined
                       }
                       onStepMutationSuccess={promptAfterStepChange}
+                      aiPromptLiveProgress={
+                        effectiveRunId &&
+                        step.runId === effectiveRunId &&
+                        isRecording &&
+                        runId === effectiveRunId &&
+                        aiPromptTestProgress &&
+                        aiPromptTestProgress.runId === runId &&
+                        aiPromptTestProgress.stepId === step.id
+                          ? aiPromptTestProgress
+                          : effectiveRunId &&
+                              step.runId === effectiveRunId &&
+                              playbackSessionId &&
+                              playbackSourceRunId === effectiveRunId &&
+                              lastAiPromptProgress &&
+                              lastAiPromptProgress.runId === playbackSourceRunId &&
+                              lastAiPromptProgress.stepId === step.id
+                            ? lastAiPromptProgress
+                            : null
+                      }
+                      aiPromptSocketConnected={
+                        !effectiveRunId || step.runId !== effectiveRunId
+                          ? true
+                          : isRecording && runId === effectiveRunId
+                            ? socketConnected
+                            : playbackSessionId && playbackSourceRunId === effectiveRunId
+                              ? playbackSocketConnected
+                              : true
+                      }
                     />
                   </div>
                 );
@@ -1781,82 +1738,7 @@ export default function RunsPage() {
                   {aiStepError}
                 </p>
               ) : null}
-              <div className="mt-4 space-y-3">
-                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">1. Viewport sent to the vision model</p>
-                  <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
-                    JPEG attached to the vision API for this run — click to enlarge.
-                  </p>
-                  {aiPromptDrawerSections.screenshotBase64 ? (
-                    <LlmVisionScreenshotPreview
-                      b64={aiPromptDrawerSections.screenshotBase64}
-                      modalTitle="Vision input — full resolution"
-                    />
-                  ) : (
-                    <p className="text-[10px] text-gray-400 italic">—</p>
-                  )}
-                </div>
-                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">2. Prompt sent to the LLM</p>
-                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-                    {aiPromptDrawerSections.promptText || '—'}
-                  </pre>
-                </div>
-                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">3. Model Thinking</p>
-                  {aiPromptDrawerSections.streamingPartial ? (
-                    <div
-                      className="mb-2 rounded border border-teal-200/70 bg-teal-50/40 p-2"
-                      role="log"
-                      aria-label="Live model streaming output"
-                    >
-                      <p className="text-[9px] font-medium text-teal-900 mb-1.5">Live streaming</p>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <p className="text-[9px] font-medium text-gray-600 mb-0.5">Answer / Playwright stream</p>
-                          <pre
-                            ref={aiPromptAnswerStreamScrollRef}
-                            className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-teal-200/80 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2rem]"
-                          >
-                            {aiPromptDrawerSections.liveRawStream || '…'}
-                          </pre>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thought summary</p>
-                          <p className="text-[9px] text-gray-500 mb-1 leading-snug">
-                            From Gemini <code className="rounded bg-white/80 px-0.5">thought: true</code> chunks when
-                            includeThoughts is enabled.
-                          </p>
-                          <pre
-                            ref={aiPromptThoughtStreamScrollRef}
-                            className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded border border-teal-200/60 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2rem]"
-                          >
-                            {aiPromptDrawerSections.liveThinkingStream || '—'}
-                          </pre>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                  {aiPromptDrawerSections.thinking ? (
-                    <div className="mb-2">
-                      <p className="text-[9px] font-medium text-gray-600 mb-0.5">Model thinking (final)</p>
-                      <pre className="max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-                        {aiPromptDrawerSections.thinking}
-                      </pre>
-                    </div>
-                  ) : null}
-                  <p className="text-[9px] font-medium text-gray-600 mb-0.5">Raw model output (final)</p>
-                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-                    {aiPromptDrawerSections.rawResponse || '—'}
-                  </pre>
-                </div>
-                <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">4. Playwright code to run</p>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-                    {aiPromptDrawerSections.playwrightCode || '—'}
-                  </pre>
-                </div>
-              </div>
+              <AiPromptProgressSections sections={aiPromptDrawerSections} />
             </div>
             <div className="flex flex-shrink-0 justify-end gap-2 border-t border-gray-100 px-3 py-2.5 bg-gray-50/80">
               <button
