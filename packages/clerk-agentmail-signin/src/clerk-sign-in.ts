@@ -2,7 +2,9 @@ import type { BrowserContext, Page } from 'playwright-core';
 import { clerkSetup } from '@clerk/testing/playwright';
 import {
   deleteMailSlurpEmail,
+  MAILSLURP_POST_PASSWORD_DELAY_MS,
   nextNotBeforeMsAfterEmail,
+  sleepMs,
   waitForClerkOtpFromMailSlurp,
 } from './mailslurp-otp';
 
@@ -532,8 +534,9 @@ export async function performClerkPasswordEmail2FA(
     return;
   }
 
-  /** MailSlurp: only accept messages received after password submit. */
+  /** MailSlurp: anchor window to password submit, then wait so the new email is “latest” before polling. */
   const otpWindowStartMs = Date.now();
+  await sleepMs(MAILSLURP_POST_PASSWORD_DELAY_MS);
   await fillClerkOtpFromMailSlurp(page, {
     runUrl: opts.baseURL,
     notBeforeMs: otpWindowStartMs,

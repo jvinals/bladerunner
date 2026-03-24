@@ -4,8 +4,20 @@ import type { Email } from 'mailslurp-client';
 /** Clerk commonly sends a 6-digit code; allow 8 for future-proofing. */
 const OTP_REGEX = /\b(\d{6,8})\b/;
 
-/** Allow a few seconds of clock skew between MailSlurp timestamps and `Date.now()`. */
-export const MAILSURP_CLOCK_SKEW_MS = 5_000;
+/**
+ * Max lookback for MailSlurp `since` and for rejecting “too old” messages (ms).
+ * Kept small so we do not treat the **previous** inbox OTP as valid: a 5s window made it easy for
+ * `waitForLatestEmail` to return the last email before the new verification message arrived.
+ */
+export const MAILSURP_CLOCK_SKEW_MS = 2_000;
+
+/** Wait after password submit (or OTP-only assist start) before polling MailSlurp — gives Clerk time to send the new code so “latest” is not the prior message. */
+export const MAILSLURP_POST_PASSWORD_DELAY_MS = 2_500;
+
+export async function sleepMs(ms: number): Promise<void> {
+  if (ms <= 0) return;
+  await new Promise((r) => setTimeout(r, ms));
+}
 
 function extractOtpFromText(text: string): string | null {
   const m = text.match(OTP_REGEX);

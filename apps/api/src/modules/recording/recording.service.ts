@@ -32,7 +32,9 @@ import {
   detectClerkOtpInputVisible,
   fillClerkOtpFromClerkTestEmail,
   fillClerkOtpFromMailSlurp,
+  MAILSLURP_POST_PASSWORD_DELAY_MS,
   performClerkPasswordEmail2FA,
+  sleepMs,
   type ClerkOtpMode,
 } from '@bladerunner/clerk-agentmail-signin';
 import { buildPlaybackSkipSet, normalizePlaybackUrl, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
@@ -3067,9 +3069,11 @@ export class RecordingService extends EventEmitter {
           return;
         }
         if (otpMode === 'mailslurp') {
+          const otpWindowStartMs = Date.now();
+          await sleepMs(MAILSLURP_POST_PASSWORD_DELAY_MS);
           await fillClerkOtpFromMailSlurp(page, {
             runUrl,
-            notBeforeMs: Date.now() - 5_000,
+            notBeforeMs: otpWindowStartMs,
           });
         } else {
           await fillClerkOtpFromClerkTestEmail(page, { runUrl });

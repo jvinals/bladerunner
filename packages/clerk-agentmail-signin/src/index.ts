@@ -1,8 +1,10 @@
 export {
   deleteMailSlurpEmail,
+  MAILSLURP_POST_PASSWORD_DELAY_MS,
   MAILSURP_CLOCK_SKEW_MS,
   nextNotBeforeMsAfterEmail,
   resolveMailSlurpInboxId,
+  sleepMs,
   waitForClerkOtpFromMailSlurp,
   type ClerkOtpFromMailSlurpResult,
 } from './mailslurp-otp';
