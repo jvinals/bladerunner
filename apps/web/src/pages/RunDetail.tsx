@@ -542,6 +542,8 @@ export default function RunDetailPage() {
   const playbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const stepRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const detachedPlaybackWindowRef = useRef<Window | null>(null);
+  /** Hide inline replay canvas while detached window is open (same UX as Runs page). */
+  const [playbackDetached, setPlaybackDetached] = useState(false);
 
   const {
     playbackSessionId,
@@ -747,6 +749,7 @@ export default function RunDetailPage() {
     isPlaying || playbackStatus === 'playback' || (playbackStatus === 'failed' && !!playbackError);
 
   useEffect(() => {
+    if (playbackDetached) return;
     if (!currentFrame || !playbackCanvasRef.current) return;
     const canvas = playbackCanvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -758,7 +761,7 @@ export default function RunDetailPage() {
       ctx.drawImage(img, 0, 0);
     };
     img.src = `data:image/jpeg;base64,${currentFrame}`;
-  }, [currentFrame]);
+  }, [currentFrame, playbackDetached]);
 
   useEffect(() => {
     if (effectiveHighlightSequence == null) return;
@@ -805,14 +808,24 @@ export default function RunDetailPage() {
     );
     if (w) {
       detachedPlaybackWindowRef.current = w;
+      setPlaybackDetached(true);
       const check = setInterval(() => {
         if (w.closed) {
           detachedPlaybackWindowRef.current = null;
+          setPlaybackDetached(false);
           clearInterval(check);
         }
       }, 500);
     }
   }, [playbackSessionId, playbackSourceRunId]);
+
+  const handleReattachPlayback = useCallback(() => {
+    if (detachedPlaybackWindowRef.current && !detachedPlaybackWindowRef.current.closed) {
+      detachedPlaybackWindowRef.current.close();
+    }
+    detachedPlaybackWindowRef.current = null;
+    setPlaybackDetached(false);
+  }, []);
 
   if (isLoading) return <LoadingState message="Loading run details..." />;
   if (error || !run) return <ErrorState message="Run not found" />;
@@ -1060,10 +1073,10 @@ export default function RunDetailPage() {
               </button>
               <button
                 type="button"
-                disabled={!playbackSessionId}
+                disabled={!playbackSessionId || playbackDetached}
                 onClick={handleDetachPlayback}
-                title="Detach preview"
-                aria-label="Detach preview"
+                title={playbackDetached ? 'Preview already detached' : 'Detach preview'}
+                aria-label={playbackDetached ? 'Preview already detached' : 'Detach preview'}
                 className="flex shrink-0 items-center justify-center px-2 py-1.5 border border-gray-200 text-gray-600 text-[11px] font-medium rounded-md hover:border-[#4B90FF] hover:text-[#4B90FF] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ExternalLink size={12} aria-hidden />
@@ -1183,38 +1196,54 @@ export default function RunDetailPage() {
                 </span>
               </div>
               <div className="relative flex-1 min-h-0 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 overflow-hidden">
-                {(currentFrame || isPlaying) && (
-                  <canvas
-                    ref={playbackCanvasRef}
-                    className="max-h-full w-full max-w-full object-contain"
-                    role="img"
-                    aria-label="Playback preview"
-                  />
-                )}
-                {isPlaying && !currentFrame && !playbackError && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                {playbackDetached ? (
+                  <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
+                    <ExternalLink size={28} className="text-gray-300" aria-hidden />
+                    <p className="text-xs text-gray-500">Playback preview detached to external window</p>
+                    <button
+                      type="button"
+                      onClick={handleReattachPlayback}
+                      className="text-xs text-[#4B90FF] font-medium hover:underline"
+                    >
+                      Reattach here
+                    </button>
                   </div>
-                )}
-                {playbackError && (
-                  <div
-                    className={`flex items-center justify-center p-4 z-[2] ${
-                      currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
-                    }`}
-                    role="alert"
-                  >
-                    <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
-                  </div>
-                )}
-                {!currentFrame && !isPlaying && !playbackError && (
-                  <p className="text-xs text-gray-400 text-center px-6">
-                    Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
-                    session. Frames stream here in real time.
-                  </p>
+                ) : (
+                  <>
+                    {(currentFrame || isPlaying) && (
+                      <canvas
+                        ref={playbackCanvasRef}
+                        className="max-h-full w-full max-w-full object-contain"
+                        role="img"
+                        aria-label="Playback preview"
+                      />
+                    )}
+                    {isPlaying && !currentFrame && !playbackError && (
+                      <div
+                        className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                      </div>
+                    )}
+                    {playbackError && (
+                      <div
+                        className={`flex items-center justify-center p-4 z-[2] ${
+                          currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
+                        }`}
+                        role="alert"
+                      >
+                        <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
+                      </div>
+                    )}
+                    {!currentFrame && !isPlaying && !playbackError && (
+                      <p className="text-xs text-gray-400 text-center px-6">
+                        Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new
+                        browser session. Frames stream here in real time.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1411,38 +1440,54 @@ export default function RunDetailPage() {
                 </span>
               </div>
               <div className="relative flex-1 min-h-0 flex items-center justify-center bg-gray-50 rounded-md border border-gray-100 overflow-hidden">
-                {(currentFrame || isPlaying) && (
-                  <canvas
-                    ref={playbackCanvasRef}
-                    className="max-h-full w-full max-w-full object-contain"
-                    role="img"
-                    aria-label="Playback preview"
-                  />
-                )}
-                {isPlaying && !currentFrame && !playbackError && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                {playbackDetached ? (
+                  <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
+                    <ExternalLink size={28} className="text-gray-300" aria-hidden />
+                    <p className="text-xs text-gray-500">Playback preview detached to external window</p>
+                    <button
+                      type="button"
+                      onClick={handleReattachPlayback}
+                      className="text-xs text-[#4B90FF] font-medium hover:underline"
+                    >
+                      Reattach here
+                    </button>
                   </div>
-                )}
-                {playbackError && (
-                  <div
-                    className={`flex items-center justify-center p-4 z-[2] ${
-                      currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
-                    }`}
-                    role="alert"
-                  >
-                    <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
-                  </div>
-                )}
-                {!currentFrame && !isPlaying && !playbackError && (
-                  <p className="text-xs text-gray-400 text-center px-6">
-                    Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new browser
-                    session. Frames stream here in real time.
-                  </p>
+                ) : (
+                  <>
+                    {(currentFrame || isPlaying) && (
+                      <canvas
+                        ref={playbackCanvasRef}
+                        className="max-h-full w-full max-w-full object-contain"
+                        role="img"
+                        aria-label="Playback preview"
+                      />
+                    )}
+                    {isPlaying && !currentFrame && !playbackError && (
+                      <div
+                        className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-[1]"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <p className="text-xs text-gray-600 px-6 text-center">Connecting to playback stream…</p>
+                      </div>
+                    )}
+                    {playbackError && (
+                      <div
+                        className={`flex items-center justify-center p-4 z-[2] ${
+                          currentFrame || isPlaying ? 'absolute inset-0 bg-red-50/95' : 'w-full min-h-[200px]'
+                        }`}
+                        role="alert"
+                      >
+                        <p className="text-xs text-red-700 text-center max-w-md">{playbackError}</p>
+                      </div>
+                    )}
+                    {!currentFrame && !isPlaying && !playbackError && (
+                      <p className="text-xs text-gray-400 text-center px-6">
+                        Press <span className="font-medium text-gray-600">Play</span> to run your saved steps in a new
+                        browser session. Frames stream here in real time.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>

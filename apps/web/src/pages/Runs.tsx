@@ -87,6 +87,8 @@ export default function RunsPage() {
   const [playbackAdvanceToSeq, setPlaybackAdvanceToSeq] = useState('');
   const [stepsLoadError, setStepsLoadError] = useState<string | null>(null);
   const [isDetached, setIsDetached] = useState(false);
+  /** Inline playback canvas hidden while `/playback/:sessionId` window is open (mirrors recording detach). */
+  const [playbackDetached, setPlaybackDetached] = useState(false);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const [reRecordBusyStepId, setReRecordBusyStepId] = useState<string | null>(null);
   const [reRecordError, setReRecordError] = useState<string | null>(null);
@@ -253,7 +255,7 @@ export default function RunsPage() {
   }, [steps.length]);
 
   useEffect(() => {
-    if (isDetached) return;
+    if (isDetached || playbackDetached) return;
     const frame = isRecording ? recordFrame : playFrame;
     if (!frame || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -267,7 +269,7 @@ export default function RunsPage() {
       ctx.drawImage(img, 0, 0);
     };
     img.src = `data:image/jpeg;base64,${frame}`;
-  }, [recordFrame, playFrame, isRecording, isDetached]);
+  }, [recordFrame, playFrame, isRecording, isDetached, playbackDetached]);
 
   useEffect(() => {
     if (effectiveHighlightSequence == null) return;
@@ -461,9 +463,11 @@ export default function RunsPage() {
     );
     if (w) {
       detachedPlaybackWindowRef.current = w;
+      setPlaybackDetached(true);
       const check = setInterval(() => {
         if (w.closed) {
           detachedPlaybackWindowRef.current = null;
+          setPlaybackDetached(false);
           clearInterval(check);
         }
       }, 500);
@@ -893,6 +897,11 @@ export default function RunsPage() {
     }
     detachedWindowRef.current = null;
     setIsDetached(false);
+    if (detachedPlaybackWindowRef.current && !detachedPlaybackWindowRef.current.closed) {
+      detachedPlaybackWindowRef.current.close();
+    }
+    detachedPlaybackWindowRef.current = null;
+    setPlaybackDetached(false);
   }, []);
 
   return (
@@ -928,7 +937,7 @@ export default function RunsPage() {
                 Detach
               </button>
             </>
-          ) : (isPlaying || playFrame || playbackError) && !isDetached ? (
+          ) : (isPlaying || playFrame || playbackError) && !isDetached && !playbackDetached ? (
             <div className="relative w-full h-full min-h-[200px] flex items-center justify-center">
               {(isPlaying || playFrame) && (
                 <canvas
@@ -966,19 +975,21 @@ export default function RunsPage() {
                 <button
                   type="button"
                   onClick={handleDetachPlaybackRuns}
-                  className="absolute top-3 right-3 z-[3] flex items-center justify-center p-2 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
-                  title="Open playback in a new window"
-                  aria-label="Open playback in a new window"
+                  className="absolute top-3 right-3 z-[3] flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-600 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
+                  title="Detach playback to new window"
+                  aria-label="Detach playback to new window"
                 >
                   <ExternalLink size={12} aria-hidden />
+                  Detach
                 </button>
               )}
             </div>
-          ) : isDetached ? (
+          ) : isDetached || playbackDetached ? (
             <div className="text-center">
               <ExternalLink size={32} className="mx-auto mb-3 text-gray-300" />
               <p className="text-sm text-gray-500 mb-2">Preview detached to external window</p>
               <button
+                type="button"
                 onClick={handleReattach}
                 className="text-xs text-[#4B90FF] font-medium hover:underline"
               >
