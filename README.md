@@ -242,6 +242,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.13** — **AI prompt StepCard**: Removed **Full pipeline** and **Revert to Playwright** buttons; **Save prompt**, **Generate**, **Run on page**, and **Reset** remain. **`@bladerunner/web` `0.7.12`**.
 - **0.10.12** — **Playback / AI prompt**: After a successful **Run on page** or **Full pipeline** (or **Adopt** full re-test) on an AI prompt step during live playback, the step list **advances** the replay highlight/completed state like a finished **`playbackProgress`** step (next step becomes current). **`@bladerunner/web` `0.7.11`**.
 - **0.10.11** — **Playback / Next before Play**: **`startPaused`** on **`POST .../playback/start`** pauses before the first recorded step (after Clerk pre-roll). **Next** on **Runs** and **Run detail** starts a session in that mode and auto-runs the first step, then **advance-one** pauses after each step as today. **`@bladerunner/api` `0.6.23`**, **`@bladerunner/web` `0.7.10`**.
 - **0.10.10** — **AI prompt step controls (Runs + Run detail)**: Expanded **StepCard** matches the **Add AI prompt step** drawer — **Generate**, **Run on page**, **Reset**, optional **Full pipeline**, shared **`AiPromptProgressSections`**, merged **`aiPromptTestProgress`** / **`lastAiPromptProgress`** per step, and **`playbackSocketConnected`** gating. **`@bladerunner/web` `0.7.9`**.

@@ -90,8 +90,8 @@ interface StepCardProps {
    */
   aiPromptSocketConnected?: boolean;
   /**
-   * Live playback only: after a successful **Run on page** or **Full pipeline** test, parent advances the
-   * replay cursor (same as completing the step via the playback loop).
+   * Live playback only: after a successful **Run on page** test (or internal full-pipeline flows like adopt), parent
+   * advances the replay cursor (same as completing the step via the playback loop).
    */
   onAiPromptPlaybackRunSucceeded?: (stepSequence: number) => void;
 }
@@ -617,42 +617,6 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                     >
                       <RotateCcw size={12} />
                       Reset
-                    </button>
-                    <button
-                      type="button"
-                      disabled={aiRemoteActionsDisabled || !promptDraft.trim()}
-                      title={
-                        aiPromptStep.canTestLive
-                          ? 'Run full pipeline: generate + run on page in one step'
-                          : 'Start recording or playback for this run to test'
-                      }
-                      onClick={() => void runAiPromptPhase('full')}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 bg-white text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      <FlaskConical size={12} />
-                      Full pipeline
-                    </button>
-                    <button
-                      type="button"
-                      disabled={aiBusy}
-                      onClick={() => {
-                        setAiBusy(true);
-                        setAiError(null);
-                        void runsApi
-                          .patchRunStep(aiPromptStep.runId, aiPromptStep.stepId, { aiPromptMode: false })
-                          .then(() => {
-                            setShowEnableAi(false);
-                            aiPromptStep.onUpdated();
-                            onStepMutationSuccess?.(aiPromptStep.stepId);
-                          })
-                          .catch((e) => {
-                            setAiError(e instanceof Error ? e.message : String(e));
-                          })
-                          .finally(() => setAiBusy(false));
-                      }}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-[10px] font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      Revert to Playwright
                     </button>
                   </div>
                   {aiBusy ? (
