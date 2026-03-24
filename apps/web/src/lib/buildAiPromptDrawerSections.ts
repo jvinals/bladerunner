@@ -5,7 +5,6 @@ export type AiPromptDrawerSections = {
   screenshotBase64?: string;
   promptText: string;
   thinking?: string;
-  rawResponse: string;
   playwrightCode: string;
   streamingPartial: boolean;
   liveRawStream: string;
@@ -29,9 +28,6 @@ export function buildAiPromptDrawerSections(input: {
       screenshotBase64: live.screenshotBase64 ?? cached?.screenshotBase64,
       promptText: (live.fullUserPrompt || live.promptSent || cached?.userPrompt || '').trim(),
       thinking: streamingPartial ? cached?.thinking : (live.thinking ?? cached?.thinking),
-      rawResponse: streamingPartial
-        ? (cached?.rawResponse ?? '').trim()
-        : (live.rawResponse ?? cached?.rawResponse ?? '').trim(),
       playwrightCode: (live.playwrightCode || metaPw).trim(),
       streamingPartial,
       liveRawStream: streamingPartial ? (live.rawResponse ?? '').trim() : '',
@@ -44,7 +40,6 @@ export function buildAiPromptDrawerSections(input: {
       screenshotBase64: undefined,
       promptText: '',
       thinking: undefined,
-      rawResponse: '',
       playwrightCode: '',
       streamingPartial: false,
       liveRawStream: '',
@@ -56,7 +51,6 @@ export function buildAiPromptDrawerSections(input: {
     screenshotBase64: cached?.screenshotBase64,
     promptText: (cached?.userPrompt ?? '').trim(),
     thinking: cached?.thinking,
-    rawResponse: (cached?.rawResponse ?? '').trim(),
     playwrightCode: metaPw,
     streamingPartial: false,
     liveRawStream: '',

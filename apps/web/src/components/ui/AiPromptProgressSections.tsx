@@ -88,10 +88,6 @@ export function AiPromptProgressSections({ sections, className = 'mt-4 space-y-3
             </pre>
           </div>
         ) : null}
-        <p className="text-[9px] font-medium text-gray-600 mb-0.5">Raw model output (final)</p>
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-          {sections.rawResponse || '—'}
-        </pre>
       </div>
       <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
         <p className="text-[10px] font-semibold text-gray-800 mb-1">4. Playwright code to run</p>

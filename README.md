@@ -243,6 +243,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.16** — **Runs / Add AI prompt step**: Removed **Raw model output (final)** from the drawer **`AiPromptProgressSections`** (section 3 still shows live stream + model thinking; section 4 is Playwright code). **`@bladerunner/web` `0.7.14`**.
 - **0.10.15** — **LLM / AI prompt**: Vision codegen always receives **Set-of-Marks manifest** + **Playwright CDP accessibility snapshot** (captured before badges) + **JPEG** + task; optional **`GEMINI_INSTRUCTION_VERIFY`** (default on) runs a **DOM verify** pass to fix draft Playwright against the same DOM text. **AI prompt review** modal can show draft, verify prompt, and final code. **`@bladerunner/api` `0.6.25`**, **`@bladerunner/web` `0.7.13`**.
 - **0.10.14** — **Clerk / MailSlurp 2FA**: Tighter **`MAILSURP_CLOCK_SKEW_MS`** (2s), **`MAILSLURP_POST_PASSWORD_DELAY_MS`** (2.5s) after password submit or OTP-only assist before polling, so **`waitForLatestEmail`** is less likely to return a **previous** inbox message. **`@bladerunner/api` `0.6.24`**, **`@bladerunner/clerk-agentmail-signin` `0.5.1`**.
 - **0.10.13** — **AI prompt StepCard**: Removed **Full pipeline** and **Revert to Playwright** buttons; **Save prompt**, **Generate**, **Run on page**, and **Reset** remain. **`@bladerunner/web` `0.7.12`**.
