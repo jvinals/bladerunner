@@ -108,6 +108,36 @@ function emitAgentDebugLog(payload: Record<string, unknown>): void {
   // Do not also POST to the Cursor ingest URL: the ingest server writes the same NDJSON file, which duplicates lines.
 }
 
+/** Debug H1: async Playwright calls without `await` → later TimeoutError as unhandledRejection. */
+function heuristicUnawaitedPlaywrightCall(code: string): boolean {
+  for (const line of code.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('//')) continue;
+    if (/\bawait\b/.test(t)) continue;
+    if (/\)\.(?:click|dblclick|fill|press|pressSequentially|hover|tap|selectOption|check|uncheck)\(/.test(t)) {
+      return true;
+    }
+    if (/^\s*(?:page|locator)\b/.test(t) && /\.(?:click|fill|press)\(/.test(t)) return true;
+  }
+  return false;
+}
+
+const DEBUG_8E7_LOG = '/Users/jvinals/code/bladerunner/.cursor/debug-8e7bf9.log';
+
+function debug8e7Ingest(payload: Record<string, unknown>): void {
+  const body = JSON.stringify({ sessionId: '8e7bf9', timestamp: Date.now(), ...payload });
+  try {
+    appendFileSync(DEBUG_8E7_LOG, `${body}\n`);
+  } catch {
+    /* ignore */
+  }
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+    body,
+  }).catch(() => {});
+}
+
 /** Remote Chromium (recording + playback): CSS viewport for layout. */
 const REMOTE_BROWSER_VIEWPORT = { width: 1280, height: 720 } as const;
 /**
@@ -3344,6 +3374,17 @@ export class RecordingService extends EventEmitter {
     const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
     const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
     // #region agent log
+    debug8e7Ingest({
+      location: 'recording.service.ts:executePwCode:pre-exec',
+      hypothesisId: 'H1',
+      message: 'codegen heuristic before new Function',
+      data: {
+        heuristicUnawaited: heuristicUnawaitedPlaywrightCall(safeCode),
+        safeCodeLen: safeCode.length,
+      },
+    });
+    // #endregion
+    // #region agent log
     fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
@@ -3418,6 +3459,14 @@ export class RecordingService extends EventEmitter {
       // #endregion
       await fn(page, expect);
       // #region agent log
+      debug8e7Ingest({
+        location: 'recording.service.ts:executePwCode:post-await',
+        hypothesisId: 'H1',
+        message: 'await fn(page,expect) resolved',
+        data: {
+          heuristicUnawaited: heuristicUnawaitedPlaywrightCall(safeCode),
+        },
+      });
       emitAgentDebugLog({
         sessionId: '5cf234',
         runId: 'post-fix',

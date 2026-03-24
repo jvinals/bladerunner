@@ -1,4 +1,46 @@
 import './bootstrap-env';
+import { appendFileSync } from 'node:fs';
+// #region agent log
+const __DBG_8E7_PATH = '/Users/jvinals/code/bladerunner/.cursor/debug-8e7bf9.log';
+function __dbg8e7Post(line: Record<string, unknown>): void {
+  const payload = { sessionId: '8e7bf9', timestamp: Date.now(), ...line };
+  const j = JSON.stringify(payload);
+  try {
+    appendFileSync(__DBG_8E7_PATH, `${j}\n`);
+  } catch {
+    /* ignore */
+  }
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+    body: j,
+  }).catch(() => {});
+}
+process.on('unhandledRejection', (reason) => {
+  __dbg8e7Post({
+    location: 'main.ts:unhandledRejection',
+    hypothesisId: 'H1',
+    message: 'unhandledRejection',
+    data: {
+      name: reason instanceof Error ? reason.name : typeof reason,
+      msg: reason instanceof Error ? reason.message.slice(0, 2500) : String(reason).slice(0, 2500),
+      stack: reason instanceof Error ? reason.stack?.slice(0, 4000) : undefined,
+    },
+  });
+});
+process.on('uncaughtException', (err) => {
+  __dbg8e7Post({
+    location: 'main.ts:uncaughtException',
+    hypothesisId: 'H5',
+    message: 'uncaughtException',
+    data: {
+      name: err.name,
+      msg: err.message.slice(0, 2500),
+      stack: err.stack?.slice(0, 4000),
+    },
+  });
+});
+// #endregion
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
