@@ -3,16 +3,44 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 /** Placeholder replaced with the user’s natural-language task for the AI prompt step. */
 export const GEMINI_INSTRUCTION_ACTION_PLACEHOLDER = '[DESCRIBE THE TASK HERE]';
 
+/** Keep Gemini text prompt bounded (manifest can be large). */
+const GEMINI_MANIFEST_MAX_CHARS = 28000;
+
+function truncateSomManifestForGemini(text: string): string {
+  const t = text.trim();
+  if (t.length <= GEMINI_MANIFEST_MAX_CHARS) return t;
+  return `${t.slice(0, GEMINI_MANIFEST_MAX_CHARS)}\n… [manifest truncated]`;
+}
+
+const GEMINI_PAGE_URL_PLACEHOLDER = '[PAGE_URL]';
+const GEMINI_MANIFEST_PLACEHOLDER = '[INTERACTIVE_MANIFEST]';
+
+export type GeminiVisionPromptInput = {
+  instruction: string;
+  pageUrl: string;
+  /** Set-of-Marks manifest or fallback accessibility/context text. */
+  pageAccessibilityTree: string;
+};
+
 const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation engineer.
 
-I am attaching a screenshot of a software application UI.
+I am attaching a Set-of-Marks screenshot: high-contrast numeric badges are drawn on viewport-visible interactive controls. The list below uses the same numbers [n] as the badges. Use the screenshot plus the manifest together to choose targets; emitted Playwright code must use normal locators (getByRole, getByLabel, getByPlaceholder, getByText, etc.) — do not reference badge numbers in the final code.
 
-Your job is to generate one continuous Playwright snippet that performs the requested task based on the screenshot.
-
-Runtime note (not a limit): the app stores a single string of code per step and runs the entire snippet in one execution — it is expected and normal for that string to contain many sequential await statements plus small logic (variables, conditionals) when the task requires it. You are not restricted to a single Playwright call.
+Page URL:
+${GEMINI_PAGE_URL_PLACEHOLDER}
 
 Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
+
+Interactive manifest (aligned with screenshot badges):
+${GEMINI_MANIFEST_PLACEHOLDER}
+
+Playwright coding guidelines for modern SPAs (avoid flakiness):
+- No locator.fill() on search inputs, comboboxes, or async dropdowns — use locator.pressSequentially(text, { delay: 50 }) so React/Vue input handlers and network requests fire.
+- Do not chain .first() immediately after a generic container filtered only by hasText on a div/listbox — clicks can hit dead space. Prefer getByText('Exact', { exact: true }), getByRole('option', { name: 'Exact' }), or another leaf-level locator.
+- Do not read table or list text immediately on navigation; await the target row/cell or use web-first assertions so content is loaded first.
+- For dynamic custom listboxes, after the list is visible prefer ArrowDown + Enter rather than clicking a possibly detached node.
+- Prefer web-first assertions: await expect(locator).toContainText(...) (expect is available in the execution environment) instead of one-shot innerText checks.
 
 Strict output rules:
 Return only valid Playwright JavaScript code (syntax that runs in a JavaScript engine without transpilation). Do not use TypeScript-only syntax: no non-null assertions (expr!.prop), no type assertions (as Type), no interface/type declarations, and no satisfies/as const unless you emit plain JavaScript equivalents.
@@ -29,7 +57,7 @@ Do not artificially limit the solution to a single instruction if multiple steps
 Generate only the minimum necessary sequence of actions required to achieve the task reliably.
 
 Implementation requirements:
-Infer the most likely UI structure from the screenshot.
+Infer the most likely UI structure from the screenshot and manifest.
 Write the most robust production style Playwright snippet possible.
 Make it resilient to different content, dynamic values, user data, themes, settings, layouts, and configuration states.
 Avoid brittle selectors such as exact text matches when text may vary, screen coordinates, absolute positions, and fragile nth child chains.
@@ -46,10 +74,19 @@ Output format requirement:
 Your entire response must be executable Playwright JavaScript only, consisting of the full sequence of actions needed to complete the task.
 `;
 
-/** Full text sent to Gemini (user turn) including substituted action. */
-export function buildGeminiInstructionPrompt(instruction: string): string {
-  const action = instruction.trim();
-  return GEMINI_INSTRUCTION_TEMPLATE.replace(GEMINI_INSTRUCTION_ACTION_PLACEHOLDER, action);
+/** Full text sent to Gemini (user turn) including task, URL, and manifest. */
+export function buildGeminiInstructionPrompt(input: GeminiVisionPromptInput | string): string {
+  const resolved: GeminiVisionPromptInput =
+    typeof input === 'string'
+      ? { instruction: input, pageUrl: '', pageAccessibilityTree: '' }
+      : input;
+  const action = resolved.instruction.trim();
+  const url = resolved.pageUrl.trim() || '(unknown)';
+  const manifestRaw = resolved.pageAccessibilityTree.trim();
+  const manifest = manifestRaw ? truncateSomManifestForGemini(manifestRaw) : '(no manifest — rely on screenshot only)';
+  return GEMINI_INSTRUCTION_TEMPLATE.replace(GEMINI_INSTRUCTION_ACTION_PLACEHOLDER, action)
+    .replace(GEMINI_PAGE_URL_PLACEHOLDER, url)
+    .replace(GEMINI_MANIFEST_PLACEHOLDER, manifest);
 }
 
 /** Strip accidental markdown fences; trim. Model should not emit them per template. */
@@ -93,14 +130,14 @@ export type GeminiInstructionStreamProgress = { rawText: string; thinking?: stri
 export async function generateGeminiPlaywrightSnippet(params: {
   apiKey: string;
   model: string;
-  instruction: string;
+  /** Full user message (task + URL + manifest + rules). */
+  fullPrompt: string;
   imageBase64: string;
   signal?: AbortSignal;
   /** Called with cumulative text as the stream arrives (throttled). */
   onProgress?: (ev: GeminiInstructionStreamProgress) => void;
 }): Promise<{ rawText: string; playwrightCode: string; thinking?: string }> {
-  const { apiKey, model, instruction, imageBase64, signal, onProgress } = params;
-  const prompt = buildGeminiInstructionPrompt(instruction);
+  const { apiKey, model, fullPrompt, imageBase64, signal, onProgress } = params;
   const genAI = new GoogleGenerativeAI(apiKey);
   const gm = genAI.getGenerativeModel({ model });
   const { stream, response } = await gm.generateContentStream(
@@ -109,7 +146,7 @@ export async function generateGeminiPlaywrightSnippet(params: {
         {
           role: 'user',
           parts: [
-            { text: prompt },
+            { text: fullPrompt },
             {
               inlineData: {
                 mimeType: 'image/jpeg',

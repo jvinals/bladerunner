@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.6.18",
+  "version": "0.6.19",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
@@ -38,6 +38,7 @@
     "class-validator": "^0.14.1",
     "dotenv": "^17.3.1",
     "openai": "^6.32.0",
+    "@playwright/test": "^1.58.2",
     "playwright-core": "^1.58.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

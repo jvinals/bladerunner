@@ -24,7 +24,8 @@ Guidelines:
 - The "Selector" field is the clicked element's CSS selector from the browser (tag + #id, classes, or [data-testid]). When it contains a class, id, or attribute (not just a bare tag name), prefer await page.locator(<that exact selector as a single-quoted or JSON string>) for clicks/fills so replay targets the same node.
 - Playwright code should use modern locator APIs (getByRole, getByText, getByLabel) when possible
 - For modal/dialog close buttons, never emit a bare page.locator with only a path[d="..."] Lucide X shape or other SVG path alone — the same path repeats on row actions vs the dialog chrome. Prefer getByRole('dialog') combined with getByRole('button', { name: /close|dismiss/i }), getByLabel, or a locator scoped to the open dialog.
-- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. When Visible text is available for a click, prefer getByText(visibleText, { exact: true }).first() or getByRole with name from Visible text / aria (exact: false on getByText matches substrings like "Total Patients"). Otherwise use getByRole('link', { name: '...' }), page.locator(<Selector field>) when specific, or page.locator('span', { hasText: '...' }).first() if you must scope by tag.
+- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. When Visible text is available for a click, prefer getByText(visibleText, { exact: true }) (without chaining .first() on a broad container) or getByRole with name from Visible text / aria (exact: false on getByText matches substrings like "Total Patients"). Do not use page.locator('div', { hasText: '...' }).first() for options in a listbox — target getByRole('option', { name: '...' }) or getByText(..., { exact: true }) on the leaf control. Otherwise use getByRole('link', { name: '...' }), page.locator(<Selector field>) when specific, or a narrowly scoped locator.
+- Playwright coding guidelines for modern SPAs: do not use locator.fill() on comboboxes or async search fields — use pressSequentially(text, { delay: 50 }). Wait for data rows or list items before reading table/list text. Prefer keyboard navigation (ArrowDown + Enter) for dynamic custom dropdowns when clicks would target detached nodes. Prefer expect(locator) web-first assertions when verifying text.
 - Keep instructions concise but specific enough to identify the target element`;
 
 const EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM = `You help QA engineers understand why an AI-driven Playwright test step failed and how to fix the **natural-language instruction** (not the Playwright code).
@@ -182,11 +183,15 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     const model =
       this.configService?.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
 
-    const userPrompt = buildGeminiInstructionPrompt(input.instruction);
+    const fullPrompt = buildGeminiInstructionPrompt({
+      instruction: input.instruction,
+      pageUrl: input.pageUrl,
+      pageAccessibilityTree: input.pageAccessibilityTree,
+    });
     const { rawText, playwrightCode, thinking } = await generateGeminiPlaywrightSnippet({
       apiKey,
       model,
-      instruction: input.instruction,
+      fullPrompt,
       imageBase64: shot,
       signal: opts?.signal,
       onProgress: opts?.onStream,
@@ -203,7 +208,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       output,
       transcript: {
         systemPrompt: '',
-        userPrompt,
+        userPrompt: fullPrompt,
         rawResponse: rawText,
         visionAttached: true,
         screenshotBase64: shot,

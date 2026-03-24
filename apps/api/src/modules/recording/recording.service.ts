@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, Page, CDPSession } from 'playwright-core';
 import type { BrowserContext } from 'playwright-core';
+import { expect } from '@playwright/test';
 
 /** Return type of `BrowserContext.storageState()` (cookies + origins / localStorage). */
 type SnapshotStorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
@@ -54,6 +55,7 @@ import {
 } from './ai-prompt-step-metadata';
 import type { InstructionToActionLlmTranscript } from '../llm/providers/llm-provider.interface';
 import { buildGeminiInstructionPrompt } from '../llm/gemini-instruction.client';
+import { injectSetOfMarkOverlay, removeSetOfMarkOverlay } from './set-of-mark-capture';
 import {
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
@@ -626,28 +628,12 @@ export class RecordingService extends EventEmitter {
       throw new Error('No active recording session found');
     }
 
-    const pageUrl = session.page.url();
-    let accessibilityTree = '';
-    try {
-      const snapshot = await (session.page as any).accessibility?.snapshot();
-      accessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await session.page.title();
-    } catch {
-      accessibilityTree = 'Unable to capture accessibility tree';
-    }
-    accessibilityTree = await this.enrichAccessibilityTreeForLlm(session.page, accessibilityTree);
-
-    let screenshotBase64: string | undefined;
-    try {
-      const buf = await session.page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
-      screenshotBase64 = buf.toString('base64');
-    } catch {
-      // Continue without screenshot
-    }
+    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(session.page);
 
     const llmResult = await this.llmService.instructionToAction({
       instruction,
       pageUrl,
-      pageAccessibilityTree: accessibilityTree,
+      pageAccessibilityTree,
       screenshotBase64,
     });
     const out = llmResult.output;
@@ -695,28 +681,12 @@ export class RecordingService extends EventEmitter {
       throw new NotFoundException('Step not found');
     }
 
-    const pageUrl = session.page.url();
-    let accessibilityTree = '';
-    try {
-      const snapshot = await (session.page as any).accessibility?.snapshot();
-      accessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await session.page.title();
-    } catch {
-      accessibilityTree = 'Unable to capture accessibility tree';
-    }
-    accessibilityTree = await this.enrichAccessibilityTreeForLlm(session.page, accessibilityTree);
-
-    let screenshotBase64: string | undefined;
-    try {
-      const buf = await session.page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
-      screenshotBase64 = buf.toString('base64');
-    } catch {
-      /* continue */
-    }
+    const { pageUrl, pageAccessibilityTree, screenshotBase64 } = await this.captureLlmPageContext(session.page);
 
     const llmResult = await this.llmService.instructionToAction({
       instruction: trimmed,
       pageUrl,
-      pageAccessibilityTree: accessibilityTree,
+      pageAccessibilityTree,
       screenshotBase64,
     });
     const out = llmResult.output;
@@ -1563,21 +1533,34 @@ export class RecordingService extends EventEmitter {
     this.throwIfAborted(signal);
     const pageUrl = page.url();
     let pageAccessibilityTree = '';
-    try {
-      const snapshot = await (page as any).accessibility?.snapshot();
-      pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await page.title();
-    } catch {
-      pageAccessibilityTree = 'Unable to capture accessibility tree';
-    }
-    pageAccessibilityTree = await this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
-    this.throwIfAborted(signal);
     let screenshotBase64: string | undefined;
+
     try {
+      const { manifestText } = await injectSetOfMarkOverlay(page);
+      pageAccessibilityTree = manifestText;
+      this.throwIfAborted(signal);
       const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
       screenshotBase64 = buf.toString('base64');
-    } catch {
-      /* optional */
+    } catch (err) {
+      this.logger.warn(`captureLlmPageContext: Set-of-Marks failed, falling back to a11y + plain screenshot (${err})`);
+      try {
+        const snapshot = await (page as any).accessibility?.snapshot();
+        pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await page.title();
+      } catch {
+        pageAccessibilityTree = 'Unable to capture accessibility tree';
+      }
+      pageAccessibilityTree = await this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
+      this.throwIfAborted(signal);
+      try {
+        const buf = await page.screenshot({ type: 'jpeg', quality: LLM_VISION_SCREENSHOT_JPEG_QUALITY });
+        screenshotBase64 = buf.toString('base64');
+      } catch {
+        /* optional */
+      }
+    } finally {
+      await removeSetOfMarkOverlay(page).catch(() => {});
     }
+
     return { pageUrl, pageAccessibilityTree, screenshotBase64 };
   }
 
@@ -1611,7 +1594,7 @@ export class RecordingService extends EventEmitter {
       this.emitAiPromptTestProgress(
         progress.runId,
         progress.stepId,
-        'Capturing accessibility tree and viewport screenshot…',
+        'Capturing Set-of-Marks overlay and viewport screenshot…',
         'capturing',
       );
     }
@@ -1632,7 +1615,11 @@ export class RecordingService extends EventEmitter {
     }
     this.throwIfAborted(signal);
 
-    const fullUserPrompt = buildGeminiInstructionPrompt(instruction.trim());
+    const fullUserPrompt = buildGeminiInstructionPrompt({
+      instruction: instruction.trim(),
+      pageUrl,
+      pageAccessibilityTree,
+    });
 
     const llmResult = await this.llmService.instructionToAction(
       {
@@ -3166,10 +3153,11 @@ export class RecordingService extends EventEmitter {
       timestamp: Date.now(),
     });
     // #endregion
-    let fn: (page: Page) => Promise<unknown>;
+    let fn: (page: Page, expectFn: typeof expect) => Promise<unknown>;
     try {
-      fn = new Function('page', `return (async () => { ${safeCode} })();`) as (
+      fn = new Function('page', 'expect', `return (async () => { ${safeCode} })();`) as (
         page: Page,
+        expectFn: typeof expect,
       ) => Promise<unknown>;
     } catch (e) {
       // #region agent log
@@ -3200,7 +3188,7 @@ export class RecordingService extends EventEmitter {
         timestamp: Date.now(),
       });
       // #endregion
-      await fn(page);
+      await fn(page, expect);
       // #region agent log
       emitAgentDebugLog({
         sessionId: '5cf234',
