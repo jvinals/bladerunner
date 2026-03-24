@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import {
@@ -844,6 +844,20 @@ export default function RunsPage() {
     aiDrawerStep?.metadata,
     aiStepPrompt.trim(),
   );
+
+  const aiPromptAnswerStreamScrollRef = useRef<HTMLPreElement>(null);
+  const aiPromptThoughtStreamScrollRef = useRef<HTMLPreElement>(null);
+  useLayoutEffect(() => {
+    if (!aiPromptDrawerSections.streamingPartial) return;
+    const answerEl = aiPromptAnswerStreamScrollRef.current;
+    const thoughtEl = aiPromptThoughtStreamScrollRef.current;
+    if (answerEl) answerEl.scrollTop = answerEl.scrollHeight;
+    if (thoughtEl) thoughtEl.scrollTop = thoughtEl.scrollHeight;
+  }, [
+    aiPromptDrawerSections.streamingPartial,
+    aiPromptDrawerSections.liveRawStream,
+    aiPromptDrawerSections.liveThinkingStream,
+  ]);
 
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
@@ -1759,16 +1773,49 @@ export default function RunsPage() {
                   </pre>
                 </div>
                 <div className="rounded border border-gray-100 bg-gray-50/80 p-2">
-                  <p className="text-[10px] font-semibold text-gray-800 mb-1">3. Information received from the LLM</p>
+                  <p className="text-[10px] font-semibold text-gray-800 mb-1">3. Model Thinking</p>
+                  {aiPromptDrawerSections.streamingPartial ? (
+                    <div
+                      className="mb-2 rounded border border-teal-200/70 bg-teal-50/40 p-2"
+                      role="log"
+                      aria-label="Live model streaming output"
+                    >
+                      <p className="text-[9px] font-medium text-teal-900 mb-1.5">Live streaming</p>
+                      <div className="flex flex-col gap-2">
+                        <div>
+                          <p className="text-[9px] font-medium text-gray-600 mb-0.5">Answer / Playwright stream</p>
+                          <pre
+                            ref={aiPromptAnswerStreamScrollRef}
+                            className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-teal-200/80 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2rem]"
+                          >
+                            {aiPromptDrawerSections.liveRawStream || '…'}
+                          </pre>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thought summary</p>
+                          <p className="text-[9px] text-gray-500 mb-1 leading-snug">
+                            From Gemini <code className="rounded bg-white/80 px-0.5">thought: true</code> chunks when
+                            includeThoughts is enabled.
+                          </p>
+                          <pre
+                            ref={aiPromptThoughtStreamScrollRef}
+                            className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded border border-teal-200/60 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2rem]"
+                          >
+                            {aiPromptDrawerSections.liveThinkingStream || '—'}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   {aiPromptDrawerSections.thinking ? (
                     <div className="mb-2">
-                      <p className="text-[9px] font-medium text-gray-600 mb-0.5">Model thinking</p>
+                      <p className="text-[9px] font-medium text-gray-600 mb-0.5">Model thinking (final)</p>
                       <pre className="max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
                         {aiPromptDrawerSections.thinking}
                       </pre>
                     </div>
                   ) : null}
-                  <p className="text-[9px] font-medium text-gray-600 mb-0.5">Raw model output</p>
+                  <p className="text-[9px] font-medium text-gray-600 mb-0.5">Raw model output (final)</p>
                   <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
                     {aiPromptDrawerSections.rawResponse || '—'}
                   </pre>
@@ -1779,34 +1826,6 @@ export default function RunsPage() {
                     {aiPromptDrawerSections.playwrightCode || '—'}
                   </pre>
                 </div>
-                {aiPromptDrawerSections.streamingPartial ? (
-                  <div
-                    className="rounded border border-teal-100 bg-teal-50/40 p-2"
-                    role="region"
-                    aria-label="Live vision model output"
-                  >
-                    <p className="text-[10px] font-semibold text-gray-800 mb-1">5. Live model output</p>
-                    <p className="text-[9px] text-gray-500 mb-1.5 leading-snug">
-                      Thought summaries and answer text stream here. When generation finishes, the final transcript
-                      appears in section 3 above; use <strong>Run on page</strong> to execute Playwright on the live browser
-                      (full test runs it automatically after codegen).
-                    </p>
-                    <div className="mb-2">
-                      <p className="text-[9px] font-medium text-gray-600 mb-0.5">Thought summary</p>
-                      <p className="text-[9px] text-gray-500 mb-1 leading-snug">
-                        Parts marked <code className="rounded bg-white/80 px-0.5">thought: true</code> from Gemini
-                        (requires includeThoughts).
-                      </p>
-                      <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/60 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800 min-h-[2rem]">
-                        {aiPromptDrawerSections.liveThinkingStream || '—'}
-                      </pre>
-                    </div>
-                    <p className="text-[9px] font-medium text-gray-600 mb-0.5">Answer / Playwright stream</p>
-                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-teal-200/80 bg-white p-2 font-mono text-[9px] leading-snug text-gray-800">
-                      {aiPromptDrawerSections.liveRawStream || '…'}
-                    </pre>
-                  </div>
-                ) : null}
               </div>
             </div>
             <div className="flex flex-shrink-0 justify-end gap-2 border-t border-gray-100 px-3 py-2.5 bg-gray-50/80">
