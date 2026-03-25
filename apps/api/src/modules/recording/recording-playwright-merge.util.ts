@@ -174,3 +174,22 @@ export function fixAmbiguousTableLastRowTdLocator(playwrightCode: string): strin
     '$1.first()',
   );
 }
+
+/**
+ * Playback: some shadcn/Radix-style dropdown triggers visually show a label like "Select Provider" but
+ * Playwright's accessible-role query resolves zero matches for `getByRole('combobox', { name })`.
+ * Keep the original role/name lookup first, then fall back to visible-text combobox/button locators.
+ */
+export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): string {
+  return playwrightCode.replace(
+    /\bawait\s+page\.getByRole\(\s*(['"`])combobox\1\s*,\s*\{\s*name:\s*(['"`])([^'"`\n\r]+)\2\s*\}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?/g,
+    (_full, _roleQuote: string, _nameQuote: string, rawName: string, firstPart: string, clickPart: string) => {
+      const name = String(rawName).trim();
+      if (!name || name.length > 160) return _full;
+      const qName = JSON.stringify(name);
+      const first = firstPart ?? '';
+      const click = clickPart ?? '.click()';
+      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: true }).first()${click}; })();`;
+    },
+  );
+}

@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.44`: added a generic playback fallback for combobox triggers so shadcn-style dropdowns keep working even when accessible role/name queries do not resolve their visible labels.
+- `@bladerunner/api 0.6.49`: rewrote generated combobox clicks to try role/name first and then visible-text trigger locators, based on runtime evidence from the Kintsugi Provider dropdown mismatch.
+- `0.10.43`: added temporary runtime probes to compare Provider dropdown DOM semantics against AI prompt codegen for the Kintsugi playback issue.
+- `@bladerunner/api 0.6.48`: instrumented Provider dropdown capture and codegen summaries to debug why generated Playwright locators for the shadcn-style control do not execute successfully.
 - `0.10.42`: removed the temporary playback teardown crash probes after confirming the screencast shutdown race fix.
 - `@bladerunner/api 0.6.47`: cleaned up playback teardown instrumentation while keeping the closed-target screencast ack guard in place.
 - `0.10.41`: fixed playback teardown crashes caused by late screencast frame acknowledgements arriving after the browser was already closing.

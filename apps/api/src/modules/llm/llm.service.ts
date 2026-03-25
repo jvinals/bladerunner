@@ -343,6 +343,17 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       }
     }
 
+    const looksLikeProviderSelectPrompt = /select provider/i.test(input.instruction) || /provider drop(?:down|box)/i.test(input.instruction);
+    if (looksLikeProviderSelectPrompt) {
+      const draftHasCombobox =
+        draftPlaywrightCode.includes("getByRole('combobox'") || draftPlaywrightCode.includes('getByRole("combobox"');
+      const finalHasCombobox =
+        finalPlaywrightCode.includes("getByRole('combobox'") || finalPlaywrightCode.includes('getByRole("combobox"');
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:input.pageUrl || 'unknown',hypothesisId:'H-provider-codegen',location:'apps/api/src/modules/llm/llm.service.ts:instructionToAction',message:'provider codegen summary',data:{provider:codegen.provider,model:codegen.model,verifyOn,verifyProvider:verifyOn ? (verifyRawResponse != null ? 'executed' : 'attempted') : 'disabled',draftPlaywrightCode,draftHasSelectProvider:/Select Provider/i.test(draftPlaywrightCode),draftHasCombobox,finalPlaywrightCode,finalHasSelectProvider:/Select Provider/i.test(finalPlaywrightCode),finalHasCombobox},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
+
     const output: InstructionToActionOutput = {
       playwrightCode: finalPlaywrightCode,
       action: 'custom',

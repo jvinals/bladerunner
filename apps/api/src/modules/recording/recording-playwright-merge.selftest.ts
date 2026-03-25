@@ -1,5 +1,6 @@
 import {
   excludeFileInputFromFollowingInputXPath,
+  fallbackNamedComboboxClicksForPlayback,
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
   preferSearchConditionsPlaceholderOverFollowingInputLabel,
@@ -136,6 +137,14 @@ assertEq(
   'playback: following::input excludes type=file',
   excludeFileInputFromFollowingInputXPath(`await page.locator('section').locator('xpath=following::input').fill('x');`),
   `await page.locator('section').locator('xpath=following::input[not(@type="file")]').fill('x');`,
+);
+
+assertEq(
+  'playback: combobox role/name click gets resilient fallback',
+  fallbackNamedComboboxClicksForPlayback(
+    `await page.getByRole('combobox', { name: 'Select Provider' }).click();`,
+  ),
+  `await (async () => { const primary = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); if (await primary.count()) { await primary.click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');
