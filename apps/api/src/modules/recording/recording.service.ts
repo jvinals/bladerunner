@@ -154,6 +154,7 @@ export interface RecordingSession {
    */
   clerkDomCaptureBarrier: number;
   projectAuth: ProjectAutoSignInCredentials | null;
+  screencastClosing?: boolean;
 }
 
 /** Stored on each playback session so Restart can replay with the same options. */
@@ -193,6 +194,7 @@ export interface PlaybackSession {
    */
   activeStepWork: Promise<void> | null;
   projectAuth: ProjectAutoSignInCredentials | null;
+  screencastClosing?: boolean;
 }
 
 @Injectable()
@@ -329,6 +331,7 @@ export class RecordingService extends EventEmitter {
 
     const latestFrame = session.latestFrame;
     const screencastVideo = session.screencastVideo;
+    session.screencastClosing = true;
 
     try {
       await session.cdpSession.send('Page.stopScreencast');
@@ -451,6 +454,7 @@ export class RecordingService extends EventEmitter {
     if (session.userId !== userId) {
       throw new ForbiddenException('Not allowed to end this recording session');
     }
+    session.screencastClosing = true;
     try {
       await session.cdpSession.send('Page.stopScreencast');
     } catch (err) {
@@ -2420,7 +2424,7 @@ export class RecordingService extends EventEmitter {
   /** CDP screencast → `emit('frame', frameChannelId, base64Jpeg)` */
   private async attachScreencast(
     cdpSession: CDPSession,
-    latestFrameHolder: { latestFrame: Buffer | null },
+    latestFrameHolder: { latestFrame: Buffer | null; page?: Page; browser?: Browser; screencastClosing?: boolean },
     frameChannelId: string,
     opts?: { onJpegFrame?: (jpeg: Buffer) => void },
   ) {
@@ -2438,9 +2442,21 @@ export class RecordingService extends EventEmitter {
       latestFrameHolder.latestFrame = buf;
       opts?.onJpegFrame?.(buf);
 
-      await cdpSession.send('Page.screencastFrameAck', {
-        sessionId: params.sessionId,
-      });
+      try {
+        await cdpSession.send('Page.screencastFrameAck', {
+          sessionId: params.sessionId,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const duringTeardown =
+          latestFrameHolder.screencastClosing === true ||
+          latestFrameHolder.page?.isClosed?.() === true ||
+          latestFrameHolder.browser?.isConnected?.() === false;
+        if (duringTeardown && /Target page, context or browser has been closed/i.test(msg)) {
+          return;
+        }
+        throw err;
+      }
 
       this.emit('frame', frameChannelId, params.data);
     });
@@ -2997,6 +3013,7 @@ export class RecordingService extends EventEmitter {
 
   private async cleanupPlaybackSession(playbackSessionId: string, session: PlaybackSession) {
     session.paused = false;
+    session.screencastClosing = true;
     const waiters = session.playbackResumeWaiters.splice(0);
     for (const w of waiters) {
       try {

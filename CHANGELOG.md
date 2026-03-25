@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.42`: removed the temporary playback teardown crash probes after confirming the screencast shutdown race fix.
+- `@bladerunner/api 0.6.47`: cleaned up playback teardown instrumentation while keeping the closed-target screencast ack guard in place.
+- `0.10.41`: fixed playback teardown crashes caused by late screencast frame acknowledgements arriving after the browser was already closing.
+- `@bladerunner/api 0.6.46`: made screencast teardown tolerant of closed-target CDP ack races during recording/playback shutdown while preserving the existing playback completion flow.
 - `0.10.40`: removed the temporary Kintsugi dropdown codegen debug probes and one-off repro scripts after confirming the AI prompt selection fix.
 - `@bladerunner/api 0.6.45`: cleaned up runtime instrumentation from Set-of-Marks capture and AI prompt codegen while keeping the verified dropdown-targeting behavior.
 - `0.10.39`: taught AI prompt codegen to avoid unnecessary field-selector combobox clicks when the desired dropdown result row is already visible in the captured DOM context.
