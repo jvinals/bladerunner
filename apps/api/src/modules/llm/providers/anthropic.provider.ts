@@ -36,13 +36,15 @@ export class AnthropicProvider implements LlmProvider {
       },
     );
 
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: options?.maxTokens ?? 1024,
-      system: systemMsg?.content,
-      messages: anthropicMessages,
-      ...(options?.signal ? { signal: options.signal } : {}),
-    });
+    const response = await this.client.messages.create(
+      {
+        model: this.model,
+        max_tokens: options?.maxTokens ?? 1024,
+        system: systemMsg?.content,
+        messages: anthropicMessages,
+      },
+      ...(options?.signal ? [{ signal: options.signal }] : []),
+    );
 
     const textBlock = response.content.find((b) => b.type === 'text');
     const text = textBlock && 'text' in textBlock ? textBlock.text : '';

@@ -2,6 +2,20 @@
 
 ## 2026-03-25
 
+- `0.10.37`: taught Set-of-Marks capture to tag custom clickable dropdown rows with visible text, so AI prompt screenshots can include patient search results like the Kintsugi `Julian` row.
+- `@bladerunner/api 0.6.42`: expanded Set-of-Marks candidate detection beyond semantic controls to include visible pointer-text custom options, and added temporary dropdown repro instrumentation.
+- `0.10.36`: removed temporary AI prompt latency timing probes and the one-off repro helper after confirming the verify pass caused the visible delay.
+- `@bladerunner/api 0.6.41`: cleaned up AI prompt latency instrumentation while preserving the existing codegen and verify behavior.
+- `0.10.35`: added temporary AI prompt latency instrumentation to measure the gap between visible model output and final Playwright code completion.
+- `@bladerunner/api 0.6.40`: instrumented AI prompt codegen and verify timing for runtime diagnosis of post-stream latency.
+- `0.10.34`: removed temporary AI prompt Anthropic debug probes and the one-off signal repro script after confirming the request-shape fix.
+- `@bladerunner/api 0.6.39`: cleaned up Anthropic AI prompt instrumentation while keeping the corrected SDK request options wiring.
+- `0.10.33`: fixed AI prompt step generation when Anthropic is selected for Playwright codegen by sending abort signals as request options instead of request body fields.
+- `@bladerunner/api 0.6.38`: corrected Anthropic SDK request wiring for AI prompt codegen so `signal` no longer triggers `invalid_request_error`.
+- `0.10.32`: removed temporary Kintsugi auto-sign-in debug probes and one-off repro scripts after confirming the non-Clerk fallback works.
+- `@bladerunner/api 0.6.37`: cleaned up runtime instrumentation from recording/playback auto sign-in while preserving the project-aware auth fallback.
+- `0.10.31`: taught automatic sign-in to fall back to project-stored credentials for non-Clerk apps like Kintsugi while keeping Clerk detection for Evocare-style flows.
+- `@bladerunner/api 0.6.36`: added project-aware generic email/password sign-in alongside the existing Clerk automation path and persisted the chosen auth kind for playback.
 - `0.10.30`: removed the temporary measurement probe used to validate the compact “Models by task” card height reduction.
 - `@bladerunner/web 0.7.23`: cleaned up debug-only task-card measurement hooks while keeping the compact table layout.
 - `0.10.29`: condensed the AI / LLM “Models by task” card into a table-like layout to cut its vertical footprint substantially.

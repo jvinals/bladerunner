@@ -37,6 +37,12 @@ import {
   sleepMs,
   type ClerkOtpMode,
 } from '@bladerunner/clerk-agentmail-signin';
+import {
+  detectLikelyClerkLoginPage,
+  performProjectPasswordSignIn,
+  type AutoSignInAuthKind,
+  type ProjectAutoSignInCredentials,
+} from './project-auto-sign-in';
 import { buildPlaybackSkipSet, normalizePlaybackUrl, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
 import { filterStepsForPlaybackExecutionChain } from './playback-execution-chain.util';
 import { escapeLocatorCssInPlaywrightSnippet } from './playback-css-escape.util';
@@ -147,6 +153,7 @@ export interface RecordingSession {
    * snapshot this at entry; if it changed after `await` LLM, the action crossed the pause window and is dropped.
    */
   clerkDomCaptureBarrier: number;
+  projectAuth: ProjectAutoSignInCredentials | null;
 }
 
 /** Stored on each playback session so Restart can replay with the same options. */
@@ -185,6 +192,7 @@ export interface PlaybackSession {
    * `stopPlayback` awaits this before `browser.close()` so `executePwCode` is not torn down mid-flight.
    */
   activeStepWork: Promise<void> | null;
+  projectAuth: ProjectAutoSignInCredentials | null;
 }
 
 @Injectable()
@@ -217,11 +225,13 @@ export class RecordingService extends EventEmitter {
 
   async startRecording(userId: string, name: string, url: string, projectId?: string) {
     const pid = projectId?.trim();
+    let projectAuth: ProjectAutoSignInCredentials | null = null;
     if (pid) {
       const proj = await this.prisma.project.findFirst({ where: { id: pid, userId } });
       if (!proj) {
         throw new BadRequestException('Project not found');
       }
+      projectAuth = this.projectAuthFromProject(proj);
     }
 
     const run = await this.prisma.run.create({
@@ -263,6 +273,7 @@ export class RecordingService extends EventEmitter {
         recordingCaptureTail: Promise.resolve(),
         recordingDomCapturePaused: false,
         clerkDomCaptureBarrier: 0,
+        projectAuth,
       };
 
       this.sessions.set(run.id, session);
@@ -497,8 +508,30 @@ export class RecordingService extends EventEmitter {
     if (!session || session.userId !== userId) {
       throw new NotFoundException('No active recording session for this run');
     }
-    const otpMode = opts?.clerkOtpMode ?? this.resolveClerkOtpMode(undefined);
-    if (!this.playbackClerkAssistAvailable(otpMode)) {
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      include: {
+        project: {
+          select: {
+            testUserEmail: true,
+            testUserPassword: true,
+            testEmailProvider: true,
+          },
+        },
+      },
+    });
+    if (!run) {
+      throw new NotFoundException('Run not found');
+    }
+    const projectAuth = session.projectAuth ?? this.projectAuthFromProject(run.project);
+    const authKind = await this.resolveAutoSignInAuthKind(session.page, projectAuth);
+    if (!authKind) {
+      throw new BadRequestException(
+        'Automatic sign-in is not configured for this project. Use a Clerk sign-in page with API env credentials, or set the project test email and password.',
+      );
+    }
+    const otpMode = authKind === 'generic' ? projectAuth!.otpMode : opts?.clerkOtpMode ?? this.resolveClerkOtpMode(undefined);
+    if (authKind === 'clerk' && !this.playbackClerkAssistAvailable(otpMode)) {
       if (!this.playbackClerkCoreEnvReady()) {
         throw new BadRequestException(
           'Clerk test credentials are not fully configured on the API. Set E2E_CLERK_USER_PASSWORD, E2E_CLERK_USER_EMAIL or E2E_CLERK_USER_USERNAME (use +clerk_test in the email for test-email OTP mode), CLERK_SECRET_KEY (or PLAYBACK_CLERK_SECRET_KEY / E2E_CLERK_SECRET_KEY), and CLERK_PUBLISHABLE_KEY or VITE_CLERK_PUBLISHABLE_KEY.',
@@ -508,14 +541,6 @@ export class RecordingService extends EventEmitter {
         'MailSlurp OTP mode requires MAILSLURP_API_KEY and MAILSLURP_INBOX_ID or MAILSLURP_INBOX_EMAIL.',
       );
     }
-    const run = await this.prisma.run.findFirst({ where: { id: runId, userId } });
-    if (!run) {
-      throw new NotFoundException('Run not found');
-    }
-    const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')!.trim();
-    const identifier =
-      this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
-      this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
     const baseURL = this.playbackClerkBaseUrl(run.url);
     /** Set before page pause so in-flight capture callbacks see it before `recordStep`. */
     session.recordingDomCapturePaused = true;
@@ -526,17 +551,25 @@ export class RecordingService extends EventEmitter {
         (globalThis as unknown as { __bladerunnerPauseRecording?: boolean }).__bladerunnerPauseRecording =
           true;
       });
-      await performClerkPasswordEmail2FA(session.page, {
-        baseURL,
-        identifier,
-        password,
-        skipInitialNavigate: true,
-        otpMode,
-      });
+      if (authKind === 'generic') {
+        await performProjectPasswordSignIn(session.page, baseURL, projectAuth!);
+      } else {
+        const password = this.configService.get<string>('E2E_CLERK_USER_PASSWORD')!.trim();
+        const identifier =
+          this.configService.get<string>('E2E_CLERK_USER_USERNAME')?.trim() ||
+          this.configService.get<string>('E2E_CLERK_USER_EMAIL')!.trim();
+        await performClerkPasswordEmail2FA(session.page, {
+          baseURL,
+          identifier,
+          password,
+          skipInitialNavigate: true,
+          otpMode,
+        });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`clerkAutoSignInDuringRecording failed: ${msg}`);
-      throw new ServiceUnavailableException(`Clerk automatic sign-in failed: ${msg}`);
+      throw new ServiceUnavailableException(`Automatic sign-in failed: ${msg}`);
     } finally {
       session.recordingDomCapturePaused = false;
       session.clerkDomCaptureBarrier += 1;
@@ -588,12 +621,13 @@ export class RecordingService extends EventEmitter {
         action: 'CUSTOM',
         selector: null,
         value: null,
-        instruction: buildClerkAutoSignInInstruction(otpMode),
+        instruction: buildClerkAutoSignInInstruction(otpMode, authKind),
         playwrightCode: clerkAutoSignInSentinelPlaywrightCode(),
         origin: 'MANUAL',
       },
       {
         clerkAutoSignInBlock: {
+          authKind,
           otpMode,
           postAuthPageUrl,
         },
@@ -2211,7 +2245,7 @@ export class RecordingService extends EventEmitter {
     opts?: {
       syntheticClerkAutoSignIn?: boolean;
       /** Single-step automatic Clerk sign-in (recorded otpMode + post-auth URL for playback). */
-      clerkAutoSignInBlock?: { otpMode: ClerkOtpMode; postAuthPageUrl: string };
+      clerkAutoSignInBlock?: { authKind: AutoSignInAuthKind; otpMode: ClerkOtpMode; postAuthPageUrl: string };
       /** Re-record path: use the DB step’s sequence (session.stepSequence may not match). */
       stepSequenceHint?: number;
     },
@@ -2222,10 +2256,11 @@ export class RecordingService extends EventEmitter {
   }> {
     let metadata: Record<string, unknown> | undefined;
     if (opts?.clerkAutoSignInBlock) {
-      const { otpMode, postAuthPageUrl } = opts.clerkAutoSignInBlock;
+      const { authKind, otpMode, postAuthPageUrl } = opts.clerkAutoSignInBlock;
       metadata = {
         kind: CLERK_AUTO_SIGN_IN_KIND,
         schemaVersion: CLERK_AUTO_SIGN_IN_SCHEMA_VERSION,
+        authKind,
         otpMode,
         postAuthPageUrl,
       };
@@ -2270,7 +2305,7 @@ export class RecordingService extends EventEmitter {
     },
     opts?: {
       syntheticClerkAutoSignIn?: boolean;
-      clerkAutoSignInBlock?: { otpMode: ClerkOtpMode; postAuthPageUrl: string };
+      clerkAutoSignInBlock?: { authKind: AutoSignInAuthKind; otpMode: ClerkOtpMode; postAuthPageUrl: string };
       stepSequenceHint?: number;
     },
   ) {
@@ -2422,7 +2457,16 @@ export class RecordingService extends EventEmitter {
   ): Promise<{ playbackSessionId: string; sourceRunId: string }> {
     const run = await this.prisma.run.findFirst({
       where: { id: sourceRunId, userId },
-      include: { steps: { orderBy: { sequence: 'asc' } } },
+      include: {
+        steps: { orderBy: { sequence: 'asc' } },
+        project: {
+          select: {
+            testUserEmail: true,
+            testUserPassword: true,
+            testEmailProvider: true,
+          },
+        },
+      },
     });
 
     if (!run) {
@@ -2517,6 +2561,7 @@ export class RecordingService extends EventEmitter {
             ? Math.floor(opts.playThroughSequence)
             : null,
         pauseBeforeFirstRecordedStepPending: opts?.startPaused === true,
+        projectAuth: this.projectAuthFromProject(run.project),
       };
 
       this.playbackSessions.set(playbackSessionId, session);
@@ -3052,6 +3097,30 @@ export class RecordingService extends EventEmitter {
     return true;
   }
 
+  private projectAuthFromProject(project: {
+    testUserEmail?: string | null;
+    testUserPassword?: string | null;
+    testEmailProvider?: string | null;
+  } | null | undefined): ProjectAutoSignInCredentials | null {
+    const identifier = project?.testUserEmail?.trim();
+    const password = project?.testUserPassword ?? '';
+    if (!identifier || !password) return null;
+    return {
+      identifier,
+      password,
+      otpMode: project?.testEmailProvider === 'CLERK_TEST_EMAIL' ? 'clerk_test_email' : 'mailslurp',
+    };
+  }
+
+  private async resolveAutoSignInAuthKind(
+    page: Page,
+    projectAuth: ProjectAutoSignInCredentials | null,
+  ): Promise<AutoSignInAuthKind | null> {
+    if (await detectLikelyClerkLoginPage(page)) return 'clerk';
+    if (projectAuth) return 'generic';
+    return null;
+  }
+
   private resolveClerkOtpMode(opts?: StartPlaybackServiceOpts): ClerkOtpMode {
     if (opts?.clerkOtpMode) return opts.clerkOtpMode;
     const raw = this.configService.get<string>('PLAYBACK_CLERK_OTP_MODE', '').trim().toLowerCase();
@@ -3098,7 +3167,15 @@ export class RecordingService extends EventEmitter {
     if (!isClerkAutoSignInMetadata(meta)) {
       throw new Error('Invalid clerk_auto_sign_in step metadata');
     }
-    await this.runPlaybackClerkAutoSignIn(session.page, runUrl, meta.otpMode);
+    const authKind = meta.authKind ?? 'clerk';
+    if (authKind === 'generic') {
+      if (!session.projectAuth) {
+        throw new Error('Project test credentials are required for generic automatic sign-in');
+      }
+      await performProjectPasswordSignIn(session.page, runUrl, session.projectAuth);
+    } else {
+      await this.runPlaybackClerkAutoSignIn(session.page, runUrl, meta.otpMode);
+    }
     let current = '';
     try {
       current = session.page.url();
@@ -3122,12 +3199,34 @@ export class RecordingService extends EventEmitter {
     otpMode: ClerkOtpMode,
     state: { clerkFullSignInDone: boolean },
   ): Promise<void> {
-    const assistOk = this.playbackClerkAssistAvailable(otpMode);
-    if (!wantAuto || !assistOk) {
+    if (!wantAuto) {
       return;
     }
     try {
       const page = session.page;
+      const authKind = await this.resolveAutoSignInAuthKind(page, session.projectAuth);
+      if (authKind === 'generic' && session.projectAuth && !state.clerkFullSignInDone) {
+        const emailVisible = await page
+          .locator('input[type="email"], input[name="email"], input[autocomplete="email"], input[name*="email" i]')
+          .first()
+          .isVisible()
+          .catch(() => false);
+        const passwordVisible = await page
+          .locator('input[name="password"][type="password"], input[type="password"], input[name*="password" i]')
+          .first()
+          .isVisible()
+          .catch(() => false);
+        const otpVisibleGeneric = await detectClerkOtpInputVisible(page);
+        if (emailVisible || passwordVisible || otpVisibleGeneric) {
+          await performProjectPasswordSignIn(page, runUrl, session.projectAuth);
+          state.clerkFullSignInDone = true;
+          return;
+        }
+      }
+      const assistOk = this.playbackClerkAssistAvailable(otpMode);
+      if (!assistOk) {
+        return;
+      }
       const identifier = page.locator('input[name="identifier"], #identifier-field').first();
       const idVisible = await identifier.isVisible().catch(() => false);
       const otpVisible = await detectClerkOtpInputVisible(page);

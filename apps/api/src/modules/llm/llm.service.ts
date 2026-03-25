@@ -232,6 +232,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       onStream?: (ev: { rawText: string; thinking?: string }) => void;
     },
   ): Promise<InstructionToActionResult> {
+    const startedAt = Date.now();
     const shot = input.screenshotBase64?.trim();
     if (!shot) {
       throw new Error(
@@ -289,7 +290,6 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     let finalPlaywrightCode = draftPlaywrightCode;
     let verifyUserPrompt: string | undefined;
     let verifyRawResponse: string | undefined;
-
     if (verifyOn) {
       const verify = await this.llmConfig.resolve(opts?.userId, 'playwright_verify');
       verifyUserPrompt = buildGeminiVerifyPrompt({
@@ -299,6 +299,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         accessibilitySnapshot: input.accessibilitySnapshot,
         draftPlaywrightCode,
       });
+      const verifyStartedAt = Date.now();
       try {
         if (verify.provider === 'gemini') {
           const verifyCredentials = await this.llmConfig.resolveProviderCredentials(opts?.userId, 'gemini');
