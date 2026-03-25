@@ -2,6 +2,8 @@
 
 ## 2026-03-25
 
+- `0.10.40`: removed the temporary Kintsugi dropdown codegen debug probes and one-off repro scripts after confirming the AI prompt selection fix.
+- `@bladerunner/api 0.6.45`: cleaned up runtime instrumentation from Set-of-Marks capture and AI prompt codegen while keeping the verified dropdown-targeting behavior.
 - `0.10.39`: taught AI prompt codegen to avoid unnecessary field-selector combobox clicks when the desired dropdown result row is already visible in the captured DOM context.
 - `@bladerunner/api 0.6.44`: strengthened Playwright codegen and DOM-verify guidance so visible patient search result rows win over unrelated nearby comboboxes like the Kintsugi `Name` picker.
 - `0.10.38`: fixed Set-of-Marks candidate ordering so newly discovered custom dropdown rows are actually sorted and tagged in the final screenshot manifest.

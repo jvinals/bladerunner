@@ -238,35 +238,6 @@ export async function injectSetOfMarkOverlay(
     },
     { maxTags, containerId: SOM_CONTAINER_ID },
   );
-  const debug = await page
-    .evaluate(() => {
-      const target = /julian/i;
-      const visibleJulianNodes = Array.from(document.querySelectorAll('*'))
-        .map((el) => {
-          const h = el as HTMLElement;
-          const txt = (h.innerText || h.textContent || '').replace(/\s+/g, ' ').trim();
-          if (!target.test(txt)) return null;
-          const r = h.getBoundingClientRect();
-          return {
-            tag: h.tagName.toLowerCase(),
-            role: h.getAttribute('role') || '',
-            text: txt.slice(0, 160),
-            ariaHidden: h.getAttribute('aria-hidden') || '',
-            width: Math.round(r.width),
-            height: Math.round(r.height),
-          };
-        })
-        .filter(Boolean)
-        .slice(0, 20);
-      return {
-        visibleJulianNodeCount: visibleJulianNodes.length,
-        visibleJulianNodes,
-      };
-    })
-    .catch(() => null);
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'pre-fix',hypothesisId:'H-som-dropdown',location:'apps/api/src/modules/recording/set-of-mark-capture.ts:injectSetOfMarkOverlay',message:'set-of-mark capture summary',data:{manifestChars:((result as { manifestText?: string }).manifestText || '').length,manifestHasJulian:/julian/i.test((result as { manifestText?: string }).manifestText || ''),visibleJulianNodeCount:debug?.visibleJulianNodeCount ?? null,visibleJulianNodes:debug?.visibleJulianNodes ?? []},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return result as SetOfMarkInjectResult;
 }
 

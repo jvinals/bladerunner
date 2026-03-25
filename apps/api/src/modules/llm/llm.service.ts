@@ -343,22 +343,6 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       }
     }
 
-    const inputLooksLikeKintsugiDropdown =
-      /julian/i.test(input.instruction) &&
-      /dropdown/i.test(input.instruction) &&
-      /julian/i.test(input.somManifest);
-    if (inputLooksLikeKintsugiDropdown) {
-      const draftHasCombobox =
-        draftPlaywrightCode.includes("getByRole('combobox'") ||
-        draftPlaywrightCode.includes('getByRole("combobox"');
-      const finalHasCombobox =
-        finalPlaywrightCode.includes("getByRole('combobox'") ||
-        finalPlaywrightCode.includes('getByRole("combobox"');
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'pre-fix',hypothesisId:'H-codegen-vs-verify',location:'apps/api/src/modules/llm/llm.service.ts:instructionToAction',message:'kintsugi dropdown codegen summary',data:{draftHasCombobox,draftHasJulianText:/Julian/i.test(draftPlaywrightCode),finalHasCombobox,finalHasJulianText:/Julian/i.test(finalPlaywrightCode),verifyOn,verifyChanged:draftPlaywrightCode.trim()!==finalPlaywrightCode.trim(),somHasJulian:/julian/i.test(input.somManifest),elapsedMs:Date.now()-startedAt},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    }
-
     const output: InstructionToActionOutput = {
       playwrightCode: finalPlaywrightCode,
       action: 'custom',
