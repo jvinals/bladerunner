@@ -37,4 +37,20 @@ const emptySom = buildGeminiInstructionPrompt({
 });
 assert.ok(emptySom.includes('(none)'));
 
+const repairPrompt = buildGeminiInstructionPrompt({
+  instruction: 'Click Save',
+  pageUrl: 'https://example.com/app',
+  somManifest: '[1] <button> name="Save"',
+  accessibilitySnapshot: '{"role":"Root"}',
+  failedPlaywrightCode: `await page.getByRole('button', { name: 'Broken Save' }).click();`,
+  recordedPlaywrightCode: `await page.getByRole('button', { name: 'Save' }).click();`,
+  priorFailureKind: 'timeout',
+  priorFailureMessage: 'locator.click timed out waiting for Save',
+});
+assert.ok(repairPrompt.includes('Failure kind: timeout'));
+assert.ok(repairPrompt.includes('Previously active Playwright that failed:'));
+assert.ok(repairPrompt.includes(`await page.getByRole('button', { name: 'Broken Save' }).click();`));
+assert.ok(repairPrompt.includes('Original recorded Playwright baseline:'));
+assert.ok(repairPrompt.includes(`await page.getByRole('button', { name: 'Save' }).click();`));
+
 console.log('gemini-instruction.selftest: ok');

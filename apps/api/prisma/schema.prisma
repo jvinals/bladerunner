@@ -137,6 +137,7 @@ model RunStep {
   value          String?
   instruction    String
   playwrightCode String     @map("playwright_code")
+  recordedPlaywrightCode String? @map("recorded_playwright_code")
   origin         StepOrigin @default(MANUAL)
   durationMs     Int?       @map("duration_ms")
   timestamp      DateTime

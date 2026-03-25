@@ -33,6 +33,14 @@ export type AiPromptStepMetadata = {
   lastAiPromptFailureInstruction?: string;
   lastAiPromptFailedPlaywrightCode?: string;
   lastAiPromptRetried?: boolean;
+  /** Latest playback repair attempt metadata, used for both stored and regenerated snippets. */
+  lastPlaybackRepairAt?: string;
+  lastPlaybackRepairFailureKind?: 'abort' | 'timeout' | 'strict_mode' | 'playwright' | 'other';
+  lastPlaybackRepairFailureMessage?: string;
+  lastPlaybackRepairFailedPlaywrightCode?: string;
+  lastPlaybackRepairGeneratedPlaywrightCode?: string;
+  lastPlaybackRepairRecordedPlaywrightCode?: string;
+  lastPlaybackRepairPromotedAt?: string;
 };
 
 export function isAiPromptStepMetadata(m: unknown): m is AiPromptStepMetadata {

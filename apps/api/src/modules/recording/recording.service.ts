@@ -76,6 +76,12 @@ import {
   preferSearchConditionsPlaceholderOverFollowingInputLabel,
   excludeFileInputFromFollowingInputXPath,
 } from './recording-playwright-merge.util';
+import {
+  buildPlaybackRepairMetadataPatch,
+  isAiPromptSentinelPlaywrightCode,
+  isExecutableStoredPlaywrightCode,
+  resolveRecordedPlaywrightCode,
+} from './recorded-playwright.util';
 import { classifyRecordingAutomationFailure } from './recording-timeout.util';
 import {
   adjustRecordingVideoDurationToWallClock,
@@ -217,6 +223,151 @@ export class RecordingService extends EventEmitter {
     private readonly configService: ConfigService,
   ) {
     super();
+  }
+
+  private async attemptPlaybackRepair(
+    session: PlaybackSession,
+    step: RunStep,
+    playbackSessionId: string,
+    sourceRunId: string,
+    stepPayload: { id: string; sequence: number; action: string; instruction: string },
+    skipClickForce: boolean,
+    failureContext?: ReturnType<typeof classifyRecordingAutomationFailure>,
+  ): Promise<void> {
+    let generated: { playwrightCode: string };
+    try {
+      generated = await this.runWithActivePlaybackStep(session, () =>
+        this.playAiPromptStepOnPage(session.page, step.instruction, {
+          userId: session.userId,
+          skipClickForce,
+          progress: { runId: sourceRunId, stepId: step.id },
+          phase: 'generateOnly',
+          repairContext: {
+            failedPlaywrightCode: isExecutableStoredPlaywrightCode(step.playwrightCode) ? step.playwrightCode : undefined,
+            recordedPlaywrightCode: this.resolveStepRecordedPlaywrightCode(step) ?? undefined,
+            priorFailureKind: failureContext?.kind,
+            priorFailureMessage: failureContext?.message,
+          },
+          persistTranscript: {
+            stepId: step.id,
+            runId: sourceRunId,
+            userId: session.userId,
+            source: 'playback',
+            playbackEmit: {
+              playbackSessionId,
+              sourceRunId,
+              step: stepPayload,
+            },
+          },
+        }),
+      );
+    } catch (generationErr) {
+      const generationFailure = classifyRecordingAutomationFailure(generationErr);
+      await this.persistPlaybackRepairFailure(step, generationFailure, {
+        failedPlaywrightCode: failureContext ? step.playwrightCode : undefined,
+      });
+      throw generationErr;
+    }
+
+    try {
+      await this.runWithActivePlaybackStep(session, () =>
+        this.executePwCode(session.page, generated.playwrightCode, {
+          skipClickForce,
+        }),
+      );
+    } catch (repairErr) {
+      const repairFailure = classifyRecordingAutomationFailure(repairErr);
+      await this.persistPlaybackRepairFailure(step, repairFailure, {
+        failedPlaywrightCode: generated.playwrightCode,
+        generatedPlaywrightCode: generated.playwrightCode,
+      });
+      throw repairErr;
+    }
+
+    const fresh = await this.prisma.runStep.findFirst({
+      where: { id: step.id, runId: sourceRunId, userId: session.userId },
+    });
+    const baseMeta =
+      fresh?.metadata && typeof fresh.metadata === 'object'
+        ? { ...(fresh.metadata as Record<string, unknown>) }
+        : {};
+    const promotedAt = new Date().toISOString();
+    const metadataPatch = buildPlaybackRepairMetadataPatch(baseMeta, {
+      failureAt: promotedAt,
+      failureKind: failureContext?.kind ?? 'playwright',
+      failureMessage: failureContext?.message ?? 'Generated replacement Playwright promoted during playback.',
+      failedPlaywrightCode: failureContext ? step.playwrightCode : undefined,
+      generatedPlaywrightCode: generated.playwrightCode,
+      recordedPlaywrightCode: this.resolveStepRecordedPlaywrightCode(
+        fresh ?? step,
+        generated.playwrightCode,
+      ),
+      promotedAt,
+    });
+    if (isAiPromptStepMetadata(step.metadata) || step.origin === 'AI_PROMPT') {
+      metadataPatch.kind = AI_PROMPT_STEP_KIND;
+      metadataPatch.schemaVersion = AI_PROMPT_STEP_SCHEMA_VERSION;
+      metadataPatch.lastAiPromptCodegenOk = true;
+      metadataPatch.lastAiPromptCodegenInstruction = step.instruction;
+      metadataPatch.lastAiPromptRunOk = true;
+      metadataPatch.lastAiPromptRunInstruction = step.instruction;
+    }
+    await this.persistStepPlaywrightCodeState(
+      fresh ?? step,
+      generated.playwrightCode,
+      metadataPatch,
+    );
+  }
+
+  private async executePlaybackStepWithRepair(
+    session: PlaybackSession,
+    step: RunStep,
+    playbackSessionId: string,
+    sourceRunId: string,
+    stepPayload: { id: string; sequence: number; action: string; instruction: string },
+    skipClickForce: boolean,
+  ): Promise<void> {
+    if (isExecutableStoredPlaywrightCode(step.playwrightCode)) {
+      try {
+        await this.runWithActivePlaybackStep(session, () =>
+          this.executePwCode(session.page, step.playwrightCode, {
+            skipClickForce,
+          }),
+        );
+        return;
+      } catch (execErr) {
+        const failure = classifyRecordingAutomationFailure(execErr);
+        if (!this.shouldAttemptPlaybackRepair(step, failure)) {
+          await this.persistPlaybackRepairFailure(step, failure, {
+            failedPlaywrightCode: step.playwrightCode,
+          });
+          throw execErr;
+        }
+        try {
+          await this.attemptPlaybackRepair(
+            session,
+            step,
+            playbackSessionId,
+            sourceRunId,
+            stepPayload,
+            skipClickForce,
+            failure,
+          );
+          return;
+        } catch (repairErr) {
+          throw repairErr;
+        }
+      }
+    }
+
+    await this.attemptPlaybackRepair(
+      session,
+      step,
+      playbackSessionId,
+      sourceRunId,
+      stepPayload,
+      skipClickForce,
+    );
   }
 
   getSession(runId: string): RecordingSession | undefined {
@@ -684,6 +835,7 @@ export class RecordingService extends EventEmitter {
       value: out.value || null,
       instruction,
       playwrightCode: out.playwrightCode,
+      recordedPlaywrightCode: out.playwrightCode,
       origin: 'AI_DRIVEN',
     });
 
@@ -742,6 +894,7 @@ export class RecordingService extends EventEmitter {
       value: out.value || null,
       instruction: trimmed,
       playwrightCode: out.playwrightCode,
+      recordedPlaywrightCode: out.playwrightCode,
       origin: 'AI_DRIVEN' as const,
     };
 
@@ -757,6 +910,7 @@ export class RecordingService extends EventEmitter {
         value: data.value,
         instruction: finalInstruction,
         playwrightCode: data.playwrightCode,
+        recordedPlaywrightCode: data.recordedPlaywrightCode,
         origin: origin as any,
         metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
         timestamp: new Date(),
@@ -811,6 +965,7 @@ export class RecordingService extends EventEmitter {
           action: 'CUSTOM',
           origin: 'AI_PROMPT',
           playwrightCode: aiPromptStepSentinelPlaywrightCode(),
+          recordedPlaywrightCode: existing.recordedPlaywrightCode,
           metadata: {
             kind: AI_PROMPT_STEP_KIND,
             schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
@@ -822,6 +977,8 @@ export class RecordingService extends EventEmitter {
     if (dto.aiPromptMode === false) {
       const pw = existing.playwrightCode ?? '';
       const keepPw = pw && !pw.includes('ai_prompt_step: execution');
+      const recordedPw = existing.recordedPlaywrightCode ?? '';
+      const keepRecordedPw = recordedPw && !isAiPromptSentinelPlaywrightCode(recordedPw);
       return this.prisma.runStep.update({
         where: { id: stepId },
         data: {
@@ -829,6 +986,8 @@ export class RecordingService extends EventEmitter {
           metadata: Prisma.JsonNull,
           playwrightCode: keepPw
             ? pw
+            : keepRecordedPw
+              ? recordedPw
             : '// Reverted from AI prompt — use Re-record to capture Playwright',
         },
       });
@@ -1164,6 +1323,10 @@ export class RecordingService extends EventEmitter {
             await this.prisma.runStep.update({
               where: { id: stepId },
               data: {
+                recordedPlaywrightCode: this.resolveStepRecordedPlaywrightCode(
+                  freshAfter ?? row ?? { recordedPlaywrightCode: null, playwrightCode: pw },
+                  playwrightCode,
+                ),
                 metadata: {
                   ...baseMetaRun,
                   kind: AI_PROMPT_STEP_KIND,
@@ -1221,6 +1384,10 @@ export class RecordingService extends EventEmitter {
               await this.prisma.runStep.update({
                 where: { id: stepId },
                 data: {
+                  recordedPlaywrightCode: this.resolveStepRecordedPlaywrightCode(
+                    fresh ?? { recordedPlaywrightCode: null, playwrightCode },
+                    playwrightCode,
+                  ),
                   metadata: {
                     ...baseMeta,
                     kind: AI_PROMPT_STEP_KIND,
@@ -1238,6 +1405,10 @@ export class RecordingService extends EventEmitter {
               await this.prisma.runStep.update({
                 where: { id: stepId },
                 data: {
+                  recordedPlaywrightCode: this.resolveStepRecordedPlaywrightCode(
+                    fresh ?? { recordedPlaywrightCode: null, playwrightCode },
+                    playwrightCode,
+                  ),
                   metadata: {
                     ...baseMeta,
                     kind: AI_PROMPT_STEP_KIND,
@@ -1281,6 +1452,10 @@ export class RecordingService extends EventEmitter {
                 pageAccessibilityTree: this.combineSomAndA11yForExplain(ctx),
                 screenshotBase64: ctx.screenshotBase64,
                 failedPlaywrightCode: lastAttemptedPlaywrightCode,
+                recordedPlaywrightCode:
+                  step.recordedPlaywrightCode && step.recordedPlaywrightCode.trim()
+                    ? step.recordedPlaywrightCode.trim()
+                    : undefined,
               },
               { signal, userId },
             );
@@ -1444,6 +1619,89 @@ export class RecordingService extends EventEmitter {
     return /aborted|AbortError/i.test(msg);
   }
 
+  private resolveStepRecordedPlaywrightCode(
+    step: Pick<RunStep, 'recordedPlaywrightCode' | 'playwrightCode'>,
+    nextActiveCode?: string | null,
+  ): string | null {
+    return resolveRecordedPlaywrightCode(step.recordedPlaywrightCode, step.playwrightCode, nextActiveCode);
+  }
+
+  private async persistStepPlaywrightCodeState(
+    step: Pick<RunStep, 'id' | 'recordedPlaywrightCode' | 'playwrightCode' | 'metadata'>,
+    activePlaywrightCode: string,
+    extraMetadata?: Record<string, unknown>,
+  ): Promise<void> {
+    const recordedPlaywrightCode = this.resolveStepRecordedPlaywrightCode(step, activePlaywrightCode);
+    const baseMeta =
+      step.metadata && typeof step.metadata === 'object' ? { ...(step.metadata as Record<string, unknown>) } : {};
+    await this.prisma.runStep.update({
+      where: { id: step.id },
+      data: {
+        playwrightCode: activePlaywrightCode,
+        recordedPlaywrightCode,
+        ...(extraMetadata
+          ? {
+              metadata: {
+                ...baseMeta,
+                ...extraMetadata,
+              } as Prisma.InputJsonValue,
+            }
+          : {}),
+      },
+    });
+  }
+
+  private async persistPlaybackRepairFailure(
+    step: RunStep,
+    failure: ReturnType<typeof classifyRecordingAutomationFailure>,
+    opts: {
+      failedPlaywrightCode?: string | null;
+      generatedPlaywrightCode?: string | null;
+    } = {},
+  ): Promise<void> {
+    const baseMeta =
+      step.metadata && typeof step.metadata === 'object' ? { ...(step.metadata as Record<string, unknown>) } : {};
+    const recordedPlaywrightCode = this.resolveStepRecordedPlaywrightCode(step, opts.generatedPlaywrightCode);
+    const nowIso = new Date().toISOString();
+    const metadataPatch = buildPlaybackRepairMetadataPatch(baseMeta, {
+      failureAt: nowIso,
+      failureKind: failure.kind,
+      failureMessage: failure.message,
+      failedPlaywrightCode: opts.failedPlaywrightCode ?? step.playwrightCode,
+      generatedPlaywrightCode: opts.generatedPlaywrightCode,
+      recordedPlaywrightCode,
+    });
+    if (isAiPromptStepMetadata(step.metadata) || step.origin === 'AI_PROMPT') {
+      metadataPatch.kind = AI_PROMPT_STEP_KIND;
+      metadataPatch.schemaVersion = AI_PROMPT_STEP_SCHEMA_VERSION;
+      metadataPatch.lastAiPromptRunOk = false;
+      metadataPatch.lastAiPromptFailureAt = nowIso;
+      metadataPatch.lastAiPromptFailureKind = failure.kind;
+      metadataPatch.lastAiPromptFailureMessage = failure.message;
+      metadataPatch.lastAiPromptFailureInstruction = step.instruction;
+      metadataPatch.lastAiPromptRetried = !!opts.generatedPlaywrightCode;
+      if ((opts.failedPlaywrightCode ?? step.playwrightCode)?.trim()) {
+        metadataPatch.lastAiPromptFailedPlaywrightCode = (
+          opts.failedPlaywrightCode ?? step.playwrightCode
+        )?.trim();
+      }
+    }
+    await this.prisma.runStep.update({
+      where: { id: step.id },
+      data: {
+        metadata: metadataPatch as Prisma.InputJsonValue,
+        ...(recordedPlaywrightCode && !step.recordedPlaywrightCode
+          ? { recordedPlaywrightCode }
+          : {}),
+      },
+    });
+  }
+
+  private shouldAttemptPlaybackRepair(step: Pick<RunStep, 'instruction'>, failure: ReturnType<typeof classifyRecordingAutomationFailure>): boolean {
+    if (failure.isAbort || failure.kind === 'other') return false;
+    return !!step.instruction?.trim();
+  }
+
   /** Keep socket payloads bounded (JPEG is separate). */
   private static readonly AI_PROMPT_SOCKET_TEXT_MAX = 120_000;
 
@@ -1544,6 +1802,7 @@ export class RecordingService extends EventEmitter {
         value: null,
         instruction: instr,
         playwrightCode: aiPromptStepSentinelPlaywrightCode(),
+        recordedPlaywrightCode: null,
         origin: 'AI_PROMPT',
         metadata: {
           kind: AI_PROMPT_STEP_KIND,
@@ -1853,6 +2112,12 @@ export class RecordingService extends EventEmitter {
       phase?: 'full' | 'generateOnly' | 'executeOnly';
       /** Required when `phase` is `executeOnly`. */
       executePlaywrightCode?: string;
+      repairContext?: {
+        failedPlaywrightCode?: string;
+        recordedPlaywrightCode?: string;
+        priorFailureKind?: string;
+        priorFailureMessage?: string;
+      };
       persistTranscript?: {
         stepId: string;
         runId: string;
@@ -1936,6 +2201,10 @@ export class RecordingService extends EventEmitter {
       pageUrl,
       somManifest,
       accessibilitySnapshot,
+      failedPlaywrightCode: opts.repairContext?.failedPlaywrightCode,
+      recordedPlaywrightCode: opts.repairContext?.recordedPlaywrightCode,
+      priorFailureKind: opts.repairContext?.priorFailureKind,
+      priorFailureMessage: opts.repairContext?.priorFailureMessage,
     });
 
     const llmUserId = opts.userId ?? opts.persistTranscript?.userId;
@@ -1947,6 +2216,10 @@ export class RecordingService extends EventEmitter {
         somManifest,
         accessibilitySnapshot,
         screenshotBase64,
+        failedPlaywrightCode: opts.repairContext?.failedPlaywrightCode,
+        recordedPlaywrightCode: opts.repairContext?.recordedPlaywrightCode,
+        priorFailureKind: opts.repairContext?.priorFailureKind,
+        priorFailureMessage: opts.repairContext?.priorFailureMessage,
       },
       {
         userId: llmUserId,
@@ -2296,6 +2569,7 @@ export class RecordingService extends EventEmitter {
       value: string | null;
       instruction: string;
       playwrightCode: string;
+      recordedPlaywrightCode?: string | null;
       origin: 'MANUAL' | 'AI_DRIVEN';
     },
     opts?: {
@@ -2357,6 +2631,7 @@ export class RecordingService extends EventEmitter {
       value: string | null;
       instruction: string;
       playwrightCode: string;
+      recordedPlaywrightCode?: string | null;
       origin: 'MANUAL' | 'AI_DRIVEN';
     },
     opts?: {
@@ -2379,6 +2654,7 @@ export class RecordingService extends EventEmitter {
         value: data.value,
         instruction,
         playwrightCode: data.playwrightCode,
+        recordedPlaywrightCode: data.recordedPlaywrightCode ?? data.playwrightCode,
         origin: origin as any,
         timestamp: new Date(),
         metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
@@ -2971,80 +3247,19 @@ export class RecordingService extends EventEmitter {
           continue;
         }
 
-        const isAiPromptStep =
-          isAiPromptStepMetadata(step.metadata) || step.origin === 'AI_PROMPT';
-
         try {
-          if (isAiPromptStep) {
-            await this.runWithActivePlaybackStep(session, () =>
-              this.playAiPromptStepOnPage(session.page, step.instruction, {
-                userId: session.userId,
-                skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
-                progress: { runId: sourceRunId, stepId: step.id },
-                persistTranscript: {
-                  stepId: step.id,
-                  runId: sourceRunId,
-                  userId: session.userId,
-                  source: 'playback',
-                  playbackEmit: {
-                    playbackSessionId,
-                    sourceRunId,
-                    step: stepPayload,
-                  },
-                },
-              }),
-            );
-          } else {
-            await this.runWithActivePlaybackStep(session, () =>
-              this.executePwCode(session.page, step.playwrightCode, {
-                /** Prevents `click({ force: true })` on steps before recorded `clerk_auto_sign_in` — force can break Clerk UI. */
-                skipClickForce: !clerkPlaybackState.clerkFullSignInDone,
-              }),
-            );
-          }
+          await this.executePlaybackStepWithRepair(
+            session,
+            step,
+            playbackSessionId,
+            sourceRunId,
+            stepPayload,
+            !clerkPlaybackState.clerkFullSignInDone,
+          );
         } catch (execErr) {
           const failure = classifyRecordingAutomationFailure(execErr);
           const msg = failure.message;
           this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);
-          if (isAiPromptStep) {
-            const fresh = await this.prisma.runStep.findFirst({
-              where: { id: step.id, runId: sourceRunId, userId: session.userId },
-            });
-            const baseMeta =
-              fresh?.metadata && typeof fresh.metadata === 'object'
-                ? (fresh.metadata as Record<string, unknown>)
-                : {};
-            const transcriptCode =
-              baseMeta.lastLlmTranscript &&
-              typeof baseMeta.lastLlmTranscript === 'object' &&
-              typeof (baseMeta.lastLlmTranscript as { rawResponse?: unknown }).rawResponse === 'string'
-                ? ((baseMeta.lastLlmTranscript as { rawResponse: string }).rawResponse.trim() || undefined)
-                : undefined;
-            const failedPlaywrightCode =
-              (typeof fresh?.playwrightCode === 'string' && fresh.playwrightCode.trim()
-                ? fresh.playwrightCode.trim()
-                : undefined) ?? transcriptCode;
-            const failurePatch: Record<string, unknown> = {
-              ...baseMeta,
-              kind: AI_PROMPT_STEP_KIND,
-              schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
-              lastAiPromptRunOk: false,
-              lastAiPromptFailureAt: new Date().toISOString(),
-              lastAiPromptFailureKind: failure.kind,
-              lastAiPromptFailureMessage: msg,
-              lastAiPromptFailureInstruction: step.instruction,
-              lastAiPromptRetried: false,
-            };
-            if (failedPlaywrightCode) {
-              failurePatch.lastAiPromptFailedPlaywrightCode = failedPlaywrightCode;
-            }
-            await this.prisma.runStep.update({
-              where: { id: step.id },
-              data: {
-                metadata: failurePatch as Prisma.InputJsonValue,
-              },
-            });
-          }
           this.emit('playbackProgress', playbackSessionId, {
             playbackSessionId,
             sourceRunId,

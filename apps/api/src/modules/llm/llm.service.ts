@@ -254,6 +254,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       pageUrl: input.pageUrl,
       somManifest: input.somManifest,
       accessibilitySnapshot: input.accessibilitySnapshot,
+      failedPlaywrightCode: input.failedPlaywrightCode,
+      recordedPlaywrightCode: input.recordedPlaywrightCode,
+      priorFailureKind: input.priorFailureKind,
+      priorFailureMessage: input.priorFailureMessage,
     });
 
     let draftPlaywrightCode: string;
@@ -298,6 +302,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         somManifest: input.somManifest,
         accessibilitySnapshot: input.accessibilitySnapshot,
         draftPlaywrightCode,
+        failedPlaywrightCode: input.failedPlaywrightCode,
+        recordedPlaywrightCode: input.recordedPlaywrightCode,
+        priorFailureKind: input.priorFailureKind,
+        priorFailureMessage: input.priorFailureMessage,
       });
       const verifyStartedAt = Date.now();
       try {
@@ -315,6 +323,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
               somManifest: input.somManifest,
               accessibilitySnapshot: input.accessibilitySnapshot,
               draftPlaywrightCode,
+              failedPlaywrightCode: input.failedPlaywrightCode,
+              recordedPlaywrightCode: input.recordedPlaywrightCode,
+              priorFailureKind: input.priorFailureKind,
+              priorFailureMessage: input.priorFailureMessage,
               signal: opts?.signal,
             });
             verifyRawResponse = verified.rawText;
@@ -332,6 +344,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
             somManifest: input.somManifest,
             accessibilitySnapshot: input.accessibilitySnapshot,
             draftPlaywrightCode,
+            failedPlaywrightCode: input.failedPlaywrightCode,
+            recordedPlaywrightCode: input.recordedPlaywrightCode,
+            priorFailureKind: input.priorFailureKind,
+            priorFailureMessage: input.priorFailureMessage,
             signal: opts?.signal,
           });
           verifyRawResponse = verified.rawText;
@@ -374,11 +390,12 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       pageAccessibilityTree: string;
       screenshotBase64?: string;
       failedPlaywrightCode?: string;
+      recordedPlaywrightCode?: string;
     },
     opts?: { signal?: AbortSignal; userId?: string },
   ): Promise<AiPromptTestFailureHelp | null> {
     if (this.chatProviderOverride) {
-      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""${input.failedPlaywrightCode?.trim() ? `\n\nFailed Playwright code:\n"""${input.failedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""${input.failedPlaywrightCode?.trim() ? `\n\nFailed Playwright code:\n"""${input.failedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}${input.recordedPlaywrightCode?.trim() ? `\n\nOriginal recorded Playwright code:\n"""${input.recordedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
       try {
         const llm = await this.chatProviderOverride.chat(
           [
@@ -404,7 +421,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
 
     try {
-      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""${input.failedPlaywrightCode?.trim() ? `\n\nFailed Playwright code:\n"""${input.failedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""${input.failedPlaywrightCode?.trim() ? `\n\nFailed Playwright code:\n"""${input.failedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}${input.recordedPlaywrightCode?.trim() ? `\n\nOriginal recorded Playwright code:\n"""${input.recordedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
       const llm = await this.chatJson(
         opts?.userId,
         'explain_ai_prompt_failure',

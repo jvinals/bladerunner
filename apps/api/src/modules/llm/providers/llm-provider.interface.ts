@@ -53,6 +53,13 @@ export interface InstructionToActionInput {
   /** Playwright CDP accessibility snapshot JSON (+ enrichment), captured before SOM overlay. */
   accessibilitySnapshot: string;
   screenshotBase64?: string;
+  /** Optional: active snippet that just failed on the live page and needs repair. */
+  failedPlaywrightCode?: string;
+  /** Optional: immutable record-time baseline for the step. */
+  recordedPlaywrightCode?: string;
+  /** Optional: failure details for regeneration / repair passes. */
+  priorFailureKind?: string;
+  priorFailureMessage?: string;
 }
 
 export interface InstructionToActionOutput {

@@ -33,6 +33,7 @@ export function truncateDomSectionsForGemini(som: string, a11y: string): { som: 
 const GEMINI_PAGE_URL_PLACEHOLDER = '[PAGE_URL]';
 const GEMINI_MANIFEST_PLACEHOLDER = '[INTERACTIVE_MANIFEST]';
 const GEMINI_ACCESSIBILITY_PLACEHOLDER = '[ACCESSIBILITY_TREE]';
+const GEMINI_REPAIR_CONTEXT_PLACEHOLDER = '[PLAYWRIGHT_REPAIR_CONTEXT]';
 
 export type GeminiVisionPromptInput = {
   instruction: string;
@@ -41,6 +42,10 @@ export type GeminiVisionPromptInput = {
   somManifest: string;
   /** Playwright CDP accessibility snapshot JSON (+ enrichment). */
   accessibilitySnapshot: string;
+  failedPlaywrightCode?: string;
+  recordedPlaywrightCode?: string;
+  priorFailureKind?: string;
+  priorFailureMessage?: string;
 };
 
 const GEMINI_INSTRUCTION_TEMPLATE = `You are an expert Playwright automation engineer.
@@ -60,6 +65,9 @@ ${GEMINI_MANIFEST_PLACEHOLDER}
 
 Playwright CDP accessibility snapshot (JSON or enriched text; structural DOM / a11y distillation):
 ${GEMINI_ACCESSIBILITY_PLACEHOLDER}
+
+Previous Playwright context (optional, may be absent):
+${GEMINI_REPAIR_CONTEXT_PLACEHOLDER}
 
 Playwright coding guidelines for modern SPAs (avoid flakiness):
 - No locator.fill() on search inputs, comboboxes, or async dropdowns — use locator.pressSequentially(text, { delay: 50 }) so React/Vue input handlers and network requests fire.
@@ -112,10 +120,23 @@ export function buildGeminiInstructionPrompt(input: GeminiVisionPromptInput | st
   const { som, a11y } = truncateDomSectionsForGemini(resolved.somManifest, resolved.accessibilitySnapshot);
   const manifestBlock = som.length ? som : '(none)';
   const a11yBlock = a11y.length ? a11y : '(none)';
+  const repairContext = [
+    resolved.priorFailureKind?.trim() ? `Failure kind: ${resolved.priorFailureKind.trim()}` : '',
+    resolved.priorFailureMessage?.trim() ? `Failure message: ${resolved.priorFailureMessage.trim()}` : '',
+    resolved.failedPlaywrightCode?.trim()
+      ? `Previously active Playwright that failed:\n${resolved.failedPlaywrightCode.trim()}`
+      : '',
+    resolved.recordedPlaywrightCode?.trim()
+      ? `Original recorded Playwright baseline:\n${resolved.recordedPlaywrightCode.trim()}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   return GEMINI_INSTRUCTION_TEMPLATE.replace(GEMINI_INSTRUCTION_ACTION_PLACEHOLDER, action)
     .replace(GEMINI_PAGE_URL_PLACEHOLDER, url)
     .replace(GEMINI_MANIFEST_PLACEHOLDER, manifestBlock)
-    .replace(GEMINI_ACCESSIBILITY_PLACEHOLDER, a11yBlock);
+    .replace(GEMINI_ACCESSIBILITY_PLACEHOLDER, a11yBlock)
+    .replace(GEMINI_REPAIR_CONTEXT_PLACEHOLDER, repairContext || '(none)');
 }
 
 const GEMINI_VERIFY_DRAFT_MAX_CHARS = 16000;
@@ -125,6 +146,7 @@ const GEMINI_VERIFY_TASK = '[TASK]';
 const GEMINI_VERIFY_SOM = '[SOM_MANIFEST]';
 const GEMINI_VERIFY_A11Y = '[ACCESSIBILITY_TREE]';
 const GEMINI_VERIFY_DRAFT = '[DRAFT_PLAYWRIGHT]';
+const GEMINI_VERIFY_REPAIR_CONTEXT = '[PLAYWRIGHT_REPAIR_CONTEXT]';
 
 const GEMINI_VERIFY_TEMPLATE = `You are an expert Playwright automation engineer performing a verification pass (no image).
 
@@ -150,6 +172,9 @@ ${GEMINI_VERIFY_A11Y}
 
 Draft Playwright code to verify:
 ${GEMINI_VERIFY_DRAFT}
+
+Previous Playwright context (optional):
+${GEMINI_VERIFY_REPAIR_CONTEXT}
 `;
 
 export function buildGeminiVerifyPrompt(input: {
@@ -158,6 +183,10 @@ export function buildGeminiVerifyPrompt(input: {
   somManifest: string;
   accessibilitySnapshot: string;
   draftPlaywrightCode: string;
+  failedPlaywrightCode?: string;
+  recordedPlaywrightCode?: string;
+  priorFailureKind?: string;
+  priorFailureMessage?: string;
 }): string {
   const { som, a11y } = truncateDomSectionsForGemini(input.somManifest, input.accessibilitySnapshot);
   let draft = input.draftPlaywrightCode.trim();
@@ -165,11 +194,24 @@ export function buildGeminiVerifyPrompt(input: {
     draft = `${draft.slice(0, GEMINI_VERIFY_DRAFT_MAX_CHARS)}\n… [draft truncated for verify pass]`;
   }
   const url = input.pageUrl.trim() || '(unknown)';
+  const repairContext = [
+    input.priorFailureKind?.trim() ? `Failure kind: ${input.priorFailureKind.trim()}` : '',
+    input.priorFailureMessage?.trim() ? `Failure message: ${input.priorFailureMessage.trim()}` : '',
+    input.failedPlaywrightCode?.trim()
+      ? `Previously active Playwright that failed:\n${input.failedPlaywrightCode.trim()}`
+      : '',
+    input.recordedPlaywrightCode?.trim()
+      ? `Original recorded Playwright baseline:\n${input.recordedPlaywrightCode.trim()}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   return GEMINI_VERIFY_TEMPLATE.replace(GEMINI_VERIFY_PAGE_URL, url)
     .replace(GEMINI_VERIFY_TASK, input.instruction.trim())
     .replace(GEMINI_VERIFY_SOM, som.length ? som : '(none)')
     .replace(GEMINI_VERIFY_A11Y, a11y.length ? a11y : '(none)')
-    .replace(GEMINI_VERIFY_DRAFT, draft);
+    .replace(GEMINI_VERIFY_DRAFT, draft)
+    .replace(GEMINI_VERIFY_REPAIR_CONTEXT, repairContext || '(none)');
 }
 
 export async function verifyGeminiPlaywrightAgainstDom(params: {
@@ -180,6 +222,10 @@ export async function verifyGeminiPlaywrightAgainstDom(params: {
   somManifest: string;
   accessibilitySnapshot: string;
   draftPlaywrightCode: string;
+  failedPlaywrightCode?: string;
+  recordedPlaywrightCode?: string;
+  priorFailureKind?: string;
+  priorFailureMessage?: string;
   signal?: AbortSignal;
 }): Promise<{ rawText: string; playwrightCode: string }> {
   const { apiKey, model, signal } = params;

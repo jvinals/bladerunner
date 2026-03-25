@@ -2,6 +2,8 @@
 
 ## 2026-03-25
 
+- `0.10.47`: preserved immutable record-time Playwright per step so playback can try the active snippet first, repair failures with fresh LLM context, and promote successful replacements without losing the original baseline.
+- `@bladerunner/api 0.6.52`: added `recorded_playwright_code`, stored record-time snippets across recording flows, and taught playback to retry failed steps by regenerating Playwright with both the broken active code and the original recorded code as context.
 - `0.10.46`: hardened AI prompt timeout handling so client-abort signals are narrower, retryable generate failures can retry once, and known recording/playback promise rejections no longer take down the API process.
 - `@bladerunner/api 0.6.51`: classified recording/playback automation failures, persisted failed AI prompt code context in step metadata, switched AI test aborts to real request aborts, and added a non-fatal unhandled-rejection guard for known timeout paths.
 - `0.10.45`: removed the temporary Provider dropdown debug probes after confirming the generic combobox-trigger fallback fixed the shadcn-style playback issue.

@@ -28,6 +28,10 @@ export async function generateNonGeminiVisionPlaywrightSnippet(params: {
     pageUrl: params.input.pageUrl,
     somManifest: params.input.somManifest,
     accessibilitySnapshot: params.input.accessibilitySnapshot,
+    failedPlaywrightCode: params.input.failedPlaywrightCode,
+    recordedPlaywrightCode: params.input.recordedPlaywrightCode,
+    priorFailureKind: params.input.priorFailureKind,
+    priorFailureMessage: params.input.priorFailureMessage,
   });
 
   const client = createChatLlmProvider(params.config, params.provider, params.model, params.credentials);
@@ -59,6 +63,10 @@ export async function verifyPlaywrightAgainstDomNonGemini(params: {
   somManifest: string;
   accessibilitySnapshot: string;
   draftPlaywrightCode: string;
+  failedPlaywrightCode?: string;
+  recordedPlaywrightCode?: string;
+  priorFailureKind?: string;
+  priorFailureMessage?: string;
   signal?: AbortSignal;
 }): Promise<{ rawText: string; playwrightCode: string }> {
   const fullPrompt = buildGeminiVerifyPrompt({
@@ -67,6 +75,10 @@ export async function verifyPlaywrightAgainstDomNonGemini(params: {
     somManifest: params.somManifest,
     accessibilitySnapshot: params.accessibilitySnapshot,
     draftPlaywrightCode: params.draftPlaywrightCode,
+    failedPlaywrightCode: params.failedPlaywrightCode,
+    recordedPlaywrightCode: params.recordedPlaywrightCode,
+    priorFailureKind: params.priorFailureKind,
+    priorFailureMessage: params.priorFailureMessage,
   });
 
   const client = createChatLlmProvider(params.config, params.provider, params.model, params.credentials);
