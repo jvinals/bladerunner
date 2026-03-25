@@ -99,7 +99,7 @@ function AiLlmSettings() {
   const [usage, setUsage] = useState<Record<string, { provider: string; model: string }>>({});
   const [caps, setCaps] = useState<LlmCap | null>(null);
   const [catalog, setCatalog] = useState<
-    Record<string, { label: string; suggestedModels: string[] }>
+    Record<string, { label: string; suggestedModels: string[]; models: string[] }>
   >({});
 
   useEffect(() => {
@@ -114,7 +114,10 @@ function AiLlmSettings() {
           llm?: {
             usage: Record<string, { provider: string; model: string }>;
             capabilities: LlmCap;
-            providerCatalog: Record<string, { label: string; suggestedModels: string[] }>;
+            providerCatalog: Record<
+              string,
+              { label: string; suggestedModels: string[]; models: string[] }
+            >;
           };
         };
         if (d.llm?.usage) setUsage({ ...d.llm.usage });
@@ -133,13 +136,24 @@ function AiLlmSettings() {
   }, []);
 
   const updateRow = (key: string, field: 'provider' | 'model', value: string) => {
-    setUsage((prev) => ({
-      ...prev,
-      [key]: {
-        provider: field === 'provider' ? value : prev[key]?.provider ?? 'gemini',
-        model: field === 'model' ? value : prev[key]?.model ?? '',
-      },
-    }));
+    setUsage((prev) => {
+      if (field === 'provider') {
+        const p = value;
+        const first =
+          catalog[p]?.suggestedModels?.[0] ?? catalog[p]?.models?.[0] ?? '';
+        return {
+          ...prev,
+          [key]: { provider: p, model: first },
+        };
+      }
+      return {
+        ...prev,
+        [key]: {
+          provider: prev[key]?.provider ?? 'gemini',
+          model: value,
+        },
+      };
+    });
   };
 
   const save = async () => {
@@ -187,8 +201,9 @@ function AiLlmSettings() {
               {LLM_USAGE_ROWS.map((row) => {
                 const u = usage[row.key];
                 const prov = u?.provider ?? 'gemini';
-                const suggestions = catalog[prov]?.suggestedModels ?? [];
-                const id = `llm-model-${row.key}`;
+                const listed = catalog[prov]?.models ?? catalog[prov]?.suggestedModels ?? [];
+                const cur = u?.model?.trim() ?? '';
+                const modelOptions = cur && !listed.includes(cur) ? [cur, ...listed] : listed;
                 return (
                   <tr key={row.key} className="border-b border-gray-50 align-top">
                     <td className="py-3 pr-3 text-gray-700 max-w-[220px]">{row.label}</td>
@@ -206,19 +221,28 @@ function AiLlmSettings() {
                       </select>
                     </td>
                     <td className="py-3 pr-3">
-                      <input
-                        id={id}
-                        list={`${id}-list`}
-                        value={u?.model ?? ''}
+                      <select
+                        value={
+                          modelOptions.length === 0
+                            ? ''
+                            : modelOptions.includes(cur)
+                              ? cur
+                              : (modelOptions[0] ?? '')
+                        }
                         onChange={(e) => updateRow(row.key, 'model', e.target.value)}
-                        placeholder="Model id"
-                        className="w-full min-w-[180px] border border-gray-200 rounded-md px-2 py-1.5 text-gray-800 font-mono text-[11px]"
-                      />
-                      <datalist id={`${id}-list`}>
-                        {suggestions.map((m) => (
-                          <option key={m} value={m} />
-                        ))}
-                      </datalist>
+                        className="w-full min-w-[200px] max-w-[min(100%,28rem)] border border-gray-200 rounded-md px-2 py-1.5 text-gray-800 font-mono text-[11px] bg-white"
+                        title={cur || 'Model id'}
+                      >
+                        {modelOptions.length === 0 ? (
+                          <option value="">Loading models…</option>
+                        ) : (
+                          modelOptions.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </td>
                     <td className="py-3">
                       {caps && (

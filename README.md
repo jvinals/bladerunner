@@ -79,6 +79,8 @@ cd apps/api && pnpm exec prisma migrate deploy
 
 **Secrets** live only in **`.env`** (never in the database). **Settings → AI / LLM** in the web app stores **per-task** provider + model id (PostgreSQL `user_llm_preferences`); if unset, the server uses the env defaults below.
 
+**Model dropdowns** load from provider catalogs: **OpenRouter** (public `GET /api/v1/models`, no key), **OpenAI** and **Gemini** when the matching API key is set (live list from each vendor), and **Anthropic** (static list — no public list-models API). Results are cached in the API process; override TTL with **`LLM_MODEL_CATALOG_TTL_MS`** (milliseconds, default **900000** = 15 minutes).
+
 - **`GEMINI_API_KEY`** — Google **Gemini** (direct). Required when a routed task uses provider **Gemini**, or for env defaults for vision codegen / verify. Create a key in [Google AI Studio](https://aistudio.google.com/).
 - **`OPENAI_API_KEY`** — OpenAI (direct). Used when a task is set to **openai**, and as part of legacy defaults for text tasks.
 - **`ANTHROPIC_API_KEY`** — Anthropic (direct). Used when a task is set to **anthropic**.
@@ -250,6 +252,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.21** — **Settings / LLM**: Model id fields are **dropdowns** filled from **OpenRouter** (public catalog), **OpenAI** / **Gemini** (when API keys are set), and a static **Anthropic** list; optional **`LLM_MODEL_CATALOG_TTL_MS`** caches catalog fetches in the API. **`@bladerunner/api` `0.6.30`**, **`@bladerunner/web` `0.7.16`**, **`@bladerunner/types` `0.2.5`**.
 - **0.10.20** — **API**: Removed temporary Cursor debug instrumentation from **`main`**, **`LlmConfigService`**, and **`executePwCode`** (P2021 fallback + migrate messaging unchanged). **`@bladerunner/api` `0.6.29`**.
 - **0.10.19** — **API / LLM settings**: If **`user_llm_preferences`** is not migrated yet (Prisma **P2021**), **GET /settings** uses env LLM defaults instead of 500; **PATCH** returns **503** with migrate instructions until **`prisma migrate deploy`** is run. **`@bladerunner/api` `0.6.28`**.
 - **0.10.18** — **LLM settings**: Per-user **Settings → AI / LLM** (provider + model per task) persisted in **`user_llm_preferences`**; supports **Gemini**, **OpenAI**, **Anthropic**, and **OpenRouter** (e.g. Minimax). API keys remain **`.env`-only**; vision codegen can use non-Gemini providers via the shared prompt + image path. **`@bladerunner/api` `0.6.27`**, **`@bladerunner/web` `0.7.15`**, **`@bladerunner/types` `0.2.4`**.

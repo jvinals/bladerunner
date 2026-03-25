@@ -1,10 +1,11 @@
 import { Module, OnModuleInit, Logger } from '@nestjs/common';
 import { LlmService } from './llm.service';
 import { LlmConfigService } from './llm-config.service';
+import { LlmModelListService } from './llm-model-list.service';
 
 @Module({
-  providers: [LlmService, LlmConfigService],
-  exports: [LlmService, LlmConfigService],
+  providers: [LlmService, LlmConfigService, LlmModelListService],
+  exports: [LlmService, LlmConfigService, LlmModelListService],
 })
 export class LlmModule implements OnModuleInit {
   private readonly logger = new Logger(LlmModule.name);

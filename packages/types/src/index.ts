@@ -271,7 +271,10 @@ export interface LlmSettingsSection {
     LlmProviderId,
     {
       label: string;
+      /** Curated quick picks (subset of `models`). */
       suggestedModels: string[];
+      /** Full list for dropdowns (from provider APIs where available, else curated). */
+      models: string[];
     }
   >;
 }

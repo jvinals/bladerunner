@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, ServiceUnavailableException } from '@n
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmConfigService } from '../llm/llm-config.service';
+import { LlmModelListService } from '../llm/llm-model-list.service';
 import {
   isValidProviderId,
   isValidUsageKey,
@@ -31,17 +32,21 @@ export class SettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly llmConfig: LlmConfigService,
+    private readonly llmModelList: LlmModelListService,
   ) {}
 
   async getSettings(userId: string) {
-    const { usage, userModelPresets } = await this.llmConfig.getEffectivePreferencesForUser(userId);
+    const [{ usage, userModelPresets }, providerCatalog] = await Promise.all([
+      this.llmConfig.getEffectivePreferencesForUser(userId),
+      this.llmModelList.getResolvedProviderCatalog(),
+    ]);
     return {
       ...defaultWorkspace,
       llm: {
         usage,
         userModelPresets,
         capabilities: this.llmConfig.getCapabilities(),
-        providerCatalog: this.llmConfig.getProviderCatalog(),
+        providerCatalog,
       },
     };
   }

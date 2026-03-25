@@ -10,7 +10,6 @@ import {
   type LlmProviderId,
   type LlmUsageKey,
   type UserLlmPreferencesPayload,
-  LLM_PROVIDER_CATALOG,
   LLM_USAGE_KEYS,
 } from './llm-usage-registry';
 
@@ -56,10 +55,6 @@ export class LlmConfigService {
       hasAnthropicKey: Boolean(this.config.get<string>('ANTHROPIC_API_KEY')?.trim()),
       hasOpenRouterKey: Boolean(this.config.get<string>('OPENROUTER_API_KEY')?.trim()),
     };
-  }
-
-  getProviderCatalog() {
-    return LLM_PROVIDER_CATALOG;
   }
 
   /** Resolve API key for a provider from env (never persisted). */
