@@ -117,16 +117,6 @@ export async function injectSetOfMarkOverlay(
         };
       }
 
-      candidates.sort((a, b) => {
-        const pa = docXY(a);
-        const pb = docXY(b);
-        const dy = pa.docTop - pb.docTop;
-        if (Math.abs(dy) > 1) return dy;
-        return pa.docLeft - pb.docLeft;
-      });
-
-      const picked = candidates.slice(0, cap);
-
       function visibleName(el: Element): string {
         const al = el.getAttribute('aria-label');
         if (al?.trim()) return al.trim().slice(0, 200);
@@ -173,6 +163,16 @@ export async function injectSetOfMarkOverlay(
           seen.add(el);
         }
       }
+
+      candidates.sort((a, b) => {
+        const pa = docXY(a);
+        const pb = docXY(b);
+        const dy = pa.docTop - pb.docTop;
+        if (Math.abs(dy) > 1) return dy;
+        return pa.docLeft - pb.docLeft;
+      });
+
+      const picked = candidates.slice(0, cap);
 
       const lines: string[] = [];
       const root = doc.createElement('div');

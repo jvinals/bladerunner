@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.39`: taught AI prompt codegen to avoid unnecessary field-selector combobox clicks when the desired dropdown result row is already visible in the captured DOM context.
+- `@bladerunner/api 0.6.44`: strengthened Playwright codegen and DOM-verify guidance so visible patient search result rows win over unrelated nearby comboboxes like the Kintsugi `Name` picker.
+- `0.10.38`: fixed Set-of-Marks candidate ordering so newly discovered custom dropdown rows are actually sorted and tagged in the final screenshot manifest.
+- `@bladerunner/api 0.6.43`: moved custom pointer-text SOM candidates into the final sort/slice pass so visible dropdown results like the Kintsugi `Julian` row are no longer dropped before badge generation.
 - `0.10.37`: taught Set-of-Marks capture to tag custom clickable dropdown rows with visible text, so AI prompt screenshots can include patient search results like the Kintsugi `Julian` row.
 - `@bladerunner/api 0.6.42`: expanded Set-of-Marks candidate detection beyond semantic controls to include visible pointer-text custom options, and added temporary dropdown repro instrumentation.
 - `0.10.36`: removed temporary AI prompt latency timing probes and the one-off repro helper after confirming the verify pass caused the visible delay.

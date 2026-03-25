@@ -66,6 +66,7 @@ Playwright coding guidelines for modern SPAs (avoid flakiness):
 - Do not chain .first() immediately after a generic container filtered only by hasText on a div/listbox — clicks can hit dead space. Prefer getByText('Exact', { exact: true }), getByRole('option', { name: 'Exact' }), or another leaf-level locator.
 - Do not read table or list text immediately on navigation; await the target row/cell or use web-first assertions so content is loaded first.
 - For dynamic custom listboxes, after the list is visible prefer ArrowDown + Enter rather than clicking a possibly detached node.
+- If the matching dropdown result row is already visible in the screenshot or interactive manifest, do not add a preparatory click on a different nearby field-selector combobox just because it exists. Prefer the visible search textbox/input and the matching result row.
 - Prefer web-first assertions: await expect(locator).toContainText(...) (expect is available in the execution environment) instead of one-shot innerText checks.
 
 Strict output rules:
@@ -132,6 +133,7 @@ You are given the same page URL, task, interactive manifest, and accessibility s
 Rules:
 - If the draft is already correct and consistent with the DOM text, output it **unchanged** (verbatim).
 - If you find mismatches (e.g. wrong role name, placeholder not present, locator that cannot match the described UI), output a **corrected** full Playwright JavaScript snippet that completes the same task.
+- Treat unnecessary preparatory actions as incorrect when the target result is already visible in the DOM context. Example: if the task is to pick a patient from a visible dropdown result row, do not keep a preceding click on a separate "Name" combobox unless the task explicitly requires changing that combobox.
 - Output **only** executable Playwright JavaScript (same rules as codegen: no TypeScript-only syntax, no markdown fences, no comments or explanation).
 
 Page URL:
