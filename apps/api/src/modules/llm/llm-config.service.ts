@@ -43,19 +43,6 @@ export class LlmConfigService {
         this.logger.warn(
           'Table user_llm_preferences is missing — run `cd apps/api && pnpm exec prisma migrate deploy`. Using env LLM defaults until then.',
         );
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-          body: JSON.stringify({
-            sessionId: '8e7bf9',
-            location: 'llm-config.service.ts:findUserLlmRow',
-            message: 'P2021 missing table; fallback to env defaults',
-            data: { code: 'P2021', hypothesisId: 'H1' },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         return null;
       }
       throw e;

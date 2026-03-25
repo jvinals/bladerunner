@@ -250,6 +250,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.20** — **API**: Removed temporary Cursor debug instrumentation from **`main`**, **`LlmConfigService`**, and **`executePwCode`** (P2021 fallback + migrate messaging unchanged). **`@bladerunner/api` `0.6.29`**.
 - **0.10.19** — **API / LLM settings**: If **`user_llm_preferences`** is not migrated yet (Prisma **P2021**), **GET /settings** uses env LLM defaults instead of 500; **PATCH** returns **503** with migrate instructions until **`prisma migrate deploy`** is run. **`@bladerunner/api` `0.6.28`**.
 - **0.10.18** — **LLM settings**: Per-user **Settings → AI / LLM** (provider + model per task) persisted in **`user_llm_preferences`**; supports **Gemini**, **OpenAI**, **Anthropic**, and **OpenRouter** (e.g. Minimax). API keys remain **`.env`-only**; vision codegen can use non-Gemini providers via the shared prompt + image path. **`@bladerunner/api` `0.6.27`**, **`@bladerunner/web` `0.7.15`**, **`@bladerunner/types` `0.2.4`**.
 - **0.10.17** — **LLM / vision**: AI prompt and instruct flows capture a **full-page** JPEG for Gemini (Set-of-Marks across the scrollable page), with optional **`LLM_VISION_FULL_PAGE_MAX_HEIGHT_PX`** / **`LLM_VISION_FULL_PAGE_MAX_WIDTH_PX`** to cap oversized images via uniform downscaling. **`@bladerunner/api` `0.6.26`**.
