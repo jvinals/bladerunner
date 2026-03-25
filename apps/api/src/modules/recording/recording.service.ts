@@ -1866,74 +1866,6 @@ export class RecordingService extends EventEmitter {
       page,
       signal,
     );
-    const looksLikeProviderSelectPrompt = /select provider/i.test(instruction) || /provider drop(?:down|box)/i.test(instruction);
-    if (looksLikeProviderSelectPrompt) {
-      const providerProbe = await (async () => {
-        try {
-          const [comboSelectCount, comboProviderCount, buttonSelectCount, buttonProviderCount, textSelectCount, cssComboSelectCount, cssAnyProviderCount] = await Promise.all([
-            page.getByRole('combobox', { name: 'Select Provider' }).count(),
-            page.getByRole('combobox', { name: 'Provider' }).count(),
-            page.getByRole('button', { name: 'Select Provider' }).count(),
-            page.getByRole('button', { name: 'Provider' }).count(),
-            page.getByText('Select Provider', { exact: true }).count(),
-            page.locator('button[role="combobox"]').filter({ hasText: 'Select Provider' }).count(),
-            page.locator('button,[role="combobox"]').filter({ hasText: 'Provider' }).count(),
-          ]);
-          const domControls = await page.evaluate(() => {
-            function getLabelledText(el: Element): string {
-              const labelledby = el.getAttribute('aria-labelledby');
-              if (!labelledby) return '';
-              return labelledby
-                .split(/\s+/)
-                .map((id) => document.getElementById(id)?.textContent?.replace(/\s+/g, ' ').trim() || '')
-                .filter(Boolean)
-                .join(' ')
-                .slice(0, 200);
-            }
-            return Array.from(document.querySelectorAll('button,[role="combobox"],select,[aria-haspopup="listbox"]'))
-              .map((el) => {
-                const h = el as HTMLElement;
-                const r = h.getBoundingClientRect();
-                const st = window.getComputedStyle(h);
-                if (r.width < 1 || r.height < 1 || st.display === 'none' || st.visibility === 'hidden') return null;
-                const text = (h.innerText || h.textContent || '').replace(/\s+/g, ' ').trim();
-                const ariaLabel = h.getAttribute('aria-label') || '';
-                const labelled = getLabelledText(h);
-                const summary = `${ariaLabel} ${labelled} ${text}`.toLowerCase();
-                if (!summary.includes('provider')) return null;
-                return {
-                  tag: h.tagName.toLowerCase(),
-                  role: h.getAttribute('role') || '',
-                  text: text.slice(0, 160),
-                  ariaLabel: ariaLabel.slice(0, 160),
-                  ariaLabelledByText: labelled,
-                  nameAttr: h.getAttribute('name') || '',
-                };
-              })
-              .filter(Boolean)
-              .slice(0, 12);
-          });
-          return {
-            comboSelectCount,
-            comboProviderCount,
-            buttonSelectCount,
-            buttonProviderCount,
-            textSelectCount,
-            cssComboSelectCount,
-            cssAnyProviderCount,
-            manifestProviderLines: somManifest.split('\n').filter((line) => /provider/i.test(line)).slice(0, 12),
-            a11yHasSelectProvider: /Select Provider/i.test(accessibilitySnapshot),
-            a11yHasProvider: /\bProvider\b/i.test(accessibilitySnapshot),
-            domControls,
-          };
-        } catch (err) {
-          return { error: err instanceof Error ? err.message : String(err) };
-        }
-      })();
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:opts.persistTranscript?.runId ?? progress?.runId ?? 'unknown',hypothesisId:'H-provider-dom',location:'apps/api/src/modules/recording/recording.service.ts:playAiPromptStepOnPage',message:'provider selector probe',data:{instruction:instruction.trim(),...providerProbe},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    }
     if (progress) {
       this.emitAiPromptTestProgress(
         progress.runId,
@@ -3582,11 +3514,6 @@ export class RecordingService extends EventEmitter {
     const withForce = applyForce ? relaxClickForceForPlayback(comboboxFallback) : comboboxFallback;
     const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
     const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
-    if (comboboxFallback !== tightened) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:page.url(),hypothesisId:'H-provider-fallback',location:'apps/api/src/modules/recording/recording.service.ts:executePwCode',message:'applied combobox fallback rewrite',data:{before:tightened,after:comboboxFallback},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    }
     const fn = new Function('page', 'expect', `return (async () => { ${safeCode} })();`) as (
       page: Page,
       expectFn: typeof expect,
