@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmConfigService } from '../llm/llm-config.service';
 import {
@@ -58,7 +59,7 @@ export class SettingsService {
   }
 
   private async applyLlmPatch(userId: string, llm: Record<string, unknown>): Promise<void> {
-    const existing = await this.loadRawPayload(userId);
+    const existing = await this.llmConfig.readUserLlmPreferencesJson(userId);
     const next: UserLlmPreferencesPayload = { ...existing };
 
     if (llm.usage != null && typeof llm.usage === 'object') {
@@ -87,23 +88,24 @@ export class SettingsService {
       next.userModelPresets = presets;
     }
 
-    await this.prisma.userLlmPreferences.upsert({
-      where: { userId },
-      create: {
-        userId,
-        preferencesJson: next as object,
-      },
-      update: {
-        preferencesJson: next as object,
-      },
-    });
-  }
-
-  private async loadRawPayload(userId: string): Promise<UserLlmPreferencesPayload> {
-    const row = await this.prisma.userLlmPreferences.findUnique({ where: { userId } });
-    if (!row?.preferencesJson || typeof row.preferencesJson !== 'object') {
-      return {};
+    try {
+      await this.prisma.userLlmPreferences.upsert({
+        where: { userId },
+        create: {
+          userId,
+          preferencesJson: next as object,
+        },
+        update: {
+          preferencesJson: next as object,
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        throw new ServiceUnavailableException(
+          'LLM preferences table is missing. Run: cd apps/api && pnpm exec prisma migrate deploy',
+        );
+      }
+      throw e;
     }
-    return row.preferencesJson as UserLlmPreferencesPayload;
   }
 }

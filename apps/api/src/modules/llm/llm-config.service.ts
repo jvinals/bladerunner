@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   getDefaultPreferenceForUsage,
@@ -22,10 +23,44 @@ export type LlmCapabilities = {
 
 @Injectable()
 export class LlmConfigService {
+  private readonly logger = new Logger(LlmConfigService.name);
+
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * When `user_llm_preferences` has not been migrated yet (P2021), return null so callers use env defaults.
+   */
+  private async findUserLlmRow(userId: string) {
+    try {
+      return await this.prisma.userLlmPreferences.findUnique({
+        where: { userId },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        this.logger.warn(
+          'Table user_llm_preferences is missing — run `cd apps/api && pnpm exec prisma migrate deploy`. Using env LLM defaults until then.',
+        );
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+          body: JSON.stringify({
+            sessionId: '8e7bf9',
+            location: 'llm-config.service.ts:findUserLlmRow',
+            message: 'P2021 missing table; fallback to env defaults',
+            data: { code: 'P2021', hypothesisId: 'H1' },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        return null;
+      }
+      throw e;
+    }
+  }
 
   getCapabilities(): LlmCapabilities {
     return {
@@ -56,6 +91,15 @@ export class LlmConfigService {
     }
   }
 
+  /** Raw JSON from DB, or `{}` if missing / unmigrated table. */
+  async readUserLlmPreferencesJson(userId: string): Promise<UserLlmPreferencesPayload> {
+    const row = await this.findUserLlmRow(userId.trim());
+    if (!row?.preferencesJson || typeof row.preferencesJson !== 'object') {
+      return {};
+    }
+    return row.preferencesJson as UserLlmPreferencesPayload;
+  }
+
   geminiInstructionVerifyEnabled(): boolean {
     const v = this.config.get<string>('GEMINI_INSTRUCTION_VERIFY')?.trim().toLowerCase();
     if (v === 'false' || v === '0') return false;
@@ -69,9 +113,7 @@ export class LlmConfigService {
     const fallback = getDefaultPreferenceForUsage(this.config, usage);
     if (!userId?.trim()) return fallback;
 
-    const row = await this.prisma.userLlmPreferences.findUnique({
-      where: { userId: userId.trim() },
-    });
+    const row = await this.findUserLlmRow(userId.trim());
     if (!row?.preferencesJson || typeof row.preferencesJson !== 'object') {
       return fallback;
     }
@@ -97,9 +139,7 @@ export class LlmConfigService {
     userModelPresets: string[];
   }> {
     const defaults = this.getAllDefaults();
-    const row = await this.prisma.userLlmPreferences.findUnique({
-      where: { userId: userId.trim() },
-    });
+    const row = await this.findUserLlmRow(userId.trim());
     const usage = { ...defaults };
     const presets: string[] = [];
     if (row?.preferencesJson && typeof row.preferencesJson === 'object') {
