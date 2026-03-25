@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.30`: removed the temporary measurement probe used to validate the compact “Models by task” card height reduction.
+- `@bladerunner/web 0.7.23`: cleaned up debug-only task-card measurement hooks while keeping the compact table layout.
+- `0.10.29`: condensed the AI / LLM “Models by task” card into a table-like layout to cut its vertical footprint substantially.
+- `@bladerunner/web 0.7.22`: replaced per-row stacked labels with a shared header row and compact single-line task/provider/model/connection rows.
 - `0.10.28`: removed temporary instrumentation and repro artifacts after confirming the AI / LLM save fix.
 - `@bladerunner/web 0.7.21`: cleaned up the temporary save-path debug probe from the settings UI.
 - `@bladerunner/api 0.6.35`: removed temporary save-path debug probes and repro helpers while keeping the no-op credential save fix.

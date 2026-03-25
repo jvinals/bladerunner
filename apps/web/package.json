@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/web",
-  "version": "0.7.21",
+  "version": "0.7.23",
   "private": true,
   "type": "module",
   "scripts": {

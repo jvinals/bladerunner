@@ -306,40 +306,6 @@ function AiLlmSettings() {
     void refreshProviderModels(selectedProvider.id);
   }, [selectedProvider?.id]);
 
-  useEffect(() => {
-    if (loading) return;
-    const raf = requestAnimationFrame(() => {
-      const card = document.querySelector<HTMLElement>('[data-models-by-task-card]');
-      const table = document.querySelector<HTMLElement>('[data-ai-llm-usage-table]');
-      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-models-by-task-row]'));
-      const saveRow = card?.querySelector<HTMLElement>('[data-models-by-task-save-row]');
-      const header = card?.querySelector<HTMLElement>('[data-models-by-task-header]');
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'pre-fix',
-          hypothesisId: 'H-task-card',
-          location: 'apps/web/src/pages/Settings.tsx:AiLlmSettings:task-card-layout',
-          message: 'models by task card metrics',
-          data: {
-            cardHeight: card ? Math.round(card.getBoundingClientRect().height) : null,
-            tableHeight: table ? Math.round(table.getBoundingClientRect().height) : null,
-            headerHeight: header ? Math.round(header.getBoundingClientRect().height) : null,
-            saveRowHeight: saveRow ? Math.round(saveRow.getBoundingClientRect().height) : null,
-            rowCount: rows.length,
-            rowHeights: rows.slice(0, 6).map((row) => Math.round(row.getBoundingClientRect().height)),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [loading, providerDefs.length, selectedReview?.providerId, selectedReview?.modelId]);
-
   const updateRow = (key: string, field: 'provider' | 'model', value: string) => {
     setUsage((prev) => {
       if (field === 'provider') {
@@ -494,19 +460,22 @@ function AiLlmSettings() {
       )}
       <div data-ai-llm-grid className="grid grid-cols-1 min-[1850px]:grid-cols-[minmax(0,1.4fr)_23rem] gap-6 items-start">
         <div data-ai-llm-providers-pane className="space-y-6 min-w-0">
-          <div data-models-by-task-card className="bg-white border border-gray-100 rounded-2xl p-4">
-            <div data-models-by-task-header className="flex items-start justify-between gap-3">
+          <div className="bg-white border border-gray-100 rounded-2xl p-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">Models by task</h3>
-                <p className="mt-1 text-[11px] text-gray-500">
-                  Route each automation capability to the provider + model you want. Selecting a model updates the review panel.
-                </p>
               </div>
-              <div className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-gray-500">
+              <div className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-gray-500">
                 {providerOptions.length} providers
               </div>
             </div>
-            <div data-ai-llm-usage-table className="mt-4 space-y-2">
+            <div data-ai-llm-usage-table className="mt-3 overflow-hidden rounded-xl border border-gray-100">
+              <div className="grid grid-cols-[minmax(0,1.35fr)_9rem_minmax(0,1fr)_8rem] items-center gap-2 border-b border-gray-100 bg-[#fafcff] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-gray-500">
+                <span>Task</span>
+                <span>Provider</span>
+                <span>Model</span>
+                <span>Connection</span>
+              </div>
               {LLM_USAGE_ROWS.map((row) => {
                 const u = usage[row.key];
                 const prov = u?.provider ?? providerOptions[0] ?? 'gemini';
@@ -515,73 +484,62 @@ function AiLlmSettings() {
                 const modelOptions = cur && !listed.includes(cur) ? [cur, ...listed] : listed;
                 const state = providerState(caps, prov);
                 return (
-                  <div data-models-by-task-row key={row.key} className="rounded-xl border border-gray-100 bg-[#fcfdff] px-3 py-2.5">
-                    <div className="grid gap-2 xl:grid-cols-[minmax(0,1.15fr)_11rem_minmax(0,1fr)_9rem] xl:items-start">
-                      <div className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500 font-medium">Task</p>
-                        <p
-                          className="mt-1 text-[13px] leading-4 text-gray-800"
-                          title={row.label}
-                          style={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {row.label}
-                        </p>
-                      </div>
-                      <label className="block min-w-0">
-                        <span className="text-[10px] uppercase tracking-[0.14em] text-gray-500 font-medium">Provider</span>
-                        <select
-                          value={prov}
-                          onChange={(e) => updateRow(row.key, 'provider', e.target.value)}
-                          className="mt-1 w-full min-w-0 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-gray-800 bg-white"
-                        >
-                          {providerOptions.map((p) => (
-                            <option key={p} value={p}>
-                              {catalog[p]?.label ?? providerDefs.find((d) => d.id === p)?.label ?? p}
+                  <div
+                    key={row.key}
+                    className="grid grid-cols-[minmax(0,1.35fr)_9rem_minmax(0,1fr)_8rem] items-center gap-2 border-b border-gray-100 bg-white px-3 py-1.5 last:border-b-0"
+                  >
+                    <p className="truncate text-[12px] text-gray-800" title={row.label}>
+                      {row.label}
+                    </p>
+                    <label className="block min-w-0">
+                      <select
+                        value={prov}
+                        onChange={(e) => updateRow(row.key, 'provider', e.target.value)}
+                        className="w-full min-w-0 rounded-md border border-gray-200 px-1.5 py-1 text-[11px] text-gray-800 bg-white"
+                      >
+                        {providerOptions.map((p) => (
+                          <option key={p} value={p}>
+                            {catalog[p]?.label ?? providerDefs.find((d) => d.id === p)?.label ?? p}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block min-w-0">
+                      <select
+                        value={modelOptions.includes(cur) ? cur : modelOptions[0] ?? ''}
+                        onChange={(e) => updateRow(row.key, 'model', e.target.value)}
+                        className="w-full min-w-0 rounded-md border border-gray-200 px-1.5 py-1 text-[11px] text-gray-800 font-mono bg-white"
+                        title={cur || 'Model id'}
+                      >
+                        {modelOptions.length === 0 ? (
+                          <option value="">No models yet</option>
+                        ) : (
+                          modelOptions.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
                             </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block min-w-0">
-                        <span className="text-[10px] uppercase tracking-[0.14em] text-gray-500 font-medium">Model</span>
-                        <select
-                          value={modelOptions.includes(cur) ? cur : modelOptions[0] ?? ''}
-                          onChange={(e) => updateRow(row.key, 'model', e.target.value)}
-                          className="mt-1 w-full min-w-0 border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-800 font-mono bg-white"
-                          title={cur || 'Model id'}
-                        >
-                          {modelOptions.length === 0 ? (
-                            <option value="">No models yet</option>
-                          ) : (
-                            modelOptions.map((m) => (
-                              <option key={m} value={m}>
-                                {m}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </label>
-                      <div className="rounded-lg border border-gray-100 bg-white px-2.5 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500 font-medium">Connection</p>
-                        <p className={`mt-1 text-xs ${state?.configured ? 'text-[#2f7a3c] font-medium' : 'text-amber-700 font-medium'}`}>
-                          {state?.configured ? `Ready (${state.source})` : 'Not configured'}
-                        </p>
-                      </div>
-                    </div>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    <p
+                      className={`truncate text-[11px] ${
+                        state?.configured ? 'text-[#2f7a3c] font-medium' : 'text-amber-700 font-medium'
+                      }`}
+                      title={state?.configured ? `Ready (${state.source})` : 'Not configured'}
+                    >
+                      {state?.configured ? `Ready (${state.source})` : 'Not configured'}
+                    </p>
                   </div>
                 );
               })}
             </div>
-            <div data-models-by-task-save-row className="mt-4 flex justify-end">
+            <div className="mt-3 flex justify-end">
               <button
                 type="button"
                 onClick={() => void save()}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#4B90FF] text-white text-sm font-medium rounded-md hover:bg-blue-500 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#4B90FF] text-white text-xs font-medium rounded-md hover:bg-blue-500 transition-colors disabled:opacity-50"
               >
                 <Check size={14} /> {saving ? 'Saving…' : 'Save LLM settings'}
               </button>
