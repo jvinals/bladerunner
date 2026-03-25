@@ -2,6 +2,9 @@
 
 ## 2026-03-25
 
+- `0.10.28`: removed temporary instrumentation and repro artifacts after confirming the AI / LLM save fix.
+- `@bladerunner/web 0.7.21`: cleaned up the temporary save-path debug probe from the settings UI.
+- `@bladerunner/api 0.6.35`: removed temporary save-path debug probes and repro helpers while keeping the no-op credential save fix.
 - `0.10.27`: fixed AI / LLM settings saves so model-routing changes no longer fail when credential encryption is unset and no credentials are actually being changed.
 - `@bladerunner/api 0.6.34`: pruned empty provider credential fields before persistence and skipped credential writes for no-op saves.
 - `0.10.26`: removed temporary AI / LLM debug instrumentation after confirming the provider-status fix.

@@ -121,31 +121,6 @@ export class SettingsService {
           patch[providerId] = nextEntry;
         }
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'pre-fix',
-          hypothesisId: 'H-save-api',
-          location: 'apps/api/src/modules/settings/settings.service.ts:applyLlmPatch',
-          message: 'provider credentials patch summary',
-          data: {
-            providerCredentialKeys: Object.keys(patch),
-            nonEmptyEntries: Object.entries(patch)
-              .filter(([, entry]) => entry.apiKey !== undefined || entry.baseUrl !== undefined)
-              .map(([providerId, entry]) => ({
-                providerId,
-                apiKeyKind:
-                  entry.apiKey === null ? 'null' : typeof entry.apiKey === 'string' ? 'string' : 'missing',
-                hasBaseUrl: typeof entry.baseUrl === 'string' ? entry.baseUrl.trim().length > 0 : entry.baseUrl === null,
-              })),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       if (Object.keys(patch).length > 0) {
         await this.llmConfig.updateUserLlmCredentials(userId, patch);
       }

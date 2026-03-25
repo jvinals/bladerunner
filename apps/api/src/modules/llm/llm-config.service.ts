@@ -188,29 +188,6 @@ export class LlmConfigService {
     userId: string,
     patch: Record<string, { apiKey?: string | null; baseUrl?: string | null }>,
   ): Promise<void> {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-      body: JSON.stringify({
-        sessionId: '8e7bf9',
-        runId: 'pre-fix',
-        hypothesisId: 'H-crypto-guard',
-        location: 'apps/api/src/modules/llm/llm-config.service.ts:updateUserLlmCredentials',
-        message: 'credential persistence guard check',
-        data: {
-          encryptionConfigured: this.crypto.isConfigured(),
-          providerCount: Object.keys(patch).length,
-          providers: Object.entries(patch).map(([providerId, entry]) => ({
-            providerId,
-            apiKeyKind: entry.apiKey === null ? 'null' : typeof entry.apiKey === 'string' ? 'string' : 'missing',
-            baseUrlKind: entry.baseUrl === null ? 'null' : typeof entry.baseUrl === 'string' ? 'string' : 'missing',
-          })),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!this.crypto.isConfigured()) {
       throw new ServiceUnavailableException(
         'LLM_CREDENTIALS_ENCRYPTION_KEY is not configured on the API server.',

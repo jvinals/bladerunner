@@ -306,6 +306,40 @@ function AiLlmSettings() {
     void refreshProviderModels(selectedProvider.id);
   }, [selectedProvider?.id]);
 
+  useEffect(() => {
+    if (loading) return;
+    const raf = requestAnimationFrame(() => {
+      const card = document.querySelector<HTMLElement>('[data-models-by-task-card]');
+      const table = document.querySelector<HTMLElement>('[data-ai-llm-usage-table]');
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-models-by-task-row]'));
+      const saveRow = card?.querySelector<HTMLElement>('[data-models-by-task-save-row]');
+      const header = card?.querySelector<HTMLElement>('[data-models-by-task-header]');
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: 'pre-fix',
+          hypothesisId: 'H-task-card',
+          location: 'apps/web/src/pages/Settings.tsx:AiLlmSettings:task-card-layout',
+          message: 'models by task card metrics',
+          data: {
+            cardHeight: card ? Math.round(card.getBoundingClientRect().height) : null,
+            tableHeight: table ? Math.round(table.getBoundingClientRect().height) : null,
+            headerHeight: header ? Math.round(header.getBoundingClientRect().height) : null,
+            saveRowHeight: saveRow ? Math.round(saveRow.getBoundingClientRect().height) : null,
+            rowCount: rows.length,
+            rowHeights: rows.slice(0, 6).map((row) => Math.round(row.getBoundingClientRect().height)),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [loading, providerDefs.length, selectedReview?.providerId, selectedReview?.modelId]);
+
   const updateRow = (key: string, field: 'provider' | 'model', value: string) => {
     setUsage((prev) => {
       if (field === 'provider') {
@@ -406,30 +440,6 @@ function AiLlmSettings() {
           },
         ]),
       );
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'pre-fix',
-          hypothesisId: 'H-save-ui',
-          location: 'apps/web/src/pages/Settings.tsx:AiLlmSettings:save',
-          message: 'save payload summary',
-          data: {
-            encryptionConfigured: caps?.encryptionConfigured ?? null,
-            usageCount: Object.keys(usage).length,
-            providerCredentialKeys: Object.keys(providerCredentials),
-            providerCredentialSummary: Object.entries(providerCredentials).map(([providerId, draft]) => ({
-              providerId,
-              hasApiKey: typeof draft.apiKey === 'string' ? draft.apiKey.trim().length > 0 : draft.apiKey === null,
-              hasBaseUrl: typeof draft.baseUrl === 'string' ? draft.baseUrl.trim().length > 0 : draft.baseUrl === null,
-            })),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       await settingsApi.update({ llm: { usage, providerCredentials } });
       const fresh = (await settingsApi.get()) as {
         llm?: {
@@ -485,7 +495,7 @@ function AiLlmSettings() {
       <div data-ai-llm-grid className="grid grid-cols-1 min-[1850px]:grid-cols-[minmax(0,1.4fr)_23rem] gap-6 items-start">
         <div data-ai-llm-providers-pane className="space-y-6 min-w-0">
           <div data-models-by-task-card className="bg-white border border-gray-100 rounded-2xl p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div data-models-by-task-header className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">Models by task</h3>
                 <p className="mt-1 text-[11px] text-gray-500">
@@ -566,7 +576,7 @@ function AiLlmSettings() {
                 );
               })}
             </div>
-            <div className="mt-4 flex justify-end">
+            <div data-models-by-task-save-row className="mt-4 flex justify-end">
               <button
                 type="button"
                 onClick={() => void save()}
