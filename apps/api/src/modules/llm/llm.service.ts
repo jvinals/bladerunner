@@ -149,16 +149,16 @@ export class LlmService {
     }
 
     const resolved = await this.llmConfig.resolve(userId, usage);
-    const key = this.llmConfig.getApiKey(resolved.provider);
-    if (!key) {
-      throw new Error(`No API key for provider ${resolved.provider}`);
-    }
-
+    const credentials = await this.llmConfig.resolveProviderCredentials(userId, resolved.provider);
     if (resolved.provider === 'gemini') {
+      const key = credentials.apiKey;
+      if (!key) {
+        throw new Error(`No API key for provider ${resolved.provider}`);
+      }
       return geminiChat(key, resolved.model, messages, options);
     }
 
-    const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model);
+    const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model, credentials);
     return client.chat(messages, {
       ...options,
       responseFormat: 'json_object',
@@ -240,10 +240,11 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
 
     const codegen = await this.llmConfig.resolve(opts?.userId, 'playwright_codegen');
-    const apiKey = this.llmConfig.getApiKey(codegen.provider);
-    if (!apiKey) {
+    const codegenCredentials = await this.llmConfig.resolveProviderCredentials(opts?.userId, codegen.provider);
+    const apiKey = codegenCredentials.apiKey;
+    if (codegen.provider === 'gemini' && !apiKey) {
       throw new Error(
-        `No API key for provider "${codegen.provider}". Set the matching key in .env (see README).`,
+        `No API key for provider "${codegen.provider}". Configure the provider in Settings or .env (see README).`,
       );
     }
 
@@ -258,8 +259,9 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     let thinking: string | undefined;
 
     if (codegen.provider === 'gemini') {
+      const geminiApiKey = apiKey;
       const out = await generateGeminiPlaywrightSnippet({
-        apiKey,
+        apiKey: geminiApiKey as string,
         model: codegen.model,
         fullPrompt,
         imageBase64: shot,
@@ -273,6 +275,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         config: this.configService,
         provider: codegen.provider,
         model: codegen.model,
+        credentials: codegenCredentials,
         input,
         imageBase64: shot,
         signal: opts?.signal,
@@ -298,9 +301,10 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       });
       try {
         if (verify.provider === 'gemini') {
-          const vk = this.llmConfig.getApiKey('gemini');
+          const verifyCredentials = await this.llmConfig.resolveProviderCredentials(opts?.userId, 'gemini');
+          const vk = verifyCredentials.apiKey;
           if (!vk) {
-            this.logger.warn('DOM verify skipped: GEMINI_API_KEY not set');
+            this.logger.warn('DOM verify skipped: Gemini provider is not configured');
           } else {
             const verified = await verifyGeminiPlaywrightAgainstDom({
               apiKey: vk,
@@ -316,10 +320,12 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
             finalPlaywrightCode = verified.playwrightCode;
           }
         } else {
+          const verifyCredentials = await this.llmConfig.resolveProviderCredentials(opts?.userId, verify.provider);
           const verified = await verifyPlaywrightAgainstDomNonGemini({
             config: this.configService,
             provider: verify.provider,
             model: verify.model,
+            credentials: verifyCredentials,
             instruction: input.instruction,
             pageUrl: input.pageUrl,
             somManifest: input.somManifest,
@@ -464,8 +470,8 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
 
     const resolved = await this.llmConfig.resolve(opts?.userId, 'suggest_skip_after_change');
-    const key = this.llmConfig.getApiKey(resolved.provider);
-    if (!key) {
+    const credentials = await this.llmConfig.resolveProviderCredentials(opts?.userId, resolved.provider);
+    if (resolved.provider === 'gemini' && !credentials.apiKey) {
       this.logger.warn('suggestStepsToSkipAfterChange: no API key for configured provider');
       return { suggestions: [] };
     }

@@ -358,6 +358,13 @@ export const runsApi = {
 };
 
 // ─── Projects ────────────────────────────────────────────────────────────────
+export type TestEmailProvider = 'MAILSLURP' | 'CLERK_TEST_EMAIL';
+
+export const TEST_EMAIL_PROVIDERS: { value: TestEmailProvider; label: string }[] = [
+  { value: 'MAILSLURP', label: 'MailSlurp' },
+  { value: 'CLERK_TEST_EMAIL', label: 'Clerk Test Email' },
+];
+
 export type ProjectDto = {
   id: string;
   userId: string;
@@ -365,6 +372,10 @@ export type ProjectDto = {
   kind: 'WEB' | 'IOS' | 'ANDROID';
   url: string | null;
   artifactUrl: string | null;
+  color: string;
+  testUserEmail: string | null;
+  testUserPassword: string | null;
+  testEmailProvider: TestEmailProvider | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -374,6 +385,10 @@ export type CreateProjectBody = {
   kind?: 'WEB' | 'IOS' | 'ANDROID';
   url?: string;
   artifactUrl?: string;
+  color?: string;
+  testUserEmail?: string;
+  testUserPassword?: string;
+  testEmailProvider?: TestEmailProvider | null;
 };
 
 export const projectsApi = {
@@ -394,6 +409,22 @@ export const settingsApi = {
   get: () => apiFetch<unknown>('/settings'),
   update: (data: unknown) =>
     apiFetch<unknown>('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  getProviderModels: (providerId: string) =>
+    apiFetch<{ providerId: string; models: Array<{ id: string; launchDate: string | null }> }>(
+      `/settings/llm/models?providerId=${encodeURIComponent(providerId)}`,
+    ),
+  getModelDetail: (providerId: string, modelId: string) =>
+    apiFetch<unknown>(
+      `/settings/llm/model-detail?providerId=${encodeURIComponent(providerId)}&modelId=${encodeURIComponent(modelId)}`,
+    ),
+  testProviderConnection: (providerId: string, model?: string) =>
+    apiFetch<{ ok: boolean; latencyMs: number; source: string; error?: string }>(
+      '/settings/llm/test-connection',
+      {
+        method: 'POST',
+        body: JSON.stringify({ providerId, ...(model ? { model } : {}) }),
+      },
+    ),
 };
 
 // ─── Integrations ────────────────────────────────────────────────────────────

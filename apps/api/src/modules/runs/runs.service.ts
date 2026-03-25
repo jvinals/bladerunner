@@ -61,7 +61,7 @@ export class RunsService {
         take: pageSize,
         include: {
           _count: { select: { steps: true } },
-          project: { select: { id: true, name: true, kind: true } },
+          project: { select: { id: true, name: true, kind: true, color: true } },
         },
       }),
       this.prisma.run.count({ where }),

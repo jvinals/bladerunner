@@ -242,7 +242,7 @@ export interface SystemStatus {
 
 // ─── Settings Types ──────────────────────────────────────────────────────────
 
-export type LlmProviderId = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+export type LlmProviderId = string;
 
 export type LlmUsageKey =
   | 'playwright_codegen'
@@ -256,17 +256,59 @@ export interface LlmPreferenceEntry {
   model: string;
 }
 
+export interface LlmProviderCapability {
+  configured: boolean;
+  source: 'env' | 'db' | 'mixed' | 'none';
+  hasApiKey: boolean;
+  hasBaseUrl: boolean;
+  envApiKey?: string;
+  envBaseUrl?: string;
+  docsUrl?: string;
+}
+
 export interface LlmCapabilities {
-  hasGeminiKey: boolean;
-  hasOpenAiKey: boolean;
-  hasAnthropicKey: boolean;
-  hasOpenRouterKey: boolean;
+  encryptionConfigured: boolean;
+  providers: Record<string, LlmProviderCapability>;
+}
+
+export interface LlmProviderDefinition {
+  id: string;
+  label: string;
+  category: 'first_party' | 'aggregator' | 'local' | 'cloud';
+  protocol: 'gemini_native' | 'anthropic_native' | 'openai_compatible';
+  defaultBaseUrl?: string;
+  envApiKey?: string;
+  envBaseUrl?: string;
+  openRouterStyle?: boolean;
+  supportsVisionDefault: boolean;
+  docsUrl?: string;
+}
+
+export interface LlmProviderCredentialView {
+  apiKeyMasked?: string;
+  baseUrl?: string;
+}
+
+export interface LlmModelDetail {
+  providerId: string;
+  modelId: string;
+  title: string;
+  description: string;
+  thinkingType: string;
+  capabilities: string[];
+  supportsVision: boolean;
+  contextWindow?: number;
+  pricingSummary?: string;
+  accuracySummary: string;
+  metadataSource: 'openrouter' | 'provider_api' | 'static' | 'fallback';
 }
 
 export interface LlmSettingsSection {
   usage: Record<string, LlmPreferenceEntry>;
   userModelPresets?: string[];
   capabilities: LlmCapabilities;
+  providerDefinitions: LlmProviderDefinition[];
+  providerCredentials: Record<string, LlmProviderCredentialView>;
   providerCatalog: Record<
     LlmProviderId,
     {

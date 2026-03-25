@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   getDefaultPreferenceForUsage,
+  LLM_PROVIDER_CATALOG,
   isValidProviderId,
   isValidUsageKey,
   type LlmPreferenceEntry,
@@ -12,12 +13,29 @@ import {
   type UserLlmPreferencesPayload,
   LLM_USAGE_KEYS,
 } from './llm-usage-registry';
+import { LlmCredentialsCryptoService } from './llm-credentials-crypto.service';
+import { LLM_PROVIDER_REGISTRY, getProviderDefinition } from './llm-provider-registry';
+
+export type LlmProviderCredential = {
+  apiKey?: string;
+  baseUrl?: string;
+};
+
+export type UserLlmCredentialsPayload = Record<string, LlmProviderCredential>;
+
+export type LlmProviderCapability = {
+  configured: boolean;
+  source: 'env' | 'db' | 'mixed' | 'none';
+  hasApiKey: boolean;
+  hasBaseUrl: boolean;
+  envApiKey?: string;
+  envBaseUrl?: string;
+  docsUrl?: string;
+};
 
 export type LlmCapabilities = {
-  hasGeminiKey: boolean;
-  hasOpenAiKey: boolean;
-  hasAnthropicKey: boolean;
-  hasOpenRouterKey: boolean;
+  encryptionConfigured: boolean;
+  providers: Record<string, LlmProviderCapability>;
 };
 
 @Injectable()
@@ -27,6 +45,7 @@ export class LlmConfigService {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly crypto: LlmCredentialsCryptoService,
   ) {}
 
   /**
@@ -48,29 +67,24 @@ export class LlmConfigService {
     }
   }
 
-  getCapabilities(): LlmCapabilities {
-    return {
-      hasGeminiKey: Boolean(this.config.get<string>('GEMINI_API_KEY')?.trim()),
-      hasOpenAiKey: Boolean(this.config.get<string>('OPENAI_API_KEY')?.trim()),
-      hasAnthropicKey: Boolean(this.config.get<string>('ANTHROPIC_API_KEY')?.trim()),
-      hasOpenRouterKey: Boolean(this.config.get<string>('OPENROUTER_API_KEY')?.trim()),
-    };
+  private async findUserLlmCredentialsRow(userId: string) {
+    try {
+      return await this.prisma.userLlmCredentials.findUnique({
+        where: { userId },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        this.logger.warn(
+          'Table user_llm_credentials is missing — run `cd apps/api && pnpm exec prisma migrate deploy`. Using env credentials until then.',
+        );
+        return null;
+      }
+      throw e;
+    }
   }
 
-  /** Resolve API key for a provider from env (never persisted). */
-  getApiKey(provider: LlmProviderId): string | undefined {
-    switch (provider) {
-      case 'gemini':
-        return this.config.get<string>('GEMINI_API_KEY')?.trim();
-      case 'openai':
-        return this.config.get<string>('OPENAI_API_KEY')?.trim();
-      case 'anthropic':
-        return this.config.get<string>('ANTHROPIC_API_KEY')?.trim();
-      case 'openrouter':
-        return this.config.get<string>('OPENROUTER_API_KEY')?.trim();
-      default:
-        return undefined;
-    }
+  getProviderDefinitions() {
+    return LLM_PROVIDER_REGISTRY;
   }
 
   /** Raw JSON from DB, or `{}` if missing / unmigrated table. */
@@ -80,6 +94,165 @@ export class LlmConfigService {
       return {};
     }
     return row.preferencesJson as UserLlmPreferencesPayload;
+  }
+
+  async readUserLlmCredentialsJson(userId: string): Promise<UserLlmCredentialsPayload> {
+    const row = await this.findUserLlmCredentialsRow(userId.trim());
+    const decoded = this.crypto.tryDecryptJson(row?.payloadEncrypted ?? null);
+    return decoded ? (decoded as UserLlmCredentialsPayload) : {};
+  }
+
+  private envCredentialsForProvider(providerId: string): LlmProviderCredential {
+    const def = getProviderDefinition(providerId);
+    if (!def) return {};
+    const apiKey = def.envApiKey ? this.config.get<string>(def.envApiKey)?.trim() : undefined;
+    const baseUrl =
+      def.envBaseUrl != null
+        ? this.config.get<string>(def.envBaseUrl)?.trim() || def.defaultBaseUrl
+        : def.defaultBaseUrl;
+    return {
+      ...(apiKey ? { apiKey } : {}),
+      ...(baseUrl ? { baseUrl } : {}),
+    };
+  }
+
+  private redactApiKey(raw: string | undefined): string | undefined {
+    const t = raw?.trim();
+    if (!t) return undefined;
+    if (t.length <= 8) return `${t.slice(0, 2)}***`;
+    return `${t.slice(0, 4)}...${t.slice(-4)}`;
+  }
+
+  async resolveProviderCredentials(
+    userId: string | undefined,
+    providerId: string,
+  ): Promise<LlmProviderCredential & { source: 'env' | 'db' | 'mixed' | 'none' }> {
+    const env = this.envCredentialsForProvider(providerId);
+    const dbPayload = userId?.trim() ? await this.readUserLlmCredentialsJson(userId.trim()) : {};
+    const db = dbPayload?.[providerId] ?? {};
+    const apiKey = db.apiKey?.trim() || env.apiKey;
+    const baseUrl = db.baseUrl?.trim() || env.baseUrl;
+    const hasDb = Boolean(db.apiKey?.trim() || db.baseUrl?.trim());
+    const hasEnv = Boolean(env.apiKey?.trim() || env.baseUrl?.trim());
+    const source: 'env' | 'db' | 'mixed' | 'none' = hasDb && hasEnv ? 'mixed' : hasDb ? 'db' : hasEnv ? 'env' : 'none';
+    return {
+      ...(apiKey ? { apiKey } : {}),
+      ...(baseUrl ? { baseUrl } : {}),
+      source,
+    };
+  }
+
+  async getCapabilities(userId?: string): Promise<LlmCapabilities> {
+    const providers = await Promise.all(
+      this.getProviderDefinitions().map(async (provider) => {
+        const resolved = await this.resolveProviderCredentials(userId, provider.id);
+        const hasApiKey = Boolean(resolved.apiKey?.trim()) || provider.id === 'ollama';
+        const hasBaseUrl = Boolean(resolved.baseUrl?.trim());
+        return [
+          provider.id,
+          {
+            configured: hasApiKey || provider.id === 'ollama',
+            source: resolved.source,
+            hasApiKey,
+            hasBaseUrl,
+            ...(provider.envApiKey ? { envApiKey: provider.envApiKey } : {}),
+            ...(provider.envBaseUrl ? { envBaseUrl: provider.envBaseUrl } : {}),
+            ...(provider.docsUrl ? { docsUrl: provider.docsUrl } : {}),
+          } satisfies LlmProviderCapability,
+        ] as const;
+      }),
+    );
+    return {
+      encryptionConfigured: this.crypto.isConfigured(),
+      providers: Object.fromEntries(providers),
+    };
+  }
+
+  async getMaskedProviderCredentials(userId: string): Promise<Record<string, { apiKeyMasked?: string; baseUrl?: string }>> {
+    const dbPayload = await this.readUserLlmCredentialsJson(userId);
+    return Object.fromEntries(
+      this.getProviderDefinitions().map((provider) => {
+        const entry = dbPayload[provider.id];
+        return [
+          provider.id,
+          {
+            ...(entry?.apiKey?.trim() ? { apiKeyMasked: this.redactApiKey(entry.apiKey) } : {}),
+            ...(entry?.baseUrl?.trim() ? { baseUrl: entry.baseUrl.trim() } : {}),
+          },
+        ];
+      }),
+    );
+  }
+
+  async updateUserLlmCredentials(
+    userId: string,
+    patch: Record<string, { apiKey?: string | null; baseUrl?: string | null }>,
+  ): Promise<void> {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+      body: JSON.stringify({
+        sessionId: '8e7bf9',
+        runId: 'pre-fix',
+        hypothesisId: 'H-crypto-guard',
+        location: 'apps/api/src/modules/llm/llm-config.service.ts:updateUserLlmCredentials',
+        message: 'credential persistence guard check',
+        data: {
+          encryptionConfigured: this.crypto.isConfigured(),
+          providerCount: Object.keys(patch).length,
+          providers: Object.entries(patch).map(([providerId, entry]) => ({
+            providerId,
+            apiKeyKind: entry.apiKey === null ? 'null' : typeof entry.apiKey === 'string' ? 'string' : 'missing',
+            baseUrlKind: entry.baseUrl === null ? 'null' : typeof entry.baseUrl === 'string' ? 'string' : 'missing',
+          })),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    if (!this.crypto.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'LLM_CREDENTIALS_ENCRYPTION_KEY is not configured on the API server.',
+      );
+    }
+    const existing = await this.readUserLlmCredentialsJson(userId);
+    const next: UserLlmCredentialsPayload = { ...existing };
+    for (const [providerId, entry] of Object.entries(patch)) {
+      if (!isValidProviderId(providerId)) continue;
+      const current = { ...(next[providerId] ?? {}) };
+      const apiKey = entry.apiKey == null ? current.apiKey : entry.apiKey.trim();
+      const baseUrl = entry.baseUrl == null ? current.baseUrl : entry.baseUrl.trim();
+      if (apiKey) current.apiKey = apiKey;
+      else delete current.apiKey;
+      if (baseUrl) current.baseUrl = baseUrl;
+      else delete current.baseUrl;
+      if (current.apiKey || current.baseUrl) next[providerId] = current;
+      else delete next[providerId];
+    }
+    try {
+      await this.prisma.userLlmCredentials.upsert({
+        where: { userId },
+        create: {
+          userId,
+          payloadEncrypted: Buffer.from(this.crypto.encryptJson(next)),
+        },
+        update: {
+          payloadEncrypted: Buffer.from(this.crypto.encryptJson(next)),
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        throw new ServiceUnavailableException(
+          'LLM credentials table is missing. Run: cd apps/api && pnpm exec prisma migrate deploy',
+        );
+      }
+      throw e;
+    }
+  }
+
+  getApiKey(provider: LlmProviderId): string | undefined {
+    return this.envCredentialsForProvider(provider).apiKey;
   }
 
   geminiInstructionVerifyEnabled(): boolean {
@@ -144,5 +317,9 @@ export class LlmConfigService {
       }
     }
     return { usage, userModelPresets: presets };
+  }
+
+  getProviderCatalog() {
+    return LLM_PROVIDER_CATALOG;
   }
 }

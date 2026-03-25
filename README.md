@@ -77,14 +77,31 @@ cd apps/api && pnpm exec prisma migrate deploy
 
 ### LLM (AI prompt / instruct Playwright codegen)
 
-**Secrets** live only in **`.env`** (never in the database). **Settings → AI / LLM** in the web app stores **per-task** provider + model id (PostgreSQL `user_llm_preferences`); if unset, the server uses the env defaults below.
+**Settings → AI / LLM** now has two layers:
 
-**Model dropdowns** load from provider catalogs: **OpenRouter** (public `GET /api/v1/models`, no key), **OpenAI** and **Gemini** when the matching API key is set (live list from each vendor), and **Anthropic** (static list — no public list-models API). Results are cached in the API process; override TTL with **`LLM_MODEL_CATALOG_TTL_MS`** (milliseconds, default **900000** = 15 minutes).
+- **Per-task routing** in PostgreSQL `user_llm_preferences` (provider + model id per capability)
+- **Per-user provider credentials** in PostgreSQL `user_llm_credentials` as an **AES-256-GCM encrypted** blob
+
+The API decrypts credentials with **`LLM_CREDENTIALS_ENCRYPTION_KEY`** (base64-encoded 32 bytes). Generate one with:
+
+```bash
+openssl rand -base64 32
+```
+
+If no saved DB credential exists for a provider, the API falls back to matching **env vars**.
+
+**Supported provider families** in Settings: direct APIs (**Gemini**, **OpenAI**, **Anthropic**), aggregators (**OpenRouter**), local runtimes (**Ollama**), and additional OpenAI-compatible providers (**Groq**, **Together AI**, **Fireworks AI**, **Mistral**, **DeepSeek**, **Perplexity**, **xAI**, **Cohere**, **Azure OpenAI**).
+
+**Model dropdowns** load from provider catalogs: **OpenRouter** (public `GET /api/v1/models`, no key), **Gemini** (live list when configured), **OpenAI-compatible providers** (their `GET /models` endpoint when configured), **Ollama** (`GET /api/tags`), and **Anthropic** (static list — no public list-models API). Results are cached in the API process; override TTL with **`LLM_MODEL_CATALOG_TTL_MS`** (milliseconds, default **900000** = 15 minutes).
 
 - **`GEMINI_API_KEY`** — Google **Gemini** (direct). Required when a routed task uses provider **Gemini**, or for env defaults for vision codegen / verify. Create a key in [Google AI Studio](https://aistudio.google.com/).
 - **`OPENAI_API_KEY`** — OpenAI (direct). Used when a task is set to **openai**, and as part of legacy defaults for text tasks.
 - **`ANTHROPIC_API_KEY`** — Anthropic (direct). Used when a task is set to **anthropic**.
 - **`OPENROUTER_API_KEY`** — [OpenRouter](https://openrouter.ai/) (OpenAI-compatible API) for many models (e.g. **Minimax** via slugs like `minimax/minimax-m2.5`). Optional: **`OPENROUTER_BASE_URL`** (default `https://openrouter.ai/api/v1`), **`OPENROUTER_HTTP_REFERER`** (recommended by OpenRouter for rankings).
+- **`OLLAMA_BASE_URL`** — Optional Ollama base URL for the Settings provider entry (default `http://127.0.0.1:11434/v1`). Ollama does not require an API key.
+- **`GROQ_API_KEY`**, **`TOGETHER_API_KEY`**, **`FIREWORKS_API_KEY`**, **`MISTRAL_API_KEY`**, **`DEEPSEEK_API_KEY`**, **`PERPLEXITY_API_KEY`**, **`XAI_API_KEY`**, **`COHERE_API_KEY`** — Optional env fallbacks for the matching OpenAI-compatible providers in Settings.
+- **`AZURE_OPENAI_API_KEY`**, **`AZURE_OPENAI_ENDPOINT`** — Optional env fallbacks for Azure OpenAI in Settings.
+- **`LLM_CREDENTIALS_ENCRYPTION_KEY`** — Required only if you want to save provider credentials from the UI into PostgreSQL. Without it, saved encrypted credentials are disabled and the Settings page will show that encryption is unavailable.
 
 **Env defaults** (when the user has not saved Settings): **`GEMINI_INSTRUCTION_MODEL`** (optional, default **`gemini-3-flash-preview`**) for **`playwright_codegen`** and **`playwright_verify`**; **`LLM_PROVIDER`** (**`openai`** or **`anthropic`**) with **`OPENAI_MODEL`** / **`ANTHROPIC_MODEL`** for **`action_to_instruction`**, **`explain_ai_prompt_failure`**, and **`suggest_skip_after_change`**.
 
@@ -252,6 +269,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.22** — **Settings / LLM providers**: Added a broad provider registry (**Gemini**, **OpenAI**, **Anthropic**, **OpenRouter**, **Ollama**, **Groq**, **Together**, **Fireworks**, **Mistral**, **DeepSeek**, **Perplexity**, **xAI**, **Cohere**, **Azure OpenAI**), encrypted per-user provider credentials in PostgreSQL, **Test connection** + **Refresh models** actions, provider-aware model catalogs, and a right-side model review panel with thinking/capability metadata. **`@bladerunner/api` `0.6.31`**, **`@bladerunner/web` `0.7.17`**, **`@bladerunner/types` `0.2.6`**.
 - **0.10.21** — **Settings / LLM**: Model id fields are **dropdowns** filled from **OpenRouter** (public catalog), **OpenAI** / **Gemini** (when API keys are set), and a static **Anthropic** list; optional **`LLM_MODEL_CATALOG_TTL_MS`** caches catalog fetches in the API. **`@bladerunner/api` `0.6.30`**, **`@bladerunner/web` `0.7.16`**, **`@bladerunner/types` `0.2.5`**.
 - **0.10.20** — **API**: Removed temporary Cursor debug instrumentation from **`main`**, **`LlmConfigService`**, and **`executePwCode`** (P2021 fallback + migrate messaging unchanged). **`@bladerunner/api` `0.6.29`**.
 - **0.10.19** — **API / LLM settings**: If **`user_llm_preferences`** is not migrated yet (Prisma **P2021**), **GET /settings** uses env LLM defaults instead of 500; **PATCH** returns **503** with migrate instructions until **`prisma migrate deploy`** is run. **`@bladerunner/api` `0.6.28`**.

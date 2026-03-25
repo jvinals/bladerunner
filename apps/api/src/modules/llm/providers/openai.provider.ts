@@ -5,8 +5,16 @@ export class OpenAiProvider implements LlmProvider {
   private client: OpenAI;
   private model: string;
 
-  constructor(apiKey: string, model = 'gpt-5.4-mini') {
-    this.client = new OpenAI({ apiKey });
+  constructor(
+    apiKey: string,
+    model = 'gpt-5.4-mini',
+    opts?: { baseURL?: string; defaultHeaders?: Record<string, string> },
+  ) {
+    this.client = new OpenAI({
+      apiKey,
+      ...(opts?.baseURL ? { baseURL: opts.baseURL.replace(/\/$/, '') } : {}),
+      ...(opts?.defaultHeaders ? { defaultHeaders: opts.defaultHeaders } : {}),
+    });
     this.model = model;
   }
 

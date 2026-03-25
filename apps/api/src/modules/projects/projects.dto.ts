@@ -1,10 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export enum ProjectKindDto {
   WEB = 'WEB',
   IOS = 'IOS',
   ANDROID = 'ANDROID',
+}
+
+export enum TestEmailProviderDto {
+  MAILSLURP = 'MAILSLURP',
+  CLERK_TEST_EMAIL = 'CLERK_TEST_EMAIL',
 }
 
 export class CreateProjectDto {
@@ -30,6 +35,29 @@ export class CreateProjectDto {
   @IsString()
   @MaxLength(2000)
   artifactUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Hex color for UI display, e.g. #4B90FF' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^#[0-9A-Fa-f]{6}$/, { message: 'color must be a hex color like #4B90FF' })
+  color?: string;
+
+  @ApiPropertyOptional({ description: 'Email for automated test sign-in' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  testUserEmail?: string;
+
+  @ApiPropertyOptional({ description: 'Password for automated test sign-in' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  testUserPassword?: string;
+
+  @ApiPropertyOptional({ enum: TestEmailProviderDto, description: 'Email provider for OTP retrieval' })
+  @IsOptional()
+  @IsEnum(TestEmailProviderDto)
+  testEmailProvider?: TestEmailProviderDto;
 }
 
 export class UpdateProjectDto {
@@ -56,4 +84,27 @@ export class UpdateProjectDto {
   @IsString()
   @MaxLength(2000)
   artifactUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Hex color for UI display, e.g. #4B90FF' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^#[0-9A-Fa-f]{6}$/, { message: 'color must be a hex color like #4B90FF' })
+  color?: string;
+
+  @ApiPropertyOptional({ description: 'Email for automated test sign-in' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  testUserEmail?: string;
+
+  @ApiPropertyOptional({ description: 'Password for automated test sign-in' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  testUserPassword?: string;
+
+  @ApiPropertyOptional({ enum: TestEmailProviderDto, description: 'Email provider for OTP retrieval' })
+  @IsOptional()
+  @IsEnum(TestEmailProviderDto)
+  testEmailProvider?: TestEmailProviderDto;
 }

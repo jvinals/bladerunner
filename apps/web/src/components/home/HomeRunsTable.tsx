@@ -43,7 +43,7 @@ export type HomeRunRow = {
   triggeredBy: string;
   createdAt: string;
   stepsCount: number;
-  project?: { id: string; name: string; kind: string } | null;
+  project?: { id: string; name: string; kind: string; color: string } | null;
 };
 
 const PLATFORM_ICONS: Record<string, typeof Monitor> = {
@@ -241,11 +241,23 @@ export function HomeRunsTable() {
         id: 'project',
         header: 'Project',
         enableSorting: false,
-        cell: ({ row }) => (
-          <span className="inline-flex items-center rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:text-violet-200">
-            {row.original.project?.name ?? '—'}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const proj = row.original.project;
+          if (!proj) return <span className="text-[10px] text-muted-foreground">—</span>;
+          const c = proj.color || '#6366F1';
+          return (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+              style={{ backgroundColor: `${c}18`, color: c }}
+            >
+              <span
+                className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: c }}
+              />
+              {proj.name}
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'status',

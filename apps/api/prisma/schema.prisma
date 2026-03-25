@@ -27,6 +27,11 @@ enum ProjectKind {
   ANDROID
 }
 
+enum TestEmailProvider {
+  MAILSLURP
+  CLERK_TEST_EMAIL
+}
+
 enum StepAction {
   NAVIGATE
   CLICK
@@ -56,9 +61,17 @@ model Project {
   /// Web app URL, or store / deeplink for mobile
   url         String?
   /// APK / IPA / build artifact URL or download link
-  artifactUrl String?     @map("artifact_url")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  artifactUrl        String?            @map("artifact_url")
+  /// Hex color for UI display, e.g. "#4B90FF"
+  color              String             @default("#4B90FF")
+  /// Email for automated test sign-in
+  testUserEmail      String?            @map("test_user_email")
+  /// Password for automated test sign-in
+  testUserPassword   String?            @map("test_user_password")
+  /// Email provider used for OTP retrieval during test sign-in
+  testEmailProvider  TestEmailProvider? @map("test_email_provider")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
   runs Run[]
 

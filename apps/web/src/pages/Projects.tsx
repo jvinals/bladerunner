@@ -1,20 +1,50 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectsApi, type ProjectDto, type CreateProjectBody } from '@/lib/api';
+import {
+  projectsApi,
+  type ProjectDto,
+  type CreateProjectBody,
+  type TestEmailProvider,
+  TEST_EMAIL_PROVIDERS,
+} from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
-import { FolderKanban, Plus, Trash2, Pencil } from 'lucide-react';
+import { FolderKanban, Plus, Trash2, Pencil, Eye, EyeOff } from 'lucide-react';
 
 const KINDS: CreateProjectBody['kind'][] = ['WEB', 'IOS', 'ANDROID'];
+
+const PROJECT_COLORS = [
+  '#4B90FF', '#56A34A', '#EAB508', '#E05252',
+  '#9333EA', '#F97316', '#06B6D4', '#EC4899',
+  '#8B5CF6', '#14B8A6', '#84CC16', '#6366F1',
+];
+
+interface ProjectForm {
+  name: string;
+  kind: 'WEB' | 'IOS' | 'ANDROID';
+  url: string;
+  artifactUrl: string;
+  color: string;
+  testUserEmail: string;
+  testUserPassword: string;
+  testEmailProvider: TestEmailProvider | '';
+}
+
+const emptyForm: ProjectForm = {
+  name: '',
+  kind: 'WEB',
+  url: '',
+  artifactUrl: '',
+  color: PROJECT_COLORS[0],
+  testUserEmail: '',
+  testUserPassword: '',
+  testEmailProvider: '',
+};
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<CreateProjectBody>({
-    name: '',
-    kind: 'WEB',
-    url: '',
-    artifactUrl: '',
-  });
+  const [form, setForm] = useState<ProjectForm>({ ...emptyForm });
+  const [showPassword, setShowPassword] = useState(false);
 
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
@@ -25,7 +55,8 @@ export default function ProjectsPage() {
     mutationFn: (body: CreateProjectBody) => projectsApi.create(body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setForm({ name: '', kind: 'WEB', url: '', artifactUrl: '' });
+      setForm({ ...emptyForm });
+      setShowPassword(false);
     },
   });
 
@@ -35,6 +66,7 @@ export default function ProjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setEditingId(null);
+      setShowPassword(false);
     },
   });
 
@@ -50,12 +82,18 @@ export default function ProjectsPage() {
       kind: p.kind,
       url: p.url ?? '',
       artifactUrl: p.artifactUrl ?? '',
+      color: p.color,
+      testUserEmail: p.testUserEmail ?? '',
+      testUserPassword: p.testUserPassword ?? '',
+      testEmailProvider: p.testEmailProvider ?? '',
     });
+    setShowPassword(false);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm({ name: '', kind: 'WEB', url: '', artifactUrl: '' });
+    setForm({ ...emptyForm });
+    setShowPassword(false);
   };
 
   const submit = () => {
@@ -65,6 +103,10 @@ export default function ProjectsPage() {
       kind: form.kind,
       url: form.url?.trim() || undefined,
       artifactUrl: form.artifactUrl?.trim() || undefined,
+      color: form.color,
+      testUserEmail: form.testUserEmail?.trim() || undefined,
+      testUserPassword: form.testUserPassword || undefined,
+      testEmailProvider: form.testEmailProvider || null,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, body });
@@ -91,10 +133,33 @@ export default function ProjectsPage() {
         </div>
       </div>
 
+      {/* ── Form ─────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-100 rounded-lg p-5 mb-8 space-y-4">
         <p className="text-sm font-semibold text-gray-800">
           {editingId ? 'Edit project' : 'New project'}
         </p>
+
+        {/* Color picker */}
+        <div>
+          <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Color</label>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {PROJECT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, color: c }))}
+                className="w-7 h-7 rounded-full border-2 transition-all hover:scale-110"
+                style={{
+                  backgroundColor: c,
+                  borderColor: form.color === c ? '#1f2937' : 'transparent',
+                  boxShadow: form.color === c ? `0 0 0 2px white, 0 0 0 4px ${c}` : 'none',
+                }}
+                title={c}
+              />
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Name</label>
@@ -110,7 +175,7 @@ export default function ProjectsPage() {
             <select
               value={form.kind}
               onChange={(e) =>
-                setForm((f) => ({ ...f, kind: e.target.value as CreateProjectBody['kind'] }))
+                setForm((f) => ({ ...f, kind: e.target.value as ProjectForm['kind'] }))
               }
               className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
             >
@@ -144,6 +209,66 @@ export default function ProjectsPage() {
             />
           </div>
         </div>
+
+        {/* ── Test user credentials ──────────────────────────── */}
+        <div className="border-t border-gray-100 pt-4 mt-2">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            Test user credentials
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Email</label>
+              <input
+                type="email"
+                value={form.testUserEmail}
+                onChange={(e) => setForm((f) => ({ ...f, testUserEmail: e.target.value }))}
+                className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                placeholder="test@example.com"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Password</label>
+              <div className="mt-1 relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.testUserPassword}
+                  onChange={(e) => setForm((f) => ({ ...f, testUserPassword: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm pr-9"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Email provider</label>
+              <select
+                value={form.testEmailProvider}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    testEmailProvider: (e.target.value || '') as TestEmailProvider | '',
+                  }))
+                }
+                className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              >
+                <option value="">None</option>
+                {TEST_EMAIL_PROVIDERS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="flex gap-2">
           <button
             type="button"
@@ -166,6 +291,7 @@ export default function ProjectsPage() {
         </div>
       </div>
 
+      {/* ── Table ─────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-100 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -173,7 +299,8 @@ export default function ProjectsPage() {
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Kind</th>
               <th className="px-4 py-3">URL</th>
-              <th className="px-4 py-3">Artifact</th>
+              <th className="px-4 py-3">Test user</th>
+              <th className="px-4 py-3">Provider</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 w-24" />
             </tr>
@@ -181,20 +308,33 @@ export default function ProjectsPage() {
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">
+                <td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">
                   No projects yet. Create one above.
                 </td>
               </tr>
             ) : (
               projects.map((p) => (
                 <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800">
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: p.color }}
+                      />
+                      {p.name}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{p.kind}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[200px] truncate" title={p.url ?? ''}>
+                  <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate" title={p.url ?? ''}>
                     {p.url || '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate" title={p.artifactUrl ?? ''}>
-                    {p.artifactUrl || '—'}
+                  <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate" title={p.testUserEmail ?? ''}>
+                    {p.testUserEmail || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">
+                    {p.testEmailProvider
+                      ? TEST_EMAIL_PROVIDERS.find((x) => x.value === p.testEmailProvider)?.label ?? p.testEmailProvider
+                      : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                     {new Date(p.createdAt).toLocaleString()}
@@ -214,7 +354,7 @@ export default function ProjectsPage() {
                         title="Delete"
                         disabled={deleteMutation.isPending}
                         onClick={() => {
-                          if (window.confirm(`Delete project “${p.name}”?`)) deleteMutation.mutate(p.id);
+                          if (window.confirm(`Delete project "${p.name}"?`)) deleteMutation.mutate(p.id);
                         }}
                         className="p-1.5 rounded-md text-red-600 hover:bg-red-50"
                       >

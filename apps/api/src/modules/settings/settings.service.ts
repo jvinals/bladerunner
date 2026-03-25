@@ -36,17 +36,21 @@ export class SettingsService {
   ) {}
 
   async getSettings(userId: string) {
-    const [{ usage, userModelPresets }, providerCatalog] = await Promise.all([
+    const [{ usage, userModelPresets }, providerCatalog, capabilities, providerCredentials] = await Promise.all([
       this.llmConfig.getEffectivePreferencesForUser(userId),
-      this.llmModelList.getResolvedProviderCatalog(),
+      this.llmModelList.getResolvedProviderCatalog(userId),
+      this.llmConfig.getCapabilities(userId),
+      this.llmConfig.getMaskedProviderCredentials(userId),
     ]);
     return {
       ...defaultWorkspace,
       llm: {
         usage,
         userModelPresets,
-        capabilities: this.llmConfig.getCapabilities(),
+        capabilities,
         providerCatalog,
+        providerDefinitions: this.llmConfig.getProviderDefinitions(),
+        providerCredentials,
       },
     };
   }
@@ -93,6 +97,60 @@ export class SettingsService {
       next.userModelPresets = presets;
     }
 
+    if (llm.providerCredentials != null) {
+      if (typeof llm.providerCredentials !== 'object') {
+        throw new BadRequestException('Invalid providerCredentials payload');
+      }
+      const patch: Record<string, { apiKey?: string | null; baseUrl?: string | null }> = {};
+      for (const [providerId, raw] of Object.entries(llm.providerCredentials as Record<string, unknown>)) {
+        if (!isValidProviderId(providerId)) continue;
+        if (!raw || typeof raw !== 'object') continue;
+        const apiKey = (raw as { apiKey?: unknown }).apiKey;
+        const baseUrl = (raw as { baseUrl?: unknown }).baseUrl;
+        const nextEntry = {
+          ...(typeof apiKey === 'string' || apiKey === null ? { apiKey } : {}),
+          ...(typeof baseUrl === 'string'
+            ? baseUrl.trim()
+              ? { baseUrl }
+              : {}
+            : baseUrl === null
+              ? { baseUrl }
+              : {}),
+        };
+        if (Object.keys(nextEntry).length > 0) {
+          patch[providerId] = nextEntry;
+        }
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: 'pre-fix',
+          hypothesisId: 'H-save-api',
+          location: 'apps/api/src/modules/settings/settings.service.ts:applyLlmPatch',
+          message: 'provider credentials patch summary',
+          data: {
+            providerCredentialKeys: Object.keys(patch),
+            nonEmptyEntries: Object.entries(patch)
+              .filter(([, entry]) => entry.apiKey !== undefined || entry.baseUrl !== undefined)
+              .map(([providerId, entry]) => ({
+                providerId,
+                apiKeyKind:
+                  entry.apiKey === null ? 'null' : typeof entry.apiKey === 'string' ? 'string' : 'missing',
+                hasBaseUrl: typeof entry.baseUrl === 'string' ? entry.baseUrl.trim().length > 0 : entry.baseUrl === null,
+              })),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      if (Object.keys(patch).length > 0) {
+        await this.llmConfig.updateUserLlmCredentials(userId, patch);
+      }
+    }
+
     try {
       await this.prisma.userLlmPreferences.upsert({
         where: { userId },
@@ -111,6 +169,86 @@ export class SettingsService {
         );
       }
       throw e;
+    }
+  }
+
+  async getProviderModels(userId: string, providerId: string) {
+    if (!isValidProviderId(providerId)) {
+      throw new BadRequestException('Invalid providerId');
+    }
+    return {
+      providerId,
+      models: await this.llmModelList.getProviderModels(userId, providerId),
+    };
+  }
+
+  async getModelDetail(userId: string, providerId: string, modelId: string) {
+    if (!isValidProviderId(providerId)) {
+      throw new BadRequestException('Invalid providerId');
+    }
+    const model = sanitizeModelId(modelId);
+    if (!model) throw new BadRequestException('Invalid modelId');
+    return this.llmModelList.getModelDetail(userId, providerId, model);
+  }
+
+  async testProviderConnection(
+    userId: string,
+    payload: { providerId?: unknown; model?: unknown },
+  ): Promise<{ ok: boolean; latencyMs: number; source: string; error?: string }> {
+    const providerId = typeof payload.providerId === 'string' ? payload.providerId : '';
+    if (!isValidProviderId(providerId)) {
+      throw new BadRequestException('Invalid providerId');
+    }
+    const resolved = await this.llmConfig.resolveProviderCredentials(userId, providerId);
+    const started = Date.now();
+    try {
+      if (providerId === 'gemini') {
+        const key = resolved.apiKey?.trim();
+        if (!key) throw new Error('Gemini API key missing');
+        const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
+        url.searchParams.set('key', key);
+        url.searchParams.set('pageSize', '1');
+        const res = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+      } else if (providerId === 'anthropic') {
+        const key = resolved.apiKey?.trim();
+        if (!key) throw new Error('Anthropic API key missing');
+        const model =
+          typeof payload.model === 'string' && sanitizeModelId(payload.model)
+            ? sanitizeModelId(payload.model)
+            : 'claude-3-5-haiku-20241022';
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 1,
+            messages: [{ role: 'user', content: 'Reply with OK' }],
+          }),
+        });
+        if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}`);
+      } else {
+        const apiKey = resolved.apiKey?.trim() || (providerId === 'ollama' ? 'ollama' : '');
+        const baseUrl = resolved.baseUrl?.trim();
+        if (!baseUrl) throw new Error('Provider base URL missing');
+        if (!apiKey) throw new Error('Provider API key missing');
+        const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+          headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error(`${providerId} HTTP ${res.status}`);
+      }
+      return { ok: true, latencyMs: Date.now() - started, source: resolved.source };
+    } catch (e) {
+      return {
+        ok: false,
+        latencyMs: Date.now() - started,
+        source: resolved.source,
+        error: e instanceof Error ? e.message : String(e),
+      };
     }
   }
 }

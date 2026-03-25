@@ -39,16 +39,17 @@ export class LlmCredentialsCryptoService {
     }
   }
 
-  encryptJson(obj: unknown): Buffer {
+  encryptJson(obj: unknown): Uint8Array {
     const iv = randomBytes(IV_LEN);
     const cipher = createCipheriv(ALGO, this.key(), iv);
     const pt = Buffer.from(JSON.stringify(obj), 'utf8');
     const enc = Buffer.concat([cipher.update(pt), cipher.final()]);
     const tag = cipher.getAuthTag();
-    return Buffer.concat([iv, tag, enc]);
+    const out = Buffer.concat([iv, tag, enc]);
+    return new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
   }
 
-  decryptJson(buf: Buffer): unknown {
+  decryptJson(buf: Uint8Array): unknown {
     if (buf.length < IV_LEN + TAG_LEN + 1) {
       throw new Error('Invalid encrypted payload length');
     }
@@ -61,7 +62,7 @@ export class LlmCredentialsCryptoService {
     return JSON.parse(pt.toString('utf8'));
   }
 
-  tryDecryptJson(buf: Buffer | null | undefined): Record<string, unknown> | null {
+  tryDecryptJson(buf: Uint8Array | null | undefined): Record<string, unknown> | null {
     if (!buf || buf.length === 0) return null;
     try {
       const v = this.decryptJson(buf);

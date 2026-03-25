@@ -7,6 +7,7 @@ import { LlmConfigService } from './llm-config.service';
 import { LlmService } from './llm.service';
 import type { ChatMessage, LlmProvider } from './providers/llm-provider.interface';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { LlmCredentialsCryptoService } from './llm-credentials-crypto.service';
 
 function makeProvider(responseText: string): LlmProvider {
   return {
@@ -21,7 +22,11 @@ function makeLlmService(): LlmService {
   const mockPrisma = {
     userLlmPreferences: { findUnique: async () => null },
   } as unknown as PrismaService;
-  const llmConfig = new LlmConfigService(mockConfig, mockPrisma);
+  const mockCrypto = {
+    isConfigured: () => false,
+    tryDecryptJson: () => null,
+  } as unknown as LlmCredentialsCryptoService;
+  const llmConfig = new LlmConfigService(mockConfig, mockPrisma, mockCrypto);
   return new LlmService(mockConfig, llmConfig);
 }
 

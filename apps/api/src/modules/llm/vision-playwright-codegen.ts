@@ -5,6 +5,7 @@ import {
   normalizeGeminiPlaywrightSnippet,
 } from './gemini-instruction.client';
 import { createChatLlmProvider } from './llm-provider-factory';
+import type { LlmProviderCredential } from './llm-config.service';
 import type { LlmProviderId } from './llm-usage-registry';
 import type { InstructionToActionInput } from './providers/llm-provider.interface';
 
@@ -16,6 +17,7 @@ export async function generateNonGeminiVisionPlaywrightSnippet(params: {
   config: ConfigService;
   provider: Exclude<LlmProviderId, 'gemini'>;
   model: string;
+  credentials: LlmProviderCredential;
   input: InstructionToActionInput;
   imageBase64: string;
   signal?: AbortSignal;
@@ -28,7 +30,7 @@ export async function generateNonGeminiVisionPlaywrightSnippet(params: {
     accessibilitySnapshot: params.input.accessibilitySnapshot,
   });
 
-  const client = createChatLlmProvider(params.config, params.provider, params.model);
+  const client = createChatLlmProvider(params.config, params.provider, params.model, params.credentials);
   const result = await client.chat([{ role: 'user', content: fullPrompt }], {
     imageBase64: params.imageBase64.trim(),
     maxTokens: 8192,
@@ -51,6 +53,7 @@ export async function verifyPlaywrightAgainstDomNonGemini(params: {
   config: ConfigService;
   provider: Exclude<LlmProviderId, 'gemini'>;
   model: string;
+  credentials: LlmProviderCredential;
   instruction: string;
   pageUrl: string;
   somManifest: string;
@@ -66,7 +69,7 @@ export async function verifyPlaywrightAgainstDomNonGemini(params: {
     draftPlaywrightCode: params.draftPlaywrightCode,
   });
 
-  const client = createChatLlmProvider(params.config, params.provider, params.model);
+  const client = createChatLlmProvider(params.config, params.provider, params.model, params.credentials);
   const result = await client.chat([{ role: 'user', content: fullPrompt }], {
     maxTokens: 8192,
     temperature: 0.1,

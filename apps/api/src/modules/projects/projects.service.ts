@@ -2,6 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
 
+const PROJECT_COLORS = [
+  '#4B90FF', '#56A34A', '#EAB508', '#E05252',
+  '#9333EA', '#F97316', '#06B6D4', '#EC4899',
+  '#8B5CF6', '#14B8A6', '#84CC16', '#6366F1',
+];
+
 @Injectable()
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -20,6 +26,7 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto) {
+    const color = dto.color ?? await this.nextColor(userId);
     return this.prisma.project.create({
       data: {
         userId,
@@ -27,8 +34,17 @@ export class ProjectsService {
         kind: dto.kind ?? 'WEB',
         url: dto.url?.trim() || null,
         artifactUrl: dto.artifactUrl?.trim() || null,
+        color,
+        testUserEmail: dto.testUserEmail?.trim() || null,
+        testUserPassword: dto.testUserPassword || null,
+        testEmailProvider: dto.testEmailProvider ?? null,
       },
     });
+  }
+
+  private async nextColor(userId: string): Promise<string> {
+    const count = await this.prisma.project.count({ where: { userId } });
+    return PROJECT_COLORS[count % PROJECT_COLORS.length];
   }
 
   async update(id: string, userId: string, dto: UpdateProjectDto) {
@@ -41,6 +57,10 @@ export class ProjectsService {
         ...(dto.kind != null ? { kind: dto.kind } : {}),
         ...(dto.url !== undefined ? { url: dto.url?.trim() || null } : {}),
         ...(dto.artifactUrl !== undefined ? { artifactUrl: dto.artifactUrl?.trim() || null } : {}),
+        ...(dto.color != null ? { color: dto.color } : {}),
+        ...(dto.testUserEmail !== undefined ? { testUserEmail: dto.testUserEmail?.trim() || null } : {}),
+        ...(dto.testUserPassword !== undefined ? { testUserPassword: dto.testUserPassword || null } : {}),
+        ...(dto.testEmailProvider !== undefined ? { testEmailProvider: dto.testEmailProvider ?? null } : {}),
       },
     });
   }
