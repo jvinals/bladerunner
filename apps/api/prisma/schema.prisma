@@ -154,11 +154,20 @@ model RunRecording {
   @@map("run_recordings")
 }
 
-/// Per-user LLM routing (provider + model id per usage key). API keys stay in env only.
+/// Per-user LLM routing (provider + model id per usage key).
 model UserLlmPreferences {
   userId          String   @id @map("user_id")
   preferencesJson Json     @map("preferences_json")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("user_llm_preferences")
+}
+
+/// Per-user encrypted LLM credentials (AES-256-GCM). Plaintext JSON shape: Record<providerId, { apiKey?: string, baseUrl?: string }>.
+model UserLlmCredentials {
+  userId            String   @id @map("user_id")
+  payloadEncrypted  Bytes    @map("payload_encrypted")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("user_llm_credentials")
 }
