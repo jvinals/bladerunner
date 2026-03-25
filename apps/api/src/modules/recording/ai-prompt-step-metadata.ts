@@ -26,6 +26,13 @@ export type AiPromptStepMetadata = {
   lastAiPromptRunInstruction?: string;
   /** Last successful LLM round-trip (updated before Playwright runs; includes failed-PW cases when LLM succeeded). */
   lastLlmTranscript?: AiPromptLlmTranscriptStored;
+  /** Latest non-successful test/run diagnostics. */
+  lastAiPromptFailureAt?: string;
+  lastAiPromptFailureKind?: 'abort' | 'timeout' | 'strict_mode' | 'playwright' | 'other';
+  lastAiPromptFailureMessage?: string;
+  lastAiPromptFailureInstruction?: string;
+  lastAiPromptFailedPlaywrightCode?: string;
+  lastAiPromptRetried?: boolean;
 };
 
 export function isAiPromptStepMetadata(m: unknown): m is AiPromptStepMetadata {

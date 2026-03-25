@@ -2,6 +2,8 @@
 
 ## 2026-03-25
 
+- `0.10.46`: hardened AI prompt timeout handling so client-abort signals are narrower, retryable generate failures can retry once, and known recording/playback promise rejections no longer take down the API process.
+- `@bladerunner/api 0.6.51`: classified recording/playback automation failures, persisted failed AI prompt code context in step metadata, switched AI test aborts to real request aborts, and added a non-fatal unhandled-rejection guard for known timeout paths.
 - `0.10.45`: removed the temporary Provider dropdown debug probes after confirming the generic combobox-trigger fallback fixed the shadcn-style playback issue.
 - `@bladerunner/api 0.6.50`: cleaned up Provider dropdown instrumentation while keeping the resilient role/text fallback for generated combobox clicks.
 - `0.10.44`: added a generic playback fallback for combobox triggers so shadcn-style dropdowns keep working even when accessible role/name queries do not resolve their visible labels.

@@ -3,6 +3,17 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { classifyRecordingAutomationFailure } from './modules/recording/recording-timeout.util';
+
+process.on('unhandledRejection', (reason) => {
+  const failure = classifyRecordingAutomationFailure(reason);
+  if (!failure.isKnownNonFatal) {
+    throw reason instanceof Error ? reason : new Error(String(reason));
+  }
+  console.warn(
+    `[recording] swallowed non-fatal unhandled rejection (${failure.kind}): ${failure.message || failure.name || 'unknown error'}`,
+  );
+});
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

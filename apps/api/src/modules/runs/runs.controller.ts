@@ -328,8 +328,8 @@ export class RunsController {
     const userId = req.user.sub;
     const ac = new AbortController();
     this.recordingService.registerAiPromptTestAbort(id, stepId, ac);
-    const onClose = () => ac.abort();
-    req.on('close', onClose);
+    const onAborted = () => ac.abort();
+    req.on('aborted', onAborted);
     try {
       return await this.recordingService.testAiPromptStep(id, userId, stepId, {
         instruction: dto?.instruction,
@@ -337,7 +337,7 @@ export class RunsController {
         phase: dto?.phase,
       });
     } finally {
-      req.off('close', onClose);
+      req.off('aborted', onAborted);
       this.recordingService.unregisterAiPromptTestAbort(id, stepId);
     }
   }

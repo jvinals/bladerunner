@@ -373,11 +373,12 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       pageUrl: string;
       pageAccessibilityTree: string;
       screenshotBase64?: string;
+      failedPlaywrightCode?: string;
     },
     opts?: { signal?: AbortSignal; userId?: string },
   ): Promise<AiPromptTestFailureHelp | null> {
     if (this.chatProviderOverride) {
-      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""${input.failedPlaywrightCode?.trim() ? `\n\nFailed Playwright code:\n"""${input.failedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
       try {
         const llm = await this.chatProviderOverride.chat(
           [
@@ -403,7 +404,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
     }
 
     try {
-      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
+      const user = `Original test instruction:\n"""${input.instruction}"""\n\nFailure (technical):\n"""${input.technicalError.slice(0, 8000)}"""${input.failedPlaywrightCode?.trim() ? `\n\nFailed Playwright code:\n"""${input.failedPlaywrightCode.trim().slice(0, 12000)}"""` : ''}\n\nCurrent page URL: ${input.pageUrl}\n\nPage context (accessibility / structure, may be partial):\n${input.pageAccessibilityTree.slice(0, 12000)}`;
       const llm = await this.chatJson(
         opts?.userId,
         'explain_ai_prompt_failure',

@@ -76,6 +76,7 @@ import {
   preferSearchConditionsPlaceholderOverFollowingInputLabel,
   excludeFileInputFromFollowingInputXPath,
 } from './recording-playwright-merge.util';
+import { classifyRecordingAutomationFailure } from './recording-timeout.util';
 import {
   adjustRecordingVideoDurationToWallClock,
   copyRecordingVideoToArtifacts,
@@ -1099,6 +1100,11 @@ export class RecordingService extends EventEmitter {
       const playbackSessionForTest = this.findPlaybackSessionByPage(page);
       const apiPhase = opts?.phase ?? 'full';
       const testPromise = (async () => {
+        let lastAttemptedPlaywrightCode =
+          typeof step.playwrightCode === 'string' && step.playwrightCode.trim()
+            ? step.playwrightCode.trim()
+            : undefined;
+        let retried = false;
         try {
           this.emitAiPromptTestProgress(runId, stepId, 'Preparing snapshot for undo (Reset)…', 'capturing');
           this.throwIfAborted(signal);
@@ -1137,6 +1143,7 @@ export class RecordingService extends EventEmitter {
             if (!pw || pw === sentinel) {
               throw new BadRequestException('No generated Playwright to run — generate first.');
             }
+            lastAttemptedPlaywrightCode = pw;
             const runResult = await this.playAiPromptStepOnPage(page, instructionToRun, {
               userId,
               skipClickForce: false,
@@ -1170,15 +1177,37 @@ export class RecordingService extends EventEmitter {
             });
           } else {
             const playPhase = apiPhase === 'generate' ? 'generateOnly' : 'full';
-            const out = await this.playAiPromptStepOnPage(page, instructionToRun, {
-              userId,
-              skipClickForce: false,
-              persistTranscript: { stepId, runId, userId, source: 'test' },
-              signal,
-              progress: { runId, stepId },
-              phase: playPhase,
-            });
+            const attemptPlayPhase = () =>
+              this.playAiPromptStepOnPage(page, instructionToRun, {
+                userId,
+                skipClickForce: false,
+                persistTranscript: { stepId, runId, userId, source: 'test' },
+                signal,
+                progress: { runId, stepId },
+                phase: playPhase,
+              });
+            let out: Awaited<ReturnType<typeof attemptPlayPhase>>;
+            try {
+              out = await attemptPlayPhase();
+            } catch (firstErr) {
+              const firstFailure = classifyRecordingAutomationFailure(firstErr);
+              if (apiPhase !== 'generate' || !firstFailure.isRetryable || signal?.aborted) {
+                throw firstErr;
+              }
+              retried = true;
+              this.logger.warn(
+                `Retrying AI prompt generate after ${firstFailure.kind} for run ${runId} step ${stepId}`,
+              );
+              this.emitAiPromptTestProgress(
+                runId,
+                stepId,
+                'Transient timeout while generating Playwright. Retrying once…',
+                'llm',
+              );
+              out = await attemptPlayPhase();
+            }
             playwrightCode = out.playwrightCode;
+            lastAttemptedPlaywrightCode = playwrightCode;
 
             const fresh = await this.prisma.runStep.findFirst({
               where: { id: stepId, runId, userId },
@@ -1235,11 +1264,12 @@ export class RecordingService extends EventEmitter {
           this.emitAiPromptTestProgress(runId, stepId, doneMsg, 'done');
           return { ok: true, playwrightCode };
         } catch (e) {
-          if (signal?.aborted || this.isAbortError(e)) {
+          const failure = classifyRecordingAutomationFailure(e);
+          if (signal?.aborted || failure.isAbort || this.isAbortError(e)) {
             this.emitAiPromptTestProgress(runId, stepId, 'Cancelled.', 'cancelled');
             return { ok: false, error: 'Cancelled', cancelled: true };
           }
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = failure.message;
           let failureHelp: AiPromptTestFailureHelp | undefined;
           try {
             const ctx = await this.captureLlmPageContext(page, signal);
@@ -1250,6 +1280,7 @@ export class RecordingService extends EventEmitter {
                 pageUrl: ctx.pageUrl,
                 pageAccessibilityTree: this.combineSomAndA11yForExplain(ctx),
                 screenshotBase64: ctx.screenshotBase64,
+                failedPlaywrightCode: lastAttemptedPlaywrightCode,
               },
               { signal, userId },
             );
@@ -1275,13 +1306,33 @@ export class RecordingService extends EventEmitter {
             fresh?.metadata && typeof fresh.metadata === 'object'
               ? (fresh.metadata as Record<string, unknown>)
               : {};
+          const transcriptCode =
+            baseMeta.lastLlmTranscript &&
+            typeof baseMeta.lastLlmTranscript === 'object' &&
+            typeof (baseMeta.lastLlmTranscript as { rawResponse?: unknown }).rawResponse === 'string'
+              ? ((baseMeta.lastLlmTranscript as { rawResponse: string }).rawResponse.trim() || undefined)
+              : undefined;
+          const failedPlaywrightCode =
+            lastAttemptedPlaywrightCode ??
+            (typeof fresh?.playwrightCode === 'string' && fresh.playwrightCode.trim()
+              ? fresh.playwrightCode.trim()
+              : undefined) ??
+            transcriptCode;
           const failurePatch: Record<string, unknown> = {
             ...baseMeta,
             kind: AI_PROMPT_STEP_KIND,
             schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
             lastTestAt: new Date().toISOString(),
             lastTestOk: false,
+            lastAiPromptFailureAt: new Date().toISOString(),
+            lastAiPromptFailureKind: failure.kind,
+            lastAiPromptFailureMessage: msg,
+            lastAiPromptFailureInstruction: instructionToRun,
+            lastAiPromptRetried: retried,
           };
+          if (failedPlaywrightCode) {
+            failurePatch.lastAiPromptFailedPlaywrightCode = failedPlaywrightCode;
+          }
           if (apiPhase === 'generate') {
             failurePatch.lastAiPromptCodegenOk = false;
             failurePatch.lastAiPromptRunOk = false;
@@ -2952,8 +3003,48 @@ export class RecordingService extends EventEmitter {
             );
           }
         } catch (execErr) {
-          const msg = execErr instanceof Error ? execErr.message : String(execErr);
+          const failure = classifyRecordingAutomationFailure(execErr);
+          const msg = failure.message;
           this.logger.warn(`Playback step ${step.sequence} failed: ${msg}`);
+          if (isAiPromptStep) {
+            const fresh = await this.prisma.runStep.findFirst({
+              where: { id: step.id, runId: sourceRunId, userId: session.userId },
+            });
+            const baseMeta =
+              fresh?.metadata && typeof fresh.metadata === 'object'
+                ? (fresh.metadata as Record<string, unknown>)
+                : {};
+            const transcriptCode =
+              baseMeta.lastLlmTranscript &&
+              typeof baseMeta.lastLlmTranscript === 'object' &&
+              typeof (baseMeta.lastLlmTranscript as { rawResponse?: unknown }).rawResponse === 'string'
+                ? ((baseMeta.lastLlmTranscript as { rawResponse: string }).rawResponse.trim() || undefined)
+                : undefined;
+            const failedPlaywrightCode =
+              (typeof fresh?.playwrightCode === 'string' && fresh.playwrightCode.trim()
+                ? fresh.playwrightCode.trim()
+                : undefined) ?? transcriptCode;
+            const failurePatch: Record<string, unknown> = {
+              ...baseMeta,
+              kind: AI_PROMPT_STEP_KIND,
+              schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+              lastAiPromptRunOk: false,
+              lastAiPromptFailureAt: new Date().toISOString(),
+              lastAiPromptFailureKind: failure.kind,
+              lastAiPromptFailureMessage: msg,
+              lastAiPromptFailureInstruction: step.instruction,
+              lastAiPromptRetried: false,
+            };
+            if (failedPlaywrightCode) {
+              failurePatch.lastAiPromptFailedPlaywrightCode = failedPlaywrightCode;
+            }
+            await this.prisma.runStep.update({
+              where: { id: step.id },
+              data: {
+                metadata: failurePatch as Prisma.InputJsonValue,
+              },
+            });
+          }
           this.emit('playbackProgress', playbackSessionId, {
             playbackSessionId,
             sourceRunId,
@@ -2996,7 +3087,8 @@ export class RecordingService extends EventEmitter {
         sourceRunId,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const failure = classifyRecordingAutomationFailure(e);
+      const msg = failure.message;
       this.logger.error(`Playback loop error: ${msg}`);
       this.emit('status', playbackSessionId, {
         status: 'failed',
