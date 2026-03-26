@@ -2,6 +2,8 @@
 
 ## 2026-03-25
 
+- `0.10.53`: fixed recording so scroll gestures are persisted as replayable steps instead of being silently ignored after the remote page moved.
+- `@bladerunner/api 0.6.56`: captured debounced wheel gestures as manual `SCROLL` steps with stored relative scroll Playwright code for page and panel scrolling.
 - `0.10.52`: changed new recording defaults so runs start with the larger browser preset and high-quality preview settings out of the box.
 - `@bladerunner/web 0.7.28`: defaulted the Runs page recording controls to `1440 x 900`, `High` stream quality, and `High` preview smoothness.
 - `0.10.51`: added a read-only optimized prompt review panel in playback step details so canonical prompts and supporting intent metadata can be inspected per step.

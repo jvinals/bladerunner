@@ -3340,6 +3340,34 @@ export class RecordingService extends EventEmitter {
     return step;
   }
 
+  private buildScrollInstruction(deltaX: number, deltaY: number, selector: string | null, isRoot: boolean): string {
+    const horizontal =
+      Math.abs(deltaX) >= Math.abs(deltaY) && Math.abs(deltaX) > 0
+        ? deltaX > 0
+          ? 'right'
+          : 'left'
+        : null;
+    const vertical =
+      Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 0
+        ? deltaY > 0
+          ? 'down'
+          : 'up'
+        : null;
+    const direction = horizontal ?? vertical ?? 'down';
+    if (isRoot) return `Scroll ${direction} on the page`;
+    if (selector?.trim()) return `Scroll ${direction} inside ${selector.trim()}`;
+    return `Scroll ${direction} inside the current panel`;
+  }
+
+  private buildScrollPlaywrightCode(selector: string | null, deltaX: number, deltaY: number, isRoot: boolean): string {
+    const left = Math.round(deltaX);
+    const top = Math.round(deltaY);
+    if (isRoot || !selector?.trim()) {
+      return `await page.evaluate(({ left, top }) => {\n  window.scrollBy({ left, top, behavior: 'auto' });\n}, { left: ${left}, top: ${top} });`;
+    }
+    return `await page.locator(${JSON.stringify(selector.trim())}).evaluate((el, delta) => {\n  el.scrollBy({ left: delta.left, top: delta.top, behavior: 'auto' });\n}, { left: ${left}, top: ${top} });`;
+  }
+
   /**
    * Saves Playwright `storageState` + DB row for “app state” labels (best-effort; prefix replay is still authoritative).
    * Disabled when `RECORDING_CHECKPOINTS=false`.
@@ -4346,6 +4374,33 @@ export class RecordingService extends EventEmitter {
               return;
             }
           }
+          if (data.type === 'scroll') {
+            if (session.clerkDomCaptureBarrier !== barrierAtStart) {
+              return;
+            }
+            const deltaX = Number(data.deltaX ?? 0);
+            const deltaY = Number(data.deltaY ?? 0);
+            if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+              return;
+            }
+            const selector = typeof data.selector === 'string' && data.selector.trim() ? data.selector.trim() : null;
+            const isRoot = data.isRoot === true;
+            const step = await this.recordStep(session, {
+              action: 'SCROLL',
+              selector,
+              value: JSON.stringify({
+                deltaX: Math.round(deltaX),
+                deltaY: Math.round(deltaY),
+                scrollLeft: Number(data.scrollLeft ?? 0),
+                scrollTop: Number(data.scrollTop ?? 0),
+              }),
+              instruction: this.buildScrollInstruction(deltaX, deltaY, selector, isRoot),
+              playwrightCode: this.buildScrollPlaywrightCode(selector, deltaX, deltaY, isRoot),
+              origin: 'MANUAL',
+            });
+            this.emit('step', session.runId, step);
+            return;
+          }
           let accessibilityTree = '';
           try {
             const snapshot = await (session.page as any).accessibility?.snapshot();
@@ -4448,6 +4503,7 @@ export class RecordingService extends EventEmitter {
         }
 
         var __brScrollRaf = 0;
+        var __brScrollState = new WeakMap();
         document.addEventListener('scroll', function(e) {
           if (window.__bladerunnerPauseRecording) return;
           if (!window.__bladerunnerDebugScroll) return;
@@ -4474,6 +4530,58 @@ export class RecordingService extends EventEmitter {
             } catch (err) {}
           });
         }, true);
+
+        document.addEventListener('wheel', function(e) {
+          if (window.__bladerunnerPauseRecording) return;
+          if (!window.__bladerunnerRecordAction) return;
+          var root = document.scrollingElement || document.documentElement || document.body;
+          var rawTarget = e.target;
+          var target =
+            rawTarget && rawTarget.nodeType === 1 ? rawTarget : (rawTarget && rawTarget.parentElement ? rawTarget.parentElement : root);
+          if (!target) target = root;
+          var isRoot =
+            target === document ||
+            target === document.documentElement ||
+            target === document.body ||
+            target === root;
+          var node = isRoot ? root : target;
+          var existing = __brScrollState.get(node);
+          var next = existing || {
+            deltaX: 0,
+            deltaY: 0,
+            timer: 0
+          };
+          next.deltaX += Number(e.deltaX || 0);
+          next.deltaY += Number(e.deltaY || 0);
+          next.selector = isRoot ? 'document.scrollingElement' : getSelector(node);
+          next.elementHtml = isRoot ? '' : getElementHtml(node);
+          next.elementText = isRoot ? '' : getVisibleText(node);
+          next.ariaLabel = isRoot ? '' : getAriaLabel(node);
+          next.scrollLeft = isRoot ? (window.scrollX || root.scrollLeft || 0) : (node.scrollLeft || 0);
+          next.scrollTop = isRoot ? (window.scrollY || root.scrollTop || 0) : (node.scrollTop || 0);
+          next.isRoot = !!isRoot;
+          clearTimeout(next.timer);
+          next.timer = setTimeout(function() {
+            if (window.__bladerunnerPauseRecording) return;
+            window.__bladerunnerRecordAction(
+              JSON.stringify({
+                type: 'scroll',
+                selector: next.selector,
+                elementHtml: next.elementHtml,
+                elementText: next.elementText,
+                ariaLabel: next.ariaLabel,
+                value: null,
+                deltaX: next.deltaX,
+                deltaY: next.deltaY,
+                scrollLeft: next.scrollLeft,
+                scrollTop: next.scrollTop,
+                isRoot: next.isRoot
+              })
+            );
+            __brScrollState.delete(node);
+          }, 180);
+          __brScrollState.set(node, next);
+        }, { capture: true, passive: true });
 
         document.addEventListener('click', function(e) {
           if (window.__bladerunnerPauseRecording) return;
