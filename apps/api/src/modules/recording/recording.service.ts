@@ -506,6 +506,40 @@ export class RecordingService extends EventEmitter {
     stepPayload: { id: string; sequence: number; action: string; instruction: string },
     skipClickForce: boolean,
   ): Promise<void> {
+    if (step.action === 'SCROLL') {
+      const parsedScroll = this.parseStoredScrollCode(step.playwrightCode);
+      const beforeSnapshot = parsedScroll
+        ? await this.captureScrollTargetSnapshot(session.page, {
+            selector: parsedScroll.selector,
+            isRoot: parsedScroll.isRoot,
+          })
+        : null;
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: playbackSessionId,
+          hypothesisId: 'P1,P2',
+          location: 'recording.service.ts:executePlaybackStepWithRepair',
+          message: 'Playback reached scroll step',
+          data: {
+            sourceRunId,
+            stepId: step.id,
+            sequence: step.sequence,
+            instruction: step.instruction,
+            value: step.value,
+            playwrightCode: step.playwrightCode,
+            recordedPlaywrightCode: step.recordedPlaywrightCode,
+            parsedScroll,
+            beforeSnapshot,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    }
     const optimizedPrompt = getOptimizedPromptStored(step.metadata);
     if (isExecutableStoredPlaywrightCode(step.playwrightCode)) {
       try {
@@ -514,8 +548,60 @@ export class RecordingService extends EventEmitter {
             skipClickForce,
           }),
         );
+        if (step.action === 'SCROLL') {
+          const parsedScroll = this.parseStoredScrollCode(step.playwrightCode);
+          const afterSnapshot = parsedScroll
+            ? await this.captureScrollTargetSnapshot(session.page, {
+                selector: parsedScroll.selector,
+                isRoot: parsedScroll.isRoot,
+              })
+            : null;
+          // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+            body: JSON.stringify({
+              sessionId: '8e7bf9',
+              runId: playbackSessionId,
+              hypothesisId: 'P3,P5',
+              location: 'recording.service.ts:executePlaybackStepWithRepair',
+              message: 'Stored scroll Playwright finished during playback',
+              data: {
+                stepId: step.id,
+                sequence: step.sequence,
+                parsedScroll,
+                afterSnapshot,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+        }
         return;
       } catch (execErr) {
+        if (step.action === 'SCROLL') {
+          const failure = classifyRecordingAutomationFailure(execErr);
+          // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+            body: JSON.stringify({
+              sessionId: '8e7bf9',
+              runId: playbackSessionId,
+              hypothesisId: 'P4',
+              location: 'recording.service.ts:executePlaybackStepWithRepair',
+              message: 'Stored scroll Playwright failed during playback',
+              data: {
+                stepId: step.id,
+                sequence: step.sequence,
+                error: failure.message,
+                kind: failure.kind,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+        }
         const failure = classifyRecordingAutomationFailure(execErr);
         if (!this.shouldAttemptPlaybackRepair(step, failure)) {
           await this.persistPlaybackRepairFailure(step, failure, {
@@ -3368,6 +3454,285 @@ export class RecordingService extends EventEmitter {
     return `await page.locator(${JSON.stringify(selector.trim())}).evaluate((el, delta) => {\n  el.scrollBy({ left: delta.left, top: delta.top, behavior: 'auto' });\n}, { left: ${left}, top: ${top} });`;
   }
 
+  private parseStoredScrollCode(code: string): { selector: string | null; left: number; top: number; isRoot: boolean } | null {
+    const trimmed = code.trim();
+    const rootMatch = trimmed.match(/\{ left:\s*(-?\d+),\s*top:\s*(-?\d+)\s*\}\s*\);?\s*$/s);
+    if (trimmed.includes('window.scrollBy({ left, top, behavior: \'auto\' })') && rootMatch) {
+      return {
+        selector: null,
+        left: Number(rootMatch[1]),
+        top: Number(rootMatch[2]),
+        isRoot: true,
+      };
+    }
+    const locatorPrefix = 'await page.locator(';
+    const prefixIndex = trimmed.indexOf(locatorPrefix);
+    if (prefixIndex === -1 || !trimmed.includes('el.scrollBy({ left: delta.left, top: delta.top, behavior: \'auto\' });')) {
+      return null;
+    }
+    const selectorStart = prefixIndex + locatorPrefix.length;
+    const quote = trimmed[selectorStart];
+    if (quote !== '"' && quote !== '\'') return null;
+    let selectorEnd = selectorStart + 1;
+    while (selectorEnd < trimmed.length) {
+      const ch = trimmed[selectorEnd];
+      if (ch === quote && trimmed[selectorEnd - 1] !== '\\') break;
+      selectorEnd += 1;
+    }
+    if (selectorEnd >= trimmed.length) return null;
+    const rawSelector = trimmed.slice(selectorStart + 1, selectorEnd);
+    const deltaMatch = trimmed.match(/\{ left:\s*(-?\d+),\s*top:\s*(-?\d+)\s*\}\s*\);?\s*$/s);
+    if (!deltaMatch) return null;
+    return {
+      selector: rawSelector,
+      left: Number(deltaMatch[1]),
+      top: Number(deltaMatch[2]),
+      isRoot: false,
+    };
+  }
+
+  private async captureScrollTargetSnapshot(
+    page: Page,
+    input: { selector: string | null; isRoot: boolean },
+  ): Promise<{
+    rootX: number;
+    rootY: number;
+    selector: string | null;
+    isRoot: boolean;
+    targetCount: number;
+    firstScrollableIndex: number;
+    firstScrollableScrollTop: number | null;
+    firstScrollableScrollLeft: number | null;
+    firstScrollableClientHeight: number | null;
+    firstScrollableScrollHeight: number | null;
+    matched: Array<{ index: number; tag: string; className: string; scrollTop: number; scrollLeft: number; clientHeight: number; scrollHeight: number }>;
+  } | null> {
+    return page.evaluate((payload) => {
+      const root = document.scrollingElement || document.documentElement || document.body;
+      const serialize = (el: Element, index: number) => {
+        const node = el instanceof HTMLElement ? el : null;
+        return {
+          index,
+          tag: el.tagName.toLowerCase(),
+          className: node?.className ? String(node.className).slice(0, 120) : '',
+          scrollTop: node?.scrollTop ?? 0,
+          scrollLeft: node?.scrollLeft ?? 0,
+          clientHeight: node?.clientHeight ?? 0,
+          scrollHeight: node?.scrollHeight ?? 0,
+        };
+      };
+      const matches = payload.selector ? Array.from(document.querySelectorAll(payload.selector)) : [];
+      const firstScrollableIndex = matches.findIndex((el) => {
+        const node = el instanceof HTMLElement ? el : null;
+        return !!node && (node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth);
+      });
+      const scrollable =
+        firstScrollableIndex >= 0 && matches[firstScrollableIndex] instanceof HTMLElement
+          ? (matches[firstScrollableIndex] as HTMLElement)
+          : null;
+      return {
+        rootX: window.scrollX,
+        rootY: window.scrollY,
+        selector: payload.selector,
+        isRoot: payload.isRoot,
+        targetCount: matches.length,
+        firstScrollableIndex,
+        firstScrollableScrollTop: scrollable ? scrollable.scrollTop : null,
+        firstScrollableScrollLeft: scrollable ? scrollable.scrollLeft : null,
+        firstScrollableClientHeight: scrollable ? scrollable.clientHeight : null,
+        firstScrollableScrollHeight: scrollable ? scrollable.scrollHeight : null,
+        matched: matches.slice(0, 5).map((el, index) => serialize(el, index)),
+      };
+    }, input).catch(() => null);
+  }
+
+  private async executeRecordedScrollPlayback(
+    page: Page,
+    input: { selector: string | null; left: number; top: number; isRoot: boolean },
+  ): Promise<{
+    mode: 'root' | 'selector';
+    selector: string | null;
+    changed: boolean;
+    matchedCount: number;
+    chosenTag: string | null;
+    chosenClassName: string | null;
+    chosenDepth: number | null;
+    beforeTop: number | null;
+    afterTop: number | null;
+    beforeLeft: number | null;
+    afterLeft: number | null;
+    durationMs: number;
+  }> {
+    return page.evaluate((payload) => {
+      const startedAt = performance.now();
+      const animateScroll = (
+        getPosition: () => { left: number; top: number },
+        apply: (left: number, top: number) => void,
+        targetLeft: number,
+        targetTop: number,
+      ) =>
+        new Promise<{ beforeLeft: number; beforeTop: number; afterLeft: number; afterTop: number; durationMs: number }>((resolve) => {
+          const start = getPosition();
+          const duration = Math.min(
+            260,
+            Math.max(140, Math.round(Math.max(Math.abs(targetLeft), Math.abs(targetTop)) * 0.22)),
+          );
+          const begin = performance.now();
+          const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+          const tick = (now: number) => {
+            const progress = duration <= 0 ? 1 : Math.min(1, (now - begin) / duration);
+            const eased = easeOutCubic(progress);
+            const nextLeft = start.left + targetLeft * eased;
+            const nextTop = start.top + targetTop * eased;
+            apply(nextLeft, nextTop);
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+              return;
+            }
+            const end = getPosition();
+            resolve({
+              beforeLeft: start.left,
+              beforeTop: start.top,
+              afterLeft: end.left,
+              afterTop: end.top,
+              durationMs: performance.now() - begin,
+            });
+          };
+          requestAnimationFrame(tick);
+        });
+      if (payload.isRoot || !payload.selector) {
+        return animateScroll(
+          () => ({ left: window.scrollX, top: window.scrollY }),
+          (left, top) => window.scrollTo({ left, top, behavior: 'auto' }),
+          payload.left,
+          payload.top,
+        ).then(({ beforeLeft, beforeTop, afterLeft, afterTop, durationMs }) => ({
+          mode: 'root' as const,
+          selector: null,
+          changed: afterLeft !== beforeLeft || afterTop !== beforeTop,
+          matchedCount: 1,
+          chosenTag: 'document',
+          chosenClassName: null,
+          chosenDepth: 0,
+          beforeTop,
+          afterTop,
+          beforeLeft,
+          afterLeft,
+          durationMs: performance.now() - startedAt + durationMs - durationMs,
+        }));
+      }
+
+      const matches = Array.from(document.querySelectorAll(payload.selector)).filter(
+        (el): el is HTMLElement => el instanceof HTMLElement,
+      );
+      const seen = new Set<HTMLElement>();
+      const candidates: Array<{ el: HTMLElement; depth: number }> = [];
+      const axisCanScroll = (el: HTMLElement) =>
+        (payload.top !== 0 && el.scrollHeight - el.clientHeight > 8) ||
+        (payload.left !== 0 && el.scrollWidth - el.clientWidth > 8);
+      const anyCanScroll = (el: HTMLElement) => el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth;
+      const depthOf = (el: HTMLElement) => {
+        let depth = 0;
+        let cur: HTMLElement | null = el;
+        while (cur?.parentElement) {
+          depth += 1;
+          cur = cur.parentElement;
+        }
+        return depth;
+      };
+      const pushCandidate = (el: HTMLElement) => {
+        if (seen.has(el)) return;
+        seen.add(el);
+        if (!axisCanScroll(el) && !anyCanScroll(el)) return;
+        candidates.push({ el, depth: depthOf(el) });
+      };
+
+      for (const match of matches) {
+        pushCandidate(match);
+        const descendants = Array.from(match.querySelectorAll('*')).filter(
+          (el): el is HTMLElement => el instanceof HTMLElement,
+        );
+        for (const descendant of descendants) pushCandidate(descendant);
+      }
+
+      const pickBestCandidate = () => {
+        let best:
+          | {
+              el: HTMLElement;
+              depth: number;
+              score: number;
+              beforeTop: number;
+              beforeLeft: number;
+              probeAfterTop: number;
+              probeAfterLeft: number;
+            }
+          | null = null;
+        for (const candidate of candidates) {
+          const beforeTop = candidate.el.scrollTop;
+          const beforeLeft = candidate.el.scrollLeft;
+          candidate.el.scrollBy({ left: payload.left, top: payload.top, behavior: 'auto' });
+          const probeAfterTop = candidate.el.scrollTop;
+          const probeAfterLeft = candidate.el.scrollLeft;
+          candidate.el.scrollTo({ left: beforeLeft, top: beforeTop, behavior: 'auto' });
+          const movedY = Math.abs(probeAfterTop - beforeTop);
+          const movedX = Math.abs(probeAfterLeft - beforeLeft);
+          const score = movedY + movedX;
+          if (score <= 0) continue;
+          if (!best || score > best.score || (score === best.score && candidate.depth > best.depth)) {
+            best = {
+              el: candidate.el,
+              depth: candidate.depth,
+              score,
+              beforeTop,
+              beforeLeft,
+              probeAfterTop,
+              probeAfterLeft,
+            };
+          }
+        }
+        return best;
+      };
+
+      const best = pickBestCandidate();
+      if (!best) {
+        return {
+          mode: 'selector' as const,
+          selector: payload.selector,
+          changed: false,
+          matchedCount: matches.length,
+          chosenTag: null,
+          chosenClassName: null,
+          chosenDepth: null,
+          beforeTop: null,
+          afterTop: null,
+          beforeLeft: null,
+          afterLeft: null,
+          durationMs: performance.now() - startedAt,
+        };
+      }
+
+      return animateScroll(
+        () => ({ left: best.el.scrollLeft, top: best.el.scrollTop }),
+        (left, top) => best.el.scrollTo({ left, top, behavior: 'auto' }),
+        payload.left,
+        payload.top,
+      ).then(({ beforeLeft, beforeTop, afterLeft, afterTop, durationMs }) => ({
+        mode: 'selector' as const,
+        selector: payload.selector,
+        changed: afterTop !== beforeTop || afterLeft !== beforeLeft,
+        matchedCount: matches.length,
+        chosenTag: best.el.tagName.toLowerCase(),
+        chosenClassName: best.el.className ? String(best.el.className).slice(0, 160) : null,
+        chosenDepth: best.depth,
+        beforeTop,
+        afterTop,
+        beforeLeft,
+        afterLeft,
+        durationMs: performance.now() - startedAt + durationMs - durationMs,
+      }));
+    }, input);
+  }
+
   /**
    * Saves Playwright `storageState` + DB row for “app state” labels (best-effort; prefix replay is still authoritative).
    * Disabled when `RECORDING_CHECKPOINTS=false`.
@@ -4667,6 +5032,135 @@ export class RecordingService extends EventEmitter {
     const withForce = applyForce ? relaxClickForceForPlayback(comboboxFallback) : comboboxFallback;
     const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
     const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
+    const parsedScroll = this.parseStoredScrollCode(safeCode);
+    if (code.includes('scrollBy') || safeCode.includes('scrollBy')) {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: 'playback-scroll',
+          hypothesisId: 'S1,S2',
+          location: 'recording.service.ts:executePwCode',
+          message: parsedScroll ? 'Playback scroll parser matched transformed code' : 'Playback scroll parser did not match transformed code',
+          data: {
+            originalCode: code,
+            safeCode,
+            parsedScroll,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    }
+    let beforeScrollSnapshot:
+      | {
+          rootX: number;
+          rootY: number;
+          targetSelector: string | null;
+          targetCount: number;
+          targetScrollLeft: number | null;
+          targetScrollTop: number | null;
+          targetClientHeight: number | null;
+          targetScrollHeight: number | null;
+        }
+      | null = null;
+    if (parsedScroll) {
+      const selector = parsedScroll.selector;
+      beforeScrollSnapshot = await page.evaluate((input) => {
+        const root = document.scrollingElement || document.documentElement || document.body;
+        const target = input.selector ? document.querySelector(input.selector) : null;
+        const targetEl = target instanceof HTMLElement ? target : null;
+        return {
+          rootX: window.scrollX,
+          rootY: window.scrollY,
+          targetSelector: input.selector,
+          targetCount: input.selector ? document.querySelectorAll(input.selector).length : 0,
+          targetScrollLeft: targetEl ? targetEl.scrollLeft : null,
+          targetScrollTop: targetEl ? targetEl.scrollTop : null,
+          targetClientHeight: targetEl ? targetEl.clientHeight : null,
+          targetScrollHeight: targetEl ? targetEl.scrollHeight : null,
+        };
+      }, { selector }).catch(() => null);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: 'playback-scroll',
+          hypothesisId: 'P2,P3,P5',
+          location: 'recording.service.ts:executePwCode',
+          message: 'About to execute scroll Playwright code',
+          data: {
+            selector,
+            isRootScroll: parsedScroll.isRoot,
+            deltaLeft: parsedScroll.left,
+            deltaTop: parsedScroll.top,
+            before: beforeScrollSnapshot,
+            safeCode,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    }
+    if (parsedScroll) {
+      const scrollResult = await this.executeRecordedScrollPlayback(page, parsedScroll);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: 'playback-scroll',
+          hypothesisId: 'S2,S3',
+          location: 'recording.service.ts:executePwCode',
+          message: 'Scroll playback helper executed',
+          data: scrollResult,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      const selector = parsedScroll.selector;
+      const afterScrollSnapshot = await page.evaluate((input) => {
+        const target = input.selector ? document.querySelector(input.selector) : null;
+        const targetEl = target instanceof HTMLElement ? target : null;
+        return {
+          rootX: window.scrollX,
+          rootY: window.scrollY,
+          targetSelector: input.selector,
+          targetCount: input.selector ? document.querySelectorAll(input.selector).length : 0,
+          targetScrollLeft: targetEl ? targetEl.scrollLeft : null,
+          targetScrollTop: targetEl ? targetEl.scrollTop : null,
+          targetClientHeight: targetEl ? targetEl.clientHeight : null,
+          targetScrollHeight: targetEl ? targetEl.scrollHeight : null,
+        };
+      }, { selector }).catch(() => null);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+        body: JSON.stringify({
+          sessionId: '8e7bf9',
+          runId: 'playback-scroll',
+          hypothesisId: 'P3,P5',
+          location: 'recording.service.ts:executePwCode',
+          message: 'Finished executing scroll Playwright code',
+          data: {
+            selector,
+            isRootScroll: parsedScroll.isRoot,
+            helperResult: scrollResult,
+            before: beforeScrollSnapshot,
+            after: afterScrollSnapshot,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return;
+    }
     const fn = new Function('page', 'expect', `return (async () => { ${safeCode} })();`) as (
       page: Page,
       expectFn: typeof expect,

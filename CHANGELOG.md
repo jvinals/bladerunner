@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.55`: made playback scroll steps visibly animate through their movement instead of jumping to the final position in a single frame.
+- `@bladerunner/api 0.6.58`: changed scroll-step playback to probe for the best responsive scroll container and animate the recorded delta progressively with `requestAnimationFrame`.
+- `0.10.54`: fixed playback of recorded scroll steps by resolving broad selectors to a descendant-or-match element that actually responds to the stored scroll delta.
+- `@bladerunner/api 0.6.57`: taught scroll-step playback to search matched containers and apply the delta to the first element whose scroll position actually changes.
 - `0.10.53`: fixed recording so scroll gestures are persisted as replayable steps instead of being silently ignored after the remote page moved.
 - `@bladerunner/api 0.6.56`: captured debounced wheel gestures as manual `SCROLL` steps with stored relative scroll Playwright code for page and panel scrolling.
 - `0.10.52`: changed new recording defaults so runs start with the larger browser preset and high-quality preview settings out of the box.
