@@ -2981,9 +2981,23 @@ export class RecordingService extends EventEmitter {
   ): Promise<void> {
     const session = this.sessions.get(runId);
     if (!session || session.userId !== userId) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H3',location:'recording.service.ts:dispatchRemotePointer:missingSession',message:'Remote pointer ignored due to missing session',data:{requestedRunId:runId,hasSession:!!session,userMatches:session?session.userId===userId:false,kind:payload.kind},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      if (payload.kind === 'wheel') {
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+          body: JSON.stringify({
+            sessionId: '8e7bf9',
+            runId,
+            hypothesisId: 'H2',
+            location: 'recording.service.ts:dispatchRemotePointer',
+            message: 'Wheel payload rejected before Playwright dispatch',
+            data: { hasSession: !!session, userMatched: !!session && session.userId === userId },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+      }
       return;
     }
 
@@ -2994,9 +3008,6 @@ export class RecordingService extends EventEmitter {
     const x = Math.max(0, Math.min(rawX, vp.width - 1));
     const y = Math.max(0, Math.min(rawY, vp.height - 1));
     const button = payload.button ?? 'left';
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H2-H3',location:'recording.service.ts:dispatchRemotePointer',message:'Remote pointer dispatch start',data:{kind:payload.kind,rawX,payloadX:payload.x??null,rawY,payloadY:payload.y??null,clampedX:x,clampedY:y,button,viewportWidth:vp.width,viewportHeight:vp.height,deltaX:payload.deltaX??null,deltaY:payload.deltaY??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     try {
       switch (payload.kind) {
@@ -3011,10 +3022,45 @@ export class RecordingService extends EventEmitter {
           await page.mouse.move(x, y);
           await page.mouse.up({ button });
           break;
-        case 'wheel':
+        case 'wheel': {
+          const before = await page.evaluate(() => ({
+            x: window.scrollX,
+            y: window.scrollY,
+            activeTag: document.activeElement?.tagName ?? null,
+          })).catch(() => ({ x: -1, y: -1, activeTag: null }));
           await page.mouse.move(x, y);
           await page.mouse.wheel(payload.deltaX ?? 0, payload.deltaY ?? 0);
+          const after = await page.evaluate(() => ({
+            x: window.scrollX,
+            y: window.scrollY,
+            activeTag: document.activeElement?.tagName ?? null,
+          })).catch(() => ({ x: -1, y: -1, activeTag: null }));
+          // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+            body: JSON.stringify({
+              sessionId: '8e7bf9',
+              runId,
+              hypothesisId: 'H3,H4',
+              location: 'recording.service.ts:dispatchRemotePointer',
+              message: 'Wheel dispatched to Playwright',
+              data: {
+                rawX,
+                rawY,
+                clampedX: x,
+                clampedY: y,
+                deltaX: payload.deltaX ?? 0,
+                deltaY: payload.deltaY ?? 0,
+                before,
+                after,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           break;
+        }
         case 'dblclick':
           await page.mouse.move(x, y);
           await page.mouse.click(x, y, { button, clickCount: 2, delay: 50 });
@@ -3023,9 +3069,6 @@ export class RecordingService extends EventEmitter {
           break;
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H3',location:'recording.service.ts:dispatchRemotePointer:error',message:'Remote pointer dispatch failed',data:{kind:payload.kind,error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       this.logger.debug(`dispatchRemotePointer ${payload.kind}: ${err}`);
     }
   }
@@ -3273,6 +3316,22 @@ export class RecordingService extends EventEmitter {
         metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
+
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+      body: JSON.stringify({
+        sessionId: '8e7bf9',
+        runId: session.runId,
+        hypothesisId: 'H4',
+        location: 'recording.service.ts:recordStep',
+        message: 'Recorded step persisted',
+        data: { sequence: step.sequence, action: step.action, origin: step.origin, instruction: step.instruction.slice(0, 160) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     void this.persistCheckpointAfterStep(session, step).catch((err) => {
       this.logger.warn(`Checkpoint after step ${step.sequence}: ${err}`);
@@ -4246,6 +4305,27 @@ export class RecordingService extends EventEmitter {
 
   private async setupEventCapture(session: RecordingSession) {
     await session.page.exposeFunction(
+      '__bladerunnerDebugScroll',
+      async (scrollData: string) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
+          body: JSON.stringify({
+            sessionId: '8e7bf9',
+            runId: session.runId,
+            hypothesisId: 'H4,H5',
+            location: 'recording.service.ts:__bladerunnerDebugScroll',
+            message: 'Page scroll event observed during recording',
+            data: JSON.parse(scrollData),
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+      },
+    );
+
+    await session.page.exposeFunction(
       '__bladerunnerRecordAction',
       async (actionData: string) => {
         await this.enqueueRecordingCapture(session, async () => {
@@ -4366,6 +4446,34 @@ export class RecordingService extends EventEmitter {
             return '';
           }
         }
+
+        var __brScrollRaf = 0;
+        document.addEventListener('scroll', function(e) {
+          if (window.__bladerunnerPauseRecording) return;
+          if (!window.__bladerunnerDebugScroll) return;
+          if (__brScrollRaf) cancelAnimationFrame(__brScrollRaf);
+          var target = e.target;
+          __brScrollRaf = requestAnimationFrame(function() {
+            try {
+              var root = document.scrollingElement || document.documentElement || document.body;
+              var isRoot =
+                !target ||
+                target === document ||
+                target === document.documentElement ||
+                target === document.body ||
+                target === root;
+              var node = isRoot ? root : target;
+              var left = isRoot ? (window.scrollX || root.scrollLeft || 0) : (node.scrollLeft || 0);
+              var top = isRoot ? (window.scrollY || root.scrollTop || 0) : (node.scrollTop || 0);
+              window.__bladerunnerDebugScroll(JSON.stringify({
+                targetTag: node && node.tagName ? String(node.tagName).toLowerCase() : 'unknown',
+                isRoot: !!isRoot,
+                scrollLeft: left,
+                scrollTop: top
+              }));
+            } catch (err) {}
+          });
+        }, true);
 
         document.addEventListener('click', function(e) {
           if (window.__bladerunnerPauseRecording) return;

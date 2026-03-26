@@ -79,8 +79,8 @@ export default function RunsPage() {
   const [newUrl, setNewUrl] = useState('');
   const [newName, setNewName] = useState('');
   const [newRunProjectId, setNewRunProjectId] = useState('');
-  const [newViewportPreset, setNewViewportPreset] = useState<RecordingViewportPreset>('hd');
-  const [newStreamQuality, setNewStreamQuality] = useState<RecordingStreamQuality>('medium');
+  const [newViewportPreset, setNewViewportPreset] = useState<RecordingViewportPreset>('wxga');
+  const [newStreamQuality, setNewStreamQuality] = useState<RecordingStreamQuality>('high');
   const [newStreamSmoothness, setNewStreamSmoothness] = useState<RecordingStreamSmoothness>('high');
   const [instructionText, setInstructionText] = useState('');
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');

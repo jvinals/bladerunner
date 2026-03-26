@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.52`: changed new recording defaults so runs start with the larger browser preset and high-quality preview settings out of the box.
+- `@bladerunner/web 0.7.28`: defaulted the Runs page recording controls to `1440 x 900`, `High` stream quality, and `High` preview smoothness.
+- `0.10.51`: added a read-only optimized prompt review panel in playback step details so canonical prompts and supporting intent metadata can be inspected per step.
+- `@bladerunner/web 0.7.27`: rendered stored optimized prompt details inside `StepCard` when playback metadata includes a compiled prompt.
 - `0.10.50`: added per-step optimized playback prompts that capture user intent from recorded evidence and let playback fall back to semantic step recreation before the normal repair path.
 - `@bladerunner/api 0.6.55`: added the `Optimized Prompt` LLM task, persisted per-step optimized prompt evidence/results, refreshed prompts after recording stops, and used canonical playback prompts as a fallback before standard playback regeneration.
 - `@bladerunner/web 0.7.26`: exposed the new `Optimized Prompt` task in AI / LLM settings so users can choose the model/provider used for canonical per-step prompt compilation.

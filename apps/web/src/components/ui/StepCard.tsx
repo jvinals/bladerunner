@@ -28,6 +28,7 @@ import type { AiPromptTestProgressPayload } from '@/hooks/useRecording';
 import { parseAiPromptLastLlmTranscript } from '@/lib/aiPromptLastLlmTranscript';
 import { aiPromptCodegenOkForInstruction } from '@/lib/aiPromptStepMetadata';
 import { buildAiPromptDrawerSections } from '@/lib/buildAiPromptDrawerSections';
+import { parseOptimizedPromptStored } from '@/lib/optimizedPromptMetadata';
 import { AiPromptProgressSections } from '@/components/ui/AiPromptProgressSections';
 
 export type PlaybackHighlight = 'past' | 'current' | 'future';
@@ -119,6 +120,20 @@ const HIGHLIGHT_RING: Record<PlaybackHighlight, string> = {
   past: 'opacity-55',
   future: 'opacity-90',
 };
+
+function ReviewList({ items }: { items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <ul className="space-y-1 text-[10px] leading-snug text-gray-700">
+      {items.map((item, index) => (
+        <li key={`${item}-${index}`} className="flex gap-1.5">
+          <span className="mt-[2px] text-gray-400">•</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function playbackAiPromptPhaseClass(phase: PlaybackAiPromptIconPhase): string {
   if (phase === 'idle') return 'text-gray-300';
@@ -279,6 +294,7 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
   );
 
   const canRunPlaywrightOnPage = aiPromptCodegenOkForInstruction(metadata, promptDraft.trim());
+  const optimizedPrompt = useMemo(() => parseOptimizedPromptStored(metadata), [metadata]);
 
   const runAiPromptPhase = useCallback(
     async (phase: 'generate' | 'run' | 'full') => {
@@ -704,6 +720,113 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
                   {aiError}
                 </p>
               )}
+            </div>
+          )}
+          {optimizedPrompt && (
+            <div className="mb-2 rounded-md border border-violet-200 bg-violet-50/40 p-2.5">
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-violet-700">
+                  Optimized prompt
+                </p>
+                <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wide text-violet-700">
+                  Review only
+                </span>
+                <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wide text-violet-700/80">
+                  {Math.round(optimizedPrompt.confidence * 100)}% confidence
+                </span>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                    Canonical playback prompt
+                  </p>
+                  <pre className="whitespace-pre-wrap break-words rounded-md border border-violet-100 bg-white/90 px-2 py-1.5 text-[11px] leading-relaxed text-gray-800">
+                    {optimizedPrompt.canonical_playback_prompt}
+                  </pre>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Intent summary
+                    </p>
+                    <p className="text-[10px] leading-snug text-gray-700">
+                      {optimizedPrompt.step_intent_summary}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Semantic target
+                    </p>
+                    <p className="text-[10px] leading-snug text-gray-700">
+                      {optimizedPrompt.target_semantic_description}
+                    </p>
+                  </div>
+                </div>
+                {(optimizedPrompt.business_object || optimizedPrompt.input_or_selection_value) && (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {optimizedPrompt.business_object && (
+                      <div>
+                        <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                          Business object
+                        </p>
+                        <p className="text-[10px] leading-snug text-gray-700">
+                          {optimizedPrompt.business_object}
+                        </p>
+                      </div>
+                    )}
+                    {optimizedPrompt.input_or_selection_value && (
+                      <div>
+                        <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                          Input / selection value
+                        </p>
+                        <p className="text-[10px] leading-snug text-gray-700">
+                          {optimizedPrompt.input_or_selection_value}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {optimizedPrompt.preconditions.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Preconditions
+                    </p>
+                    <ReviewList items={optimizedPrompt.preconditions} />
+                  </div>
+                )}
+                {optimizedPrompt.expected_outcome.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Expected outcome
+                    </p>
+                    <ReviewList items={optimizedPrompt.expected_outcome} />
+                  </div>
+                )}
+                {optimizedPrompt.disambiguation_hints.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Disambiguation hints
+                    </p>
+                    <ReviewList items={optimizedPrompt.disambiguation_hints} />
+                  </div>
+                )}
+                {optimizedPrompt.do_not_depend_on.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Do not depend on
+                    </p>
+                    <ReviewList items={optimizedPrompt.do_not_depend_on} />
+                  </div>
+                )}
+                {optimizedPrompt.uncertainty_notes.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      Uncertainty notes
+                    </p>
+                    <ReviewList items={optimizedPrompt.uncertainty_notes} />
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
