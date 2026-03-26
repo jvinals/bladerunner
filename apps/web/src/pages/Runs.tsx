@@ -111,6 +111,8 @@ export default function RunsPage() {
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const aiStepAbortRef = useRef<AbortController | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const recordingSettingsGridRef = useRef<HTMLDivElement | null>(null);
+  const recordingSettingsFieldRefs = useRef<Array<HTMLDivElement | null>>([]);
   const previewFocusRef = useRef<HTMLDivElement>(null);
   /** Scrollable panel for the step list — scroll this only; avoid scrollIntoView (scrolls the window and shifts the preview). */
   const stepsListScrollRef = useRef<HTMLDivElement>(null);
@@ -285,6 +287,44 @@ export default function RunsPage() {
     const el = stepRefsPlayback.current.get(effectiveHighlightSequence);
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [effectiveHighlightSequence]);
+
+  useEffect(() => {
+    if (!newPanelOpen) return;
+    const grid = recordingSettingsGridRef.current;
+    if (!grid) return;
+    const gridRect = grid.getBoundingClientRect();
+    const fields = recordingSettingsFieldRefs.current
+      .map((field, index) => {
+        if (!field) return null;
+        const label = field.querySelector('label');
+        const select = field.querySelector('select');
+        const fieldRect = field.getBoundingClientRect();
+        const labelRect = label?.getBoundingClientRect();
+        const selectRect = select?.getBoundingClientRect();
+        const labelStyles = label ? window.getComputedStyle(label) : null;
+        const selectStyles = select ? window.getComputedStyle(select) : null;
+        return {
+          index,
+          fieldTop: Math.round(fieldRect.top),
+          fieldHeight: Math.round(fieldRect.height),
+          labelTop: labelRect ? Math.round(labelRect.top) : null,
+          labelHeight: labelRect ? Math.round(labelRect.height) : null,
+          labelLineHeight: labelStyles?.lineHeight ?? null,
+          labelMarginTop: labelStyles?.marginTop ?? null,
+          labelMarginBottom: labelStyles?.marginBottom ?? null,
+          selectTop: selectRect ? Math.round(selectRect.top) : null,
+          selectHeight: selectRect ? Math.round(selectRect.height) : null,
+          selectPaddingTop: selectStyles?.paddingTop ?? null,
+          selectPaddingBottom: selectStyles?.paddingBottom ?? null,
+          selectLineHeight: selectStyles?.lineHeight ?? null,
+          selectAppearance: selectStyles?.appearance ?? null,
+        };
+      })
+      .filter(Boolean);
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-settings-layout',hypothesisId:'H1-H4',location:'Runs.tsx:measurement-effect',message:'Recording settings layout metrics',data:{newPanelOpen,gridTop:Math.round(gridRect.top),gridHeight:Math.round(gridRect.height),gridAlignItems:window.getComputedStyle(grid).alignItems,gridJustifyItems:window.getComputedStyle(grid).justifyItems,gridTemplateColumns:window.getComputedStyle(grid).gridTemplateColumns,fields},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [newPanelOpen, newViewportPreset, newStreamQuality, newStreamSmoothness]);
 
   const handleStartRecording = useCallback(async () => {
     if (!newUrl || !newName) return;
@@ -1369,9 +1409,9 @@ export default function RunsPage() {
                 className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
               />
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div>
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+            <div ref={recordingSettingsGridRef} className="grid gap-3 md:grid-cols-3">
+              <div ref={(el) => { recordingSettingsFieldRefs.current[0] = el; }}>
+                <label className="mb-1 flex min-h-[30px] items-start text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                   Browser Resolution
                 </label>
                 <select
@@ -1386,8 +1426,8 @@ export default function RunsPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+              <div ref={(el) => { recordingSettingsFieldRefs.current[1] = el; }}>
+                <label className="mb-1 flex min-h-[30px] items-start text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                   Stream Quality
                 </label>
                 <select
@@ -1402,8 +1442,8 @@ export default function RunsPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+              <div ref={(el) => { recordingSettingsFieldRefs.current[2] = el; }}>
+                <label className="mb-1 flex min-h-[30px] items-start text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                   Preview Smoothness
                 </label>
                 <select
