@@ -506,40 +506,6 @@ export class RecordingService extends EventEmitter {
     stepPayload: { id: string; sequence: number; action: string; instruction: string },
     skipClickForce: boolean,
   ): Promise<void> {
-    if (step.action === 'SCROLL') {
-      const parsedScroll = this.parseStoredScrollCode(step.playwrightCode);
-      const beforeSnapshot = parsedScroll
-        ? await this.captureScrollTargetSnapshot(session.page, {
-            selector: parsedScroll.selector,
-            isRoot: parsedScroll.isRoot,
-          })
-        : null;
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: playbackSessionId,
-          hypothesisId: 'P1,P2',
-          location: 'recording.service.ts:executePlaybackStepWithRepair',
-          message: 'Playback reached scroll step',
-          data: {
-            sourceRunId,
-            stepId: step.id,
-            sequence: step.sequence,
-            instruction: step.instruction,
-            value: step.value,
-            playwrightCode: step.playwrightCode,
-            recordedPlaywrightCode: step.recordedPlaywrightCode,
-            parsedScroll,
-            beforeSnapshot,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    }
     const optimizedPrompt = getOptimizedPromptStored(step.metadata);
     if (isExecutableStoredPlaywrightCode(step.playwrightCode)) {
       try {
@@ -548,60 +514,8 @@ export class RecordingService extends EventEmitter {
             skipClickForce,
           }),
         );
-        if (step.action === 'SCROLL') {
-          const parsedScroll = this.parseStoredScrollCode(step.playwrightCode);
-          const afterSnapshot = parsedScroll
-            ? await this.captureScrollTargetSnapshot(session.page, {
-                selector: parsedScroll.selector,
-                isRoot: parsedScroll.isRoot,
-              })
-            : null;
-          // #region agent log
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-            body: JSON.stringify({
-              sessionId: '8e7bf9',
-              runId: playbackSessionId,
-              hypothesisId: 'P3,P5',
-              location: 'recording.service.ts:executePlaybackStepWithRepair',
-              message: 'Stored scroll Playwright finished during playback',
-              data: {
-                stepId: step.id,
-                sequence: step.sequence,
-                parsedScroll,
-                afterSnapshot,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-        }
         return;
       } catch (execErr) {
-        if (step.action === 'SCROLL') {
-          const failure = classifyRecordingAutomationFailure(execErr);
-          // #region agent log
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-            body: JSON.stringify({
-              sessionId: '8e7bf9',
-              runId: playbackSessionId,
-              hypothesisId: 'P4',
-              location: 'recording.service.ts:executePlaybackStepWithRepair',
-              message: 'Stored scroll Playwright failed during playback',
-              data: {
-                stepId: step.id,
-                sequence: step.sequence,
-                error: failure.message,
-                kind: failure.kind,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-        }
         const failure = classifyRecordingAutomationFailure(execErr);
         if (!this.shouldAttemptPlaybackRepair(step, failure)) {
           await this.persistPlaybackRepairFailure(step, failure, {
@@ -3067,23 +2981,6 @@ export class RecordingService extends EventEmitter {
   ): Promise<void> {
     const session = this.sessions.get(runId);
     if (!session || session.userId !== userId) {
-      if (payload.kind === 'wheel') {
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-          body: JSON.stringify({
-            sessionId: '8e7bf9',
-            runId,
-            hypothesisId: 'H2',
-            location: 'recording.service.ts:dispatchRemotePointer',
-            message: 'Wheel payload rejected before Playwright dispatch',
-            data: { hasSession: !!session, userMatched: !!session && session.userId === userId },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-      }
       return;
     }
 
@@ -3109,42 +3006,8 @@ export class RecordingService extends EventEmitter {
           await page.mouse.up({ button });
           break;
         case 'wheel': {
-          const before = await page.evaluate(() => ({
-            x: window.scrollX,
-            y: window.scrollY,
-            activeTag: document.activeElement?.tagName ?? null,
-          })).catch(() => ({ x: -1, y: -1, activeTag: null }));
           await page.mouse.move(x, y);
           await page.mouse.wheel(payload.deltaX ?? 0, payload.deltaY ?? 0);
-          const after = await page.evaluate(() => ({
-            x: window.scrollX,
-            y: window.scrollY,
-            activeTag: document.activeElement?.tagName ?? null,
-          })).catch(() => ({ x: -1, y: -1, activeTag: null }));
-          // #region agent log
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-            body: JSON.stringify({
-              sessionId: '8e7bf9',
-              runId,
-              hypothesisId: 'H3,H4',
-              location: 'recording.service.ts:dispatchRemotePointer',
-              message: 'Wheel dispatched to Playwright',
-              data: {
-                rawX,
-                rawY,
-                clampedX: x,
-                clampedY: y,
-                deltaX: payload.deltaX ?? 0,
-                deltaY: payload.deltaY ?? 0,
-                before,
-                after,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           break;
         }
         case 'dblclick':
@@ -3403,22 +3266,6 @@ export class RecordingService extends EventEmitter {
       },
     });
 
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-      body: JSON.stringify({
-        sessionId: '8e7bf9',
-        runId: session.runId,
-        hypothesisId: 'H4',
-        location: 'recording.service.ts:recordStep',
-        message: 'Recorded step persisted',
-        data: { sequence: step.sequence, action: step.action, origin: step.origin, instruction: step.instruction.slice(0, 160) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
     void this.persistCheckpointAfterStep(session, step).catch((err) => {
       this.logger.warn(`Checkpoint after step ${step.sequence}: ${err}`);
     });
@@ -3489,61 +3336,6 @@ export class RecordingService extends EventEmitter {
       top: Number(deltaMatch[2]),
       isRoot: false,
     };
-  }
-
-  private async captureScrollTargetSnapshot(
-    page: Page,
-    input: { selector: string | null; isRoot: boolean },
-  ): Promise<{
-    rootX: number;
-    rootY: number;
-    selector: string | null;
-    isRoot: boolean;
-    targetCount: number;
-    firstScrollableIndex: number;
-    firstScrollableScrollTop: number | null;
-    firstScrollableScrollLeft: number | null;
-    firstScrollableClientHeight: number | null;
-    firstScrollableScrollHeight: number | null;
-    matched: Array<{ index: number; tag: string; className: string; scrollTop: number; scrollLeft: number; clientHeight: number; scrollHeight: number }>;
-  } | null> {
-    return page.evaluate((payload) => {
-      const root = document.scrollingElement || document.documentElement || document.body;
-      const serialize = (el: Element, index: number) => {
-        const node = el instanceof HTMLElement ? el : null;
-        return {
-          index,
-          tag: el.tagName.toLowerCase(),
-          className: node?.className ? String(node.className).slice(0, 120) : '',
-          scrollTop: node?.scrollTop ?? 0,
-          scrollLeft: node?.scrollLeft ?? 0,
-          clientHeight: node?.clientHeight ?? 0,
-          scrollHeight: node?.scrollHeight ?? 0,
-        };
-      };
-      const matches = payload.selector ? Array.from(document.querySelectorAll(payload.selector)) : [];
-      const firstScrollableIndex = matches.findIndex((el) => {
-        const node = el instanceof HTMLElement ? el : null;
-        return !!node && (node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth);
-      });
-      const scrollable =
-        firstScrollableIndex >= 0 && matches[firstScrollableIndex] instanceof HTMLElement
-          ? (matches[firstScrollableIndex] as HTMLElement)
-          : null;
-      return {
-        rootX: window.scrollX,
-        rootY: window.scrollY,
-        selector: payload.selector,
-        isRoot: payload.isRoot,
-        targetCount: matches.length,
-        firstScrollableIndex,
-        firstScrollableScrollTop: scrollable ? scrollable.scrollTop : null,
-        firstScrollableScrollLeft: scrollable ? scrollable.scrollLeft : null,
-        firstScrollableClientHeight: scrollable ? scrollable.clientHeight : null,
-        firstScrollableScrollHeight: scrollable ? scrollable.scrollHeight : null,
-        matched: matches.slice(0, 5).map((el, index) => serialize(el, index)),
-      };
-    }, input).catch(() => null);
   }
 
   private async executeRecordedScrollPlayback(
@@ -4698,27 +4490,6 @@ export class RecordingService extends EventEmitter {
 
   private async setupEventCapture(session: RecordingSession) {
     await session.page.exposeFunction(
-      '__bladerunnerDebugScroll',
-      async (scrollData: string) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-          body: JSON.stringify({
-            sessionId: '8e7bf9',
-            runId: session.runId,
-            hypothesisId: 'H4,H5',
-            location: 'recording.service.ts:__bladerunnerDebugScroll',
-            message: 'Page scroll event observed during recording',
-            data: JSON.parse(scrollData),
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-      },
-    );
-
-    await session.page.exposeFunction(
       '__bladerunnerRecordAction',
       async (actionData: string) => {
         await this.enqueueRecordingCapture(session, async () => {
@@ -4867,35 +4638,7 @@ export class RecordingService extends EventEmitter {
           }
         }
 
-        var __brScrollRaf = 0;
         var __brScrollState = new WeakMap();
-        document.addEventListener('scroll', function(e) {
-          if (window.__bladerunnerPauseRecording) return;
-          if (!window.__bladerunnerDebugScroll) return;
-          if (__brScrollRaf) cancelAnimationFrame(__brScrollRaf);
-          var target = e.target;
-          __brScrollRaf = requestAnimationFrame(function() {
-            try {
-              var root = document.scrollingElement || document.documentElement || document.body;
-              var isRoot =
-                !target ||
-                target === document ||
-                target === document.documentElement ||
-                target === document.body ||
-                target === root;
-              var node = isRoot ? root : target;
-              var left = isRoot ? (window.scrollX || root.scrollLeft || 0) : (node.scrollLeft || 0);
-              var top = isRoot ? (window.scrollY || root.scrollTop || 0) : (node.scrollTop || 0);
-              window.__bladerunnerDebugScroll(JSON.stringify({
-                targetTag: node && node.tagName ? String(node.tagName).toLowerCase() : 'unknown',
-                isRoot: !!isRoot,
-                scrollLeft: left,
-                scrollTop: top
-              }));
-            } catch (err) {}
-          });
-        }, true);
-
         document.addEventListener('wheel', function(e) {
           if (window.__bladerunnerPauseRecording) return;
           if (!window.__bladerunnerRecordAction) return;
@@ -5033,132 +4776,8 @@ export class RecordingService extends EventEmitter {
     const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
     const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
     const parsedScroll = this.parseStoredScrollCode(safeCode);
-    if (code.includes('scrollBy') || safeCode.includes('scrollBy')) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'playback-scroll',
-          hypothesisId: 'S1,S2',
-          location: 'recording.service.ts:executePwCode',
-          message: parsedScroll ? 'Playback scroll parser matched transformed code' : 'Playback scroll parser did not match transformed code',
-          data: {
-            originalCode: code,
-            safeCode,
-            parsedScroll,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    }
-    let beforeScrollSnapshot:
-      | {
-          rootX: number;
-          rootY: number;
-          targetSelector: string | null;
-          targetCount: number;
-          targetScrollLeft: number | null;
-          targetScrollTop: number | null;
-          targetClientHeight: number | null;
-          targetScrollHeight: number | null;
-        }
-      | null = null;
     if (parsedScroll) {
-      const selector = parsedScroll.selector;
-      beforeScrollSnapshot = await page.evaluate((input) => {
-        const root = document.scrollingElement || document.documentElement || document.body;
-        const target = input.selector ? document.querySelector(input.selector) : null;
-        const targetEl = target instanceof HTMLElement ? target : null;
-        return {
-          rootX: window.scrollX,
-          rootY: window.scrollY,
-          targetSelector: input.selector,
-          targetCount: input.selector ? document.querySelectorAll(input.selector).length : 0,
-          targetScrollLeft: targetEl ? targetEl.scrollLeft : null,
-          targetScrollTop: targetEl ? targetEl.scrollTop : null,
-          targetClientHeight: targetEl ? targetEl.clientHeight : null,
-          targetScrollHeight: targetEl ? targetEl.scrollHeight : null,
-        };
-      }, { selector }).catch(() => null);
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'playback-scroll',
-          hypothesisId: 'P2,P3,P5',
-          location: 'recording.service.ts:executePwCode',
-          message: 'About to execute scroll Playwright code',
-          data: {
-            selector,
-            isRootScroll: parsedScroll.isRoot,
-            deltaLeft: parsedScroll.left,
-            deltaTop: parsedScroll.top,
-            before: beforeScrollSnapshot,
-            safeCode,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    }
-    if (parsedScroll) {
-      const scrollResult = await this.executeRecordedScrollPlayback(page, parsedScroll);
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'playback-scroll',
-          hypothesisId: 'S2,S3',
-          location: 'recording.service.ts:executePwCode',
-          message: 'Scroll playback helper executed',
-          data: scrollResult,
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      const selector = parsedScroll.selector;
-      const afterScrollSnapshot = await page.evaluate((input) => {
-        const target = input.selector ? document.querySelector(input.selector) : null;
-        const targetEl = target instanceof HTMLElement ? target : null;
-        return {
-          rootX: window.scrollX,
-          rootY: window.scrollY,
-          targetSelector: input.selector,
-          targetCount: input.selector ? document.querySelectorAll(input.selector).length : 0,
-          targetScrollLeft: targetEl ? targetEl.scrollLeft : null,
-          targetScrollTop: targetEl ? targetEl.scrollTop : null,
-          targetClientHeight: targetEl ? targetEl.clientHeight : null,
-          targetScrollHeight: targetEl ? targetEl.scrollHeight : null,
-        };
-      }, { selector }).catch(() => null);
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'playback-scroll',
-          hypothesisId: 'P3,P5',
-          location: 'recording.service.ts:executePwCode',
-          message: 'Finished executing scroll Playwright code',
-          data: {
-            selector,
-            isRootScroll: parsedScroll.isRoot,
-            helperResult: scrollResult,
-            before: beforeScrollSnapshot,
-            after: afterScrollSnapshot,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
+      await this.executeRecordedScrollPlayback(page, parsedScroll);
       return;
     }
     const fn = new Function('page', 'expect', `return (async () => { ${safeCode} })();`) as (

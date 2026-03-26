@@ -318,30 +318,6 @@ export function useRecording(): UseRecordingReturn {
   const sendRemotePointer = useCallback((userId: string, payload: RemotePointerPayload) => {
     const id = activeRunIdRef.current ?? runId;
     const s = socketRef.current;
-    if (payload.kind === 'wheel') {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: id ?? 'missing-run',
-          hypothesisId: !id || !s?.connected ? 'H2' : 'H2,H3',
-          location: 'useRecording.ts:sendRemotePointer',
-          message: !id || !s?.connected ? 'Wheel payload dropped before socket emit' : 'Wheel payload emitted to recording socket',
-          data: {
-            connected: !!s?.connected,
-            hasRunId: !!id,
-            deltaX: payload.deltaX ?? 0,
-            deltaY: payload.deltaY ?? 0,
-            x: payload.x ?? null,
-            y: payload.y ?? null,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    }
     if (!id || !s?.connected) return;
     s.emit('pointer', { runId: id, userId, ...payload });
   }, [runId]);

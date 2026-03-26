@@ -2,6 +2,9 @@
 
 ## 2026-03-25
 
+- `0.10.56`: removed the temporary runtime instrumentation used to debug scroll recording and playback after the fixes were confirmed.
+- `@bladerunner/api 0.6.59`: cleaned up backend debug probes while keeping the recorded-scroll targeting and animated playback behavior.
+- `@bladerunner/web 0.7.29`: removed temporary client-side wheel debugging logs from the recording preview bridge.
 - `0.10.55`: made playback scroll steps visibly animate through their movement instead of jumping to the final position in a single frame.
 - `@bladerunner/api 0.6.58`: changed scroll-step playback to probe for the best responsive scroll container and animate the recorded delta progressively with `requestAnimationFrame`.
 - `0.10.54`: fixed playback of recorded scroll steps by resolving broad selectors to a descendant-or-match element that actually responds to the stored scroll delta.

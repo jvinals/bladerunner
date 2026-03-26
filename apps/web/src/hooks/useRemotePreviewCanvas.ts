@@ -74,21 +74,6 @@ export function useRemotePreviewCanvas(
       if (!userId || !canvasRef.current) return;
       const { x, y } = clientToViewportCoords(canvasRef.current, e.clientX, e.clientY);
       const { deltaX, deltaY } = normalizeWheelDelta(e);
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e7bf9' },
-        body: JSON.stringify({
-          sessionId: '8e7bf9',
-          runId: 'ui-preview',
-          hypothesisId: 'H1',
-          location: 'useRemotePreviewCanvas.ts:forwardWheel',
-          message: 'Preview wheel handler fired',
-          data: { x, y, deltaX, deltaY, deltaMode: e.deltaMode, userPresent: !!userId, bridgeConnected: bridge.isConnected() },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       bridge.pointer({ kind: 'wheel', x, y, deltaX, deltaY });
     },
     [userId, bridge, canvasRef],
