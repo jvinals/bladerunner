@@ -1,0 +1,7 @@
+ALTER TABLE "runs"
+ADD COLUMN "recording_viewport_width" INTEGER NOT NULL DEFAULT 1280,
+ADD COLUMN "recording_viewport_height" INTEGER NOT NULL DEFAULT 720,
+ADD COLUMN "stream_max_width" INTEGER NOT NULL DEFAULT 1280,
+ADD COLUMN "stream_max_height" INTEGER NOT NULL DEFAULT 720,
+ADD COLUMN "stream_jpeg_quality" INTEGER NOT NULL DEFAULT 60,
+ADD COLUMN "stream_every_nth_frame" INTEGER NOT NULL DEFAULT 1;

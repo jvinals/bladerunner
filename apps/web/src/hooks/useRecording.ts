@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import type { Socket } from 'socket.io-client';
-import { runsApi, type AutoClerkOtpUiMode } from '@/lib/api';
+import { runsApi, type AutoClerkOtpUiMode, type StartRecordingBody } from '@/lib/api';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 
 export interface RecordedStep {
@@ -64,7 +64,7 @@ interface UseRecordingReturn {
   currentFrame: string | null;
   steps: RecordedStep[];
   status: string;
-  startRecording: (url: string, name: string, projectId?: string) => Promise<void>;
+  startRecording: (input: StartRecordingBody) => Promise<void>;
   stopRecording: () => Promise<void>;
   sendInstruction: (instruction: string) => Promise<RecordedStep | null>;
   /** Replace an existing step by re-running a natural-language instruction (active recording only). */
@@ -239,12 +239,8 @@ export function useRecording(): UseRecordingReturn {
     setAiPromptTestProgress(null);
   }, []);
 
-  const startRecording = useCallback(async (url: string, name: string, projectId?: string) => {
-    const result = await runsApi.startRecording({
-      name,
-      url,
-      ...(projectId ? { projectId } : {}),
-    });
+  const startRecording = useCallback(async (input: StartRecordingBody) => {
+    const result = await runsApi.startRecording(input);
     activeRunIdRef.current = result.runId;
     connectSocket(result.runId);
     let initialSteps: RecordedStep[] = [];

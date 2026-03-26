@@ -18,6 +18,7 @@ const LLM_USAGE_ROWS: { key: string; label: string }[] = [
   { key: 'playwright_codegen', label: 'Generate Playwright from vision (AI prompt / instruct)' },
   { key: 'playwright_verify', label: 'DOM verify pass (after draft codegen)' },
   { key: 'action_to_instruction', label: 'Recording — action to instruction' },
+  { key: 'optimized_prompt', label: 'Optimized Prompt' },
   { key: 'explain_ai_prompt_failure', label: 'Explain AI prompt test failure' },
   { key: 'suggest_skip_after_change', label: 'Suggest steps to skip after edit' },
 ];

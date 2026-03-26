@@ -23,7 +23,7 @@ import { Prisma, type RunStep } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
-import { LlmService } from '../llm/llm.service';
+import { LlmService, type OptimizedPromptCompilerInput } from '../llm/llm.service';
 import type { AiPromptTestFailureHelp } from '../llm/llm.service';
 import { EventEmitter } from 'events';
 import {
@@ -92,13 +92,110 @@ import {
   writeJpegThumbnailFromVideo,
 } from './recording-storage';
 import { createScreencastVideoEncoder, type ScreencastVideoEncoder } from './recording-screencast-ffmpeg';
+import {
+  getOptimizedPromptEvidenceRef,
+  getOptimizedPromptStored,
+  OPTIMIZED_PROMPT_SCHEMA_VERSION,
+  type OptimizedPromptCompileSource,
+  type OptimizedPromptEvidenceRef,
+  withOptimizedPromptFailure,
+  withOptimizedPromptSuccess,
+} from './optimized-prompt-metadata';
 
 /** AI-generated Playwright often needs longer than Playwright's default 30s action timeout. */
 const AI_PROMPT_PW_TIMEOUT_MS = 120_000;
 const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Remote Chromium (recording + playback): CSS viewport for layout. */
-const REMOTE_BROWSER_VIEWPORT = { width: 1280, height: 720 } as const;
+type RecordingViewportPreset = 'hd' | 'wxga' | 'fhd';
+type RecordingStreamQualityPreset = 'low' | 'medium' | 'high';
+type RecordingStreamSmoothnessPreset = 'low' | 'medium' | 'high';
+
+type RecordingStartOptions = {
+  name: string;
+  url: string;
+  projectId?: string;
+  viewportPreset?: RecordingViewportPreset;
+  streamQuality?: RecordingStreamQualityPreset;
+  streamSmoothness?: RecordingStreamSmoothnessPreset;
+};
+
+type RunCaptureSettings = {
+  recordingViewportWidth: number;
+  recordingViewportHeight: number;
+  streamMaxWidth: number;
+  streamMaxHeight: number;
+  streamJpegQuality: number;
+  streamEveryNthFrame: number;
+};
+
+type OptimizedPromptEvidencePayload = {
+  pageUrl: string;
+  somManifest: string;
+  accessibilitySnapshot: string;
+  playwrightSnippet: string;
+  recordingMode: string;
+  humanPromptOrNull: string | null;
+  optionalPageMetadata: string;
+  screenshotBase64?: string;
+};
+
+const VIEWPORT_PRESETS: Record<RecordingViewportPreset, { width: number; height: number }> = {
+  hd: { width: 1280, height: 720 },
+  wxga: { width: 1440, height: 900 },
+  fhd: { width: 1920, height: 1080 },
+};
+
+const STREAM_QUALITY_PRESETS: Record<RecordingStreamQualityPreset, { jpegQuality: number; scale: number }> = {
+  low: { jpegQuality: 45, scale: 0.75 },
+  medium: { jpegQuality: 60, scale: 1 },
+  high: { jpegQuality: 78, scale: 1 },
+};
+
+const STREAM_SMOOTHNESS_PRESETS: Record<RecordingStreamSmoothnessPreset, number> = {
+  low: 3,
+  medium: 2,
+  high: 1,
+};
+
+const DEFAULT_VIEWPORT_PRESET: RecordingViewportPreset = 'hd';
+const DEFAULT_STREAM_QUALITY_PRESET: RecordingStreamQualityPreset = 'medium';
+const DEFAULT_STREAM_SMOOTHNESS_PRESET: RecordingStreamSmoothnessPreset = 'high';
+
+function buildCaptureSettingsFromPresets(input?: {
+  viewportPreset?: string;
+  streamQuality?: string;
+  streamSmoothness?: string;
+}): RunCaptureSettings {
+  const viewport =
+    VIEWPORT_PRESETS[(input?.viewportPreset as RecordingViewportPreset) || DEFAULT_VIEWPORT_PRESET] ??
+    VIEWPORT_PRESETS[DEFAULT_VIEWPORT_PRESET];
+  const quality =
+    STREAM_QUALITY_PRESETS[(input?.streamQuality as RecordingStreamQualityPreset) || DEFAULT_STREAM_QUALITY_PRESET] ??
+    STREAM_QUALITY_PRESETS[DEFAULT_STREAM_QUALITY_PRESET];
+  const everyNthFrame =
+    STREAM_SMOOTHNESS_PRESETS[
+      (input?.streamSmoothness as RecordingStreamSmoothnessPreset) || DEFAULT_STREAM_SMOOTHNESS_PRESET
+    ] ?? STREAM_SMOOTHNESS_PRESETS[DEFAULT_STREAM_SMOOTHNESS_PRESET];
+  return {
+    recordingViewportWidth: viewport.width,
+    recordingViewportHeight: viewport.height,
+    streamMaxWidth: Math.max(640, Math.round(viewport.width * quality.scale)),
+    streamMaxHeight: Math.max(360, Math.round(viewport.height * quality.scale)),
+    streamJpegQuality: quality.jpegQuality,
+    streamEveryNthFrame: everyNthFrame,
+  };
+}
+
+function captureSettingsFromRun(run: Partial<RunCaptureSettings>): RunCaptureSettings {
+  return {
+    recordingViewportWidth: run.recordingViewportWidth ?? 1280,
+    recordingViewportHeight: run.recordingViewportHeight ?? 720,
+    streamMaxWidth: run.streamMaxWidth ?? 1280,
+    streamMaxHeight: run.streamMaxHeight ?? 720,
+    streamJpegQuality: run.streamJpegQuality ?? 60,
+    streamEveryNthFrame: run.streamEveryNthFrame ?? 1,
+  };
+}
 /**
  * Keep **1** here: `deviceScaleFactor: 2` caused **Clerk automatic sign-in during recording** to fail (hosted UI /
  * layout differences). Vision quality is improved via **JPEG quality** on LLM screenshots instead.
@@ -212,6 +309,8 @@ export class RecordingService extends EventEmitter {
   private playbackSessions = new Map<string, PlaybackSession>();
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
   private aiPromptTestInFlight = new Map<string, Promise<void>>();
+  /** In-flight optimized prompt generation / refresh work keyed by `${runId}:${stepId}`. */
+  private optimizedPromptInFlight = new Map<string, Promise<void>>();
   /** Before each AI prompt Test: URL + `storageState` for Reset (key `${runId}:${stepId}`). */
   private aiPromptPreTestSnapshots = new Map<string, { url: string; state: SnapshotStorageState }>();
   /** Active `test-ai-step` HTTP request — `POST .../abort-ai-test` or client disconnect calls `abort()`. */
@@ -319,6 +418,86 @@ export class RecordingService extends EventEmitter {
     );
   }
 
+  private async attemptPlaybackWithOptimizedPrompt(
+    session: PlaybackSession,
+    step: RunStep,
+    sourceRunId: string,
+    skipClickForce: boolean,
+    failureContext?: ReturnType<typeof classifyRecordingAutomationFailure>,
+  ): Promise<void> {
+    const optimized = getOptimizedPromptStored(step.metadata);
+    if (!optimized?.canonical_playback_prompt?.trim()) {
+      throw new Error('No optimized prompt available');
+    }
+    const generated = await this.runWithActivePlaybackStep(session, () =>
+      this.playAiPromptStepOnPage(session.page, optimized.canonical_playback_prompt, {
+        userId: session.userId,
+        skipClickForce,
+        phase: 'generateOnly',
+        repairContext: {
+          failedPlaywrightCode: isExecutableStoredPlaywrightCode(step.playwrightCode) ? step.playwrightCode : undefined,
+          recordedPlaywrightCode: this.resolveStepRecordedPlaywrightCode(step) ?? undefined,
+          priorFailureKind: failureContext?.kind,
+          priorFailureMessage: failureContext?.message,
+        },
+      }),
+    );
+
+    await this.runWithActivePlaybackStep(session, () =>
+      this.executePwCode(session.page, generated.playwrightCode, {
+        skipClickForce,
+      }),
+    );
+
+    const fresh = await this.prisma.runStep.findFirst({
+      where: { id: step.id, runId: sourceRunId, userId: session.userId },
+    });
+    const baseMeta =
+      fresh?.metadata && typeof fresh.metadata === 'object'
+        ? { ...(fresh.metadata as Record<string, unknown>) }
+        : {};
+    const nowIso = new Date().toISOString();
+    const metadataPatch: Record<string, unknown> = {
+      ...baseMeta,
+      lastOptimizedPromptPlaybackAt: nowIso,
+      lastOptimizedPromptPlaybackFailure: null,
+      lastOptimizedPromptPlaybackPrompt: optimized.canonical_playback_prompt,
+    };
+
+    if (isExecutableStoredPlaywrightCode(step.playwrightCode) && step.origin !== 'AI_PROMPT') {
+      await this.persistStepPlaywrightCodeState(fresh ?? step, generated.playwrightCode, metadataPatch);
+      return;
+    }
+
+    await this.prisma.runStep.update({
+      where: { id: step.id },
+      data: {
+        metadata: metadataPatch as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  private async persistOptimizedPromptPlaybackFailure(step: RunStep, error: unknown): Promise<void> {
+    const fresh = await this.prisma.runStep.findFirst({
+      where: { id: step.id, runId: step.runId, userId: step.userId },
+    });
+    const baseMeta =
+      fresh?.metadata && typeof fresh.metadata === 'object'
+        ? { ...(fresh.metadata as Record<string, unknown>) }
+        : {};
+    const message = error instanceof Error ? error.message : String(error);
+    await this.prisma.runStep.update({
+      where: { id: step.id },
+      data: {
+        metadata: {
+          ...baseMeta,
+          lastOptimizedPromptPlaybackAt: new Date().toISOString(),
+          lastOptimizedPromptPlaybackFailure: message,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   private async executePlaybackStepWithRepair(
     session: PlaybackSession,
     step: RunStep,
@@ -327,6 +506,7 @@ export class RecordingService extends EventEmitter {
     stepPayload: { id: string; sequence: number; action: string; instruction: string },
     skipClickForce: boolean,
   ): Promise<void> {
+    const optimizedPrompt = getOptimizedPromptStored(step.metadata);
     if (isExecutableStoredPlaywrightCode(step.playwrightCode)) {
       try {
         await this.runWithActivePlaybackStep(session, () =>
@@ -343,6 +523,21 @@ export class RecordingService extends EventEmitter {
           });
           throw execErr;
         }
+        if (optimizedPrompt) {
+          try {
+            await this.attemptPlaybackWithOptimizedPrompt(
+              session,
+              step,
+              sourceRunId,
+              skipClickForce,
+              failure,
+            );
+            return;
+          } catch (optimizedErr) {
+            await this.persistOptimizedPromptPlaybackFailure(step, optimizedErr);
+            this.logger.warn(`Optimized prompt fallback failed for step ${step.id}: ${optimizedErr}`);
+          }
+        }
         try {
           await this.attemptPlaybackRepair(
             session,
@@ -357,6 +552,21 @@ export class RecordingService extends EventEmitter {
         } catch (repairErr) {
           throw repairErr;
         }
+      }
+    }
+
+    if (optimizedPrompt) {
+      try {
+        await this.attemptPlaybackWithOptimizedPrompt(
+          session,
+          step,
+          sourceRunId,
+          skipClickForce,
+        );
+        return;
+      } catch (optimizedErr) {
+        await this.persistOptimizedPromptPlaybackFailure(step, optimizedErr);
+        this.logger.warn(`Optimized prompt fallback failed for step ${step.id}: ${optimizedErr}`);
       }
     }
 
@@ -378,8 +588,9 @@ export class RecordingService extends EventEmitter {
     return this.sessions.get(runId)?.latestFrame ?? null;
   }
 
-  async startRecording(userId: string, name: string, url: string, projectId?: string) {
-    const pid = projectId?.trim();
+  async startRecording(userId: string, opts: RecordingStartOptions) {
+    const pid = opts.projectId?.trim();
+    const captureSettings = buildCaptureSettingsFromPresets(opts);
     let projectAuth: ProjectAutoSignInCredentials | null = null;
     if (pid) {
       const proj = await this.prisma.project.findFirst({ where: { id: pid, userId } });
@@ -392,11 +603,12 @@ export class RecordingService extends EventEmitter {
     const run = await this.prisma.run.create({
       data: {
         userId,
-        name,
-        url,
+        name: opts.name,
+        url: opts.url,
         projectId: pid || null,
         status: 'RECORDING',
         platform: 'DESKTOP',
+        ...captureSettings,
         startedAt: new Date(),
       },
     });
@@ -410,7 +622,10 @@ export class RecordingService extends EventEmitter {
       const browser = await chromium.connect(wsEndpoint);
       screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
       const context = await browser.newContext({
-        viewport: REMOTE_BROWSER_VIEWPORT,
+        viewport: {
+          width: captureSettings.recordingViewportWidth,
+          height: captureSettings.recordingViewportHeight,
+        },
         deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
       });
       const page = await context.newPage();
@@ -433,26 +648,26 @@ export class RecordingService extends EventEmitter {
 
       this.sessions.set(run.id, session);
 
-      await this.attachScreencast(session.cdpSession, session, session.runId, {
+      await this.attachScreencast(session.cdpSession, session, session.runId, captureSettings, {
         onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
       });
       await this.setupEventCapture(session);
 
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.goto(opts.url, { waitUntil: 'domcontentloaded' });
 
       const navStep = await this.recordStep(session, {
         action: 'NAVIGATE',
         selector: null,
-        value: url,
-        instruction: `Navigate to ${url}`,
-        playwrightCode: `await page.goto('${url}');`,
+        value: opts.url,
+        instruction: `Navigate to ${opts.url}`,
+        playwrightCode: `await page.goto('${opts.url}');`,
         origin: 'MANUAL',
       });
 
       this.emit('step', run.id, navStep);
       this.emit('status', run.id, { status: 'recording', runId: run.id });
 
-      this.logger.log(`Recording started: ${run.id} -> ${url}`);
+      this.logger.log(`Recording started: ${run.id} -> ${opts.url}`);
       return run;
     } catch (err) {
       if (screencastVideo) {
@@ -481,6 +696,7 @@ export class RecordingService extends EventEmitter {
         await p.catch(() => {});
       }
     }
+    await this.waitForOptimizedPromptTasks(runId);
 
     const latestFrame = session.latestFrame;
     const screencastVideo = session.screencastVideo;
@@ -591,6 +807,14 @@ export class RecordingService extends EventEmitter {
       });
     }
 
+    void this.refreshOptimizedPromptsForRun(runId, userId)
+      .catch((err) => {
+        this.logger.warn(`Optimized prompt stop-refresh failed for ${runId}: ${err}`);
+      })
+      .finally(() => {
+        this.clearOptimizedPromptTasksForRun(runId);
+      });
+
     this.emit('status', runId, { status: 'completed', runId });
     this.logger.log(`Recording stopped: ${runId}`);
     return run;
@@ -624,6 +848,7 @@ export class RecordingService extends EventEmitter {
     }
     this.sessions.delete(runId);
     this.clearAiPromptSnapshotsForRun(runId);
+    this.clearOptimizedPromptTasksForRun(runId);
     this.emit('status', runId, { status: 'cancelled', runId });
     this.logger.log(`Recording session aborted for delete: ${runId}`);
   }
@@ -839,6 +1064,19 @@ export class RecordingService extends EventEmitter {
       origin: 'AI_DRIVEN',
     });
 
+    const optimizedCtx = await this.captureLlmPageContext(session.page).catch((err) => {
+      this.logger.warn(`Optimized prompt capture after executeInstruction failed for ${step.id}: ${err}`);
+      return null;
+    });
+    if (optimizedCtx) {
+      this.scheduleOptimizedPromptGeneration(
+        session,
+        step,
+        this.buildOptimizedPromptEvidencePayload(step, optimizedCtx),
+        'immediate',
+      );
+    }
+
     this.emit('step', runId, step);
     return step;
   }
@@ -920,6 +1158,19 @@ export class RecordingService extends EventEmitter {
     void this.persistCheckpointAfterStep(session, step).catch((err) => {
       this.logger.warn(`Checkpoint after re-record step ${step.sequence}: ${err}`);
     });
+
+    const optimizedCtx = await this.captureLlmPageContext(session.page).catch((err) => {
+      this.logger.warn(`Optimized prompt capture after re-record failed for ${step.id}: ${err}`);
+      return null;
+    });
+    if (optimizedCtx) {
+      this.scheduleOptimizedPromptGeneration(
+        session,
+        step,
+        this.buildOptimizedPromptEvidencePayload(step, optimizedCtx),
+        'immediate',
+      );
+    }
 
     this.emit('step', runId, step);
     this.logger.log(`Recording ${runId}: re-recorded step ${step.sequence} (${stepId})`);
@@ -1775,6 +2026,347 @@ export class RecordingService extends EventEmitter {
     }
   }
 
+  private optimizedPromptTaskKey(runId: string, stepId: string): string {
+    return `${runId}:${stepId}`;
+  }
+
+  private clearOptimizedPromptTasksForRun(runId: string): void {
+    const prefix = `${runId}:`;
+    for (const key of this.optimizedPromptInFlight.keys()) {
+      if (key.startsWith(prefix)) {
+        this.optimizedPromptInFlight.delete(key);
+      }
+    }
+  }
+
+  private async waitForOptimizedPromptTasks(runId: string): Promise<void> {
+    for (const [key, task] of this.optimizedPromptInFlight) {
+      if (key.startsWith(`${runId}:`)) {
+        await task.catch(() => {});
+      }
+    }
+  }
+
+  private shouldGenerateOptimizedPromptForStep(step: Pick<RunStep, 'origin' | 'instruction'>): boolean {
+    if (step.origin === 'AUTOMATIC') return false;
+    return !!step.instruction?.trim();
+  }
+
+  private humanPromptForOptimizedStep(step: Pick<RunStep, 'origin' | 'instruction'>): string | null {
+    if (step.origin === 'AI_DRIVEN' || step.origin === 'AI_PROMPT') {
+      const prompt = step.instruction?.trim();
+      return prompt ? prompt : null;
+    }
+    return null;
+  }
+
+  private stepSummaryForOptimizedContext(step: Pick<RunStep, 'instruction' | 'metadata'>): string {
+    const optimized = getOptimizedPromptStored(step.metadata);
+    return optimized?.step_intent_summary?.trim() || step.instruction.trim();
+  }
+
+  private async writeOptimizedPromptEvidence(
+    runId: string,
+    userId: string,
+    step: Pick<RunStep, 'id' | 'sequence'>,
+    payload: OptimizedPromptEvidencePayload,
+    source: OptimizedPromptCompileSource,
+  ): Promise<OptimizedPromptEvidenceRef> {
+    const baseDir = getRecordingsBaseDir(this.configService);
+    const artifactDir = getRunArtifactDir(baseDir, userId, runId);
+    const promptDir = path.join(artifactDir, 'optimized-prompts');
+    await fs.mkdir(promptDir, { recursive: true });
+    const stem = `step-${String(step.sequence).padStart(4, '0')}-${step.id}`;
+    const evidenceFile = `${stem}.json`;
+    const screenshotFile = `${stem}.jpg`;
+    const evidencePath = path.join(promptDir, evidenceFile);
+    const screenshotPath = payload.screenshotBase64?.trim()
+      ? path.join(promptDir, screenshotFile)
+      : null;
+    if (screenshotPath) {
+      await fs.writeFile(screenshotPath, Buffer.from(payload.screenshotBase64!.trim(), 'base64'));
+    }
+    await fs.writeFile(
+      evidencePath,
+      JSON.stringify(
+        {
+          schemaVersion: OPTIMIZED_PROMPT_SCHEMA_VERSION,
+          capturedAt: new Date().toISOString(),
+          source,
+          pageUrl: payload.pageUrl,
+          somManifest: payload.somManifest,
+          accessibilitySnapshot: payload.accessibilitySnapshot,
+          playwrightSnippet: payload.playwrightSnippet,
+          recordingMode: payload.recordingMode,
+          humanPromptOrNull: payload.humanPromptOrNull,
+          optionalPageMetadata: payload.optionalPageMetadata,
+        },
+        null,
+        2,
+      ),
+    );
+    return {
+      schemaVersion: OPTIMIZED_PROMPT_SCHEMA_VERSION,
+      capturedAt: new Date().toISOString(),
+      source,
+      evidencePath: path.relative(artifactDir, evidencePath),
+      screenshotPath: screenshotPath ? path.relative(artifactDir, screenshotPath) : null,
+    };
+  }
+
+  private async readOptimizedPromptEvidence(
+    runId: string,
+    userId: string,
+    metadata: unknown,
+  ): Promise<OptimizedPromptEvidencePayload | null> {
+    const ref = getOptimizedPromptEvidenceRef(metadata);
+    if (!ref) return null;
+    const artifactDir = getRunArtifactDir(getRecordingsBaseDir(this.configService), userId, runId);
+    try {
+      const raw = JSON.parse(await fs.readFile(path.join(artifactDir, ref.evidencePath), 'utf8')) as Record<
+        string,
+        unknown
+      >;
+      const screenshotBase64 =
+        ref.screenshotPath != null
+          ? (await fs.readFile(path.join(artifactDir, ref.screenshotPath))).toString('base64')
+          : undefined;
+      return {
+        pageUrl: typeof raw.pageUrl === 'string' ? raw.pageUrl : '',
+        somManifest: typeof raw.somManifest === 'string' ? raw.somManifest : '',
+        accessibilitySnapshot:
+          typeof raw.accessibilitySnapshot === 'string' ? raw.accessibilitySnapshot : '',
+        playwrightSnippet: typeof raw.playwrightSnippet === 'string' ? raw.playwrightSnippet : '',
+        recordingMode: typeof raw.recordingMode === 'string' ? raw.recordingMode : 'unknown',
+        humanPromptOrNull:
+          typeof raw.humanPromptOrNull === 'string' && raw.humanPromptOrNull.trim()
+            ? raw.humanPromptOrNull.trim()
+            : null,
+        optionalPageMetadata:
+          typeof raw.optionalPageMetadata === 'string' ? raw.optionalPageMetadata : '',
+        ...(screenshotBase64 ? { screenshotBase64 } : {}),
+      };
+    } catch (err) {
+      this.logger.warn(`readOptimizedPromptEvidence ${runId}: ${err}`);
+      return null;
+    }
+  }
+
+  private buildOptimizedPromptAppContext(run: {
+    id: string;
+    name: string;
+    url: string;
+    project?: { id: string; name?: string | null; kind?: string | null; url?: string | null } | null;
+  }): string {
+    return JSON.stringify(
+      {
+        runId: run.id,
+        runName: run.name,
+        runUrl: run.url,
+        project:
+          run.project != null
+            ? {
+                id: run.project.id,
+                name: run.project.name ?? null,
+                kind: run.project.kind ?? null,
+                url: run.project.url ?? null,
+              }
+            : null,
+      },
+      null,
+      2,
+    );
+  }
+
+  private buildOptimizedPromptWorkflowContext(
+    run: { name: string; url: string },
+    steps: RunStep[],
+    step: RunStep,
+  ): string {
+    return JSON.stringify(
+      {
+        runName: run.name,
+        runUrl: run.url,
+        totalSteps: steps.length,
+        currentStepSequence: step.sequence,
+        currentInstruction: step.instruction,
+      },
+      null,
+      2,
+    );
+  }
+
+  private buildOptimizedPromptEvidencePayload(
+    step: Pick<RunStep, 'action' | 'selector' | 'value' | 'origin' | 'instruction' | 'playwrightCode'>,
+    ctx: {
+      pageUrl: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
+      screenshotBase64?: string;
+    },
+  ): OptimizedPromptEvidencePayload {
+    return {
+      pageUrl: ctx.pageUrl,
+      somManifest: ctx.somManifest,
+      accessibilitySnapshot: ctx.accessibilitySnapshot,
+      playwrightSnippet: step.playwrightCode,
+      recordingMode: step.origin.toLowerCase(),
+      humanPromptOrNull: this.humanPromptForOptimizedStep(step),
+      optionalPageMetadata: JSON.stringify(
+        {
+          pageUrl: ctx.pageUrl,
+          stepAction: step.action,
+          selector: step.selector,
+          value: step.value,
+          instruction: step.instruction,
+        },
+        null,
+        2,
+      ),
+      ...(ctx.screenshotBase64?.trim() ? { screenshotBase64: ctx.screenshotBase64.trim() } : {}),
+    };
+  }
+
+  private async generateOptimizedPromptForStep(
+    stepId: string,
+    runId: string,
+    userId: string,
+    source: OptimizedPromptCompileSource,
+    evidenceOverride?: OptimizedPromptEvidencePayload,
+  ): Promise<void> {
+    const step = await this.prisma.runStep.findFirst({
+      where: { id: stepId, runId, userId },
+    });
+    if (!step || !this.shouldGenerateOptimizedPromptForStep(step)) return;
+
+    const evidence = evidenceOverride ?? (await this.readOptimizedPromptEvidence(runId, userId, step.metadata));
+    if (!evidence) return;
+
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      include: {
+        project: { select: { id: true, name: true, kind: true, url: true } },
+      },
+    });
+    if (!run) return;
+
+    const steps = await this.prisma.runStep.findMany({
+      where: { runId, userId },
+      orderBy: { sequence: 'asc' },
+    });
+    const idx = steps.findIndex((s) => s.id === stepId);
+    if (idx < 0) return;
+    const current = steps[idx];
+    const previousStepSummaries = steps
+      .slice(0, idx)
+      .map((s) => this.stepSummaryForOptimizedContext(s))
+      .filter(Boolean);
+    const nextStepSummaries = steps
+      .slice(idx + 1)
+      .map((s) => this.stepSummaryForOptimizedContext(s))
+      .filter(Boolean);
+
+    const compilerInput: OptimizedPromptCompilerInput = {
+      appContext: this.buildOptimizedPromptAppContext(run),
+      workflowContext: this.buildOptimizedPromptWorkflowContext(run, steps, current),
+      stepId: current.id,
+      stepIndex: current.sequence,
+      recordingMode: evidence.recordingMode,
+      timestamp: current.timestamp.toISOString(),
+      previousStepSummaries,
+      nextStepSummaries,
+      humanPromptOrNull: evidence.humanPromptOrNull,
+      playwrightSnippet: evidence.playwrightSnippet,
+      taggedScreenshotDescription: evidence.somManifest,
+      accessibilityTree: evidence.accessibilitySnapshot,
+      optionalPageMetadata: evidence.optionalPageMetadata,
+      screenshotBase64: evidence.screenshotBase64,
+    };
+
+    const baseMeta =
+      current.metadata && typeof current.metadata === 'object'
+        ? { ...(current.metadata as Record<string, unknown>) }
+        : {};
+
+    try {
+      const compiled = await this.llmService.compileOptimizedPrompt(compilerInput, {
+        userId,
+      });
+      const evidenceRef = getOptimizedPromptEvidenceRef(current.metadata);
+      if (!evidenceRef) return;
+      await this.prisma.runStep.update({
+        where: { id: stepId },
+        data: {
+          metadata: withOptimizedPromptSuccess(
+            baseMeta,
+            {
+              ...compiled.output,
+              schemaVersion: OPTIMIZED_PROMPT_SCHEMA_VERSION,
+              generatedAt: new Date().toISOString(),
+              source,
+            },
+            evidenceRef,
+          ) as Prisma.InputJsonValue,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.prisma.runStep.update({
+        where: { id: stepId },
+        data: {
+          metadata: withOptimizedPromptFailure(baseMeta, source, message) as Prisma.InputJsonValue,
+        },
+      });
+      this.logger.warn(`Optimized prompt generation failed for ${stepId}: ${message}`);
+    }
+  }
+
+  private scheduleOptimizedPromptGeneration(
+    session: RecordingSession,
+    step: RunStep,
+    evidence: OptimizedPromptEvidencePayload,
+    source: OptimizedPromptCompileSource,
+  ): void {
+    if (!this.shouldGenerateOptimizedPromptForStep(step)) return;
+    const taskKey = this.optimizedPromptTaskKey(step.runId, step.id);
+    const task = (async () => {
+      const ref = await this.writeOptimizedPromptEvidence(step.runId, session.userId, step, evidence, source);
+      const baseMeta =
+        step.metadata && typeof step.metadata === 'object' ? { ...(step.metadata as Record<string, unknown>) } : {};
+      await this.prisma.runStep.update({
+        where: { id: step.id },
+        data: {
+          metadata: {
+            ...baseMeta,
+            optimizedPromptEvidence: ref,
+            lastOptimizedPromptAttemptAt: new Date().toISOString(),
+            lastOptimizedPromptSource: source,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await this.generateOptimizedPromptForStep(step.id, step.runId, session.userId, source, evidence);
+    })()
+      .catch((err) => {
+        this.logger.warn(`scheduleOptimizedPromptGeneration ${taskKey}: ${err}`);
+      })
+      .finally(() => {
+        this.optimizedPromptInFlight.delete(taskKey);
+      });
+    this.optimizedPromptInFlight.set(taskKey, task);
+  }
+
+  private async refreshOptimizedPromptsForRun(runId: string, userId: string): Promise<void> {
+    const steps = await this.prisma.runStep.findMany({
+      where: { runId, userId },
+      orderBy: { sequence: 'asc' },
+    });
+    for (const step of steps) {
+      if (!this.shouldGenerateOptimizedPromptForStep(step)) continue;
+      if (!getOptimizedPromptEvidenceRef(step.metadata)) continue;
+      await this.generateOptimizedPromptForStep(step.id, runId, userId, 'recording_stop_refresh');
+    }
+  }
+
   /**
    * Append an AI prompt step during an active recording (no DOM capture). Emits `step` like other recorded steps.
    */
@@ -1815,6 +2407,18 @@ export class RecordingService extends EventEmitter {
     void this.persistCheckpointAfterStep(session, step).catch((err) => {
       this.logger.warn(`Checkpoint after AI prompt step ${step.sequence}: ${err}`);
     });
+    const optimizedCtx = await this.captureLlmPageContext(session.page).catch((err) => {
+      this.logger.warn(`Optimized prompt capture after AI prompt append failed for ${step.id}: ${err}`);
+      return null;
+    });
+    if (optimizedCtx) {
+      this.scheduleOptimizedPromptGeneration(
+        session,
+        step,
+        this.buildOptimizedPromptEvidencePayload(step, optimizedCtx),
+        'immediate',
+      );
+    }
     this.emit('step', runId, step);
     return step;
   }
@@ -2754,15 +3358,15 @@ export class RecordingService extends EventEmitter {
     cdpSession: CDPSession,
     latestFrameHolder: { latestFrame: Buffer | null; page?: Page; browser?: Browser; screencastClosing?: boolean },
     frameChannelId: string,
+    captureSettings: RunCaptureSettings,
     opts?: { onJpegFrame?: (jpeg: Buffer) => void },
   ) {
     await cdpSession.send('Page.startScreencast', {
       format: 'jpeg',
-      quality: 60,
-      maxWidth: 1280,
-      maxHeight: 720,
-      /** 1 = every frame — static pages still get regular preview updates (was 3, felt “stuck” until input). */
-      everyNthFrame: 1,
+      quality: captureSettings.streamJpegQuality,
+      maxWidth: captureSettings.streamMaxWidth,
+      maxHeight: captureSettings.streamMaxHeight,
+      everyNthFrame: captureSettings.streamEveryNthFrame,
     });
 
     cdpSession.on('Page.screencastFrame', async (params: any) => {
@@ -2880,8 +3484,12 @@ export class RecordingService extends EventEmitter {
     }
 
     try {
+      const captureSettings = captureSettingsFromRun(run);
       const context = await browser.newContext({
-        viewport: REMOTE_BROWSER_VIEWPORT,
+        viewport: {
+          width: captureSettings.recordingViewportWidth,
+          height: captureSettings.recordingViewportHeight,
+        },
         deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
       });
       const page = await context.newPage();
@@ -2909,7 +3517,7 @@ export class RecordingService extends EventEmitter {
       };
 
       this.playbackSessions.set(playbackSessionId, session);
-      await this.attachScreencast(cdpSession, session, playbackSessionId);
+      await this.attachScreencast(cdpSession, session, playbackSessionId, captureSettings);
 
       const steps = run.steps;
       const playbackExecutionSteps = filterStepsForPlaybackExecutionChain(steps, wantAutoClerkSignIn);
@@ -3693,6 +4301,19 @@ export class RecordingService extends EventEmitter {
             playwrightCode,
             origin: 'MANUAL',
           });
+
+          const optimizedCtx = await this.captureLlmPageContext(session.page).catch((err) => {
+            this.logger.warn(`Optimized prompt capture after manual step failed for ${step.id}: ${err}`);
+            return null;
+          });
+          if (optimizedCtx) {
+            this.scheduleOptimizedPromptGeneration(
+              session,
+              step,
+              this.buildOptimizedPromptEvidencePayload(step, optimizedCtx),
+              'immediate',
+            );
+          }
 
           this.emit('step', session.runId, step);
         });

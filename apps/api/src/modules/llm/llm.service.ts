@@ -23,6 +23,7 @@ import {
   generateNonGeminiVisionPlaywrightSnippet,
   verifyPlaywrightAgainstDomNonGemini,
 } from './vision-playwright-codegen';
+import { parseOptimizedPromptSpec, type OptimizedPromptSpec } from '../recording/optimized-prompt-metadata';
 
 const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
 1. A concise human-readable instruction describing what the user did
@@ -74,6 +75,189 @@ Rules:
 - If none qualify, return an empty suggestions array.
 - Respond ONLY with valid JSON:
 { "suggestions": [ { "stepId": "<uuid from forward list>", "reason": "<short reason>" } ] }`;
+
+const OPTIMIZED_PROMPT_SYSTEM = `You are an Interaction Intent Compiler for complex SaaS web applications.
+
+Your job is to convert one recorded UI step into a future-proof playback instruction that reproduces the USER'S INTENDED ACTION, not the exact historical UI mechanics.
+
+You will receive evidence for a single step, which may include:
+1. A tagged screenshot of the page at the moment of the action
+2. The DOM accessibility tree
+3. The Playwright snippet generated for the action
+4. Optional context about the test, demo, workflow, previous steps, or app domain
+
+Your task is to infer the semantic intent behind the step and produce a canonical action specification that can later be used by another AI agent to execute the same intention even if the UI layout, selectors, labels, structure, or interaction path change.
+
+Core principles:
+1. Preserve intent, not implementation.
+2. Prefer business meaning over UI wording.
+3. Describe the target by role and meaning, not by brittle selectors.
+4. Use the screenshot, accessibility tree, and Playwright code together. Do not rely on only one source.
+5. Infer the most likely user goal from context.
+6. Be conservative when evidence is ambiguous. State uncertainty explicitly.
+7. Never output coordinates, CSS selectors, XPath, DOM paths, internal test ids, or transient implementation details unless they are the only meaningful identifiers and are semantically important.
+8. Do not anchor the instruction to today's screen layout.
+9. The output must be reusable by a playback agent in a future version of the UI.
+10. Focus on the smallest meaningful user intention represented by this step.
+
+When reconstructing intent, identify:
+1. The action type being attempted
+2. The business object involved
+3. The target control or destination in semantic terms
+4. Any required value being entered, selected, confirmed, opened, closed, searched, filtered, or submitted
+5. Preconditions that make the action valid
+6. The expected observable result after the action
+7. Disambiguation hints that help a future agent find the correct target if the UI changes
+
+Guidelines for robust intent extraction:
+1. If the step is navigation, describe where the user is trying to go in product terms.
+2. If the step is data entry, describe the field by meaning and the intended value.
+3. If the step is selection, describe what is being selected and why.
+4. If the step is submission or confirmation, describe the operation being committed.
+5. If the step is opening a patient, chart, task, encounter, order, message, or other domain entity, describe the entity type and identifying context.
+6. If labels differ across assets, infer the most semantically stable phrasing.
+7. If multiple candidate intents exist, choose the best supported one and report alternatives in uncertainty_notes.
+8. If the Playwright code is overly mechanical, abstract it into user intent.
+9. If the action is part of a larger workflow, preserve only the intent of this specific step while referencing necessary context.
+
+Create a playback prompt that another LLM can later use to perform the same action in a changed UI.
+That playback prompt must:
+1. Be imperative and action oriented
+2. Be specific enough to execute
+3. Be general enough to survive UI changes
+4. Include what success looks like
+5. Avoid brittle implementation details
+6. Include fallback guidance for ambiguity
+
+Output format:
+Return ONLY valid JSON.
+Do not include markdown fences.
+Do not include explanations outside the JSON.
+
+JSON schema:
+{
+  "step_intent_summary": "One sentence summary of the user's intent for this step.",
+  "canonical_playback_prompt": "A future-proof prompt that instructs a playback agent to reproduce the intended action in the product.",
+  "action_type": "One of: navigate | open | click | input | select | search | filter | submit | confirm | toggle | create | update | delete | close | expand | collapse | download | upload | other",
+  "business_object": "The domain object involved, if any, such as patient, appointment, medication, encounter, message, order, task, report, chart, or null.",
+  "target_semantic_description": "A stable semantic description of the target element, view, field, record, or control.",
+  "input_or_selection_value": "The value entered or chosen, if any, else null.",
+  "preconditions": [
+    "List of conditions that should already be true before replaying this step."
+  ],
+  "expected_outcome": [
+    "List of observable results that indicate the step succeeded."
+  ],
+  "disambiguation_hints": [
+    "Stable clues a future playback agent can use to locate the correct target if the UI has changed."
+  ],
+  "do_not_depend_on": [
+    "Things the playback agent should avoid relying on, such as exact wording, exact location, CSS classes, or specific containers."
+  ],
+  "uncertainty_notes": [
+    "Any ambiguity or alternate interpretations supported by the evidence."
+  ],
+  "confidence": 0.0
+}
+
+Quality bar:
+1. The canonical_playback_prompt must sound like an instruction to a smart UI agent.
+2. It must describe the user goal and intended result, not the historical click path.
+3. It must be concise but operational.
+4. It must be grounded in the supplied evidence.
+5. Confidence must be between 0 and 1.`;
+
+export type OptimizedPromptCompilerInput = {
+  appContext: string;
+  workflowContext: string;
+  stepId: string;
+  stepIndex: number;
+  recordingMode: string;
+  timestamp: string;
+  previousStepSummaries: string[];
+  nextStepSummaries: string[];
+  humanPromptOrNull?: string | null;
+  playwrightSnippet: string;
+  taggedScreenshotDescription: string;
+  accessibilityTree: string;
+  optionalPageMetadata?: string;
+  screenshotBase64?: string;
+};
+
+export type OptimizedPromptCompilerResult = {
+  output: OptimizedPromptSpec;
+  transcript: {
+    systemPrompt: string;
+    userPrompt: string;
+    rawResponse: string;
+    thinking?: string;
+  };
+};
+
+function buildOptimizedPromptUserPrompt(input: OptimizedPromptCompilerInput): string {
+  const previous = input.previousStepSummaries.length
+    ? JSON.stringify(input.previousStepSummaries, null, 2)
+    : 'null';
+  const next = input.nextStepSummaries.length ? JSON.stringify(input.nextStepSummaries, null, 2) : 'null';
+  const humanPrompt = input.humanPromptOrNull?.trim() ? input.humanPromptOrNull.trim() : 'null';
+  const optionalPageMetadata = input.optionalPageMetadata?.trim() ? input.optionalPageMetadata.trim() : 'null';
+  return `Convert the following recorded UI step into a future-proof intent specification for playback.
+
+Application context:
+${input.appContext}
+
+Workflow context:
+${input.workflowContext}
+
+Step metadata:
+{
+  "step_id": "${input.stepId}",
+  "step_index": ${input.stepIndex},
+  "recording_mode": "${input.recordingMode}",
+  "timestamp": "${input.timestamp}"
+}
+
+Optional previous step summaries:
+${previous}
+
+Optional next step summaries:
+${next}
+
+Human instruction used to create the step, if any:
+${humanPrompt}
+
+Generated Playwright code for this step:
+
+${input.playwrightSnippet}
+
+Tagged screenshot description or OCR-like tagged regions:
+${input.taggedScreenshotDescription}
+
+Accessibility tree:
+
+${input.accessibilityTree}
+
+Additional DOM or page metadata, if available:
+
+${optionalPageMetadata}
+
+Important requirements:
+
+Infer the real user intention behind this single step.
+Produce a canonical playback prompt that would still work if the UI changes in layout, styling, selectors, or exact wording.
+Prefer product meaning over literal labels when the meaning is clear.
+Use domain terminology when appropriate.
+If there is ambiguity, make the best supported interpretation and mention uncertainty in uncertainty_notes.
+Output ONLY valid JSON matching the required schema.
+
+## What the generated playback prompt should feel like
+
+A good result from that template will produce prompts like these:
+
+Open the patient's chart from the current worklist by selecting the row or control corresponding to John A. Smith, using patient identity and surrounding clinical context to disambiguate. Do not rely on the exact row position or current table layout. Succeed when the patient chart is displayed and the header or main content clearly reflects that patient's record.
+Enter the patient's date of birth into the demographic form using the value 02/14/1978, targeting the field whose meaning is date of birth even if its label or placement has changed. Succeed when the form shows the value applied to the birth date field without validation errors.
+Apply the medication filter for active prescriptions in the current medications view. Use the filter control associated with medication status, not its exact location or current widget style. Succeed when the list updates to show only active medications.`;
+}
 
 export type SuggestSkipAnchorInput = {
   sequence: number;
@@ -140,7 +324,7 @@ export class LlmService {
 
   private async chatJson(
     userId: string | undefined,
-    usage: 'action_to_instruction' | 'explain_ai_prompt_failure' | 'suggest_skip_after_change',
+    usage: 'action_to_instruction' | 'optimized_prompt' | 'explain_ai_prompt_failure' | 'suggest_skip_after_change',
     messages: ChatMessage[],
     options?: LlmChatOptions,
   ): Promise<{ content: string; thinking?: string }> {
@@ -446,6 +630,65 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       this.logger.warn(`explainAiPromptTestFailure: ${err}`);
       return null;
     }
+  }
+
+  async compileOptimizedPrompt(
+    input: OptimizedPromptCompilerInput,
+    opts?: { signal?: AbortSignal; userId?: string },
+  ): Promise<OptimizedPromptCompilerResult> {
+    const userPrompt = buildOptimizedPromptUserPrompt(input);
+    if (this.chatProviderOverride) {
+      const llm = await this.chatProviderOverride.chat(
+        [
+          { role: 'system', content: OPTIMIZED_PROMPT_SYSTEM },
+          { role: 'user', content: userPrompt },
+        ],
+        {
+          imageBase64: input.screenshotBase64,
+          maxTokens: 4096,
+          temperature: 0.1,
+          reasoningEffort: 'low',
+          signal: opts?.signal,
+          responseFormat: 'json_object',
+        },
+      );
+      return {
+        output: parseOptimizedPromptSpec(parseJsonFromLlmText(llm.content)),
+        transcript: {
+          systemPrompt: OPTIMIZED_PROMPT_SYSTEM,
+          userPrompt,
+          rawResponse: llm.content,
+          ...(llm.thinking?.trim() ? { thinking: llm.thinking.trim() } : {}),
+        },
+      };
+    }
+
+    const llm = await this.chatJson(
+      opts?.userId,
+      'optimized_prompt',
+      [
+        { role: 'system', content: OPTIMIZED_PROMPT_SYSTEM },
+        { role: 'user', content: userPrompt },
+      ],
+      {
+        imageBase64: input.screenshotBase64,
+        maxTokens: 4096,
+        temperature: 0.1,
+        reasoningEffort: 'low',
+        signal: opts?.signal,
+        responseFormat: 'json_object',
+      },
+    );
+
+    return {
+      output: parseOptimizedPromptSpec(parseJsonFromLlmText(llm.content)),
+      transcript: {
+        systemPrompt: OPTIMIZED_PROMPT_SYSTEM,
+        userPrompt,
+        rawResponse: llm.content,
+        ...(llm.thinking?.trim() ? { thinking: llm.thinking.trim() } : {}),
+      },
+    };
   }
 
   async suggestStepsToSkipAfterChange(

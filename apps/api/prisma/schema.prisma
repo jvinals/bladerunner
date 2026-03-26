@@ -87,6 +87,12 @@ model Run {
   url         String
   status      RunStatus @default(RECORDING)
   platform    Platform  @default(DESKTOP)
+  recordingViewportWidth  Int @default(1280) @map("recording_viewport_width")
+  recordingViewportHeight Int @default(720) @map("recording_viewport_height")
+  streamMaxWidth          Int @default(1280) @map("stream_max_width")
+  streamMaxHeight         Int @default(720) @map("stream_max_height")
+  streamJpegQuality       Int @default(60) @map("stream_jpeg_quality")
+  streamEveryNthFrame     Int @default(1) @map("stream_every_nth_frame")
   durationMs  Int?      @map("duration_ms")
   startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")

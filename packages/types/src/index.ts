@@ -248,6 +248,7 @@ export type LlmUsageKey =
   | 'playwright_codegen'
   | 'playwright_verify'
   | 'action_to_instruction'
+  | 'optimized_prompt'
   | 'explain_ai_prompt_failure'
   | 'suggest_skip_after_change';
 

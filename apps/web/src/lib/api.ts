@@ -21,6 +21,17 @@ export type AutoClerkPlaybackMode = 'default' | 'on' | 'off';
 
 /** UI: which OTP path to request; `default` = omit body, use server env. */
 export type AutoClerkOtpUiMode = 'default' | ClerkOtpMode;
+export type RecordingViewportPreset = 'hd' | 'wxga' | 'fhd';
+export type RecordingStreamQuality = 'low' | 'medium' | 'high';
+export type RecordingStreamSmoothness = 'low' | 'medium' | 'high';
+export type StartRecordingBody = {
+  name: string;
+  url: string;
+  projectId?: string;
+  viewportPreset?: RecordingViewportPreset;
+  streamQuality?: RecordingStreamQuality;
+  streamSmoothness?: RecordingStreamSmoothness;
+};
 
 export function buildStartPlaybackBody(params: {
   delayMs?: number;
@@ -187,7 +198,7 @@ export const runsApi = {
     runsTrend: number;
     passRateTrend: number;
   }>('/runs/dashboard'),
-  startRecording: (data: { name: string; url: string; projectId?: string }) =>
+  startRecording: (data: StartRecordingBody) =>
     apiFetch<{ runId: string; status: string }>('/runs/record/start', {
       method: 'POST',
       body: JSON.stringify(data),

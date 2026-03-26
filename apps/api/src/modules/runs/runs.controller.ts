@@ -71,7 +71,7 @@ export class RunsController {
   @ApiResponse({ status: 201, description: 'Recording started' })
   async startRecording(@Req() req: any, @Body() dto: StartRecordingDto) {
     const userId = req.user.sub;
-    const run = await this.recordingService.startRecording(userId, dto.name, dto.url, dto.projectId);
+    const run = await this.recordingService.startRecording(userId, dto);
     return { runId: run.id, status: 'recording' };
   }
 

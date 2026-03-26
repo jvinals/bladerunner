@@ -16,6 +16,7 @@ export class RunsService {
       status?: string;
       platform?: string;
       search?: string;
+      projectId?: string;
       page?: number;
       pageSize?: number;
       sortBy?: string;
@@ -35,6 +36,9 @@ export class RunsService {
         { name: { contains: query.search, mode: 'insensitive' } },
         { url: { contains: query.search, mode: 'insensitive' } },
       ];
+    }
+    if (query?.projectId) {
+      where.projectId = query.projectId;
     }
 
     const page = query?.page || 1;

@@ -2,6 +2,16 @@
 
 ## 2026-03-25
 
+- `0.10.50`: added per-step optimized playback prompts that capture user intent from recorded evidence and let playback fall back to semantic step recreation before the normal repair path.
+- `@bladerunner/api 0.6.55`: added the `Optimized Prompt` LLM task, persisted per-step optimized prompt evidence/results, refreshed prompts after recording stops, and used canonical playback prompts as a fallback before standard playback regeneration.
+- `@bladerunner/web 0.7.26`: exposed the new `Optimized Prompt` task in AI / LLM settings so users can choose the model/provider used for canonical per-step prompt compilation.
+- `@bladerunner/types 0.2.7`: added the shared `optimized_prompt` LLM usage key.
+- `0.10.49`: added safe recording-time controls for browser resolution, stream quality, and preview smoothness on the Runs page, while keeping playback aligned to the same stored viewport.
+- `@bladerunner/api 0.6.54`: persisted per-run capture settings, used them to size recording/playback browsers, and applied matching screencast quality/smoothness settings to preview and saved video capture.
+- `@bladerunner/web 0.7.25`: added Runs page controls for browser resolution, stream quality, and preview smoothness when starting a recording.
+- `0.10.48`: added an easy project filter to the Home runs table so recent runs can be narrowed without leaving the dashboard.
+- `@bladerunner/api 0.6.53`: taught the runs list endpoint to accept a `projectId` filter for dashboard and runs-table queries.
+- `@bladerunner/web 0.7.24`: added a Home runs table project picker that filters runs by project alongside the existing search, status, and platform controls.
 - `0.10.47`: preserved immutable record-time Playwright per step so playback can try the active snippet first, repair failures with fresh LLM context, and promote successful replacements without losing the original baseline.
 - `@bladerunner/api 0.6.52`: added `recorded_playwright_code`, stored record-time snippets across recording flows, and taught playback to retry failed steps by regenerating Playwright with both the broken active code and the original recorded code as context.
 - `0.10.46`: hardened AI prompt timeout handling so client-abort signals are narrower, retryable generate failures can retry once, and known recording/playback promise rejections no longer take down the API process.

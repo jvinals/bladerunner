@@ -7,6 +7,9 @@ import {
   projectsApi,
   type ProjectDto,
   type AutoClerkOtpUiMode,
+  type RecordingViewportPreset,
+  type RecordingStreamQuality,
+  type RecordingStreamSmoothness,
 } from '@/lib/api';
 import { StepCard } from '@/components/ui/StepCard';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
@@ -42,6 +45,21 @@ import {
 } from 'lucide-react';
 
 const AI_STEP_DRAFT_PLACEHOLDER = '(AI prompt — edit below)';
+const VIEWPORT_OPTIONS: Array<{ value: RecordingViewportPreset; label: string }> = [
+  { value: 'hd', label: '1280 x 720 (HD)' },
+  { value: 'wxga', label: '1440 x 900 (WXGA+)' },
+  { value: 'fhd', label: '1920 x 1080 (Full HD)' },
+];
+const STREAM_QUALITY_OPTIONS: Array<{ value: RecordingStreamQuality; label: string }> = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+const STREAM_SMOOTHNESS_OPTIONS: Array<{ value: RecordingStreamSmoothness; label: string }> = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
 
 export default function RunsPage() {
   const { user } = useUser();
@@ -61,6 +79,9 @@ export default function RunsPage() {
   const [newUrl, setNewUrl] = useState('');
   const [newName, setNewName] = useState('');
   const [newRunProjectId, setNewRunProjectId] = useState('');
+  const [newViewportPreset, setNewViewportPreset] = useState<RecordingViewportPreset>('hd');
+  const [newStreamQuality, setNewStreamQuality] = useState<RecordingStreamQuality>('medium');
+  const [newStreamSmoothness, setNewStreamSmoothness] = useState<RecordingStreamSmoothness>('high');
   const [instructionText, setInstructionText] = useState('');
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
   const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
@@ -268,16 +289,35 @@ export default function RunsPage() {
   const handleStartRecording = useCallback(async () => {
     if (!newUrl || !newName) return;
     try {
-      await startRecording(newUrl, newName, newRunProjectId || undefined);
+      await startRecording({
+        url: newUrl,
+        name: newName,
+        ...(newRunProjectId ? { projectId: newRunProjectId } : {}),
+        viewportPreset: newViewportPreset,
+        streamQuality: newStreamQuality,
+        streamSmoothness: newStreamSmoothness,
+      });
       setNewPanelOpen(false);
       setNewUrl('');
       setNewName('');
       setNewRunProjectId('');
+      setNewViewportPreset('hd');
+      setNewStreamQuality('medium');
+      setNewStreamSmoothness('high');
       refetch();
     } catch (err) {
       console.error('Failed to start recording:', err);
     }
-  }, [newUrl, newName, newRunProjectId, startRecording, refetch]);
+  }, [
+    newUrl,
+    newName,
+    newRunProjectId,
+    newViewportPreset,
+    newStreamQuality,
+    newStreamSmoothness,
+    startRecording,
+    refetch,
+  ]);
 
   const handleDeleteSelectedRun = useCallback(() => {
     if (!selectedRunId || !selectedRun) return;
@@ -1276,7 +1316,7 @@ export default function RunsPage() {
         {/* New Run Sliding Panel */}
         <div
           className={`overflow-hidden transition-all duration-300 ease-out border-b border-gray-50 ${
-            newPanelOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0'
+            newPanelOpen ? 'max-h-[720px] opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
           <div className="p-4 space-y-3">
@@ -1329,6 +1369,59 @@ export default function RunsPage() {
                 className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
               />
             </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+                  Browser Resolution
+                </label>
+                <select
+                  value={newViewportPreset}
+                  onChange={(e) => setNewViewportPreset(e.target.value as RecordingViewportPreset)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+                >
+                  {VIEWPORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+                  Stream Quality
+                </label>
+                <select
+                  value={newStreamQuality}
+                  onChange={(e) => setNewStreamQuality(e.target.value as RecordingStreamQuality)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+                >
+                  {STREAM_QUALITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">
+                  Preview Smoothness
+                </label>
+                <select
+                  value={newStreamSmoothness}
+                  onChange={(e) => setNewStreamSmoothness(e.target.value as RecordingStreamSmoothness)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30 focus:border-[#4B90FF]"
+                >
+                  {STREAM_SMOOTHNESS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-[9px] text-gray-400 -mt-1">
+              These settings apply when the browser session starts. The selected viewport is also reused automatically for playback.
+            </p>
             <div className="flex gap-2">
               <button
                 onClick={handleStartRecording}

@@ -25,6 +25,24 @@ enum PlatformTypeDto {
   PWA = 'PWA',
 }
 
+enum RecordingViewportPresetDto {
+  HD = 'hd',
+  WXGA = 'wxga',
+  FHD = 'fhd',
+}
+
+enum RecordingStreamQualityDto {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+}
+
+enum RecordingStreamSmoothnessDto {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+}
+
 export class StartRecordingDto {
   @ApiProperty({ description: 'Name of the test run' })
   @IsString()
@@ -38,6 +56,30 @@ export class StartRecordingDto {
   @IsOptional()
   @IsString()
   projectId?: string;
+
+  @ApiPropertyOptional({
+    enum: RecordingViewportPresetDto,
+    description: 'Browser viewport preset for recording and later playback reuse',
+  })
+  @IsOptional()
+  @IsEnum(RecordingViewportPresetDto)
+  viewportPreset?: RecordingViewportPresetDto;
+
+  @ApiPropertyOptional({
+    enum: RecordingStreamQualityDto,
+    description: 'Preview/video stream quality profile',
+  })
+  @IsOptional()
+  @IsEnum(RecordingStreamQualityDto)
+  streamQuality?: RecordingStreamQualityDto;
+
+  @ApiPropertyOptional({
+    enum: RecordingStreamSmoothnessDto,
+    description: 'Preview/video smoothness profile',
+  })
+  @IsOptional()
+  @IsEnum(RecordingStreamSmoothnessDto)
+  streamSmoothness?: RecordingStreamSmoothnessDto;
 }
 
 export class StopRecordingDto {
@@ -276,6 +318,11 @@ export class RunQueryDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by project id' })
+  @IsString()
+  @IsOptional()
+  projectId?: string;
 
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
   @IsOptional()

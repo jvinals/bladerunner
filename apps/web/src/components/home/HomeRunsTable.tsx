@@ -22,7 +22,7 @@ import {
   Smartphone,
   Globe,
 } from 'lucide-react';
-import { runsApi } from '@/lib/api';
+import { projectsApi, runsApi, type ProjectDto } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/States';
 import { formatDuration, formatRelativeTime, cn } from '@/lib/utils';
@@ -132,6 +132,7 @@ export function HomeRunsTable() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [platformFilter, setPlatformFilter] = useState<string>('');
+  const [projectFilter, setProjectFilter] = useState<string>('');
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created', desc: true }]);
 
@@ -142,7 +143,7 @@ export function HomeRunsTable() {
 
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }));
-  }, [debouncedSearch, statusFilter, platformFilter]);
+  }, [debouncedSearch, statusFilter, platformFilter, projectFilter]);
 
   const queryParams = useMemo(() => {
     const sort = sorting[0];
@@ -164,12 +165,18 @@ export function HomeRunsTable() {
     if (debouncedSearch) p.search = debouncedSearch;
     if (statusFilter) p.status = statusFilter;
     if (platformFilter) p.platform = platformFilter;
+    if (projectFilter) p.projectId = projectFilter;
     return p;
-  }, [pagination, sorting, debouncedSearch, statusFilter, platformFilter]);
+  }, [pagination, sorting, debouncedSearch, statusFilter, platformFilter, projectFilter]);
 
   const { data: runsData, isLoading } = useQuery({
     queryKey: ['home-runs-table', queryParams],
     queryFn: () => runsApi.list(queryParams),
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
   });
 
   const deleteRunMutation = useMutation({
@@ -394,6 +401,18 @@ export function HomeRunsTable() {
             <option value="DESKTOP">Desktop</option>
             <option value="MOBILE">Mobile</option>
             <option value="PWA">PWA</option>
+          </select>
+          <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="h-8 max-w-[180px] rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+          >
+            <option value="">All projects</option>
+            {(projects as ProjectDto[]).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
           </select>
           <select
             value={pagination.pageSize}
