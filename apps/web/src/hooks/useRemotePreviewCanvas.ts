@@ -94,6 +94,15 @@ export function useRemotePreviewCanvas(
       e.currentTarget.setPointerCapture(e.pointerId);
       setRemoteKeysEnabled(true);
       previewFocusRef.current?.focus({ preventScroll: true });
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const mapped = clientToViewportCoords(canvas, e.clientX, e.clientY);
+        const topEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H1-H3-H5',location:'useRemotePreviewCanvas.ts:onCanvasPointerDown',message:'Canvas pointer down forwarded',data:{pointerType:e.pointerType,button:e.button,clientX:Math.round(e.clientX),clientY:Math.round(e.clientY),mappedX:Math.round(mapped.x),mappedY:Math.round(mapped.y),canvasLeft:Math.round(rect.left),canvasTop:Math.round(rect.top),canvasWidth:Math.round(rect.width),canvasHeight:Math.round(rect.height),bitmapWidth:canvas.width,bitmapHeight:canvas.height,elementFromPointTag:topEl?.tagName ?? null,elementFromPointClass:topEl?.className ?? null,previewFocused:document.activeElement===previewFocusRef.current},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
       forwardPointer('down', e);
     },
     [forwardPointer, previewFocusRef],
@@ -137,9 +146,17 @@ export function useRemotePreviewCanvas(
   const onCanvasWheel = useCallback(
     (e: React.WheelEvent<HTMLCanvasElement>) => {
       e.preventDefault();
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const mapped = clientToViewportCoords(canvas, e.clientX, e.clientY);
+        const norm = normalizeWheelDelta(e);
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H2-H3',location:'useRemotePreviewCanvas.ts:onCanvasWheel',message:'Canvas wheel forwarded',data:{clientX:Math.round(e.clientX),clientY:Math.round(e.clientY),mappedX:Math.round(mapped.x),mappedY:Math.round(mapped.y),deltaX:Math.round(norm.deltaX),deltaY:Math.round(norm.deltaY),remoteKeysEnabled},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
       forwardWheel(e);
     },
-    [forwardWheel],
+    [forwardWheel, canvasRef, remoteKeysEnabled],
   );
 
   const onTouchStart = useCallback(
@@ -203,7 +220,16 @@ export function useRemotePreviewCanvas(
 
   const onPreviewKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!userId || !remoteKeysEnabled || !bridge.isConnected()) return;
+      if (!userId || !remoteKeysEnabled || !bridge.isConnected()) {
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H4',location:'useRemotePreviewCanvas.ts:onPreviewKeyDown',message:'Preview keydown ignored',data:{key:e.key,remoteKeysEnabled,isConnected:bridge.isConnected(),userPresent:!!userId},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return;
+      }
+
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H4',location:'useRemotePreviewCanvas.ts:onPreviewKeyDown',message:'Preview keydown forwarded',data:{key:e.key,ctrlKey:e.ctrlKey,metaKey:e.metaKey,repeat:e.repeat},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       if (e.key === 'Escape') {
         e.preventDefault();

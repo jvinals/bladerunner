@@ -2981,6 +2981,9 @@ export class RecordingService extends EventEmitter {
   ): Promise<void> {
     const session = this.sessions.get(runId);
     if (!session || session.userId !== userId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H3',location:'recording.service.ts:dispatchRemotePointer:missingSession',message:'Remote pointer ignored due to missing session',data:{requestedRunId:runId,hasSession:!!session,userMatches:session?session.userId===userId:false,kind:payload.kind},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       return;
     }
 
@@ -2991,6 +2994,9 @@ export class RecordingService extends EventEmitter {
     const x = Math.max(0, Math.min(rawX, vp.width - 1));
     const y = Math.max(0, Math.min(rawY, vp.height - 1));
     const button = payload.button ?? 'left';
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H2-H3',location:'recording.service.ts:dispatchRemotePointer',message:'Remote pointer dispatch start',data:{kind:payload.kind,rawX,payloadX:payload.x??null,rawY,payloadY:payload.y??null,clampedX:x,clampedY:y,button,viewportWidth:vp.width,viewportHeight:vp.height,deltaX:payload.deltaX??null,deltaY:payload.deltaY??null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     try {
       switch (payload.kind) {
@@ -3017,6 +3023,9 @@ export class RecordingService extends EventEmitter {
           break;
       }
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8e7bf9'},body:JSON.stringify({sessionId:'8e7bf9',runId:'recording-interaction',hypothesisId:'H3',location:'recording.service.ts:dispatchRemotePointer:error',message:'Remote pointer dispatch failed',data:{kind:payload.kind,error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       this.logger.debug(`dispatchRemotePointer ${payload.kind}: ${err}`);
     }
   }
