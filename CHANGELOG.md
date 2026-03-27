@@ -2,6 +2,9 @@
 
 ## 2026-03-25
 
+- `0.10.57`: added temporary runtime instrumentation and a focused generic auto sign-in selftest to debug intermittent playback startup failures before landing the final fix.
+- `@bladerunner/api 0.6.60`: logged generic auto sign-in detection/form state and added a Playwright-backed delayed/two-step auth selftest for runtime diagnosis.
+- `@bladerunner/clerk-agentmail-signin 0.5.2`: tightened OTP completion waits so same-host verification screens do not report false success before the OTP UI actually exits.
 - `0.10.56`: removed the temporary runtime instrumentation used to debug scroll recording and playback after the fixes were confirmed.
 - `@bladerunner/api 0.6.59`: cleaned up backend debug probes while keeping the recorded-scroll targeting and animated playback behavior.
 - `@bladerunner/web 0.7.29`: removed temporary client-side wheel debugging logs from the recording preview bridge.

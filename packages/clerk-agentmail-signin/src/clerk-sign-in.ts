@@ -368,9 +368,50 @@ async function applyClerkOtpDigitsAndWaitForApp(page: Page, otp: string, runUrl:
   }
 
   const host = new URL(runUrl.includes('://') ? runUrl : `https://${runUrl}`).hostname;
+  const beforeOtpUrl = page.url();
+  const waitForOtpUiToExit = async (timeout: number): Promise<void> => {
+    await Promise.race([
+      page
+        .waitForURL((url) => isAppHostUrl(url, host) && url.toString() !== beforeOtpUrl, { timeout })
+        .catch(() => {}),
+      otpSingle.waitFor({ state: 'hidden', timeout }).catch(() => {}),
+      page
+        .waitForFunction(
+          () => {
+            const sels = [
+              'input[inputmode="numeric"]',
+              'input[name="code"]',
+              'input[autocomplete="one-time-code"]',
+              '[data-input-otp]',
+              'input[type="text"][inputmode="numeric"]',
+              'input[placeholder*="code" i]',
+              'input[placeholder*="verification" i]',
+              'input[aria-label*="code" i]',
+              'input[aria-label*="verification" i]',
+            ];
+            return !sels.some((sel) => {
+              const el = document.querySelector(sel);
+              if (!el) return false;
+              const html = el as HTMLElement;
+              const style = window.getComputedStyle(html);
+              const rect = html.getBoundingClientRect();
+              return (
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0' &&
+                rect.width > 0 &&
+                rect.height > 0
+              );
+            });
+          },
+          { timeout },
+        )
+        .catch(() => {}),
+    ]);
+  };
 
   try {
-    await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 20_000 });
+    await waitForOtpUiToExit(20_000);
   } catch {
     let clicked = await tryClickPostOtpSubmit(page);
     if (!clicked) {
@@ -383,7 +424,7 @@ async function applyClerkOtpDigitsAndWaitForApp(page: Page, otp: string, runUrl:
     }
   }
 
-  await page.waitForURL((url) => isAppHostUrl(url, host), { timeout: 120_000 });
+  await waitForOtpUiToExit(120_000);
 }
 
 export type FillClerkOtpFromClerkTestEmailOpts = {
