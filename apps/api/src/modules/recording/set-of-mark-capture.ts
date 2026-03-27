@@ -12,6 +12,17 @@ export const SOM_MANIFEST_MAX_CHARS = 28000;
 export type SetOfMarkInjectResult = {
   /** Human-readable lines `[n] ...` aligned with screenshot badges. */
   manifestText: string;
+  tags: Array<{
+    number: number;
+    tag: string;
+    role: string | null;
+    type: string | null;
+    name: string;
+    left: number;
+    top: number;
+  }>;
+  documentWidth: number;
+  documentHeight: number;
 };
 
 /**
@@ -175,6 +186,15 @@ export async function injectSetOfMarkOverlay(
       const picked = candidates.slice(0, cap);
 
       const lines: string[] = [];
+      const tags: Array<{
+        number: number;
+        tag: string;
+        role: string | null;
+        type: string | null;
+        name: string;
+        left: number;
+        top: number;
+      }> = [];
       const root = doc.createElement('div');
       root.id = containerId;
       root.setAttribute('data-bladerunner-som', 'true');
@@ -229,12 +249,26 @@ export async function injectSetOfMarkOverlay(
           'box-shadow:0 1px 2px rgba(0,0,0,0.45)',
         ].join(';');
         root.appendChild(badge);
+        tags.push({
+          number: n,
+          tag,
+          role: role || null,
+          type: type || null,
+          name,
+          left: leftPx,
+          top: topPx,
+        });
       });
 
       doc.body.appendChild(root);
       const header =
         'Interactive elements (full scrollable page; numeric badges on the screenshot match [n] below; order is top-to-bottom, then left-to-right):';
-      return { manifestText: [header, ...lines].join('\n') };
+      return {
+        manifestText: [header, ...lines].join('\n'),
+        tags,
+        documentWidth: scrollW,
+        documentHeight: scrollH,
+      };
     },
     { maxTags, containerId: SOM_CONTAINER_ID },
   );

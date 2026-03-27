@@ -249,6 +249,7 @@ export type LlmUsageKey =
   | 'playwright_verify'
   | 'action_to_instruction'
   | 'optimized_prompt'
+  | 'ai_visual_id'
   | 'explain_ai_prompt_failure'
   | 'suggest_skip_after_change';
 

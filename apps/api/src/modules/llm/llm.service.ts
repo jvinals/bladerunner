@@ -19,6 +19,7 @@ import {
 import { geminiChat } from './gemini-llm-chat.adapter';
 import { LlmConfigService } from './llm-config.service';
 import { createChatLlmProvider } from './llm-provider-factory';
+import type { LlmUsageKey } from './llm-usage-registry';
 import {
   generateNonGeminiVisionPlaywrightSnippet,
   verifyPlaywrightAgainstDomNonGemini,
@@ -166,6 +167,23 @@ Quality bar:
 3. It must be concise but operational.
 4. It must be grounded in the supplied evidence.
 5. Confidence must be between 0 and 1.`;
+
+const AI_VISUAL_ID_SYSTEM = `You are AI Visual ID, a UI-understanding assistant for QA engineers.
+
+You receive:
+1. The user's question or prompt about the current UI
+2. A labeled screenshot with numeric Set-of-Marks badges
+3. The complete accessibility tree
+4. A Set-of-Marks manifest that maps badge numbers to interactive elements
+
+Your job is to answer the user's question using only the supplied evidence.
+
+Rules:
+- Ground your answer in the screenshot, tag numbers, accessibility tree, and page URL.
+- When referring to visible elements, cite their tag numbers when possible, like [12].
+- If the evidence is ambiguous, say so plainly.
+- Do not invent UI details that are not supported by the screenshot or tree.
+- Return plain text, not JSON or markdown tables, unless the user explicitly asked for a structured format.`;
 
 export type OptimizedPromptCompilerInput = {
   appContext: string;
@@ -322,14 +340,15 @@ export class LlmService {
     return this.chatProviderOverride;
   }
 
-  private async chatJson(
+  private async chatWithUsage(
     userId: string | undefined,
-    usage: 'action_to_instruction' | 'optimized_prompt' | 'explain_ai_prompt_failure' | 'suggest_skip_after_change',
+    usage: LlmUsageKey,
     messages: ChatMessage[],
     options?: LlmChatOptions,
-  ): Promise<{ content: string; thinking?: string }> {
+  ): Promise<{ content: string; thinking?: string; provider: string; model: string }> {
     if (this.chatProviderOverride) {
-      return this.chatProviderOverride.chat(messages, options);
+      const result = await this.chatProviderOverride.chat(messages, options);
+      return { ...result, provider: 'override', model: 'override' };
     }
 
     const resolved = await this.llmConfig.resolve(userId, usage);
@@ -339,14 +358,26 @@ export class LlmService {
       if (!key) {
         throw new Error(`No API key for provider ${resolved.provider}`);
       }
-      return geminiChat(key, resolved.model, messages, options);
+      const result = await geminiChat(key, resolved.model, messages, options);
+      return { ...result, provider: resolved.provider, model: resolved.model };
     }
 
     const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model, credentials);
-    return client.chat(messages, {
+    const result = await client.chat(messages, options);
+    return { ...result, provider: resolved.provider, model: resolved.model };
+  }
+
+  private async chatJson(
+    userId: string | undefined,
+    usage: 'action_to_instruction' | 'optimized_prompt' | 'explain_ai_prompt_failure' | 'suggest_skip_after_change',
+    messages: ChatMessage[],
+    options?: LlmChatOptions,
+  ): Promise<{ content: string; thinking?: string }> {
+    const result = await this.chatWithUsage(userId, usage, messages, {
       ...options,
       responseFormat: 'json_object',
     });
+    return { content: result.content, thinking: result.thinking };
   }
 
   async actionToInstruction(
@@ -563,6 +594,55 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         screenshotBase64: shot,
         ...(thinking ? { thinking } : {}),
       },
+    };
+  }
+
+  async aiVisualId(
+    input: {
+      prompt: string;
+      pageUrl: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
+      screenshotBase64: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{ answer: string; fullPrompt: string; provider: string; model: string; thinking?: string }> {
+    const fullPrompt = `User prompt:
+${input.prompt.trim()}
+
+Page URL:
+${input.pageUrl}
+
+Set-of-Marks manifest:
+${input.somManifest.trim() || '(no interactive tags found)'}
+
+Accessibility tree:
+${input.accessibilitySnapshot.trim() || '(no accessibility tree captured)'}
+
+Answer the user using only this evidence. Reference tag numbers like [7] when they help identify the UI element.`;
+
+    const result = await this.chatWithUsage(
+      opts?.userId,
+      'ai_visual_id',
+      [
+        { role: 'system', content: AI_VISUAL_ID_SYSTEM },
+        { role: 'user', content: fullPrompt },
+      ],
+      {
+        imageBase64: input.screenshotBase64,
+        maxTokens: 4096,
+        temperature: 0.2,
+        responseFormat: 'text',
+        signal: opts?.signal,
+      },
+    );
+
+    return {
+      answer: result.content.trim(),
+      fullPrompt,
+      provider: result.provider,
+      model: result.model,
+      ...(result.thinking ? { thinking: result.thinking } : {}),
     };
   }
 

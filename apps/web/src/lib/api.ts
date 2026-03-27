@@ -24,6 +24,45 @@ export type AutoClerkOtpUiMode = 'default' | ClerkOtpMode;
 export type RecordingViewportPreset = 'hd' | 'wxga' | 'fhd';
 export type RecordingStreamQuality = 'low' | 'medium' | 'high';
 export type RecordingStreamSmoothness = 'low' | 'medium' | 'high';
+export type AiVisualIdTag = {
+  number: number;
+  tag: string;
+  role: string | null;
+  type: string | null;
+  name: string;
+  left: number;
+  top: number;
+};
+export type AiVisualIdTreeNode = {
+  id: string;
+  role: string;
+  name: string;
+  value: string | null;
+  description: string | null;
+  tagNumber: number | null;
+  children: AiVisualIdTreeNode[];
+};
+export type AiVisualIdTestSummary = {
+  id: string;
+  runId: string;
+  stepSequence: number;
+  provider: string;
+  model: string;
+  prompt: string;
+  answer: string;
+  pageUrl: string | null;
+  createdAt: string;
+};
+export type AiVisualIdTestDetail = AiVisualIdTestSummary & {
+  screenshotBase64: string;
+  screenshotWidth: number;
+  screenshotHeight: number;
+  somManifest: string;
+  somTags: AiVisualIdTag[];
+  accessibilitySnapshot: string;
+  tree: AiVisualIdTreeNode[];
+  fullPrompt: string;
+};
 export type StartRecordingBody = {
   name: string;
   url: string;
@@ -272,6 +311,15 @@ export const runsApi = {
   /** Restore browser to state before last AI prompt Test (or prior checkpoint). */
   resetAiPromptTest: (runId: string, stepId: string) =>
     apiFetch<{ ok: boolean }>(`/runs/${runId}/steps/${stepId}/reset-ai-test`, { method: 'POST' }),
+  createAiVisualIdTest: (runId: string, body: { prompt: string }) =>
+    apiFetch<AiVisualIdTestDetail>(`/runs/${runId}/ai-visual-id/tests`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  listAiVisualIdTests: (runId: string) =>
+    apiFetch<AiVisualIdTestSummary[]>(`/runs/${runId}/ai-visual-id/tests`),
+  getAiVisualIdTest: (runId: string, testId: string) =>
+    apiFetch<AiVisualIdTestDetail>(`/runs/${runId}/ai-visual-id/tests/${testId}`),
   /** Active recording only: remove the most recently recorded step (e.g. cancel draft AI step). */
   deleteLastRunStepDuringRecording: (runId: string, stepId: string) =>
     apiFetchVoid(`/runs/${runId}/steps/${stepId}`, { method: 'DELETE' }),

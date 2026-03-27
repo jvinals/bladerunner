@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 
+- `0.10.58`: added a run-scoped AI Visual ID tool on the recording page with persistent prompt/answer history and a tree viewer for labeled UI context.
+- `@bladerunner/api 0.6.61`: added AI Visual ID capture, persistence, REST endpoints, LLM routing, and a focused selftest for tree/tag mapping.
+- `@bladerunner/web 0.7.30`: added the recording-page AI Visual ID panel, persisted history list, and screenshot plus accessibility-tree modal with blinking tag highlights.
+- `@bladerunner/types 0.2.8`: added the shared `ai_visual_id` LLM usage key.
 - `0.10.57`: added temporary runtime instrumentation and a focused generic auto sign-in selftest to debug intermittent playback startup failures before landing the final fix.
 - `@bladerunner/api 0.6.60`: logged generic auto sign-in detection/form state and added a Playwright-backed delayed/two-step auth selftest for runtime diagnosis.
 - `@bladerunner/clerk-agentmail-signin 0.5.2`: tightened OTP completion waits so same-host verification screens do not report false success before the OTP UI actually exits.

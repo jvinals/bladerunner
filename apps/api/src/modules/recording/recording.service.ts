@@ -101,6 +101,7 @@ import {
   withOptimizedPromptFailure,
   withOptimizedPromptSuccess,
 } from './optimized-prompt-metadata';
+import { buildAiVisualIdTree, type AiVisualIdContextArtifact, type AiVisualIdTag } from './ai-visual-id';
 
 /** AI-generated Playwright often needs longer than Playwright's default 30s action timeout. */
 const AI_PROMPT_PW_TIMEOUT_MS = 120_000;
@@ -2567,13 +2568,23 @@ export class RecordingService extends EventEmitter {
    * Playwright CDP accessibility snapshot (+ body text enrichment), **before** Set-of-Marks overlay
    * so the tree does not include badge UI.
    */
-  private async captureAccessibilitySnapshotForLlm(page: Page): Promise<string> {
-    let pageAccessibilityTree = '';
+  private async captureAccessibilitySnapshotObject(page: Page): Promise<unknown | null> {
     try {
       const snapshot = await (page as any).accessibility?.snapshot();
-      pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : await page.title();
+      return snapshot ?? null;
     } catch {
-      pageAccessibilityTree = 'Unable to capture accessibility tree';
+      return null;
+    }
+  }
+
+  private async captureAccessibilitySnapshotForLlm(page: Page, snapshot?: unknown | null): Promise<string> {
+    let pageAccessibilityTree = snapshot ? JSON.stringify(snapshot, null, 2) : '';
+    if (!pageAccessibilityTree.trim()) {
+      try {
+        pageAccessibilityTree = await page.title();
+      } catch {
+        pageAccessibilityTree = 'Unable to capture accessibility tree';
+      }
     }
     return this.enrichAccessibilityTreeForLlm(page, pageAccessibilityTree);
   }
@@ -2659,18 +2670,27 @@ export class RecordingService extends EventEmitter {
     somManifest: string;
     /** CDP accessibility JSON (+ enrichment), captured before overlay. */
     accessibilitySnapshot: string;
+    rawAccessibilitySnapshot: unknown | null;
     screenshotBase64?: string;
+    somTags: AiVisualIdTag[];
+    screenshotWidth?: number;
+    screenshotHeight?: number;
   }> {
     this.throwIfAborted(signal);
     const pageUrl = page.url();
-    const accessibilitySnapshot = await this.captureAccessibilitySnapshotForLlm(page);
+    const rawAccessibilitySnapshot = await this.captureAccessibilitySnapshotObject(page);
+    const accessibilitySnapshot = await this.captureAccessibilitySnapshotForLlm(page, rawAccessibilitySnapshot);
 
     let somManifest = '';
     let screenshotBase64: string | undefined;
+    let somTags: AiVisualIdTag[] = [];
+    let screenshotWidth: number | undefined;
+    let screenshotHeight: number | undefined;
 
     try {
-      const { manifestText } = await injectSetOfMarkOverlay(page);
+      const { manifestText, tags } = await injectSetOfMarkOverlay(page);
       somManifest = manifestText;
+      somTags = tags;
       this.throwIfAborted(signal);
       const rawBuf = await page.screenshot({
         type: 'jpeg',
@@ -2678,7 +2698,22 @@ export class RecordingService extends EventEmitter {
         fullPage: true,
         animations: 'disabled',
       });
+      const rawMeta = await sharp(rawBuf).metadata();
       const buf = await this.maybeResizeLlmVisionJpeg(Buffer.from(rawBuf));
+      const meta = await sharp(buf).metadata();
+      screenshotWidth = meta.width ?? undefined;
+      screenshotHeight = meta.height ?? undefined;
+      const rawWidth = rawMeta.width ?? meta.width ?? 0;
+      const rawHeight = rawMeta.height ?? meta.height ?? 0;
+      if (rawWidth > 0 && rawHeight > 0 && screenshotWidth && screenshotHeight) {
+        const scaleX = screenshotWidth / rawWidth;
+        const scaleY = screenshotHeight / rawHeight;
+        somTags = somTags.map((tag) => ({
+          ...tag,
+          left: Math.round(tag.left * scaleX),
+          top: Math.round(tag.top * scaleY),
+        }));
+      }
       screenshotBase64 = buf.toString('base64');
     } catch (err) {
       /** Tagged screenshot is best-effort when overlay/screenshot fails; a11y snapshot was already captured. */
@@ -2691,6 +2726,9 @@ export class RecordingService extends EventEmitter {
           animations: 'disabled',
         });
         const buf = await this.maybeResizeLlmVisionJpeg(Buffer.from(rawBuf));
+        const meta = await sharp(buf).metadata();
+        screenshotWidth = meta.width ?? undefined;
+        screenshotHeight = meta.height ?? undefined;
         screenshotBase64 = buf.toString('base64');
       } catch {
         /* optional */
@@ -2699,7 +2737,16 @@ export class RecordingService extends EventEmitter {
       await removeSetOfMarkOverlay(page).catch(() => {});
     }
 
-    return { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 };
+    return {
+      pageUrl,
+      somManifest,
+      accessibilitySnapshot,
+      rawAccessibilitySnapshot,
+      screenshotBase64,
+      somTags,
+      screenshotWidth,
+      screenshotHeight,
+    };
   }
 
   /** Vision + LLM → Playwright, then optionally execute (used by playback and Test Step). */
@@ -2964,6 +3011,170 @@ export class RecordingService extends EventEmitter {
       },
     });
     return true;
+  }
+
+  private getAiVisualIdArtifactPaths(runId: string, userId: string, testId: string) {
+    const baseDir = getRecordingsBaseDir(this.configService);
+    const artifactDir = getRunArtifactDir(baseDir, userId, runId);
+    const visualDir = path.join(artifactDir, 'ai-visual-id');
+    return {
+      artifactDir,
+      visualDir,
+      screenshotAbsPath: path.join(visualDir, `${testId}.jpg`),
+      contextAbsPath: path.join(visualDir, `${testId}.json`),
+    };
+  }
+
+  private async writeAiVisualIdArtifacts(
+    runId: string,
+    userId: string,
+    testId: string,
+    screenshotBase64: string,
+    context: AiVisualIdContextArtifact,
+  ): Promise<{ screenshotPath: string; contextPath: string }> {
+    const paths = this.getAiVisualIdArtifactPaths(runId, userId, testId);
+    await fs.mkdir(paths.visualDir, { recursive: true });
+    await fs.writeFile(paths.screenshotAbsPath, Buffer.from(screenshotBase64, 'base64'));
+    await fs.writeFile(paths.contextAbsPath, JSON.stringify(context, null, 2), 'utf8');
+    return {
+      screenshotPath: path.relative(paths.artifactDir, paths.screenshotAbsPath),
+      contextPath: path.relative(paths.artifactDir, paths.contextAbsPath),
+    };
+  }
+
+  private async readAiVisualIdArtifacts(
+    runId: string,
+    userId: string,
+    row: { screenshotPath: string; contextPath: string },
+  ): Promise<{ screenshotBase64: string; context: AiVisualIdContextArtifact }> {
+    const baseDir = getRecordingsBaseDir(this.configService);
+    const artifactDir = getRunArtifactDir(baseDir, userId, runId);
+    const [screenshotBase64, context] = await Promise.all([
+      fs.readFile(path.join(artifactDir, row.screenshotPath)).then((buf) => buf.toString('base64')),
+      fs
+        .readFile(path.join(artifactDir, row.contextPath), 'utf8')
+        .then((raw) => JSON.parse(raw) as AiVisualIdContextArtifact),
+    ]);
+    return { screenshotBase64, context };
+  }
+
+  async createAiVisualIdTest(runId: string, userId: string, prompt: string) {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      throw new BadRequestException('AI Visual ID prompt is required');
+    }
+    const session = this.sessions.get(runId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('No active recording session for this run');
+    }
+
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      select: { id: true },
+    });
+    if (!run) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    const ctx = await this.captureLlmPageContext(session.page);
+    const screenshotBase64 = ctx.screenshotBase64?.trim();
+    if (!screenshotBase64) {
+      throw new ServiceUnavailableException('AI Visual ID could not capture a labeled screenshot');
+    }
+
+    const tree = buildAiVisualIdTree(ctx.rawAccessibilitySnapshot, ctx.somTags);
+    const llmResult = await this.llmService.aiVisualId(
+      {
+        prompt: trimmedPrompt,
+        pageUrl: ctx.pageUrl,
+        somManifest: ctx.somManifest,
+        accessibilitySnapshot: ctx.accessibilitySnapshot,
+        screenshotBase64,
+      },
+      { userId },
+    );
+
+    const id = randomUUID();
+    const context: AiVisualIdContextArtifact = {
+      pageUrl: ctx.pageUrl,
+      somManifest: ctx.somManifest,
+      accessibilitySnapshot: ctx.accessibilitySnapshot,
+      somTags: ctx.somTags,
+      tree,
+      screenshotWidth: ctx.screenshotWidth ?? 0,
+      screenshotHeight: ctx.screenshotHeight ?? 0,
+      prompt: trimmedPrompt,
+      fullPrompt: llmResult.fullPrompt,
+      answer: llmResult.answer,
+      provider: llmResult.provider,
+      model: llmResult.model,
+    };
+
+    const artifactPaths = await this.writeAiVisualIdArtifacts(runId, userId, id, screenshotBase64, context);
+    const row = await this.prisma.aiVisualIdTest.create({
+      data: {
+        id,
+        runId,
+        userId,
+        stepSequence: session.stepSequence,
+        provider: llmResult.provider,
+        model: llmResult.model,
+        prompt: trimmedPrompt,
+        answer: llmResult.answer,
+        pageUrl: ctx.pageUrl,
+        screenshotPath: artifactPaths.screenshotPath,
+        contextPath: artifactPaths.contextPath,
+      },
+    });
+
+    return {
+      id: row.id,
+      runId: row.runId,
+      stepSequence: row.stepSequence,
+      provider: row.provider,
+      model: row.model,
+      prompt: row.prompt,
+      answer: row.answer,
+      pageUrl: row.pageUrl,
+      createdAt: row.createdAt.toISOString(),
+      screenshotBase64,
+      screenshotWidth: context.screenshotWidth,
+      screenshotHeight: context.screenshotHeight,
+      somManifest: context.somManifest,
+      somTags: context.somTags,
+      accessibilitySnapshot: context.accessibilitySnapshot,
+      tree: context.tree,
+      fullPrompt: context.fullPrompt,
+    };
+  }
+
+  async getAiVisualIdTest(runId: string, userId: string, testId: string) {
+    const row = await this.prisma.aiVisualIdTest.findFirst({
+      where: { id: testId, runId, userId },
+    });
+    if (!row) {
+      throw new NotFoundException('AI Visual ID test not found');
+    }
+    const { screenshotBase64, context } = await this.readAiVisualIdArtifacts(runId, userId, row);
+    return {
+      id: row.id,
+      runId: row.runId,
+      stepSequence: row.stepSequence,
+      provider: row.provider,
+      model: row.model,
+      prompt: row.prompt,
+      answer: row.answer,
+      pageUrl: row.pageUrl,
+      createdAt: row.createdAt.toISOString(),
+      screenshotBase64,
+      screenshotWidth: context.screenshotWidth,
+      screenshotHeight: context.screenshotHeight,
+      somManifest: context.somManifest,
+      somTags: context.somTags,
+      accessibilitySnapshot: context.accessibilitySnapshot,
+      tree: context.tree,
+      fullPrompt: context.fullPrompt,
+    };
   }
 
   /** Forward pointer from the UI preview (canvas) into the Playwright page viewport. */

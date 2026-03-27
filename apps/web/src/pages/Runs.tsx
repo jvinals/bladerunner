@@ -6,6 +6,8 @@ import {
   buildStartPlaybackBody,
   projectsApi,
   type ProjectDto,
+  type AiVisualIdTestDetail,
+  type AiVisualIdTestSummary,
   type AutoClerkOtpUiMode,
   type RecordingViewportPreset,
   type RecordingStreamQuality,
@@ -14,6 +16,7 @@ import {
 import { StepCard } from '@/components/ui/StepCard';
 import { AiPromptReviewModal } from '@/components/ui/AiPromptReviewModal';
 import { AiPromptProgressSections } from '@/components/ui/AiPromptProgressSections';
+import { AiVisualIdTreeModal } from '@/components/ui/AiVisualIdTreeModal';
 import { SkipReplaySuggestionsModal } from '@/components/ui/SkipReplaySuggestionsModal';
 import { useRecording, type AiPromptTestProgressPayload } from '@/hooks/useRecording';
 import { parseAiPromptLastLlmTranscript } from '@/lib/aiPromptLastLlmTranscript';
@@ -108,6 +111,12 @@ export default function RunsPage() {
   } | null>(null);
   const [aiStepOpeningBusy, setAiStepOpeningBusy] = useState(false);
   const [aiStepReviewOpen, setAiStepReviewOpen] = useState(false);
+  const [aiVisualIdPrompt, setAiVisualIdPrompt] = useState('');
+  const [aiVisualIdBusy, setAiVisualIdBusy] = useState(false);
+  const [aiVisualIdError, setAiVisualIdError] = useState<string | null>(null);
+  const [aiVisualIdTreeOpen, setAiVisualIdTreeOpen] = useState(false);
+  const [aiVisualIdSelectedTestId, setAiVisualIdSelectedTestId] = useState<string | null>(null);
+  const [aiVisualIdSelectedTest, setAiVisualIdSelectedTest] = useState<AiVisualIdTestDetail | null>(null);
   const [playbackExclusionBusyStepId, setPlaybackExclusionBusyStepId] = useState<string | null>(null);
   const aiStepAbortRef = useRef<AbortController | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -256,6 +265,16 @@ export default function RunsPage() {
     if (isPlaying || playbackSessionId != null) return;
     setPlaybackAdvanceToSeq('');
   }, [isPlaying, playbackSessionId]);
+
+  useEffect(() => {
+    if (!isRecording || !runId) {
+      setAiVisualIdPrompt('');
+      setAiVisualIdError(null);
+      setAiVisualIdSelectedTestId(null);
+      setAiVisualIdSelectedTest(null);
+      setAiVisualIdTreeOpen(false);
+    }
+  }, [isRecording, runId]);
 
   useEffect(() => {
     const panel = stepsListScrollRef.current;
@@ -492,6 +511,29 @@ export default function RunsPage() {
     enabled: !!effectiveRunId && canShowStepActions,
     refetchInterval: isRecording ? 3000 : false,
   });
+
+  const { data: aiVisualIdTests = [] } = useQuery({
+    queryKey: ['ai-visual-id-tests', runId],
+    queryFn: () => runsApi.listAiVisualIdTests(runId!),
+    enabled: isRecording && !!runId,
+  });
+
+  const { data: aiVisualIdSelectedQuery, isFetching: aiVisualIdSelectedLoading } = useQuery({
+    queryKey: ['ai-visual-id-test', runId, aiVisualIdSelectedTestId],
+    queryFn: () => runsApi.getAiVisualIdTest(runId!, aiVisualIdSelectedTestId!),
+    enabled: isRecording && !!runId && !!aiVisualIdSelectedTestId && aiVisualIdSelectedTestId !== aiVisualIdSelectedTest?.id,
+  });
+
+  useEffect(() => {
+    if (aiVisualIdSelectedQuery) {
+      setAiVisualIdSelectedTest(aiVisualIdSelectedQuery);
+    }
+  }, [aiVisualIdSelectedQuery]);
+
+  useEffect(() => {
+    if (!isRecording || aiVisualIdSelectedTestId || aiVisualIdTests.length === 0) return;
+    setAiVisualIdSelectedTestId(aiVisualIdTests[0]!.id);
+  }, [isRecording, aiVisualIdSelectedTestId, aiVisualIdTests]);
 
   const handleDetachPlaybackRuns = useCallback(() => {
     if (!playbackSessionId) return;
@@ -827,6 +869,41 @@ export default function RunsPage() {
       setAiStepBusy(false);
     }
   }, [runId, aiStepCreatedId, aiStepBusy]);
+
+  const handleAiVisualIdSend = useCallback(async () => {
+    if (!runId || !aiVisualIdPrompt.trim() || aiVisualIdBusy) return;
+    setAiVisualIdBusy(true);
+    setAiVisualIdError(null);
+    try {
+      const detail = await runsApi.createAiVisualIdTest(runId, {
+        prompt: aiVisualIdPrompt.trim(),
+      });
+      setAiVisualIdSelectedTest(detail);
+      setAiVisualIdSelectedTestId(detail.id);
+      await queryClient.invalidateQueries({ queryKey: ['ai-visual-id-tests', runId] });
+    } catch (error) {
+      setAiVisualIdError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAiVisualIdBusy(false);
+    }
+  }, [runId, aiVisualIdPrompt, aiVisualIdBusy, queryClient]);
+
+  const handleOpenAiVisualIdTree = useCallback(() => {
+    const fallbackId = aiVisualIdSelectedTest?.id ?? aiVisualIdTests[0]?.id ?? null;
+    if (!fallbackId) return;
+    setAiVisualIdSelectedTestId(fallbackId);
+    setAiVisualIdTreeOpen(true);
+  }, [aiVisualIdSelectedTest?.id, aiVisualIdTests]);
+
+  const handleSelectAiVisualIdHistory = useCallback(
+    (item: AiVisualIdTestSummary) => {
+      setAiVisualIdSelectedTestId(item.id);
+      if (aiVisualIdSelectedTest?.id !== item.id) {
+        setAiVisualIdSelectedTest(null);
+      }
+    },
+    [aiVisualIdSelectedTest?.id],
+  );
 
   const aiPromptProgressBlock = useMemo((): AiPromptTestProgressPayload | null => {
     if (!aiPromptTestProgress || !aiStepCreatedId || !runId) return null;
@@ -1536,6 +1613,101 @@ export default function RunsPage() {
                 Set <span className="font-mono">E2E_CLERK_USER_EMAIL</span> with <span className="font-mono">+clerk_test</span>{' '}
                 for test-email mode (no real email). Navigate to Clerk sign-in in the preview, then click above.
               </p>
+              <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">5.- AI Visual ID</p>
+                    <p className="mt-1 text-[10px] leading-snug text-gray-600">
+                      Ask a vision model about the current UI using the live labeled screenshot and full accessibility tree.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={aiVisualIdBusy || (!aiVisualIdSelectedTest && aiVisualIdTests.length === 0)}
+                    onClick={handleOpenAiVisualIdTree}
+                    className="shrink-0 rounded-md border border-violet-200 bg-white px-2 py-1 text-[10px] font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-40"
+                  >
+                    Tree
+                  </button>
+                </div>
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={aiVisualIdPrompt}
+                    onChange={(e) => setAiVisualIdPrompt(e.target.value)}
+                    rows={3}
+                    disabled={aiVisualIdBusy || !socketConnected}
+                    placeholder="Ask something about the current UI, layout, controls, or visible state…"
+                    className="min-h-[72px] flex-1 resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/30 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAiVisualIdSend()}
+                    disabled={!aiVisualIdPrompt.trim() || aiVisualIdBusy || !socketConnected}
+                    className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-2 text-[10px] font-medium text-white hover:bg-violet-700 disabled:opacity-40"
+                  >
+                    {aiVisualIdBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    Send
+                  </button>
+                </div>
+                {!socketConnected ? (
+                  <p className="mt-2 text-[10px] text-amber-700">Wait for the live preview connection before sending AI Visual ID.</p>
+                ) : null}
+                {aiVisualIdError ? (
+                  <p className="mt-2 rounded border border-red-100 bg-red-50 px-2 py-1.5 text-[10px] text-red-600" role="alert">
+                    {aiVisualIdError}
+                  </p>
+                ) : null}
+                {aiVisualIdSelectedTest ? (
+                  <div className="mt-3 rounded-md border border-gray-200 bg-white p-2">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                      <span>Step #{aiVisualIdSelectedTest.stepSequence}</span>
+                      <span>•</span>
+                      <span>{new Date(aiVisualIdSelectedTest.createdAt).toLocaleString()}</span>
+                      <span>•</span>
+                      <span>{aiVisualIdSelectedTest.provider}</span>
+                      <span>•</span>
+                      <span>{aiVisualIdSelectedTest.model}</span>
+                    </div>
+                    <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Answer</div>
+                    <div className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-gray-800">
+                      {aiVisualIdSelectedTest.answer}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">History</p>
+                    <p className="text-[9px] text-gray-400">{aiVisualIdTests.length} saved</p>
+                  </div>
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 bg-white p-1.5">
+                    {aiVisualIdTests.length === 0 ? (
+                      <p className="px-1 py-2 text-[10px] text-gray-400">No AI Visual ID tests saved for this run yet.</p>
+                    ) : (
+                      aiVisualIdTests.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectAiVisualIdHistory(item)}
+                          className={`block w-full rounded-md border px-2 py-1.5 text-left ${
+                            aiVisualIdSelectedTestId === item.id
+                              ? 'border-violet-300 bg-violet-50'
+                              : 'border-transparent hover:border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-medium text-gray-800">Step #{item.stepSequence}</span>
+                            <span className="text-[9px] text-gray-400">{new Date(item.createdAt).toLocaleTimeString()}</span>
+                          </div>
+                          <div className="mt-0.5 truncate text-[10px] text-gray-600">{item.prompt}</div>
+                          <div className="mt-0.5 truncate text-[9px] text-gray-400">
+                            {item.provider} · {item.model}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1910,6 +2082,13 @@ export default function RunsPage() {
         adoptBusy={aiStepBusy}
         overlayClassName="z-[125]"
         contentClassName="z-[126]"
+      />
+
+      <AiVisualIdTreeModal
+        open={aiVisualIdTreeOpen}
+        onOpenChange={setAiVisualIdTreeOpen}
+        test={aiVisualIdSelectedTest}
+        loading={aiVisualIdSelectedLoading}
       />
 
       <SkipReplaySuggestionsModal

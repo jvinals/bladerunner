@@ -7,6 +7,7 @@ export const LLM_USAGE_KEYS = [
   'playwright_verify',
   'action_to_instruction',
   'optimized_prompt',
+  'ai_visual_id',
   'explain_ai_prompt_failure',
   'suggest_skip_after_change',
 ] as const;
@@ -32,6 +33,7 @@ export const LLM_USAGE_LABELS: Record<LlmUsageKey, string> = {
   playwright_verify: 'DOM verify pass (after draft Playwright codegen)',
   action_to_instruction: 'Recording — action to instruction + snippet',
   optimized_prompt: 'Optimized Prompt',
+  ai_visual_id: 'AI Visual ID',
   explain_ai_prompt_failure: 'Explain AI prompt test failure + suggested prompt',
   suggest_skip_after_change: 'Suggest steps to skip after step change',
 };
@@ -41,6 +43,7 @@ export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
   playwright_verify: false,
   action_to_instruction: false,
   optimized_prompt: true,
+  ai_visual_id: true,
   explain_ai_prompt_failure: true,
   suggest_skip_after_change: false,
 };
@@ -115,6 +118,7 @@ export function getDefaultPreferenceForUsage(config: ConfigService, usage: LlmUs
       return { provider: 'gemini', model: geminiModel };
     case 'action_to_instruction':
     case 'optimized_prompt':
+    case 'ai_visual_id':
     case 'explain_ai_prompt_failure':
     case 'suggest_skip_after_change':
       return { ...general };

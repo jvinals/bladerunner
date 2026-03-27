@@ -146,6 +146,30 @@ export class RunsService {
     });
   }
 
+  async findAiVisualIdTests(runId: string, userId: string) {
+    const run = await this.prisma.run.findFirst({ where: { id: runId, userId }, select: { id: true } });
+    if (!run) throw new NotFoundException(`Run ${runId} not found`);
+    const rows = await this.prisma.aiVisualIdTest.findMany({
+      where: { runId, userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        runId: true,
+        stepSequence: true,
+        provider: true,
+        model: true,
+        prompt: true,
+        answer: true,
+        pageUrl: true,
+        createdAt: true,
+      },
+    });
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
   async getRunStatus(runId: string, userId: string) {
     const run = await this.prisma.run.findFirst({
       where: { id: runId, userId },

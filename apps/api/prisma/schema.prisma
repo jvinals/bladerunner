@@ -105,10 +105,32 @@ model Run {
   steps       RunStep[]
   recordings  RunRecording[]
   checkpoints RunCheckpoint[]
+  aiVisualIdTests AiVisualIdTest[]
 
   @@index([userId])
   @@index([projectId])
   @@map("runs")
+}
+
+model AiVisualIdTest {
+  id             String   @id @default(uuid())
+  runId          String   @map("run_id")
+  userId         String   @map("user_id")
+  stepSequence   Int      @map("step_sequence")
+  provider       String
+  model          String
+  prompt         String
+  answer         String
+  pageUrl        String?  @map("page_url")
+  screenshotPath String   @map("screenshot_path")
+  contextPath    String   @map("context_path")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ai_visual_id_tests")
 }
 
 /// Captured browser storage (cookies / localStorage) after a step — optional aid for “app state” restore; prefix replay remains the source of truth for determinism.

@@ -38,6 +38,7 @@ import {
   BulkSkipReplayDto,
   AppendAiPromptStepRecordingDto,
   TestAiPromptStepDto,
+  CreateAiVisualIdTestDto,
 } from './runs.dto';
 import { Observable, Subject } from 'rxjs';
 
@@ -133,6 +134,45 @@ export class RunsController {
     const userId = req.user.sub;
     const step = await this.recordingService.appendAiPromptStepDuringRecording(id, userId, dto);
     return { step };
+  }
+
+  @Post(':id/ai-visual-id/tests')
+  @HttpCode(201)
+  @ApiOperation({
+    summary: 'During recording: run the AI Visual ID task against the current live page and persist the result',
+  })
+  @ApiResponse({ status: 201, description: 'AI Visual ID test created' })
+  async createAiVisualIdTest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: CreateAiVisualIdTestDto,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.createAiVisualIdTest(id, userId, dto.prompt);
+  }
+
+  @Get(':id/ai-visual-id/tests')
+  @ApiOperation({
+    summary: 'List persisted AI Visual ID tests for a run',
+  })
+  @ApiResponse({ status: 200, description: 'AI Visual ID history rows' })
+  async listAiVisualIdTests(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    return this.runsService.findAiVisualIdTests(id, userId);
+  }
+
+  @Get(':id/ai-visual-id/tests/:testId')
+  @ApiOperation({
+    summary: 'Fetch one AI Visual ID test with screenshot, tree, tag mapping, and answer',
+  })
+  @ApiResponse({ status: 200, description: 'AI Visual ID test detail' })
+  async getAiVisualIdTest(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('testId') testId: string,
+  ) {
+    const userId = req.user.sub;
+    return this.recordingService.getAiVisualIdTest(id, userId, testId);
   }
 
   @Post('playback/stop')

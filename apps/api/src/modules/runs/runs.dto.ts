@@ -260,6 +260,14 @@ export class TestAiPromptStepDto {
   phase?: 'full' | 'generate' | 'run';
 }
 
+export class CreateAiVisualIdTestDto {
+  @ApiProperty({
+    description: 'Question or prompt to send to the AI Visual ID task along with the current labeled screenshot and accessibility tree',
+  })
+  @IsString()
+  prompt!: string;
+}
+
 export class SuggestSkipAfterChangeDto {
   @ApiProperty({ description: 'The step that was just added or edited (anchor)' })
   @IsString()
