@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.6.61",
+  "version": "0.6.72",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
@@ -20,6 +20,7 @@
     "test:recording-merge": "tsx src/modules/recording/recording-playwright-merge.selftest.ts",
     "test:optimized-prompt-recording": "tsx src/modules/recording/optimized-prompt.selftest.ts",
     "test:ai-visual-id": "tsx src/modules/recording/ai-visual-id.selftest.ts",
+    "test:resume-recording": "tsx src/modules/recording/resume-recording.selftest.ts",
     "test:optimized-prompt-llm": "tsx src/modules/llm/optimized-prompt.selftest.ts",
     "test:recorded-playwright": "tsx src/modules/recording/recorded-playwright.selftest.ts",
     "test:recording-timeout": "tsx src/modules/recording/recording-timeout.selftest.ts",

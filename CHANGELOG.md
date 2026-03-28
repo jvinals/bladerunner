@@ -1,7 +1,40 @@
 # Changelog
 
+## 2026-03-28
+
+- `0.10.69`: removed the temporary runtime instrumentation used to diagnose resumable playback repair failures and manual-step AI prompt relabeling after the fixes were confirmed.
+- `@bladerunner/api 0.6.72`: cleaned up playback/replay debug probes from recording repair, resume checkpoint restore, selector rewrite diagnosis, and transcript metadata tracing.
+- `@bladerunner/web 0.7.37`: removed temporary run-detail, runs-page, recording-hook, and step-card probes used during resumable playback debugging.
+- `0.10.68`: fixed resumable-run playback for Tailwind-heavy file-input locators and stopped manual steps from being mislabeled as AI prompt after playback repair attempts.
+- `@bladerunner/api 0.6.71`: escaped broader Tailwind class-chain syntax in playback locators, including file-input variants and arbitrary values, and prevented transcript persistence from stamping `ai_prompt_step` metadata onto manual steps.
+- `@bladerunner/web 0.7.36`: treated `origin` as the authoritative UI signal for AI prompt steps so contaminated manual-step metadata no longer changes the step badge or playback tone.
+- `0.10.67`: fixed resumable-run playback compilation for recorded locators that contain nested quoted CSS fragments before continuing a saved recording.
+- `@bladerunner/api 0.6.70`: rewrote playback locator escaping to recover the full `.locator(...)` CSS argument even when the recorded snippet contains embedded quote sequences, and added a focused nested-quote selftest.
+- `0.10.66`: added resumable recording runs so in-progress recordings can be saved, reopened for prefix playback, and continued later from a fresh restored browser session.
+- `@bladerunner/api 0.6.69`: added the `PAUSED` run lifecycle, split recording stop into save-vs-finish flows, restored resumed sessions from checkpoints, and added a focused resumable-recording selftest.
+- `@bladerunner/web 0.7.35`: added `Save for later` and `Continue recording` actions in Runs and Run Detail, while allowing paused runs to replay their recorded prefix.
+- `@bladerunner/types 0.2.9`: added the shared paused recording status enum for resumable runs.
+
 ## 2026-03-25
 
+- `0.10.65`: removed the temporary runtime instrumentation used to verify the recording-page automatic sign-in false-failure fix after the issue was confirmed resolved.
+- `@bladerunner/api 0.6.68`: cleaned up the generic auto sign-in post-submit verification probes while keeping the short settle-window success handling.
+- `@bladerunner/web 0.7.34`: removed the temporary recording auto sign-in request lifecycle probes from `useRecording`.
+- `0.10.64`: fixed the false automatic sign-in failure shown during recording by letting generic login submits finish their short in-flight transition before classifying them as stuck on the form.
+- `@bladerunner/api 0.6.67`: re-checked generic post-submit auth state after a short settle window and treated successful redirect/form disappearance as sign-in success instead of a 503 failure.
+- `0.10.63`: added targeted runtime probes to diagnose the false automatic sign-in error shown on the recording page after a seemingly successful generic login.
+- `@bladerunner/api 0.6.66`: logged the generic post-submit auth state before and after a short observation window to determine whether sign-in success is being classified too early.
+- `@bladerunner/web 0.7.33`: logged the recording-page automatic sign-in request lifecycle so UI-side stale error reporting can be distinguished from backend false failures.
+- `0.10.62`: removed the temporary runtime instrumentation used to diagnose AI Visual ID tree rendering and generic auto sign-in issues after both fixes were confirmed.
+- `@bladerunner/api 0.6.65`: cleaned up backend debug probes from AI Visual ID capture/tree persistence and generic auto sign-in diagnostics while keeping the verified fixes.
+- `@bladerunner/web 0.7.32`: removed temporary AI Visual ID placement and modal render probes from the Runs page and tree modal.
+- `0.10.61`: reshaped the AI Visual ID tree into a Playwright-style accessibility view by collapsing raw CDP wrapper nodes and preserving semantic attributes.
+- `@bladerunner/api 0.6.64`: normalized CDP accessibility snapshots into semantic AI Visual ID nodes with filtered wrappers, preserved ARIA-style attributes, and tighter tag matching.
+- `@bladerunner/web 0.7.31`: rendered AI Visual ID tree rows as Playwright-style `role "name" [attr=value]` entries and removed noisy `no tag` badges from wrapper-heavy output.
+- `0.10.60`: added focused runtime diagnostics for AI Visual ID tree quality so noisy accessibility nodes can be filtered with evidence from live captures.
+- `@bladerunner/api 0.6.63`: logged AI Visual ID tree composition metrics and sample noisy/tagged nodes to debug the malformed accessibility tree presentation.
+- `0.10.59`: fixed AI Visual ID tree capture in runtimes where Playwright's `page.accessibility` API is unavailable by falling back to Chromium CDP accessibility data.
+- `@bladerunner/api 0.6.62`: captured AI Visual ID accessibility trees through `Accessibility.getFullAXTree` when the Playwright accessibility API is missing, preserving the modal tree payload.
 - `0.10.58`: added a run-scoped AI Visual ID tool on the recording page with persistent prompt/answer history and a tree viewer for labeled UI context.
 - `@bladerunner/api 0.6.61`: added AI Visual ID capture, persistence, REST endpoints, LLM routing, and a focused selftest for tree/tag mapping.
 - `@bladerunner/web 0.7.30`: added the recording-page AI Visual ID panel, persisted history list, and screenshot plus accessibility-tree modal with blinking tag highlights.

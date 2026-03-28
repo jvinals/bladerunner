@@ -337,6 +337,7 @@ export interface WorkspaceSettings {
 
 export enum RecordingRunStatus {
   Recording = 'RECORDING',
+  Paused = 'PAUSED',
   Completed = 'COMPLETED',
   Failed = 'FAILED',
   Cancelled = 'CANCELLED',

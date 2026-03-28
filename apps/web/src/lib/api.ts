@@ -39,6 +39,7 @@ export type AiVisualIdTreeNode = {
   name: string;
   value: string | null;
   description: string | null;
+  attributes: Record<string, string | number | boolean>;
   tagNumber: number | null;
   children: AiVisualIdTreeNode[];
 };
@@ -71,6 +72,8 @@ export type StartRecordingBody = {
   streamQuality?: RecordingStreamQuality;
   streamSmoothness?: RecordingStreamSmoothness;
 };
+
+export type StopRecordingMode = 'complete' | 'save';
 
 export function buildStartPlaybackBody(params: {
   delayMs?: number;
@@ -246,10 +249,14 @@ export const runsApi = {
     apiFetchVoid(`/runs/${id}`, {
       method: 'DELETE',
     }),
-  stopRecording: (runId: string) =>
+  stopRecording: (runId: string, mode: StopRecordingMode = 'complete') =>
     apiFetch<unknown>('/runs/record/stop', {
       method: 'POST',
-      body: JSON.stringify({ runId }),
+      body: JSON.stringify({ runId, mode }),
+    }),
+  resumeRecording: (runId: string) =>
+    apiFetch<{ runId: string; status: string }>(`/runs/${runId}/recording/resume`, {
+      method: 'POST',
     }),
   /** Active recording only: server runs Clerk auto sign-in on the remote browser; appends a tagged step. */
   clerkAutoSignInRecording: (runId: string, body?: { clerkOtpMode?: ClerkOtpMode }) =>

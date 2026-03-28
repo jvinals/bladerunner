@@ -66,6 +66,8 @@ interface UseRecordingReturn {
   status: string;
   startRecording: (input: StartRecordingBody) => Promise<void>;
   stopRecording: () => Promise<void>;
+  saveRecordingProgress: () => Promise<void>;
+  resumeRecording: (runId: string) => Promise<void>;
   sendInstruction: (instruction: string) => Promise<RecordedStep | null>;
   /** Replace an existing step by re-running a natural-language instruction (active recording only). */
   reRecordStep: (stepId: string, instruction: string) => Promise<RecordedStep | null>;
@@ -176,7 +178,12 @@ export function useRecording(): UseRecordingReturn {
     socket.on('status', (data: { status: string; runId: string }) => {
       if (data.runId === recordRunId) {
         setStatus(data.status);
-        if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+        if (
+          data.status === 'completed' ||
+          data.status === 'failed' ||
+          data.status === 'cancelled' ||
+          data.status === 'paused'
+        ) {
           setIsRecording(false);
         }
       }
@@ -259,7 +266,7 @@ export function useRecording(): UseRecordingReturn {
 
   const stopRecording = useCallback(async () => {
     if (!runId) return;
-    await runsApi.stopRecording(runId);
+    await runsApi.stopRecording(runId, 'complete');
     activeRunIdRef.current = null;
     if (socketRef.current) {
       socketRef.current.emit('leave', { runId });
@@ -271,6 +278,38 @@ export function useRecording(): UseRecordingReturn {
     setStatus('completed');
     setCurrentFrame(null);
   }, [runId]);
+
+  const saveRecordingProgress = useCallback(async () => {
+    if (!runId) return;
+    await runsApi.stopRecording(runId, 'save');
+    activeRunIdRef.current = null;
+    if (socketRef.current) {
+      socketRef.current.emit('leave', { runId });
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    setSocketConnected(false);
+    setIsRecording(false);
+    setStatus('paused');
+    setCurrentFrame(null);
+  }, [runId]);
+
+  const resumeRecording = useCallback(async (resumeRunId: string) => {
+    const result = await runsApi.resumeRecording(resumeRunId);
+    activeRunIdRef.current = result.runId;
+    connectSocket(result.runId);
+    let initialSteps: RecordedStep[] = [];
+    try {
+      initialSteps = (await runsApi.getSteps(result.runId)) as RecordedStep[];
+    } catch {
+      /* steps may still arrive via socket */
+    }
+    setRunId(result.runId);
+    setSteps(initialSteps);
+    setIsRecording(true);
+    setStatus('recording');
+    setClerkAutoSignInError(null);
+  }, [connectSocket]);
 
   const sendInstruction = useCallback(async (instruction: string): Promise<RecordedStep | null> => {
     if (!runId) return null;
@@ -390,6 +429,8 @@ export function useRecording(): UseRecordingReturn {
     status,
     startRecording,
     stopRecording,
+    saveRecordingProgress,
+    resumeRecording,
     sendInstruction,
     reRecordStep,
     loadRunSteps,

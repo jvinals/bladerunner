@@ -71,22 +71,39 @@ function restAfterFirstColonLooksLikeCssPseudo(rest: string): boolean {
   return CSS_PSEUDO_AFTER_FIRST_COLON.has(name);
 }
 
-/** Per `.` segment in a simple class chain: escape `:` when it is Tailwind-style, not CSS pseudo. */
+function escapeCssIdentifier(value: string): string {
+  let out = '';
+  for (const ch of value) {
+    if (/[A-Za-z0-9_-]/.test(ch)) {
+      out += ch;
+      continue;
+    }
+    out += `\\${ch}`;
+  }
+  return out;
+}
+
+function escapeSimpleClassChainSegment(segment: string): string {
+  if (!segment) return segment;
+  const i = segment.indexOf(':');
+  if (i > 0) {
+    const rest = segment.slice(i + 1);
+    if (restAfterFirstColonLooksLikeCssPseudo(rest)) {
+      return `${escapeCssIdentifier(segment.slice(0, i))}:${rest}`;
+    }
+  }
+  return escapeCssIdentifier(segment);
+}
+
+/** Per `.` segment in a simple class chain: escape Tailwind class syntax, but keep real CSS pseudos intact. */
 export function escapeTailwindColonsInCssSelector(selector: string): string {
-  if (!selector || selector.includes('[') || selector.includes(']') || selector.includes(' ')) {
+  if (!selector || selector.includes(' ')) {
     return selector;
   }
   const parts = selector.split('.');
-  const out = parts.map((segment) => {
-    if (!segment.includes(':')) return segment;
-    const i = segment.indexOf(':');
-    const rest = segment.slice(i + 1);
-    if (restAfterFirstColonLooksLikeCssPseudo(rest)) {
-      return segment;
-    }
-    return segment.replace(/:/g, '\\:');
-  });
-  return out.join('.');
+  if (parts.length <= 1) return selector;
+  const [head, ...tail] = parts;
+  return [head, ...tail.map(escapeSimpleClassChainSegment)].join('.');
 }
 
 /**
@@ -95,16 +112,58 @@ export function escapeTailwindColonsInCssSelector(selector: string): string {
  * later embedded in `new Function('…', 'return (async () => { … })();')` — a single-quoted
  * `page.locator('…\\:…')` would re-parse as `locator('…:…')` and drop the escape, breaking `querySelectorAll`.
  */
-export function escapeLocatorCssInPlaywrightSnippet(code: string): string {
-  let out = code.replace(/\.locator\(\s*'([^']*)'\)/g, (_m, css: string) => {
-    return `.locator(${JSON.stringify(escapeTailwindColonsInCssSelector(css))})`;
-  });
-  // Do not re-process strings produced above: they contain `\\:` sequences that would get a third `\` if we escaped again.
-  out = out.replace(/\.locator\(\s*"([^"]*)"\)/g, (_m, css: string) => {
-    if (/\\\\:/.test(css)) {
-      return _m;
+function findStringLiteralEnd(code: string, start: number, quote: '"' | "'"): number {
+  for (let i = start; i < code.length; i += 1) {
+    if (code[i] !== quote) continue;
+    let lookahead = i + 1;
+    while (lookahead < code.length && /\s/.test(code[lookahead] ?? '')) lookahead += 1;
+    if (code[lookahead] === ')') {
+      return i;
     }
-    return `.locator(${JSON.stringify(escapeTailwindColonsInCssSelector(css))})`;
-  });
+  }
+  let backslashRun = 0;
+  for (let i = start; i < code.length; i += 1) {
+    const ch = code[i];
+    if (ch === '\\') {
+      backslashRun += 1;
+      continue;
+    }
+    if (ch === quote && backslashRun % 2 === 0) {
+      return i;
+    }
+    backslashRun = 0;
+  }
+  return -1;
+}
+
+export function escapeLocatorCssInPlaywrightSnippet(code: string): string {
+  let out = '';
+  let idx = 0;
+  while (idx < code.length) {
+    const locatorIdx = code.indexOf('.locator(', idx);
+    if (locatorIdx < 0) {
+      out += code.slice(idx);
+      break;
+    }
+    out += code.slice(idx, locatorIdx);
+    let cursor = locatorIdx + '.locator('.length;
+    while (cursor < code.length && /\s/.test(code[cursor] ?? '')) cursor += 1;
+    const quote = code[cursor];
+    if (quote !== '"' && quote !== "'") {
+      out += '.locator(';
+      idx = cursor;
+      continue;
+    }
+    const literalStart = cursor + 1;
+    const literalEnd = findStringLiteralEnd(code, literalStart, quote);
+    if (literalEnd < 0) {
+      out += code.slice(locatorIdx);
+      break;
+    }
+    const rawCss = code.slice(literalStart, literalEnd);
+    const rewrittenCss = escapeTailwindColonsInCssSelector(rawCss);
+    out += `${code.slice(locatorIdx, cursor)}${JSON.stringify(rewrittenCss)}`;
+    idx = literalEnd + 1;
+  }
   return out;
 }

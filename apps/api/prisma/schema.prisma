@@ -9,6 +9,7 @@ generator client {
 
 enum RunStatus {
   RECORDING
+  PAUSED
   COMPLETED
   FAILED
   CANCELLED

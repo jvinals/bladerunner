@@ -35,6 +35,7 @@ export type HomeRunRow = {
   id: string;
   name: string;
   status: string;
+  hasLiveRecordingSession?: boolean;
   platform: string;
   url: string;
   /** Populated after a completed recording when a JPEG thumbnail exists on disk. */
@@ -64,6 +65,8 @@ function rowAccent(status: string) {
       return 'border-l-[3px] border-l-[var(--ce-destructive)] bg-red-500/[0.04]';
     case 'RECORDING':
       return 'border-l-[3px] border-l-[var(--ce-primary)] bg-sky-500/[0.05]';
+    case 'PAUSED':
+      return 'border-l-[3px] border-l-amber-500/80 bg-amber-500/[0.06]';
     case 'CANCELLED':
       return 'border-l-[3px] border-l-amber-500/70 bg-amber-500/[0.04]';
     default:
@@ -388,6 +391,7 @@ export function HomeRunsTable() {
           >
             <option value="">All statuses</option>
             <option value="RECORDING">Recording</option>
+            <option value="PAUSED">Paused</option>
             <option value="COMPLETED">Completed</option>
             <option value="FAILED">Failed</option>
             <option value="CANCELLED">Cancelled</option>

@@ -50,12 +50,8 @@ export function playbackToneForStep(
 }
 
 export function isAiPromptStepRow(origin: string, metadata?: unknown): boolean {
-  return (
-    origin === 'AI_PROMPT' ||
-    (!!metadata &&
-      typeof metadata === 'object' &&
-      (metadata as { kind?: string }).kind === 'ai_prompt_step')
-  );
+  void metadata;
+  return origin === 'AI_PROMPT';
 }
 
 /**

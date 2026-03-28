@@ -30,4 +30,25 @@ const decoded = JSON.parse(jsonArg) as string;
 assert.ok(decoded.includes('hover\\:bg-accent'), decoded);
 assert.ok(decoded.includes('hover\\:text-foreground'), decoded);
 
+const nestedQuoteSnippet =
+  "await page.locator('button.inline-flex.items-center.[&_svg:not([class*=\\\\'size-\\\\'])]:size-4').click();";
+const nestedQuoteOut = escapeLocatorCssInPlaywrightSnippet(nestedQuoteSnippet);
+assert.ok(nestedQuoteOut.includes('.locator("'), nestedQuoteOut);
+assert.ok(!nestedQuoteOut.includes(".locator('"), nestedQuoteOut);
+assert.doesNotThrow(
+  () => new Function('page', 'return (async () => { ' + nestedQuoteOut + ' })();'),
+  nestedQuoteOut,
+);
+
+const fileInputSnippet =
+  "await page.locator('input.file:text-foreground.selection:bg-primary.dark:bg-input/30.transition-[color,box-shadow].file:inline-flex.!border-0').click();";
+const fileInputOut = escapeLocatorCssInPlaywrightSnippet(fileInputSnippet);
+const fileInputJsonArg = fileInputOut.match(/\.locator\(\s*("(?:\\.|[^"\\])*")\s*\)/)?.[1];
+assert.ok(fileInputJsonArg, `expected escaped file input locator arg, got: ${fileInputOut.slice(0, 240)}`);
+const fileInputDecoded = JSON.parse(fileInputJsonArg) as string;
+assert.ok(fileInputDecoded.includes('file\\:text-foreground'), fileInputDecoded);
+assert.ok(fileInputDecoded.includes('dark\\:bg-input\\/30'), fileInputDecoded);
+assert.ok(fileInputDecoded.includes('transition-\\[color\\,box-shadow\\]'), fileInputDecoded);
+assert.ok(fileInputDecoded.includes('\\!border-0'), fileInputDecoded);
+
 console.log('playback-css-escape.selftest: ok');

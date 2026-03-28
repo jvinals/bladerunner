@@ -15,6 +15,11 @@ const STATUS_STYLES: Record<string, string> = {
   pending: 'bg-[#EAB508] text-white',
   busy: 'bg-[#4B90FF] text-white',
   error: 'bg-[#FF4D4D] text-white',
+  RECORDING: 'bg-[#4B90FF] text-white',
+  PAUSED: 'bg-amber-500 text-white',
+  COMPLETED: 'bg-[#56A34A] text-white',
+  FAILED: 'bg-[#FF4D4D] text-white',
+  CANCELLED: 'bg-gray-400 text-white',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -31,6 +36,11 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   busy: 'Busy',
   error: 'Error',
+  RECORDING: 'Recording',
+  PAUSED: 'Paused',
+  COMPLETED: 'Completed',
+  FAILED: 'Failed',
+  CANCELLED: 'Cancelled',
 };
 
 interface StatusBadgeProps {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   runsApi,
   buildStartPlaybackBody,
@@ -66,6 +67,8 @@ const STREAM_SMOOTHNESS_OPTIONS: Array<{ value: RecordingStreamSmoothness; label
 
 export default function RunsPage() {
   const { user } = useUser();
+  const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const invalidateStepsAfterPlaybackStep = useCallback(
     (p: PlaybackProgressPayload) => {
@@ -135,6 +138,8 @@ export default function RunsPage() {
     status,
     startRecording,
     stopRecording,
+    saveRecordingProgress,
+    resumeRecording,
     sendInstruction,
     reRecordStep,
     loadRunSteps,
@@ -213,6 +218,7 @@ export default function RunsPage() {
     name: string;
     url: string;
     status: string;
+    hasLiveRecordingSession?: boolean;
     stepsCount: number;
     createdAt: string;
     project?: { id: string; name: string; kind: string } | null;
@@ -220,6 +226,10 @@ export default function RunsPage() {
 
   const selectedRun = selectedRunId ? runs.find((r) => r.id === selectedRunId) : undefined;
   const effectiveRunId = isRecording ? runId : selectedRunId;
+  const requestedResumeRunId =
+    typeof (location.state as { resumeRunId?: unknown } | null)?.resumeRunId === 'string'
+      ? ((location.state as { resumeRunId?: string } | null)?.resumeRunId ?? null)
+      : null;
   const {
     skipReplayModalOpen,
     skipReplayAnchorStepId,
@@ -233,8 +243,15 @@ export default function RunsPage() {
     !!selectedRunId &&
     steps.length > 0 &&
     !!selectedRun &&
-    selectedRun.status !== 'RECORDING' &&
+    !selectedRun.hasLiveRecordingSession &&
     !isRecording;
+  const canResumeSelected =
+    !!selectedRunId &&
+    !!selectedRun &&
+    !selectedRun.hasLiveRecordingSession &&
+    (selectedRun.status === 'PAUSED' || selectedRun.status === 'RECORDING') &&
+    !isRecording &&
+    !isPlaying;
   const canShowStepActions =
     steps.length > 0 &&
     (!!effectiveRunId);
@@ -349,9 +366,33 @@ export default function RunsPage() {
   }, [selectedRunId, selectedRun, deleteRunMutation]);
 
   const handleStopRecording = useCallback(async () => {
+    const activeRunId = runId;
     await stopRecording();
+    if (activeRunId) setSelectedRunId(activeRunId);
     refetch();
-  }, [stopRecording, refetch]);
+  }, [runId, stopRecording, refetch]);
+
+  const handleSaveRecordingForLater = useCallback(async () => {
+    const activeRunId = runId;
+    await saveRecordingProgress();
+    if (activeRunId) {
+      setSelectedRunId(activeRunId);
+      try {
+        await loadRunSteps(activeRunId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setStepsLoadError(msg);
+      }
+    }
+    refetch();
+  }, [runId, saveRecordingProgress, loadRunSteps, refetch]);
+
+  const handleResumeSelectedRun = useCallback(async (id: string) => {
+    setStepsLoadError(null);
+    await resumeRecording(id);
+    setSelectedRunId(id);
+    refetch();
+  }, [resumeRecording, refetch, selectedRunId]);
 
   const userId = user?.id ?? '';
 
@@ -938,6 +979,28 @@ export default function RunsPage() {
     }
   }, [loadRunSteps]);
 
+  useEffect(() => {
+    if (!requestedResumeRunId || isRecording) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        setSelectedRunId(requestedResumeRunId);
+        await handleResumeSelectedRun(requestedResumeRunId);
+      } catch (e) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : String(e);
+        setStepsLoadError(msg);
+      } finally {
+        if (!cancelled) {
+          navigate('/runs', { replace: true, state: null });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedResumeRunId, isRecording, handleResumeSelectedRun, navigate]);
+
   const handleDetach = useCallback(() => {
     if (!runId) return;
     const url = `${window.location.origin}/preview/${runId}`;
@@ -1097,13 +1160,26 @@ export default function RunsPage() {
             </div>
 
             {isRecording ? (
-              <button
-                onClick={handleStopRecording}
-                className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
-              >
-                <Square size={12} />
-                Stop
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveRecordingForLater()}
+                  className="flex items-center gap-1 px-3 py-1.5 border border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors"
+                  title="Close the live browser and keep this run resumable"
+                >
+                  <Pause size={12} />
+                  Save for later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleStopRecording()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
+                  title="Finish recording and close this run"
+                >
+                  <Square size={12} />
+                  Finish
+                </button>
+              </div>
             ) : isPlaying ? (
               <div className="flex flex-col items-end gap-1 shrink-0 max-w-[min(100%,20rem)]">
                 <div className="flex flex-wrap items-center gap-1.5 justify-end">
@@ -1236,7 +1312,7 @@ export default function RunsPage() {
                   ) : (
                     runs.map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.status === 'RECORDING' ? '* ' : ''}
+                        {r.status === 'RECORDING' ? '* ' : r.status === 'PAUSED' ? '|| ' : ''}
                         {r.name} ({r.stepsCount} steps)
                       </option>
                     ))
@@ -1341,7 +1417,7 @@ export default function RunsPage() {
                 title={
                   !selectedRunId
                     ? 'Select a run first'
-                    : selectedRun?.status === 'RECORDING'
+                    : selectedRun?.hasLiveRecordingSession
                       ? 'Wait until recording finishes'
                       : steps.length === 0
                         ? 'This run has no steps yet'
@@ -1361,7 +1437,7 @@ export default function RunsPage() {
                 title={
                   !selectedRunId
                     ? 'Select a run first'
-                    : selectedRun?.status === 'RECORDING'
+                    : selectedRun?.hasLiveRecordingSession
                       ? 'Wait until recording finishes'
                       : steps.length === 0
                         ? 'This run has no steps yet'
@@ -1374,6 +1450,17 @@ export default function RunsPage() {
                 <StepForward size={14} />
                 Next
               </button>
+              {canResumeSelected && (
+                <button
+                  type="button"
+                  onClick={() => void handleResumeSelectedRun(selectedRunId)}
+                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-2.5 border border-sky-200 bg-sky-50 text-sky-800 text-xs font-semibold rounded-md hover:bg-sky-100 transition-colors"
+                  title="Open a fresh browser and continue recording this run"
+                >
+                  <Play size={14} className="fill-current" />
+                  Continue
+                </button>
+              )}
               {canPlaybackSelected && !isPlaying && (
                 <button
                   type="button"
@@ -1613,101 +1700,6 @@ export default function RunsPage() {
                 Set <span className="font-mono">E2E_CLERK_USER_EMAIL</span> with <span className="font-mono">+clerk_test</span>{' '}
                 for test-email mode (no real email). Navigate to Clerk sign-in in the preview, then click above.
               </p>
-              <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3">
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">5.- AI Visual ID</p>
-                    <p className="mt-1 text-[10px] leading-snug text-gray-600">
-                      Ask a vision model about the current UI using the live labeled screenshot and full accessibility tree.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={aiVisualIdBusy || (!aiVisualIdSelectedTest && aiVisualIdTests.length === 0)}
-                    onClick={handleOpenAiVisualIdTree}
-                    className="shrink-0 rounded-md border border-violet-200 bg-white px-2 py-1 text-[10px] font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-40"
-                  >
-                    Tree
-                  </button>
-                </div>
-                <div className="flex items-start gap-2">
-                  <textarea
-                    value={aiVisualIdPrompt}
-                    onChange={(e) => setAiVisualIdPrompt(e.target.value)}
-                    rows={3}
-                    disabled={aiVisualIdBusy || !socketConnected}
-                    placeholder="Ask something about the current UI, layout, controls, or visible state…"
-                    className="min-h-[72px] flex-1 resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/30 disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleAiVisualIdSend()}
-                    disabled={!aiVisualIdPrompt.trim() || aiVisualIdBusy || !socketConnected}
-                    className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-2 text-[10px] font-medium text-white hover:bg-violet-700 disabled:opacity-40"
-                  >
-                    {aiVisualIdBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                    Send
-                  </button>
-                </div>
-                {!socketConnected ? (
-                  <p className="mt-2 text-[10px] text-amber-700">Wait for the live preview connection before sending AI Visual ID.</p>
-                ) : null}
-                {aiVisualIdError ? (
-                  <p className="mt-2 rounded border border-red-100 bg-red-50 px-2 py-1.5 text-[10px] text-red-600" role="alert">
-                    {aiVisualIdError}
-                  </p>
-                ) : null}
-                {aiVisualIdSelectedTest ? (
-                  <div className="mt-3 rounded-md border border-gray-200 bg-white p-2">
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
-                      <span>Step #{aiVisualIdSelectedTest.stepSequence}</span>
-                      <span>•</span>
-                      <span>{new Date(aiVisualIdSelectedTest.createdAt).toLocaleString()}</span>
-                      <span>•</span>
-                      <span>{aiVisualIdSelectedTest.provider}</span>
-                      <span>•</span>
-                      <span>{aiVisualIdSelectedTest.model}</span>
-                    </div>
-                    <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Answer</div>
-                    <div className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-gray-800">
-                      {aiVisualIdSelectedTest.answer}
-                    </div>
-                  </div>
-                ) : null}
-                <div className="mt-3">
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">History</p>
-                    <p className="text-[9px] text-gray-400">{aiVisualIdTests.length} saved</p>
-                  </div>
-                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 bg-white p-1.5">
-                    {aiVisualIdTests.length === 0 ? (
-                      <p className="px-1 py-2 text-[10px] text-gray-400">No AI Visual ID tests saved for this run yet.</p>
-                    ) : (
-                      aiVisualIdTests.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => handleSelectAiVisualIdHistory(item)}
-                          className={`block w-full rounded-md border px-2 py-1.5 text-left ${
-                            aiVisualIdSelectedTestId === item.id
-                              ? 'border-violet-300 bg-violet-50'
-                              : 'border-transparent hover:border-gray-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-medium text-gray-800">Step #{item.stepSequence}</span>
-                            <span className="text-[9px] text-gray-400">{new Date(item.createdAt).toLocaleTimeString()}</span>
-                          </div>
-                          <div className="mt-0.5 truncate text-[10px] text-gray-600">{item.prompt}</div>
-                          <div className="mt-0.5 truncate text-[9px] text-gray-400">
-                            {item.provider} · {item.model}
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
@@ -2048,6 +2040,106 @@ export default function RunsPage() {
                 </p>
               ) : null}
               <AiPromptProgressSections sections={aiPromptDrawerSections} />
+              <div
+                data-testid="runs-ai-visual-id-main"
+                className="mt-3 rounded-lg border border-violet-200 bg-violet-50/40 p-3"
+              >
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">5.- AI Visual ID</p>
+                    <p className="mt-1 text-[10px] leading-snug text-gray-600">
+                      Ask a vision model about the current UI using the live labeled screenshot and full accessibility tree.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={aiVisualIdBusy || (!aiVisualIdSelectedTest && aiVisualIdTests.length === 0)}
+                    onClick={handleOpenAiVisualIdTree}
+                    className="shrink-0 rounded-md border border-violet-200 bg-white px-2 py-1 text-[10px] font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-40"
+                  >
+                    Tree
+                  </button>
+                </div>
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={aiVisualIdPrompt}
+                    onChange={(e) => setAiVisualIdPrompt(e.target.value)}
+                    rows={3}
+                    disabled={aiVisualIdBusy || !socketConnected}
+                    placeholder="Ask something about the current UI, layout, controls, or visible state…"
+                    className="min-h-[72px] flex-1 resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/30 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAiVisualIdSend()}
+                    disabled={!aiVisualIdPrompt.trim() || aiVisualIdBusy || !socketConnected}
+                    className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-2 text-[10px] font-medium text-white hover:bg-violet-700 disabled:opacity-40"
+                  >
+                    {aiVisualIdBusy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    Send
+                  </button>
+                </div>
+                {!socketConnected ? (
+                  <p className="mt-2 text-[10px] text-amber-700">
+                    Wait for the live preview connection before sending AI Visual ID.
+                  </p>
+                ) : null}
+                {aiVisualIdError ? (
+                  <p className="mt-2 rounded border border-red-100 bg-red-50 px-2 py-1.5 text-[10px] text-red-600" role="alert">
+                    {aiVisualIdError}
+                  </p>
+                ) : null}
+                {aiVisualIdSelectedTest ? (
+                  <div className="mt-3 rounded-md border border-gray-200 bg-white p-2">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                      <span>Step #{aiVisualIdSelectedTest.stepSequence}</span>
+                      <span>•</span>
+                      <span>{new Date(aiVisualIdSelectedTest.createdAt).toLocaleString()}</span>
+                      <span>•</span>
+                      <span>{aiVisualIdSelectedTest.provider}</span>
+                      <span>•</span>
+                      <span>{aiVisualIdSelectedTest.model}</span>
+                    </div>
+                    <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Answer</div>
+                    <div className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-gray-800">
+                      {aiVisualIdSelectedTest.answer}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">History</p>
+                    <p className="text-[9px] text-gray-400">{aiVisualIdTests.length} saved</p>
+                  </div>
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 bg-white p-1.5">
+                    {aiVisualIdTests.length === 0 ? (
+                      <p className="px-1 py-2 text-[10px] text-gray-400">No AI Visual ID tests saved for this run yet.</p>
+                    ) : (
+                      aiVisualIdTests.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectAiVisualIdHistory(item)}
+                          className={`block w-full rounded-md border px-2 py-1.5 text-left ${
+                            aiVisualIdSelectedTestId === item.id
+                              ? 'border-violet-300 bg-violet-50'
+                              : 'border-transparent hover:border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-medium text-gray-800">Step #{item.stepSequence}</span>
+                            <span className="text-[9px] text-gray-400">{new Date(item.createdAt).toLocaleTimeString()}</span>
+                          </div>
+                          <div className="mt-0.5 truncate text-[10px] text-gray-600">{item.prompt}</div>
+                          <div className="mt-0.5 truncate text-[9px] text-gray-400">
+                            {item.provider} · {item.model}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="flex flex-shrink-0 justify-end gap-2 border-t border-gray-100 px-3 py-2.5 bg-gray-50/80">
               <button

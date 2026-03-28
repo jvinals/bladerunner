@@ -14,9 +14,15 @@ import {
 
 enum RunStatusDto {
   RECORDING = 'RECORDING',
+  PAUSED = 'PAUSED',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
+}
+
+enum StopRecordingModeDto {
+  COMPLETE = 'complete',
+  SAVE = 'save',
 }
 
 enum PlatformTypeDto {
@@ -86,6 +92,14 @@ export class StopRecordingDto {
   @ApiProperty({ description: 'Run ID to stop' })
   @IsString()
   runId!: string;
+
+  @ApiPropertyOptional({
+    enum: StopRecordingModeDto,
+    description: '`complete` finalizes the run; `save` closes the live browser but keeps the run resumable.',
+  })
+  @IsOptional()
+  @IsEnum(StopRecordingModeDto)
+  mode?: StopRecordingModeDto;
 }
 
 export class StartPlaybackDto {

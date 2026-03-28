@@ -45,28 +45,7 @@ export async function detectLikelyClerkLoginPage(page: Page): Promise<boolean> {
     .first()
     .isVisible()
     .catch(() => false);
-  const result = hasPublishableKey || identifierVisible;
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-    body: JSON.stringify({
-      sessionId: '91995d',
-      runId: 'generic-auto-signin-detect',
-      hypothesisId: 'H1',
-      location: 'apps/api/src/modules/recording/project-auto-sign-in.ts:36',
-      message: 'detectLikelyClerkLoginPage result',
-      data: {
-        url: page.url(),
-        hasPublishableKey,
-        identifierVisible,
-        result,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-  return result;
+  return hasPublishableKey || identifierVisible;
 }
 
 function authEmailInput(page: Page) {
@@ -241,27 +220,6 @@ export async function performProjectPasswordSignIn(
   const emailField = authEmailInput(page);
   const passwordField = authPasswordInput(page);
   let state = await readProjectAuthState(page);
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-    body: JSON.stringify({
-      sessionId: '91995d',
-      runId: 'generic-auto-signin-initial-state',
-      hypothesisId: 'H2',
-      location: 'apps/api/src/modules/recording/project-auto-sign-in.ts:108',
-      message: 'performProjectPasswordSignIn initial visibility',
-      data: {
-        url: page.url(),
-        emailVisible: state.emailVisible,
-        passwordVisible: state.passwordVisible,
-        otpVisibleBefore: state.otpVisible,
-        visibleControls: state.visibleControls,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   if (!state.emailVisible && !state.passwordVisible && !state.otpVisible) {
     await waitForGenericAuthUi(page, 15_000);
@@ -294,26 +252,52 @@ export async function performProjectPasswordSignIn(
       } else {
         await fillClerkOtpFromClerkTestEmail(page, { runUrl });
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-        body: JSON.stringify({
-          sessionId: '91995d',
-          runId: 'generic-auto-signin-success',
-          hypothesisId: 'H2',
-          location: 'apps/api/src/modules/recording/project-auto-sign-in.ts:236',
-          message: 'performProjectPasswordSignIn completed after otp step',
-          data: {
-            url: page.url(),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return;
     }
     if (state.emailVisible || state.passwordVisible) {
+      const immediateUrl = page.url();
+      const immediateState = state;
+      const probeStartedAt = Date.now();
+      await Promise.race([
+        page.waitForURL((url) => url.toString() !== immediateUrl, { timeout: 4000 }).catch(() => {}),
+        page
+          .waitForFunction(
+            () => {
+              const selectors = [
+                'input[type="email"]',
+                'input[name="email"]',
+                'input[autocomplete="email"]',
+                'input[name*="email" i]',
+                'input[name="password"][type="password"]',
+                'input[type="password"]',
+                'input[name*="password" i]',
+              ];
+              const isVisible = (el: Element | null) => {
+                if (!el) return false;
+                const html = el as HTMLElement;
+                const style = window.getComputedStyle(html);
+                const rect = html.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+              };
+              return selectors.every((selector) => !Array.from(document.querySelectorAll(selector)).some((el) => isVisible(el)));
+            },
+            { timeout: 4000 },
+          )
+          .catch(() => {}),
+      ]);
+      state = await readProjectAuthState(page);
+      if (state.otpVisible && !state.emailVisible && !state.passwordVisible) {
+        if (creds.otpMode === 'mailslurp') {
+          await sleepMs(MAILSLURP_POST_PASSWORD_DELAY_MS);
+          await fillClerkOtpFromMailSlurp(page, { runUrl, notBeforeMs: otpWindowStartMs });
+        } else {
+          await fillClerkOtpFromClerkTestEmail(page, { runUrl });
+        }
+        return;
+      }
+      if (!state.emailVisible && !state.passwordVisible) {
+        return;
+      }
       const errs = await visibleAuthErrors(page);
       throw new Error(
         errs.length
@@ -321,23 +305,6 @@ export async function performProjectPasswordSignIn(
           : 'Generic automatic sign-in stayed on the login form after submit',
       );
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-      body: JSON.stringify({
-        sessionId: '91995d',
-        runId: 'generic-auto-signin-success',
-        hypothesisId: 'H2',
-        location: 'apps/api/src/modules/recording/project-auto-sign-in.ts:236',
-        message: 'performProjectPasswordSignIn completed after password step',
-        data: {
-          url: page.url(),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return;
   }
 
@@ -347,43 +314,8 @@ export async function performProjectPasswordSignIn(
     } else {
       await fillClerkOtpFromClerkTestEmail(page, { runUrl });
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-      body: JSON.stringify({
-        sessionId: '91995d',
-        runId: 'generic-auto-signin-success',
-        hypothesisId: 'H2',
-        location: 'apps/api/src/modules/recording/project-auto-sign-in.ts:236',
-        message: 'performProjectPasswordSignIn completed from otp-only screen',
-        data: {
-          url: page.url(),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return;
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-    body: JSON.stringify({
-      sessionId: '91995d',
-      runId: 'generic-auto-signin-no-form',
-      hypothesisId: 'H3',
-      location: 'apps/api/src/modules/recording/project-auto-sign-in.ts:177',
-      message: 'performProjectPasswordSignIn found no supported auth form',
-      data: {
-        url: page.url(),
-        visibleControls: state.visibleControls,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   throw new Error('Generic automatic sign-in could not find an email/password or OTP form');
 }

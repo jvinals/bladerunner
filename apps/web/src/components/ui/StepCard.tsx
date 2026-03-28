@@ -350,11 +350,9 @@ export const StepCard = forwardRef<HTMLDivElement, StepCardProps>(function StepC
     aiBusy || !aiPromptStep?.canTestLive || !aiPromptSocketConnected;
 
   const Icon = ACTION_ICONS[action] || Hand;
-  const isAiPromptStep =
-    origin === 'AI_PROMPT' ||
-    (metadata &&
-      typeof metadata === 'object' &&
-      (metadata as { kind?: string }).kind === 'ai_prompt_step');
+  const metadataKind =
+    metadata && typeof metadata === 'object' ? ((metadata as { kind?: string }).kind ?? null) : null;
+  const isAiPromptStep = origin === 'AI_PROMPT';
   const isAILlmGenerated = origin === 'AI_DRIVEN' && !isAiPromptStep;
   const isClerkAutoSignInStep =
     (metadata &&

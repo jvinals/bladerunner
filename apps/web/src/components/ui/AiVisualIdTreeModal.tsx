@@ -19,6 +19,14 @@ type TreeNodeRowProps = {
   activeTagNumber: number | null;
 };
 
+function formatTreeNodeLine(node: AiVisualIdTreeNode): string {
+  const attrs = Object.entries(node.attributes)
+    .map(([key, value]) => `${key}=${typeof value === 'string' ? JSON.stringify(value) : String(value)}`)
+    .join(' ');
+  const label = node.name || '';
+  return `${node.role}${label ? ` ${JSON.stringify(label)}` : ''}${attrs ? ` [${attrs}]` : ''}`;
+}
+
 function TreeNodeRow({ node, depth, expanded, onToggle, onSelect, activeTagNumber }: TreeNodeRowProps) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expanded[node.id] ?? depth < 2;
@@ -46,26 +54,19 @@ function TreeNodeRow({ node, depth, expanded, onToggle, onSelect, activeTagNumbe
           onClick={() => onSelect(node.tagNumber)}
           className="min-w-0 flex-1 text-left"
         >
-          <div className="flex items-center gap-1.5">
-            <span className="shrink-0 rounded border border-gray-200 bg-white px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
-              {node.role}
-            </span>
+          <div className="flex items-start gap-1.5">
+            <span className="min-w-0 break-words font-mono text-[11px] text-gray-900">{formatTreeNodeLine(node)}</span>
             {node.tagNumber != null ? (
-              <span className="shrink-0 rounded border border-amber-300 bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-900">
+              <span className="mt-0.5 shrink-0 rounded border border-amber-300 bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-900">
                 [{node.tagNumber}]
               </span>
-            ) : (
-              <span className="shrink-0 rounded border border-gray-200 bg-gray-100 px-1 py-0.5 text-[9px] text-gray-500">
-                no tag
-              </span>
-            )}
+            ) : null}
           </div>
-          <div className="mt-0.5 break-words text-[11px] font-medium text-gray-900">
-            {node.name || node.value || node.description || '(unnamed node)'}
-          </div>
-          {node.value ? <div className="break-words text-[10px] text-gray-500">Value: {node.value}</div> : null}
+          {node.value && node.value !== node.name ? (
+            <div className="mt-0.5 break-words text-[10px] text-gray-500">Value: {node.value}</div>
+          ) : null}
           {node.description ? (
-            <div className="break-words text-[10px] text-gray-500">Description: {node.description}</div>
+            <div className="mt-0.5 break-words text-[10px] text-gray-500">Description: {node.description}</div>
           ) : null}
         </button>
       </div>
@@ -219,17 +220,23 @@ export function AiVisualIdTreeModal({ open, onOpenChange, test, loading = false 
                     Step #{test.stepSequence} · {test.provider} · {test.model}
                   </div>
                   <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-                    {test.tree.map((node) => (
-                      <TreeNodeRow
-                        key={node.id}
-                        node={node}
-                        depth={0}
-                        expanded={expanded}
-                        onToggle={toggleNode}
-                        onSelect={pulseTag}
-                        activeTagNumber={activeTagNumber}
-                      />
-                    ))}
+                    {test.tree.length === 0 ? (
+                      <div className="px-3 py-4 text-[11px] text-gray-500">
+                        No accessibility tree nodes were saved for this capture.
+                      </div>
+                    ) : (
+                      test.tree.map((node) => (
+                        <TreeNodeRow
+                          key={node.id}
+                          node={node}
+                          depth={0}
+                          expanded={expanded}
+                          onToggle={toggleNode}
+                          onSelect={pulseTag}
+                          activeTagNumber={activeTagNumber}
+                        />
+                      ))
+                    )}
                   </div>
                 </div>
               ) : (

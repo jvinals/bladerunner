@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useEffect, useCallback, useState, useMemo, type ReactNode } from 'react';
 import { runsApi, buildStartPlaybackBody, type AutoClerkOtpUiMode } from '@/lib/api';
@@ -511,6 +511,7 @@ function SessionRecordingModal({
 }
 
 export default function RunDetailPage() {
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const invalidateStepsAfterPlaybackStep = useCallback(
@@ -616,6 +617,8 @@ export default function RunDetailPage() {
   }, [run, stepsFromApi]);
 
   const runStepsCount = (run as { stepsCount?: number } | undefined)?.stepsCount ?? 0;
+  const hasLiveRecordingSession =
+    (run as { hasLiveRecordingSession?: boolean } | undefined)?.hasLiveRecordingSession === true;
   /** Wait for parallel GET /steps when run payload had no steps but we expect some (avoids Play stuck disabled with pointer-events-none). */
   const waitingForSteps =
     !!run &&
@@ -627,8 +630,14 @@ export default function RunDetailPage() {
   const canPlayback =
     !!run &&
     recordedSteps.length > 0 &&
-    (run as { status: string }).status !== 'RECORDING' &&
+    !hasLiveRecordingSession &&
     !waitingForSteps;
+  const canResumeRecording =
+    !!run &&
+    !hasLiveRecordingSession &&
+    recordedSteps.length > 0 &&
+    ((run as { status?: string } | undefined)?.status === 'PAUSED' ||
+      (run as { status?: string } | undefined)?.status === 'RECORDING');
   const canShowStepActions =
     !!run &&
     recordedSteps.length > 0 &&
@@ -798,6 +807,20 @@ export default function RunDetailPage() {
     }
   }, [id, canPlayback, startPlayback, playbackBodyForRun]);
 
+  const handleContinueRecording = useCallback(async () => {
+    if (!id) return;
+    if (playbackSessionId) {
+      void stopPlayback()
+        .then(() => {
+          /* ignore */
+        })
+        .catch((e) => {
+          console.error('Stopping playback before continue recording failed:', e);
+        });
+    }
+    navigate('/runs', { state: { resumeRunId: id } });
+  }, [id, navigate, isPlaying, playbackSessionId, hasLiveRecordingSession, stopPlayback]);
+
   const handlePlaybackNext = useCallback(async () => {
     if (!id || !canPlayback) return;
     try {
@@ -937,6 +960,16 @@ export default function RunDetailPage() {
             <PlatformIcon size={18} className="text-gray-400" />
             <h1 className="text-xl font-bold text-gray-900">{r.name}</h1>
             <StatusBadge status={r.status} />
+            {canResumeRecording && (
+              <button
+                type="button"
+                onClick={handleContinueRecording}
+                className="inline-flex items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 shadow-sm transition-colors hover:bg-sky-100"
+              >
+                <Play size={14} className="fill-current" aria-hidden />
+                Continue recording
+              </button>
+            )}
             {showSessionRecordingCard && (
               <button
                 type="button"
@@ -983,7 +1016,7 @@ export default function RunDetailPage() {
                   waitingForSteps
                     ? 'Loading steps…'
                     : !canPlayback
-                      ? r.status === 'RECORDING'
+                      ? hasLiveRecordingSession
                         ? 'Wait until recording finishes'
                         : stepsQueryErrorMessage
                           ? `Steps could not be loaded: ${stepsQueryErrorMessage}`

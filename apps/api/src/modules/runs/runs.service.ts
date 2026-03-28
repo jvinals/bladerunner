@@ -74,6 +74,7 @@ export class RunsService {
     return {
       data: data.map((run) => ({
         ...run,
+        hasLiveRecordingSession: !!this.recordingService.getSession(run.id),
         stepsCount: run._count.steps,
         passedSteps: run._count.steps,
         failedSteps: 0,
@@ -100,9 +101,11 @@ export class RunsService {
       },
     });
     if (!run) return null;
+    const hasLiveRecordingSession = !!this.recordingService.getSession(id);
     /** Match list DTO so Run detail metrics + playback gating can use `stepsCount` without a second round-trip. */
     return {
       ...run,
+      hasLiveRecordingSession,
       stepsCount: run.steps.length,
       passedSteps: run.steps.length,
       failedSteps: 0,
@@ -181,6 +184,7 @@ export class RunsService {
     return {
       runId: run.id,
       status: run.status,
+      hasLiveRecordingSession: !!this.recordingService.getSession(runId),
       stepsCount: run._count.steps,
       durationMs: run.durationMs,
       startedAt: run.startedAt,

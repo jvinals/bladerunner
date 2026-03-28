@@ -226,6 +226,8 @@ export type StartPlaybackServiceOpts = {
   startPaused?: boolean;
 };
 
+type StopRecordingMode = 'complete' | 'save';
+
 export interface RecordingSession {
   runId: string;
   userId: string;
@@ -589,6 +591,79 @@ export class RecordingService extends EventEmitter {
     return this.sessions.get(runId)?.latestFrame ?? null;
   }
 
+  private async createLiveRecordingSession(args: {
+    runId: string;
+    userId: string;
+    captureSettings: RunCaptureSettings;
+    projectAuth: ProjectAutoSignInCredentials | null;
+  }): Promise<RecordingSession> {
+    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
+    const browser = await chromium.connect(wsEndpoint);
+    const ffmpegStagingPath = path.join(os.tmpdir(), `br-screencast-${args.runId}-${randomUUID()}.mp4`);
+    const screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
+    try {
+      const context = await browser.newContext({
+        viewport: {
+          width: args.captureSettings.recordingViewportWidth,
+          height: args.captureSettings.recordingViewportHeight,
+        },
+        deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
+      });
+      const page = await context.newPage();
+      const cdpSession = await context.newCDPSession(page);
+      const session: RecordingSession = {
+        runId: args.runId,
+        userId: args.userId,
+        browser,
+        page,
+        cdpSession,
+        stepSequence: 0,
+        latestFrame: null,
+        screencastVideo,
+        recordingCaptureTail: Promise.resolve(),
+        recordingDomCapturePaused: false,
+        clerkDomCaptureBarrier: 0,
+        projectAuth: args.projectAuth,
+      };
+      this.sessions.set(args.runId, session);
+      await this.attachScreencast(session.cdpSession, session, session.runId, args.captureSettings, {
+        onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
+      });
+      await this.setupEventCapture(session);
+      return session;
+    } catch (err) {
+      this.sessions.delete(args.runId);
+      screencastVideo?.kill();
+      await removePathIfExists(ffmpegStagingPath).catch(() => {});
+      try {
+        await browser.close();
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    }
+  }
+
+  private async readLatestCheckpointSnapshot(args: {
+    runId: string;
+    userId: string;
+  }): Promise<{ pageUrl: string; afterStepSequence: number; state: SnapshotStorageState } | null> {
+    const checkpoint = await this.prisma.runCheckpoint.findFirst({
+      where: { runId: args.runId, userId: args.userId, storageStatePath: { not: null } },
+      orderBy: { afterStepSequence: 'desc' },
+      select: { pageUrl: true, storageStatePath: true, afterStepSequence: true },
+    });
+    if (!checkpoint?.storageStatePath) return null;
+    const artifactDir = getRunArtifactDir(getRecordingsBaseDir(this.configService), args.userId, args.runId);
+    const raw = await fs.readFile(path.join(artifactDir, checkpoint.storageStatePath), 'utf8');
+    return {
+      pageUrl: checkpoint.pageUrl?.trim() || '',
+      afterStepSequence: checkpoint.afterStepSequence,
+      state: JSON.parse(raw) as SnapshotStorageState,
+    };
+  }
+
   async startRecording(userId: string, opts: RecordingStartOptions) {
     const pid = opts.projectId?.trim();
     const captureSettings = buildCaptureSettingsFromPresets(opts);
@@ -610,51 +685,19 @@ export class RecordingService extends EventEmitter {
         status: 'RECORDING',
         platform: 'DESKTOP',
         ...captureSettings,
+        durationMs: 0,
         startedAt: new Date(),
       },
     });
-
-    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
-
-    let screencastVideo: ScreencastVideoEncoder | null = null;
-    const ffmpegStagingPath = path.join(os.tmpdir(), `br-screencast-${run.id}-${randomUUID()}.mp4`);
     try {
-      const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
-      const browser = await chromium.connect(wsEndpoint);
-      screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
-      const context = await browser.newContext({
-        viewport: {
-          width: captureSettings.recordingViewportWidth,
-          height: captureSettings.recordingViewportHeight,
-        },
-        deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
-      });
-      const page = await context.newPage();
-      const cdpSession = await context.newCDPSession(page);
-
-      const session: RecordingSession = {
+      const session = await this.createLiveRecordingSession({
         runId: run.id,
         userId,
-        browser,
-        page,
-        cdpSession,
-        stepSequence: 0,
-        latestFrame: null,
-        screencastVideo,
-        recordingCaptureTail: Promise.resolve(),
-        recordingDomCapturePaused: false,
-        clerkDomCaptureBarrier: 0,
+        captureSettings,
         projectAuth,
-      };
-
-      this.sessions.set(run.id, session);
-
-      await this.attachScreencast(session.cdpSession, session, session.runId, captureSettings, {
-        onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
       });
-      await this.setupEventCapture(session);
 
-      await page.goto(opts.url, { waitUntil: 'domcontentloaded' });
+      await session.page.goto(opts.url, { waitUntil: 'domcontentloaded' });
 
       const navStep = await this.recordStep(session, {
         action: 'NAVIGATE',
@@ -671,10 +714,6 @@ export class RecordingService extends EventEmitter {
       this.logger.log(`Recording started: ${run.id} -> ${opts.url}`);
       return run;
     } catch (err) {
-      if (screencastVideo) {
-        screencastVideo.kill();
-        await removePathIfExists(ffmpegStagingPath).catch(() => {});
-      }
       await this.prisma.run.update({
         where: { id: run.id },
         data: { status: 'FAILED', completedAt: new Date() },
@@ -686,7 +725,7 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  async stopRecording(runId: string, userId: string) {
+  async stopRecording(runId: string, userId: string, mode: StopRecordingMode = 'complete') {
     const session = this.sessions.get(runId);
     if (!session || session.userId !== userId) {
       return null;
@@ -782,21 +821,25 @@ export class RecordingService extends EventEmitter {
     }
 
     const started = runRow?.startedAt;
+    const now = Date.now();
+    const accumulatedDurationMs = (runRow?.durationMs ?? 0) + (started ? Math.round(now - started.getTime()) : 0);
     if (!started) {
       this.logger.warn(`stopRecording: run ${runId} missing startedAt; duration may be wrong`);
     }
     const run = await this.prisma.run.update({
       where: { id: runId },
       data: {
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        durationMs: started ? Math.round(Date.now() - started.getTime()) : 0,
+        status: mode === 'save' ? 'PAUSED' : 'COMPLETED',
+        startedAt: mode === 'save' ? null : runRow?.startedAt ?? null,
+        completedAt: mode === 'save' ? null : new Date(now),
+        durationMs: accumulatedDurationMs,
         thumbnailUrl,
       },
       include: { steps: { orderBy: { sequence: 'asc' } } },
     });
 
     if (recordingUrl && sizeBytes != null) {
+      await this.prisma.runRecording.deleteMany({ where: { runId, userId } });
       await this.prisma.runRecording.create({
         data: {
           runId,
@@ -808,17 +851,111 @@ export class RecordingService extends EventEmitter {
       });
     }
 
-    void this.refreshOptimizedPromptsForRun(runId, userId)
-      .catch((err) => {
-        this.logger.warn(`Optimized prompt stop-refresh failed for ${runId}: ${err}`);
-      })
-      .finally(() => {
-        this.clearOptimizedPromptTasksForRun(runId);
-      });
+    if (mode === 'complete') {
+      void this.refreshOptimizedPromptsForRun(runId, userId)
+        .catch((err) => {
+          this.logger.warn(`Optimized prompt stop-refresh failed for ${runId}: ${err}`);
+        })
+        .finally(() => {
+          this.clearOptimizedPromptTasksForRun(runId);
+        });
+    } else {
+      this.clearOptimizedPromptTasksForRun(runId);
+    }
 
-    this.emit('status', runId, { status: 'completed', runId });
-    this.logger.log(`Recording stopped: ${runId}`);
+    this.emit('status', runId, { status: mode === 'save' ? 'paused' : 'completed', runId });
+    this.logger.log(mode === 'save' ? `Recording saved for later: ${runId}` : `Recording stopped: ${runId}`);
     return run;
+  }
+
+  async resumeRecording(runId: string, userId: string) {
+    const existingSession = this.sessions.get(runId);
+    if (existingSession) {
+      if (existingSession.userId !== userId) {
+        throw new ForbiddenException('Not allowed to resume this recording session');
+      }
+      throw new ConflictException('Run is already recording');
+    }
+
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      include: {
+        project: {
+          select: {
+            testUserEmail: true,
+            testUserPassword: true,
+            testEmailProvider: true,
+          },
+        },
+      },
+    });
+    if (!run) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+    if (run.status !== 'PAUSED') {
+      throw new ConflictException('Only saved recordings can be resumed');
+    }
+
+    const latestStep = await this.prisma.runStep.findFirst({
+      where: { runId, userId },
+      orderBy: { sequence: 'desc' },
+      select: { sequence: true },
+    });
+
+    const session = await this.createLiveRecordingSession({
+      runId,
+      userId,
+      captureSettings: captureSettingsFromRun(run),
+      projectAuth: this.projectAuthFromProject(run.project),
+    });
+    session.stepSequence = latestStep?.sequence ?? 0;
+
+    try {
+      const latestCheckpoint = await this.readLatestCheckpointSnapshot({ runId, userId }).catch((err) => {
+        this.logger.warn(`resumeRecording ${runId} checkpoint restore skipped: ${err}`);
+        return null;
+      });
+      if (latestCheckpoint) {
+        await this.applyStorageStateToPage(session.page, latestCheckpoint.state, latestCheckpoint.pageUrl || run.url);
+      } else {
+        await session.page.goto(run.url, { waitUntil: 'domcontentloaded' });
+      }
+    } catch (err) {
+      session.screencastClosing = true;
+      try {
+        await session.cdpSession.send('Page.stopScreencast');
+      } catch {
+        /* ignore */
+      }
+      if (session.screencastVideo) {
+        session.screencastVideo.kill();
+        await removePathIfExists(session.screencastVideo.outputPath).catch(() => {});
+      }
+      try {
+        await session.browser.close();
+      } catch {
+        /* ignore */
+      }
+      this.sessions.delete(runId);
+      this.clearAiPromptSnapshotsForRun(runId);
+      this.clearOptimizedPromptTasksForRun(runId);
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new ServiceUnavailableException(`Recording could not resume. ${detail}`);
+    }
+
+    const resumedRun = await this.prisma.run.update({
+      where: { id: runId },
+      data: {
+        status: 'RECORDING',
+        startedAt: new Date(),
+        completedAt: null,
+      },
+      include: { steps: { orderBy: { sequence: 'asc' } } },
+    });
+
+    this.emit('status', runId, { status: 'recording', runId });
+    this.logger.log(`Recording resumed: ${runId}`);
+    return resumedRun;
   }
 
   /**
@@ -2568,11 +2705,114 @@ export class RecordingService extends EventEmitter {
    * Playwright CDP accessibility snapshot (+ body text enrichment), **before** Set-of-Marks overlay
    * so the tree does not include badge UI.
    */
-  private async captureAccessibilitySnapshotObject(page: Page): Promise<unknown | null> {
+  private axValue(value: unknown): string | number | boolean | null {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed ? trimmed : null;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    if (!value || typeof value !== 'object') return null;
+    const raw = (value as { value?: unknown }).value;
+    return this.axValue(raw);
+  }
+
+  private cdpAxNodeToTree(
+    nodeId: string,
+    byId: Map<string, any>,
+    seen = new Set<string>(),
+  ): {
+    role?: string | number | boolean;
+    name?: string | number | boolean;
+    value?: string | number | boolean;
+    description?: string | number | boolean;
+    properties?: Array<{ name?: string | number | boolean; value?: string | number | boolean }>;
+    children?: unknown[];
+  } | null {
+    if (seen.has(nodeId)) return null;
+    const node = byId.get(nodeId);
+    if (!node) return null;
+    seen.add(nodeId);
+    const children = Array.isArray(node.childIds)
+      ? node.childIds
+          .map((childId: string) => this.cdpAxNodeToTree(childId, byId, seen))
+          .filter(
+            (
+              child: unknown,
+            ): child is {
+              role?: string | number | boolean;
+              name?: string | number | boolean;
+              value?: string | number | boolean;
+              description?: string | number | boolean;
+              properties?: Array<{ name?: string | number | boolean; value?: string | number | boolean }>;
+              children?: unknown[];
+            } =>
+              !!child,
+          )
+      : [];
+    const properties = Array.isArray(node.properties)
+      ? node.properties
+          .map((prop: any) => ({
+            name: this.axValue(prop?.name) ?? undefined,
+            value: this.axValue(prop?.value) ?? undefined,
+          }))
+          .filter((prop: { name?: string | number | boolean; value?: string | number | boolean }) => prop.name != null)
+      : [];
+    return {
+      role: this.axValue(node.role) ?? undefined,
+      name: this.axValue(node.name) ?? undefined,
+      value: this.axValue(node.value) ?? undefined,
+      description: this.axValue(node.description) ?? undefined,
+      ...(properties.length ? { properties } : {}),
+      ...(children.length ? { children } : {}),
+    };
+  }
+
+  private async captureAccessibilitySnapshotObject(page: Page, cdpSession?: CDPSession): Promise<unknown | null> {
     try {
-      const snapshot = await (page as any).accessibility?.snapshot();
-      return snapshot ?? null;
-    } catch {
+      const accessibilityApi = (page as any).accessibility;
+      const hasApi = !!accessibilityApi?.snapshot;
+      const defaultSnapshot = hasApi ? await accessibilityApi.snapshot().catch(() => null) : null;
+      const fullSnapshot = hasApi
+        ? await accessibilityApi.snapshot({ interestingOnly: false }).catch(() => null)
+        : null;
+      let cdpSnapshot: unknown | null = null;
+      if (!fullSnapshot && !defaultSnapshot) {
+        const ownedSession =
+          cdpSession ??
+          (await page
+            .context()
+            .newCDPSession(page)
+            .catch(() => null));
+        if (ownedSession) {
+          try {
+            const result = (await ownedSession.send('Accessibility.getFullAXTree')) as {
+              nodes?: Array<{
+                nodeId: string;
+                childIds?: string[];
+                role?: unknown;
+                name?: unknown;
+                value?: unknown;
+                description?: unknown;
+              properties?: unknown[];
+              }>;
+            };
+            const nodes = result.nodes ?? [];
+            const byId = new Map(nodes.map((node) => [node.nodeId, node]));
+            const rootNode =
+              nodes.find((node) => {
+                const role = this.axValue(node.role);
+                return typeof role === 'string' && role.toLowerCase() === 'rootwebarea';
+              }) ?? nodes[0] ?? null;
+            cdpSnapshot = rootNode ? this.cdpAxNodeToTree(rootNode.nodeId, byId) : null;
+          } finally {
+            if (!cdpSession) {
+              await ownedSession.detach().catch(() => {});
+            }
+          }
+        }
+      }
+      return fullSnapshot ?? defaultSnapshot ?? cdpSnapshot ?? null;
+    } catch (error) {
       return null;
     }
   }
@@ -2664,6 +2904,7 @@ export class RecordingService extends EventEmitter {
   private async captureLlmPageContext(
     page: Page,
     signal?: AbortSignal,
+    cdpSession?: CDPSession,
   ): Promise<{
     pageUrl: string;
     /** Set-of-Marks lines `[n] …` aligned with numeric badges on the JPEG; empty if injection failed. */
@@ -2678,7 +2919,7 @@ export class RecordingService extends EventEmitter {
   }> {
     this.throwIfAborted(signal);
     const pageUrl = page.url();
-    const rawAccessibilitySnapshot = await this.captureAccessibilitySnapshotObject(page);
+    const rawAccessibilitySnapshot = await this.captureAccessibilitySnapshotObject(page, cdpSession);
     const accessibilitySnapshot = await this.captureAccessibilitySnapshotForLlm(page, rawAccessibilitySnapshot);
 
     let somManifest = '';
@@ -2994,6 +3235,11 @@ export class RecordingService extends EventEmitter {
     }
     const baseMeta =
       row.metadata && typeof row.metadata === 'object' ? { ...(row.metadata as Record<string, unknown>) } : {};
+    const {
+      kind: _discardKind,
+      schemaVersion: _discardSchemaVersion,
+      ...baseMetaSansAiPromptKind
+    } = baseMeta;
     const stored: AiPromptLlmTranscriptStored = {
       ...transcript,
       capturedAt: new Date().toISOString(),
@@ -3003,9 +3249,13 @@ export class RecordingService extends EventEmitter {
       where: { id: stepId },
       data: {
         metadata: {
-          ...baseMeta,
-          kind: AI_PROMPT_STEP_KIND,
-          schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+          ...(row.origin === 'AI_PROMPT' ? baseMeta : baseMetaSansAiPromptKind),
+          ...(row.origin === 'AI_PROMPT'
+            ? {
+                kind: AI_PROMPT_STEP_KIND,
+                schemaVersion: AI_PROMPT_STEP_SCHEMA_VERSION,
+              }
+            : {}),
           lastLlmTranscript: stored,
         } as unknown as Prisma.InputJsonValue,
       },
@@ -3076,7 +3326,7 @@ export class RecordingService extends EventEmitter {
       throw new NotFoundException(`Run ${runId} not found`);
     }
 
-    const ctx = await this.captureLlmPageContext(session.page);
+    const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
     const screenshotBase64 = ctx.screenshotBase64?.trim();
     if (!screenshotBase64) {
       throw new ServiceUnavailableException('AI Visual ID could not capture a labeled screenshot');
@@ -3111,21 +3361,26 @@ export class RecordingService extends EventEmitter {
     };
 
     const artifactPaths = await this.writeAiVisualIdArtifacts(runId, userId, id, screenshotBase64, context);
-    const row = await this.prisma.aiVisualIdTest.create({
-      data: {
-        id,
-        runId,
-        userId,
-        stepSequence: session.stepSequence,
-        provider: llmResult.provider,
-        model: llmResult.model,
-        prompt: trimmedPrompt,
-        answer: llmResult.answer,
-        pageUrl: ctx.pageUrl,
-        screenshotPath: artifactPaths.screenshotPath,
-        contextPath: artifactPaths.contextPath,
-      },
-    });
+    let row;
+    try {
+      row = await this.prisma.aiVisualIdTest.create({
+        data: {
+          id,
+          runId,
+          userId,
+          stepSequence: session.stepSequence,
+          provider: llmResult.provider,
+          model: llmResult.model,
+          prompt: trimmedPrompt,
+          answer: llmResult.answer,
+          pageUrl: ctx.pageUrl,
+          screenshotPath: artifactPaths.screenshotPath,
+          contextPath: artifactPaths.contextPath,
+        },
+      });
+    } catch (error) {
+      throw error;
+    }
 
     return {
       id: row.id,
@@ -3884,7 +4139,8 @@ export class RecordingService extends EventEmitter {
     if (!run) {
       throw new NotFoundException(`Run ${sourceRunId} not found`);
     }
-    if (run.status === 'RECORDING') {
+    const hasLiveRecordingSession = this.sessions.has(sourceRunId);
+    if (run.status === 'RECORDING' && hasLiveRecordingSession) {
       throw new ConflictException('Run is still recording; wait until it completes before playback');
     }
     if (!run.steps.length) {
@@ -4991,10 +5247,15 @@ export class RecordingService extends EventEmitter {
       await this.executeRecordedScrollPlayback(page, parsedScroll);
       return;
     }
-    const fn = new Function('page', 'expect', `return (async () => { ${safeCode} })();`) as (
-      page: Page,
-      expectFn: typeof expect,
-    ) => Promise<unknown>;
+    let fn: (page: Page, expectFn: typeof expect) => Promise<unknown>;
+    try {
+      fn = new Function('page', 'expect', `return (async () => { ${safeCode} })();`) as (
+        page: Page,
+        expectFn: typeof expect,
+      ) => Promise<unknown>;
+    } catch (err) {
+      throw err;
+    }
     await fn(page, expect);
   }
 

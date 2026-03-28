@@ -90,9 +90,19 @@ export class RunsController {
   @ApiResponse({ status: 200, description: 'Recording stopped' })
   async stopRecording(@Req() req: any, @Body() dto: StopRecordingDto) {
     const userId = req.user.sub;
-    const run = await this.recordingService.stopRecording(dto.runId, userId);
+    const run = await this.recordingService.stopRecording(dto.runId, userId, dto.mode ?? 'complete');
     if (!run) throw new NotFoundException('Run not found or not recording');
     return run;
+  }
+
+  @Post(':id/recording/resume')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Resume a saved recording run in a fresh browser session' })
+  @ApiResponse({ status: 200, description: 'Recording resumed' })
+  async resumeRecording(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    const run = await this.recordingService.resumeRecording(id, userId);
+    return { runId: run.id, status: 'recording' };
   }
 
   @Post(':id/recording/clerk-auto-sign-in')
@@ -615,7 +625,7 @@ export class RunsController {
     const onStatus = (runId: string, status: any) => {
       if (runId === id) {
         res.write(`event: status\ndata: ${JSON.stringify(status)}\n\n`);
-        if (status.status === 'completed' || status.status === 'failed') {
+        if (status.status === 'completed' || status.status === 'failed' || status.status === 'paused') {
           cleanup();
           res.end();
         }

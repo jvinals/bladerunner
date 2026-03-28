@@ -25,7 +25,7 @@ try {
   );
 
   assert.equal(tree.length, 1);
-  assert.equal(tree[0]?.role, 'WebArea');
+  assert.equal(tree[0]?.role, 'webarea');
   assert.equal(tree[0]?.children.length, 2);
   assert.equal(tree[0]?.children[0]?.tagNumber, 7);
   assert.equal(tree[0]?.children[1]?.tagNumber, 9);
