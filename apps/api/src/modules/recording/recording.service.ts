@@ -3446,6 +3446,9 @@ export class RecordingService extends EventEmitter {
     },
   ): Promise<void> {
     const session = this.sessions.get(runId);
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId,hypothesisId:'H23',location:'apps/api/src/modules/recording/recording.service.ts:3448',message:'dispatchRemotePointer received',data:{hasSession:!!session,userMatches:!!session && session.userId === userId,kind:payload.kind,x:payload.x ?? null,y:payload.y ?? null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!session || session.userId !== userId) {
       return;
     }
@@ -3587,6 +3590,9 @@ export class RecordingService extends EventEmitter {
     payload: { type: 'down' | 'up'; key: string },
   ): Promise<void> {
     const session = this.sessions.get(runId);
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId,hypothesisId:'H24',location:'apps/api/src/modules/recording/recording.service.ts:3589',message:'dispatchRemoteKey received',data:{hasSession:!!session,userMatches:!!session && session.userId === userId,type:payload.type,key:payload.key},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!session || session.userId !== userId) {
       return;
     }
