@@ -295,7 +295,13 @@ export function useRecording(): UseRecordingReturn {
   }, [runId]);
 
   const resumeRecording = useCallback(async (resumeRunId: string) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:resumeRunId,hypothesisId:'H28',location:'apps/web/src/hooks/useRecording.ts:297',message:'resumeRecording request start',data:{resumeRunId},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const result = await runsApi.resumeRecording(resumeRunId);
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:result.runId,hypothesisId:'H29',location:'apps/web/src/hooks/useRecording.ts:298',message:'resumeRecording request resolved',data:{resumeRunId,resultRunId:result.runId},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     activeRunIdRef.current = result.runId;
     connectSocket(result.runId);
     let initialSteps: RecordedStep[] = [];

@@ -2,6 +2,10 @@
 
 ## 2026-03-28
 
+- `0.10.71`: added visible pending feedback when saving an in-progress recording for later so the Runs page shows that the resumable save is still processing.
+- `@bladerunner/web 0.7.38`: added a spinner and temporary disabled state to the `Save for later` recording action, and blocked `Finish` while the save request is in flight.
+- `0.10.70`: fixed continue-recording handoff for dormant recording runs so playback pages can reopen legacy in-progress runs instead of failing on resume.
+- `@bladerunner/api 0.6.73`: allowed `resumeRecording()` to reopen dormant runs still marked `RECORDING` when no live session exists, and added selftest coverage for that legacy status path.
 - `0.10.69`: removed the temporary runtime instrumentation used to diagnose resumable playback repair failures and manual-step AI prompt relabeling after the fixes were confirmed.
 - `@bladerunner/api 0.6.72`: cleaned up playback/replay debug probes from recording repair, resume checkpoint restore, selector rewrite diagnosis, and transcript metadata tracing.
 - `@bladerunner/web 0.7.37`: removed temporary run-detail, runs-page, recording-hook, and step-card probes used during resumable playback debugging.

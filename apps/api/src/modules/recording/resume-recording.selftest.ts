@@ -203,6 +203,16 @@ async function main() {
   const resumedSession = (service as any).sessions.get(run.id);
   assert.equal(resumedSession.stepSequence, 2);
 
+  (service as any).sessions.delete(run.id);
+  run.status = 'RECORDING';
+  restoredUrl = '';
+  const legacyRecordingResumedRun = await service.resumeRecording(run.id, run.userId);
+  assert.equal(legacyRecordingResumedRun.status, 'RECORDING');
+  assert.equal(restoredUrl, 'https://example.com/dashboard');
+  const legacyResumedSession = (service as any).sessions.get(run.id);
+  assert.equal(legacyResumedSession.stepSequence, 2);
+  (service as any).sessions.delete(run.id);
+
   run.status = 'PAUSED';
   (service as any).attachScreencast = async () => {};
   (service as any).runPlaybackLoop = async () => {};

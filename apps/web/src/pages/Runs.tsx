@@ -92,6 +92,7 @@ export default function RunsPage() {
   const [playbackAutoClerkMode, setPlaybackAutoClerkMode] = useState<'default' | 'on' | 'off'>('on');
   const [playbackClerkOtpMode, setPlaybackClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
   const [recordingClerkOtpMode, setRecordingClerkOtpMode] = useState<AutoClerkOtpUiMode>('mailslurp');
+  const [saveForLaterBusy, setSaveForLaterBusy] = useState(false);
   const [playbackDelayMs, setPlaybackDelayMs] = useState(600);
   const [playbackSkipUntilSeq, setPlaybackSkipUntilSeq] = useState('');
   const [playbackAdvanceToSeq, setPlaybackAdvanceToSeq] = useState('');
@@ -230,6 +231,7 @@ export default function RunsPage() {
     typeof (location.state as { resumeRunId?: unknown } | null)?.resumeRunId === 'string'
       ? ((location.state as { resumeRunId?: string } | null)?.resumeRunId ?? null)
       : null;
+  const pendingResumeRunIdRef = useRef<string | null>(null);
   const {
     skipReplayModalOpen,
     skipReplayAnchorStepId,
@@ -373,19 +375,25 @@ export default function RunsPage() {
   }, [runId, stopRecording, refetch]);
 
   const handleSaveRecordingForLater = useCallback(async () => {
+    if (saveForLaterBusy) return;
     const activeRunId = runId;
-    await saveRecordingProgress();
-    if (activeRunId) {
-      setSelectedRunId(activeRunId);
-      try {
-        await loadRunSteps(activeRunId);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setStepsLoadError(msg);
+    setSaveForLaterBusy(true);
+    try {
+      await saveRecordingProgress();
+      if (activeRunId) {
+        setSelectedRunId(activeRunId);
+        try {
+          await loadRunSteps(activeRunId);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setStepsLoadError(msg);
+        }
       }
+      refetch();
+    } finally {
+      setSaveForLaterBusy(false);
     }
-    refetch();
-  }, [runId, saveRecordingProgress, loadRunSteps, refetch]);
+  }, [runId, saveRecordingProgress, loadRunSteps, refetch, saveForLaterBusy]);
 
   const handleResumeSelectedRun = useCallback(async (id: string) => {
     setStepsLoadError(null);
@@ -984,19 +992,24 @@ export default function RunsPage() {
 
   useEffect(() => {
     // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:requestedResumeRunId ?? null,hypothesisId:'H26',location:'apps/web/src/pages/Runs.tsx:982',message:'Runs resume effect evaluated',data:{requestedResumeRunId:requestedResumeRunId ?? null,isRecording},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:requestedResumeRunId ?? null,hypothesisId:'H26',location:'apps/web/src/pages/Runs.tsx:982',message:'Runs resume effect evaluated',data:{requestedResumeRunId:requestedResumeRunId ?? null,isRecording,pendingResumeRunId:pendingResumeRunIdRef.current},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
-    if (!requestedResumeRunId || isRecording) return;
+    if (!requestedResumeRunId || isRecording || pendingResumeRunIdRef.current === requestedResumeRunId) return;
+    pendingResumeRunIdRef.current = requestedResumeRunId;
     let cancelled = false;
     void (async () => {
       try {
         setSelectedRunId(requestedResumeRunId);
         await handleResumeSelectedRun(requestedResumeRunId);
       } catch (e) {
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:requestedResumeRunId,hypothesisId:'H31',location:'apps/web/src/pages/Runs.tsx:989',message:'Runs resume effect caught error',data:{error:e instanceof Error ? e.message : String(e)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (cancelled) return;
         const msg = e instanceof Error ? e.message : String(e);
         setStepsLoadError(msg);
       } finally {
+        pendingResumeRunIdRef.current = null;
         if (!cancelled) {
           navigate('/runs', { replace: true, state: null });
         }
@@ -1177,16 +1190,19 @@ export default function RunsPage() {
                 <button
                   type="button"
                   onClick={() => void handleSaveRecordingForLater()}
-                  className="flex items-center gap-1 px-3 py-1.5 border border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors"
+                  disabled={saveForLaterBusy}
+                  className="flex items-center gap-1 px-3 py-1.5 border border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium rounded-md hover:bg-amber-100 transition-colors disabled:cursor-not-allowed disabled:opacity-70"
                   title="Close the live browser and keep this run resumable"
+                  aria-busy={saveForLaterBusy}
                 >
-                  <Pause size={12} />
-                  Save for later
+                  {saveForLaterBusy ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Pause size={12} />}
+                  {saveForLaterBusy ? 'Saving…' : 'Save for later'}
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleStopRecording()}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
+                  disabled={saveForLaterBusy}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-md hover:bg-red-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   title="Finish recording and close this run"
                 >
                   <Square size={12} />

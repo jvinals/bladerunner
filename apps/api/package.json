@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.6.72",
+  "version": "0.6.73",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build",
