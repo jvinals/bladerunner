@@ -214,3 +214,99 @@ model UserLlmCredentials {
 
   @@map("user_llm_credentials")
 }
+
+/// Autonomous app exploration / reporting (separate from recording `Run`).
+enum EvaluationStatus {
+  QUEUED
+  RUNNING
+  WAITING_FOR_HUMAN
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum EvaluationStepDecision {
+  retry
+  advance
+  ask_human
+  finish
+}
+
+model Evaluation {
+  id               String            @id @default(uuid())
+  userId           String            @map("user_id")
+  name             String            @default("Evaluation")
+  url              String
+  intent           String            @db.Text
+  desiredOutput    String            @map("desired_output") @db.Text
+  progressSummary  String?           @map("progress_summary") @db.Text
+  status           EvaluationStatus  @default(QUEUED)
+  startedAt        DateTime?         @map("started_at")
+  completedAt      DateTime?         @map("completed_at")
+  failureMessage   String?           @map("failure_message") @db.Text
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  steps     EvaluationStep[]
+  questions EvaluationQuestion[]
+  reports   EvaluationReport[]
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("evaluations")
+}
+
+model EvaluationStep {
+  id                String                  @id @default(uuid())
+  evaluationId      String                  @map("evaluation_id")
+  userId            String                  @map("user_id")
+  sequence          Int
+  pageUrl           String?                 @map("page_url")
+  thinkingText      String?                 @map("thinking_text") @db.Text
+  proposedCode      String?                 @map("proposed_code") @db.Text
+  expectedOutcome   String?                 @map("expected_outcome") @db.Text
+  actualOutcome     String?                 @map("actual_outcome") @db.Text
+  errorMessage      String?                 @map("error_message") @db.Text
+  decision          EvaluationStepDecision?
+  analyzerRationale String?                 @map("analyzer_rationale") @db.Text
+  createdAt         DateTime                @default(now()) @map("created_at")
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId, sequence])
+  @@map("evaluation_steps")
+}
+
+model EvaluationQuestion {
+  id             String    @id @default(uuid())
+  evaluationId String      @map("evaluation_id")
+  userId         String      @map("user_id")
+  stepSequence   Int?        @map("step_sequence")
+  prompt         String      @db.Text
+  /// JSON string array of 3–4 option labels
+  optionsJson    String      @map("options_json") @db.Text
+  state          String      @default("pending")
+  selectedIndex  Int?        @map("selected_index")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  answeredAt     DateTime?   @map("answered_at")
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@map("evaluation_questions")
+}
+
+model EvaluationReport {
+  id              String   @id @default(uuid())
+  evaluationId    String   @map("evaluation_id")
+  userId          String   @map("user_id")
+  format          String   @default("markdown")
+  content         String   @db.Text
+  structuredJson  Json?    @map("structured_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@map("evaluation_reports")
+}

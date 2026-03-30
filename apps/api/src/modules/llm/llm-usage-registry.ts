@@ -10,6 +10,11 @@ export const LLM_USAGE_KEYS = [
   'ai_visual_id',
   'explain_ai_prompt_failure',
   'suggest_skip_after_change',
+  'evaluation_planner',
+  'evaluation_codegen',
+  'evaluation_analyzer',
+  'evaluation_human_question',
+  'evaluation_report',
 ] as const;
 
 export type LlmUsageKey = (typeof LLM_USAGE_KEYS)[number];
@@ -36,6 +41,11 @@ export const LLM_USAGE_LABELS: Record<LlmUsageKey, string> = {
   ai_visual_id: 'AI Visual ID',
   explain_ai_prompt_failure: 'Explain AI prompt test failure + suggested prompt',
   suggest_skip_after_change: 'Suggest steps to skip after step change',
+  evaluation_planner: 'Evaluation — plan exploration (high-level)',
+  evaluation_codegen: 'Evaluation — propose Playwright step from screenshot',
+  evaluation_analyzer: 'Evaluation — analyze result and decide next action',
+  evaluation_human_question: 'Evaluation — phrase human verification question',
+  evaluation_report: 'Evaluation — final app report',
 };
 
 export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
@@ -46,6 +56,11 @@ export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
   ai_visual_id: true,
   explain_ai_prompt_failure: true,
   suggest_skip_after_change: false,
+  evaluation_planner: true,
+  evaluation_codegen: true,
+  evaluation_analyzer: true,
+  evaluation_human_question: false,
+  evaluation_report: true,
 };
 
 const SUGGESTED_MODELS_BY_PROVIDER: Record<string, string[]> = {
@@ -115,12 +130,17 @@ export function getDefaultPreferenceForUsage(config: ConfigService, usage: LlmUs
   switch (usage) {
     case 'playwright_codegen':
     case 'playwright_verify':
+    case 'evaluation_planner':
+    case 'evaluation_codegen':
+    case 'evaluation_analyzer':
+    case 'evaluation_report':
       return { provider: 'gemini', model: geminiModel };
     case 'action_to_instruction':
     case 'optimized_prompt':
     case 'ai_visual_id':
     case 'explain_ai_prompt_failure':
     case 'suggest_skip_after_change':
+    case 'evaluation_human_question':
       return { ...general };
     default:
       return general;

@@ -8,6 +8,8 @@ import RunsPage from './pages/Runs';
 import RunDetailPage from './pages/RunDetail';
 import SettingsPage from './pages/Settings';
 import ProjectsPage from './pages/Projects';
+import EvaluationsPage from './pages/Evaluations';
+import EvaluationDetailPage from './pages/EvaluationDetail';
 import DetachedPreview from './pages/DetachedPreview';
 import DetachedPlayback from './pages/DetachedPlayback';
 import NotFoundPage from './pages/NotFound';
@@ -31,6 +33,8 @@ export default function App() {
             <Route path="runs" element={<RunsPage />} />
             <Route path="runs/:id" element={<RunDetailPage />} />
             <Route path="projects" element={<ProjectsPage />} />
+            <Route path="evaluations" element={<EvaluationsPage />} />
+            <Route path="evaluations/:id" element={<EvaluationDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

@@ -77,6 +77,48 @@ Rules:
 - Respond ONLY with valid JSON:
 { "suggestions": [ { "stepId": "<uuid from forward list>", "reason": "<short reason>" } ] }`;
 
+const EVALUATION_CODEGEN_SYSTEM = `You are a QA automation agent exploring a web app with Playwright. The user authorized testing against their own staging or demo app.
+
+You receive a screenshot of the current page, the starting URL, the overall evaluation intent, desired final output, and a short summary of prior steps.
+
+Respond ONLY with valid JSON:
+{
+  "thinking": "<what you observe and why you propose the next action toward the intent>",
+  "playwrightCode": "<single async IIFE body using only \`page\` and \`expect\` from Playwright test — valid JavaScript statements, no imports; e.g. await page.getByRole('button', { name: 'Next' }).click();>",
+  "expectedOutcome": "<what should change in the UI after this code runs>"
+}
+
+Rules:
+- Output executable Playwright snippets only; no TypeScript types; no require/import.
+- Prefer getByRole, getByLabel, getByText with stable accessible names.
+- One focused step per response; avoid multi-page tours in one snippet.
+- If the goal appears complete from the screenshot, use a no-op or wait: e.g. await page.waitForTimeout(500); and explain in expectedOutcome that you are confirming completion.`;
+
+const EVALUATION_ANALYZER_SYSTEM = `You judge progress of an autonomous web evaluation. The app under test is owned by the user for QA.
+
+Respond ONLY with valid JSON:
+{
+  "goalProgress": "partial" | "complete" | "blocked",
+  "decision": "retry" | "advance" | "ask_human" | "finish",
+  "rationale": "<short reasoning>",
+  "humanQuestion": "<only if decision is ask_human: clear question for the user>",
+  "humanOptions": ["<3-4 short option labels>", "..."]
+}
+
+Rules:
+- Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
+- Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions.
+- Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
+- Use "advance" when the step succeeded and exploration should continue.`;
+
+const EVALUATION_REPORT_SYSTEM = `You write structured evaluation reports for QA. The user tests their own applications; treat UI data as synthetic.
+
+Respond ONLY with valid JSON:
+{
+  "markdown": "<full markdown report: app purpose, navigation/IA, main workflows observed, notable screens, gaps/risks, suggested follow-ups>",
+  "structured": { "sections": [ { "title": "...", "body": "..." } ] }
+}`;
+
 const OPTIMIZED_PROMPT_SYSTEM = `You are an Interaction Intent Compiler for complex SaaS web applications.
 
 Your job is to convert one recorded UI step into a future-proof playback instruction that reproduces the USER'S INTENDED ACTION, not the exact historical UI mechanics.
@@ -369,7 +411,7 @@ export class LlmService {
 
   private async chatJson(
     userId: string | undefined,
-    usage: 'action_to_instruction' | 'optimized_prompt' | 'explain_ai_prompt_failure' | 'suggest_skip_after_change',
+    usage: LlmUsageKey,
     messages: ChatMessage[],
     options?: LlmChatOptions,
   ): Promise<{ content: string; thinking?: string }> {
@@ -874,5 +916,189 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       this.logger.warn(`suggestStepsToSkipAfterChange: ${err}`);
       return { suggestions: [] };
     }
+  }
+
+  /**
+   * Propose the next Playwright snippet for an evaluation step (vision + intent).
+   */
+  async evaluationProposePlaywrightStep(
+    input: {
+      url: string;
+      intent: string;
+      desiredOutput: string;
+      progressSummary: string | null;
+      priorStepsBrief: string;
+      screenshotBase64: string;
+      pageUrl: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{ thinking: string; playwrightCode: string; expectedOutcome: string }> {
+    const user = `Start URL: ${input.url}
+Current page URL: ${input.pageUrl}
+Overall intent:
+${input.intent}
+
+Desired final output:
+${input.desiredOutput}
+
+Progress summary (rolling):
+${input.progressSummary?.trim() || '(none yet)'}
+
+Prior steps (brief):
+${input.priorStepsBrief.trim() || '(none)'}
+
+The attached image is the current viewport.`;
+    const res = await this.chatJson(
+      opts?.userId,
+      'evaluation_codegen',
+      [
+        { role: 'system', content: EVALUATION_CODEGEN_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      {
+        imageBase64: input.screenshotBase64,
+        maxTokens: 8192,
+        temperature: 0.2,
+        signal: opts?.signal,
+      },
+    );
+    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const thinking = typeof parsed.thinking === 'string' ? parsed.thinking.trim() : '';
+    const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
+    const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
+    if (!playwrightCode) {
+      throw new Error('evaluation_codegen returned empty playwrightCode');
+    }
+    return { thinking, playwrightCode, expectedOutcome };
+  }
+
+  /**
+   * After executing proposed Playwright, decide retry / advance / human / finish.
+   */
+  async evaluationAnalyzeAfterStep(
+    input: {
+      intent: string;
+      desiredOutput: string;
+      progressSummary: string | null;
+      executedCode: string;
+      executionOk: boolean;
+      errorMessage?: string;
+      pageUrlAfter: string;
+      screenshotAfterBase64: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{
+    goalProgress: 'partial' | 'complete' | 'blocked';
+    decision: 'retry' | 'advance' | 'ask_human' | 'finish';
+    rationale: string;
+    humanQuestion?: string;
+    humanOptions?: string[];
+  }> {
+    const user = `Overall intent:
+${input.intent}
+
+Desired output:
+${input.desiredOutput}
+
+Progress summary:
+${input.progressSummary?.trim() || '(none)'}
+
+Executed Playwright (last step):
+${input.executedCode}
+
+Execution OK: ${input.executionOk}
+${input.errorMessage ? `Error: ${input.errorMessage}` : ''}
+
+Page URL after step: ${input.pageUrlAfter}
+
+The attached image is the viewport after execution.`;
+    const res = await this.chatJson(
+      opts?.userId,
+      'evaluation_analyzer',
+      [
+        { role: 'system', content: EVALUATION_ANALYZER_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      {
+        imageBase64: input.screenshotAfterBase64,
+        maxTokens: 4096,
+        temperature: 0.2,
+        signal: opts?.signal,
+      },
+    );
+    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const goalProgress = parsed.goalProgress === 'complete' || parsed.goalProgress === 'blocked' || parsed.goalProgress === 'partial' ? parsed.goalProgress : 'partial';
+    const decision =
+      parsed.decision === 'retry' ||
+      parsed.decision === 'advance' ||
+      parsed.decision === 'ask_human' ||
+      parsed.decision === 'finish'
+        ? parsed.decision
+        : 'advance';
+    const rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '';
+    let humanQuestion: string | undefined;
+    let humanOptions: string[] | undefined;
+    if (decision === 'ask_human') {
+      humanQuestion = typeof parsed.humanQuestion === 'string' ? parsed.humanQuestion.trim() : undefined;
+      const ho = parsed.humanOptions;
+      if (Array.isArray(ho)) {
+        humanOptions = ho.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 4);
+      }
+      if (!humanQuestion || !humanOptions?.length) {
+        return {
+          goalProgress,
+          decision: 'advance',
+          rationale: `${rationale} (fallback: invalid human question payload)`,
+        };
+      }
+    }
+    return {
+      goalProgress,
+      decision,
+      rationale,
+      ...(humanQuestion ? { humanQuestion } : {}),
+      ...(humanOptions?.length ? { humanOptions } : {}),
+    };
+  }
+
+  /**
+   * Final markdown + structured report from step history.
+   */
+  async evaluationGenerateFinalReport(
+    input: {
+      intent: string;
+      desiredOutput: string;
+      progressSummary: string | null;
+      stepsMarkdown: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{ markdown: string; structured?: unknown }> {
+    const user = `Overall intent:
+${input.intent}
+
+Desired output:
+${input.desiredOutput}
+
+Progress summary:
+${input.progressSummary?.trim() || '(none)'}
+
+Step-by-step trace:
+${input.stepsMarkdown}`;
+    const res = await this.chatJson(
+      opts?.userId,
+      'evaluation_report',
+      [
+        { role: 'system', content: EVALUATION_REPORT_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      { maxTokens: 16384, temperature: 0.3, signal: opts?.signal },
+    );
+    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
+    const structured = parsed.structured;
+    if (!markdown) {
+      throw new Error('evaluation_report returned empty markdown');
+    }
+    return { markdown, ...(structured !== undefined ? { structured } : {}) };
   }
 }

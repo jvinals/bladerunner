@@ -44,6 +44,10 @@ export class RecordingGateway implements OnGatewayInit {
       this.server.to(`run:${roomId}`).emit('aiPromptTestProgress', payload);
     });
 
+    this.recordingService.on('evaluationProgress', (evaluationId: string, payload: Record<string, unknown>) => {
+      this.server.to(`run:${evaluationId}`).emit('evaluationProgress', { evaluationId, ...payload });
+    });
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 
@@ -55,7 +59,10 @@ export class RecordingGateway implements OnGatewayInit {
     client.join(`run:${data.runId}`);
     this.logger.log(`Client ${client.id} joined run:${data.runId}`);
     /** Catch-up: frames/steps may have been broadcast before this socket joined the room. */
-    const latest = this.recordingService.getLatestFrame(data.runId);
+    const recFrame = this.recordingService.getLatestFrame(data.runId);
+    const evalFrame = this.recordingService.getLatestEvaluationFrame(data.runId);
+    const latest =
+      recFrame && recFrame.length > 0 ? recFrame : evalFrame && evalFrame.length > 0 ? evalFrame : null;
     if (latest && latest.length > 0) {
       client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
     }

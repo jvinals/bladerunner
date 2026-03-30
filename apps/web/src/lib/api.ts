@@ -470,6 +470,94 @@ export const projectsApi = {
     }),
 };
 
+// ─── Evaluations (autonomous browser + LLM) ────────────────────────────────────
+export type EvaluationStatus =
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'WAITING_FOR_HUMAN'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export type EvaluationRow = {
+  id: string;
+  name: string;
+  url: string;
+  status: EvaluationStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type EvaluationStepDto = {
+  id: string;
+  sequence: number;
+  pageUrl: string | null;
+  thinkingText: string | null;
+  proposedCode: string | null;
+  expectedOutcome: string | null;
+  actualOutcome: string | null;
+  errorMessage: string | null;
+  decision: string | null;
+  analyzerRationale: string | null;
+  createdAt: string;
+};
+
+export type EvaluationQuestionDto = {
+  id: string;
+  prompt: string;
+  optionsJson: string;
+  state: string;
+  selectedIndex: number | null;
+  stepSequence: number | null;
+  createdAt: string;
+  answeredAt: string | null;
+};
+
+export type EvaluationReportDto = {
+  id: string;
+  content: string;
+  format: string;
+  structuredJson: unknown;
+  createdAt: string;
+};
+
+export type EvaluationDetail = EvaluationRow & {
+  intent: string;
+  desiredOutput: string;
+  progressSummary: string | null;
+  failureMessage: string | null;
+  steps: EvaluationStepDto[];
+  questions: EvaluationQuestionDto[];
+  reports: EvaluationReportDto[];
+};
+
+export type CreateEvaluationBody = {
+  name?: string;
+  url: string;
+  intent: string;
+  desiredOutput: string;
+};
+
+export const evaluationsApi = {
+  list: () => apiFetch<EvaluationRow[]>('/evaluations'),
+  create: (body: CreateEvaluationBody) =>
+    apiFetch<EvaluationRow>('/evaluations', { method: 'POST', body: JSON.stringify(body) }),
+  get: (id: string) => apiFetch<EvaluationDetail>(`/evaluations/${id}`),
+  start: (id: string) =>
+    apiFetch<{ accepted: boolean; evaluationId: string }>(`/evaluations/${id}/start`, {
+      method: 'POST',
+    }),
+  cancel: (id: string) =>
+    apiFetch<{ ok: boolean }>(`/evaluations/${id}/cancel`, { method: 'POST' }),
+  humanAnswer: (id: string, body: { questionId: string; selectedIndex: number }) =>
+    apiFetch<{ accepted: boolean; evaluationId: string }>(`/evaluations/${id}/human-answer`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+};
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 export const settingsApi = {
   get: () => apiFetch<unknown>('/settings'),

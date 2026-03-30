@@ -251,7 +251,12 @@ export type LlmUsageKey =
   | 'optimized_prompt'
   | 'ai_visual_id'
   | 'explain_ai_prompt_failure'
-  | 'suggest_skip_after_change';
+  | 'suggest_skip_after_change'
+  | 'evaluation_planner'
+  | 'evaluation_codegen'
+  | 'evaluation_analyzer'
+  | 'evaluation_human_question'
+  | 'evaluation_report';
 
 export interface LlmPreferenceEntry {
   provider: LlmProviderId;

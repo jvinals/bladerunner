@@ -305,11 +305,24 @@ export interface PlaybackSession {
   screencastClosing?: boolean;
 }
 
+/** Autonomous evaluation browser — keyed by `evaluationId`; socket room `run:<evaluationId>` (same as recording frames). */
+type EvaluationLiveSession = {
+  evaluationId: string;
+  userId: string;
+  browser: Browser;
+  page: Page;
+  cdpSession: CDPSession;
+  latestFrame: Buffer | null;
+  screencastVideo: ScreencastVideoEncoder | null;
+  screencastClosing?: boolean;
+};
+
 @Injectable()
 export class RecordingService extends EventEmitter {
   private readonly logger = new Logger(RecordingService.name);
   private sessions = new Map<string, RecordingSession>();
   private playbackSessions = new Map<string, PlaybackSession>();
+  private evaluationSessions = new Map<string, EvaluationLiveSession>();
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
   private aiPromptTestInFlight = new Map<string, Promise<void>>();
   /** In-flight optimized prompt generation / refresh work keyed by `${runId}:${stepId}`. */
@@ -589,6 +602,108 @@ export class RecordingService extends EventEmitter {
 
   getLatestFrame(runId: string): Buffer | null {
     return this.sessions.get(runId)?.latestFrame ?? null;
+  }
+
+  getEvaluationSession(evaluationId: string): EvaluationLiveSession | undefined {
+    return this.evaluationSessions.get(evaluationId);
+  }
+
+  getLatestEvaluationFrame(evaluationId: string): Buffer | null {
+    return this.evaluationSessions.get(evaluationId)?.latestFrame ?? null;
+  }
+
+  /**
+   * Remote Playwright browser for Evaluations — frames emit on `frame` with id = evaluationId (join room `run:<evaluationId>`).
+   */
+  async startEvaluationSession(evaluationId: string, userId: string): Promise<void> {
+    if (this.evaluationSessions.has(evaluationId)) {
+      throw new ConflictException('Evaluation browser session already active');
+    }
+    const captureSettings = buildCaptureSettingsFromPresets({
+      viewportPreset: 'wxga',
+      streamQuality: 'high',
+      streamSmoothness: 'high',
+    });
+    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
+    const browser = await chromium.connect(wsEndpoint);
+    const ffmpegStagingPath = path.join(os.tmpdir(), `br-eval-screencast-${evaluationId}-${randomUUID()}.mp4`);
+    const screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
+    try {
+      const context = await browser.newContext({
+        viewport: {
+          width: captureSettings.recordingViewportWidth,
+          height: captureSettings.recordingViewportHeight,
+        },
+        deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
+      });
+      const page = await context.newPage();
+      const cdpSession = await context.newCDPSession(page);
+      const session: EvaluationLiveSession = {
+        evaluationId,
+        userId,
+        browser,
+        page,
+        cdpSession,
+        latestFrame: null,
+        screencastVideo,
+      };
+      this.evaluationSessions.set(evaluationId, session);
+      await this.attachScreencast(session.cdpSession, session, evaluationId, captureSettings, {
+        onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
+      });
+      this.emit('status', evaluationId, { status: 'evaluation', evaluationId, phase: 'browser_ready' });
+    } catch (err) {
+      this.evaluationSessions.delete(evaluationId);
+      screencastVideo?.kill();
+      await removePathIfExists(ffmpegStagingPath).catch(() => {});
+      try {
+        await browser.close();
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    }
+  }
+
+  async stopEvaluationSession(evaluationId: string, userId: string): Promise<void> {
+    const session = this.evaluationSessions.get(evaluationId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+    const screencastVideo = session.screencastVideo;
+    session.screencastClosing = true;
+    try {
+      await session.cdpSession.send('Page.stopScreencast');
+    } catch (err) {
+      this.logger.warn(`evaluation stopScreencast ${evaluationId}`, err);
+    }
+    if (screencastVideo) {
+      try {
+        await screencastVideo.finalize();
+      } catch (err) {
+        this.logger.warn(`evaluation screencast finalize ${evaluationId}`, err);
+      }
+    }
+    try {
+      await session.browser.close();
+    } catch (err) {
+      this.logger.warn(`evaluation browser close ${evaluationId}`, err);
+    }
+    this.evaluationSessions.delete(evaluationId);
+    this.emit('status', evaluationId, { status: 'evaluation', evaluationId, phase: 'browser_stopped' });
+  }
+
+  async runEvaluationPlaywright(evaluationId: string, userId: string, code: string): Promise<void> {
+    const session = this.evaluationSessions.get(evaluationId);
+    if (!session || session.userId !== userId) {
+      throw new NotFoundException('No active evaluation browser session');
+    }
+    await this.executePwCode(session.page, code, {});
+  }
+
+  emitEvaluationProgress(evaluationId: string, payload: Record<string, unknown>): void {
+    this.emit('evaluationProgress', evaluationId, payload);
   }
 
   private async createLiveRecordingSession(args: {

@@ -20,6 +20,9 @@ const STATUS_STYLES: Record<string, string> = {
   COMPLETED: 'bg-[#56A34A] text-white',
   FAILED: 'bg-[#FF4D4D] text-white',
   CANCELLED: 'bg-gray-400 text-white',
+  QUEUED: 'bg-gray-200 text-gray-700',
+  RUNNING: 'bg-[#4B90FF] text-white',
+  WAITING_FOR_HUMAN: 'bg-violet-500 text-white',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -41,6 +44,9 @@ const STATUS_LABELS: Record<string, string> = {
   COMPLETED: 'Completed',
   FAILED: 'Failed',
   CANCELLED: 'Cancelled',
+  QUEUED: 'Queued',
+  RUNNING: 'Running',
+  WAITING_FOR_HUMAN: 'Needs input',
 };
 
 interface StatusBadgeProps {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-30
+
+- `0.10.72`: added Evaluations (autonomous LLM + Playwright runs with human verification, final report, live UI, and socket progress).
+- `@bladerunner/web 0.7.39`: added `evaluationsApi`, `Evaluations` and `EvaluationDetail` pages, sidebar nav, `useEvaluationLive` for `/recording` frames and `evaluationProgress`, and status badges for evaluation states.
+- `@bladerunner/api 0.6.74`: added Prisma models and migrations, `EvaluationsModule` (orchestrator, REST + `start`/`cancel`/`human-answer`), evaluation browser sessions on the recording worker, `evaluationProgress` gateway events, and join-time catch-up frames for evaluation rooms.
+- `@bladerunner/types 0.2.10`: added `evaluation_*` LLM usage keys for models-by-task settings.
+
 ## 2026-03-28
 
 - `0.10.71`: added visible pending feedback when saving an in-progress recording for later so the Runs page shows that the resumable save is still processing.

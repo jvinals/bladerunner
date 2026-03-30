@@ -11,6 +11,7 @@ import { AgentsModule } from './modules/agents/agents.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RecordingModule } from './modules/recording/recording.module';
 import { LlmModule } from './modules/llm/llm.module';
+import { EvaluationsModule } from './modules/evaluations/evaluations.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { LlmModule } from './modules/llm/llm.module';
     AgentsModule,
     RecordingModule,
     LlmModule,
+    EvaluationsModule,
   ],
 })
 export class AppModule {}
