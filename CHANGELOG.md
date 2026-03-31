@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.99`: debug ingest (session `3619df`) around **`evaluationAnalyzeAfterStep`** (`analyzer_llm_await_start` / `done` / `throw`) to diagnose **analyzer** “hangs”. `@bladerunner/api 0.6.91`.
+
 - `0.10.98`: evaluation **live step cards** — placeholder step **as soon as** `proposing` runs (activity log + spinners); **`analyzing`** phase + richer **`proposing`** socket payload; refetch on **`executing`** / **`paused_review`**; spinners for codegen/analyzer sections until data arrives; live phase badge on step header. `@bladerunner/api 0.6.90`, `@bladerunner/web 0.7.55`.
 
 - `0.10.97`: removed session `3619df` debug ingest **`fetch`** from **`requestBrowserFromWorker`** and browser-worker control **`close`** handler; **clearer disconnect log line** retained. `@bladerunner/api 0.6.89`, `@bladerunner/browser-worker 0.2.5`.

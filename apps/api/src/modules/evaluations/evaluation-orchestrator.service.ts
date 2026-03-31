@@ -265,19 +265,73 @@ export class EvaluationOrchestratorService {
         errorMessage: errorMessage ?? null,
       });
 
-      const analysis = await this.llm.evaluationAnalyzeAfterStep(
-        {
-          intent: ev.intent,
-          desiredOutput: ev.desiredOutput,
-          progressSummary: fresh.progressSummary,
-          executedCode: proposed.playwrightCode,
-          executionOk,
-          errorMessage,
-          pageUrlAfter: afterUrl,
-          screenshotAfterBase64: afterB64,
-        },
-        { userId },
-      );
+      const analyzerStartedAt = Date.now();
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H1',
+          location: 'evaluation-orchestrator.service.ts:analyzer',
+          message: 'analyzer_llm_await_start',
+          data: { evaluationId, sequence },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      let analysis: Awaited<ReturnType<LlmService['evaluationAnalyzeAfterStep']>>;
+      try {
+        analysis = await this.llm.evaluationAnalyzeAfterStep(
+          {
+            intent: ev.intent,
+            desiredOutput: ev.desiredOutput,
+            progressSummary: fresh.progressSummary,
+            executedCode: proposed.playwrightCode,
+            executionOk,
+            errorMessage,
+            pageUrlAfter: afterUrl,
+            screenshotAfterBase64: afterB64,
+          },
+          { userId },
+        );
+      } catch (err) {
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+          body: JSON.stringify({
+            sessionId: '3619df',
+            hypothesisId: 'H2',
+            location: 'evaluation-orchestrator.service.ts:analyzer',
+            message: 'analyzer_llm_await_throw',
+            data: {
+              evaluationId,
+              sequence,
+              ms: Date.now() - analyzerStartedAt,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        throw err;
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H1',
+          location: 'evaluation-orchestrator.service.ts:analyzer',
+          message: 'analyzer_llm_await_done',
+          data: { evaluationId, sequence, ms: Date.now() - analyzerStartedAt },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
 
       const analyzerInputJson = {
         intent: ev.intent,
