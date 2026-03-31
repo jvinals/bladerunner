@@ -245,6 +245,184 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 - Set **`PLAYBACK_CLERK_SECRET_KEY`** (or **`E2E_CLERK_SECRET_KEY`**) = the **target app’s** Clerk secret for recording/playback auto sign-in and E2E when the publishable key comes from that app. The server can read **`publishableKey` from the live page**; the **secret** must still be configured explicitly.
 - If DevTools shows Clerk API calls to a **different host** than `CLERK_FAPI`, set **`CLERK_FAPI_EXTRA_HOSTS`** (comma-separated hostnames) and/or **`CLERK_TESTING_FRONTEND_API_URL`** (hostname only, no `https://`) so testing tokens and route interception align with that Frontend API.
 
+## Autonomous evaluations (LLM prompts)
+
+An **evaluation** is an autonomous loop on the **browser worker**: it proposes Playwright from a viewport screenshot, runs the code, analyzes the result from a post-step screenshot, and persists steps until the run finishes or needs human input. The loop is implemented in **`EvaluationOrchestratorService`** (`apps/api/src/modules/evaluations/evaluation-orchestrator.service.ts`). In **Settings → AI / LLM**, task keys **`evaluation_codegen`**, **`evaluation_analyzer`**, and **`evaluation_report`** route to user-configured models via `apps/api/src/modules/llm/llm.service.ts`.
+
+### Orchestrator flow (brief)
+
+Each iteration: **propose** (vision) → **execute** Playwright on the evaluation browser → **analyze** (vision) → **persist** step + append progress summary. On **`finish`** or **`goalProgress: complete`**, or when the step cap is reached, the orchestrator calls **`finalizeReport`**, which uses **`evaluationGenerateFinalReport`** (text-only, no image). See the same file for **`evaluationProposePlaywrightStep`**, **`evaluationAnalyzeAfterStep`**, and **`finalizeReport`** / **`evaluationGenerateFinalReport`**.
+
+```mermaid
+flowchart LR
+  A[Propose codegen] --> B[Execute Playwright]
+  B --> C[Analyze after step]
+  C --> D{Decision}
+  D -->|advance / retry| A
+  D -->|finish / complete| E[Final report]
+  D -->|ask_human| F[Wait for human]
+```
+
+### Shared request mechanics
+
+- **Messages:** `system` + `user` strings (see constants in `llm.service.ts`).
+- **`chatJson`** forces **`responseFormat: 'json_object'`**; the API parses the assistant text with **`parseJsonFromLlmText`**.
+- **Screenshots:** passed as **`imageBase64`** in chat options to the provider layer—not embedded in the `user` string. The user text ends with a line like **“The attached image is …”** (viewport before/after execution).
+- **Default parameters** (per call site):
+
+| Task key | maxTokens | temperature |
+| -------- | --------- | ----------- |
+| `evaluation_codegen` | 8192 | 0.2 |
+| `evaluation_analyzer` | 4096 | 0.2 |
+| `evaluation_report` | 16384 | 0.3 |
+
+### `evaluation_codegen` (propose step)
+
+Canonical system text is the constant **`EVALUATION_CODEGEN_SYSTEM`** in `llm.service.ts`:
+
+```
+You are a QA automation agent exploring a web app with Playwright. The user authorized testing against their own staging or demo app.
+
+You receive a screenshot of the current page, the starting URL, the overall evaluation intent, desired final output, and a short summary of prior steps.
+
+Respond ONLY with valid JSON:
+{
+  "thinking": "<what you observe and why you propose the next action toward the intent>",
+  "playwrightCode": "<single async IIFE body using only `page` and `expect` from Playwright test — valid JavaScript statements, no imports; e.g. await page.getByRole('button', { name: 'Next' }).click();>",
+  "expectedOutcome": "<what should change in the UI after this code runs>"
+}
+
+Rules:
+- Output executable Playwright snippets only; no TypeScript types; no require/import.
+- Prefer getByRole, getByLabel, getByText with stable accessible names.
+- One focused step per response; avoid multi-page tours in one snippet.
+- If the goal appears complete from the screenshot, use a no-op or wait: e.g. await page.waitForTimeout(500); and explain in expectedOutcome that you are confirming completion.
+```
+
+**User string template** (from `evaluationProposePlaywrightStep`):
+
+```
+Start URL: ${url}
+Current page URL: ${pageUrl}
+Overall intent:
+${intent}
+
+Desired final output:
+${desiredOutput}
+
+Progress summary (rolling):
+${progressSummary || '(none yet)'}
+
+Prior steps (brief):
+${priorStepsBrief || '(none)'}
+
+The attached image is the current viewport.
+```
+
+**Placeholder sources:**
+
+| Placeholder | Source |
+| ----------- | ------ |
+| Start URL | Evaluation row **`url`** (initial target). |
+| Current page URL | Live `page.url()` before propose. |
+| Overall intent / Desired final output | Evaluation **`intent`**, **`desiredOutput`**. |
+| Progress summary | Rolling **`progressSummary`** on the evaluation (updated after each analyzed step). |
+| Prior steps (brief) | Up to **8** latest **`evaluationStep`** rows (desc), formatted as `seq N: decision — excerpt…` (excerpt from **`analyzerRationale`** or **`thinkingText`**, truncated). |
+
+**Expected JSON keys:** `thinking`, `playwrightCode`, `expectedOutcome`. Empty **`playwrightCode`** causes the API to throw (`evaluation_codegen returned empty playwrightCode`).
+
+### `evaluation_analyzer` (after step)
+
+Canonical system text is **`EVALUATION_ANALYZER_SYSTEM`**:
+
+```
+You judge progress of an autonomous web evaluation. The app under test is owned by the user for QA.
+
+Respond ONLY with valid JSON:
+{
+  "goalProgress": "partial" | "complete" | "blocked",
+  "decision": "retry" | "advance" | "ask_human" | "finish",
+  "rationale": "<short reasoning>",
+  "humanQuestion": "<only if decision is ask_human: clear question for the user>",
+  "humanOptions": ["<3-4 short option labels>", "..."]
+}
+
+Rules:
+- Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
+- Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions.
+- Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
+- Use "advance" when the step succeeded and exploration should continue.
+```
+
+**User string template** (from `evaluationAnalyzeAfterStep`):
+
+```
+Overall intent:
+${intent}
+
+Desired output:
+${desiredOutput}
+
+Progress summary:
+${progressSummary || '(none)'}
+
+Executed Playwright (last step):
+${executedCode}
+
+Execution OK: ${executionOk}
+${errorMessage ? `Error: ${errorMessage}` : ''}
+
+Page URL after step: ${pageUrlAfter}
+
+The attached image is the viewport after execution.
+```
+
+**Expected JSON:** `goalProgress`, `decision`, `rationale`; optional `humanQuestion` / `humanOptions` when `decision === 'ask_human'`. If **`decision`** is missing or invalid, the API defaults to **`advance`**. If **`goalProgress`** is invalid, it defaults to **`partial`**. For **`ask_human`**, if `humanQuestion` or `humanOptions` is missing/invalid, the code **falls back** to **`advance`** and appends **`(fallback: invalid human question payload)`** to the rationale.
+
+### `evaluation_report` (final report)
+
+Canonical system text is **`EVALUATION_REPORT_SYSTEM`**:
+
+```
+You write structured evaluation reports for QA. The user tests their own applications; treat UI data as synthetic.
+
+Respond ONLY with valid JSON:
+{
+  "markdown": "<full markdown report: app purpose, navigation/IA, main workflows observed, notable screens, gaps/risks, suggested follow-ups>",
+  "structured": { "sections": [ { "title": "...", "body": "..." } ] }
+}
+```
+
+**User string template** (from `evaluationGenerateFinalReport`; built in **`finalizeReport`**):
+
+```
+Overall intent:
+${intent}
+
+Desired output:
+${desiredOutput}
+
+Progress summary:
+${progressSummary || '(none)'}
+
+Step-by-step trace:
+${stepsMarkdown}
+```
+
+**No image** for this call.
+
+**Output:** **`markdown`** is required (empty markdown throws). **`structured`** is optional.
+
+### Quick reference
+
+| Task key | System constant | User content summary | Image? | JSON keys |
+| -------- | --------------- | --------------------- | ------ | --------- |
+| `evaluation_codegen` | `EVALUATION_CODEGEN_SYSTEM` | Start URL, page URL, intent, desired output, rolling progress, prior steps, viewport line | Yes (before step) | `thinking`, `playwrightCode`, `expectedOutcome` |
+| `evaluation_analyzer` | `EVALUATION_ANALYZER_SYSTEM` | Intent, desired output, progress, executed code, execution OK/error, URL after, viewport line | Yes (after step) | `goalProgress`, `decision`, `rationale`, optional `humanQuestion` / `humanOptions` |
+| `evaluation_report` | `EVALUATION_REPORT_SYSTEM` | Intent, desired output, progress, step-by-step markdown trace | No | `markdown` (required), `structured` (optional) |
+
+If prompts or templates change, update **this section** or the **TypeScript constants** in `llm.service.ts` first—the code constants remain the single source of truth.
+
 ## App state checkpoints (restore strategy)
 
 Bladerunner persists **checkpoints** after each recorded step (best-effort **Playwright `storageState`** JSON under **`RECORDINGS_DIR`**, plus DB rows via **`GET /runs/:id/checkpoints`**). **Hybrid model:**
@@ -269,6 +447,7 @@ After each completed **screen recording**, the API stores a **WebM** file and op
 
 ## Changelog
 
+- **0.10.84** — **Docs:** README section **Autonomous evaluations (LLM prompts)** documents orchestrator flow, `evaluation_codegen` / `evaluation_analyzer` / `evaluation_report` prompts, and Settings task keys.
 - **0.10.22** — **Settings / LLM providers**: Added a broad provider registry (**Gemini**, **OpenAI**, **Anthropic**, **OpenRouter**, **Ollama**, **Groq**, **Together**, **Fireworks**, **Mistral**, **DeepSeek**, **Perplexity**, **xAI**, **Cohere**, **Azure OpenAI**), encrypted per-user provider credentials in PostgreSQL, **Test connection** + **Refresh models** actions, provider-aware model catalogs, and a right-side model review panel with thinking/capability metadata. **`@bladerunner/api` `0.6.31`**, **`@bladerunner/web` `0.7.17`**, **`@bladerunner/types` `0.2.6`**.
 - **0.10.21** — **Settings / LLM**: Model id fields are **dropdowns** filled from **OpenRouter** (public catalog), **OpenAI** / **Gemini** (when API keys are set), and a static **Anthropic** list; optional **`LLM_MODEL_CATALOG_TTL_MS`** caches catalog fetches in the API. **`@bladerunner/api` `0.6.30`**, **`@bladerunner/web` `0.7.16`**, **`@bladerunner/types` `0.2.5`**.
 - **0.10.20** — **API**: Removed temporary Cursor debug instrumentation from **`main`**, **`LlmConfigService`**, and **`executePwCode`** (P2021 fallback + migrate messaging unchanged). **`@bladerunner/api` `0.6.29`**.
