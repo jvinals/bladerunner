@@ -2,6 +2,14 @@
 
 ## 2026-03-31
 
+- `0.10.115`: **Evaluation trace** — every step-scoped log line is prefixed with **`[Step N]`**; run-level **`[Eval]`** and final-report **`[Report]`**; collapsed JSON control shows **`(N keys)`** only. `@bladerunner/api 0.6.101`, `@bladerunner/web 0.7.67`.
+
+- `0.10.114`: **Evaluation detail** — when the live preview is **detached**, the inline preview area collapses to **10px** height (thin strip; click to **reattach**); caption hidden while detached. `@bladerunner/web 0.7.66`.
+
+- `0.10.113`: **Evaluation trace** — collapsed row is **one line**: timestamp, message, and **JSON details (N keys)** inline; expanding drops the JSON **below** that row. `@bladerunner/web 0.7.65`.
+
+- `0.10.112`: **Evaluation trace** — JSON details on each line are **collapsed** under `<details>` (expand to read full payload). `@bladerunner/web 0.7.64`.
+
 - `0.10.111`: **Evaluation trace (live)** — WebSocket **`evaluationDebugLog`** / **`evaluationDebugLogBatch`** (join catch-up) streams timestamped server lines (orchestrator + LLM: sign-in, capture timings, Gemini/non-Gemini request/response, Playwright run). UI panel below the step timeline on **Evaluation detail**. `@bladerunner/api 0.6.100`, `@bladerunner/web 0.7.63`.
 
 - `0.10.110`: evaluation step timeline — during **`proposing`**, **Codegen outputs** no longer says **“Codegen model running”** while the server is still in **auto sign-in + SOM/a11y capture** (before the codegen LLM). **Debug ingest** (session `3619df`) logs wall-clock milestones: after **`proposing` emit**, after **auto sign-in**, after **capture**, before/after **codegen LLM**. `@bladerunner/api 0.6.99`, `@bladerunner/web 0.7.62`.

@@ -134,7 +134,7 @@ export class EvaluationOrchestratorService {
     });
 
     this.recording.clearEvaluationDebugLog(evaluationId);
-    this.recording.emitEvaluationDebugLog(evaluationId, 'Evaluation run loop started', {
+    this.recording.emitEvaluationDebugLog(evaluationId, '[Eval] Evaluation run loop started', {
       evaluationId,
       resumeAfterHuman: Boolean(opts.resumeAfterHuman),
       resumeAfterReview: Boolean(opts.resumeAfterReview),
@@ -194,7 +194,10 @@ export class EvaluationOrchestratorService {
       const sequence = await this.evaluations.nextStepSequence(evaluationId);
       const progressSummaryBefore = fresh.progressSummary?.trim() ?? '';
       const trace = (message: string, detail?: Record<string, unknown>) =>
-        this.recording.emitEvaluationDebugLog(evaluationId, message, { sequence, ...detail });
+        this.recording.emitEvaluationDebugLog(evaluationId, `[Step ${sequence}] ${message}`, {
+          sequence,
+          ...detail,
+        });
       // #region agent log
       const stepWallStart = Date.now();
       dbgEvalStep(
@@ -204,7 +207,7 @@ export class EvaluationOrchestratorService {
         'H0',
       );
       // #endregion
-      trace('Step iteration started', {
+      trace('Iteration started', {
         autoSignIn: fresh.autoSignIn,
         pageUrl: page.url(),
       });
@@ -512,7 +515,7 @@ export class EvaluationOrchestratorService {
         goalProgress: analysis.goalProgress,
         rationale: analysis.rationale,
       });
-      trace('Step analyzed', {
+      trace('Analyzer result persisted', {
         decision: analysis.decision,
         goalProgress: analysis.goalProgress,
         msSinceStepStart: Date.now() - stepWallStart,
@@ -587,9 +590,13 @@ export class EvaluationOrchestratorService {
       )
       .join('\n');
 
-    this.recording.emitEvaluationDebugLog(evaluationId, 'Final report LLM: starting evaluationGenerateFinalReport', {
-      stepsCount: steps.length,
-    });
+    this.recording.emitEvaluationDebugLog(
+      evaluationId,
+      '[Report] Final report LLM: starting evaluationGenerateFinalReport',
+      {
+        stepsCount: steps.length,
+      },
+    );
     const report = await this.llm.evaluationGenerateFinalReport(
       {
         intent,
@@ -599,10 +606,12 @@ export class EvaluationOrchestratorService {
       },
       {
         userId,
-        onDebugLog: (m, d) => this.recording.emitEvaluationDebugLog(evaluationId, m, d),
+        onDebugLog: (m, d) => this.recording.emitEvaluationDebugLog(evaluationId, `[Report] ${m}`, d),
       },
     );
-    this.recording.emitEvaluationDebugLog(evaluationId, 'Final report LLM: done', { markdownChars: report.markdown.length });
+    this.recording.emitEvaluationDebugLog(evaluationId, '[Report] Final report LLM: done', {
+      markdownChars: report.markdown.length,
+    });
 
     await this.evaluations.saveReport(userId, {
       evaluationId,

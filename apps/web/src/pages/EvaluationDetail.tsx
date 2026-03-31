@@ -644,19 +644,21 @@ export default function EvaluationDetailPage() {
           )}
 
           <div className="w-full">
-            <div className="w-full rounded-xl border border-gray-200 bg-black overflow-hidden aspect-video flex items-center justify-center relative min-h-[200px]">
+            <div
+              className={`w-full rounded-xl border border-gray-200 bg-black overflow-hidden flex relative ${
+                liveEnabled && isDetached
+                  ? 'h-[10px] min-h-[10px] max-h-[10px] items-stretch justify-stretch'
+                  : 'aspect-video min-h-[200px] items-center justify-center'
+              }`}
+            >
               {liveEnabled && isDetached ? (
-                <div className="text-center px-4 py-8">
-                  <ExternalLink size={28} className="mx-auto mb-2 text-gray-500" aria-hidden />
-                  <p className="text-sm text-gray-400 mb-2">Preview detached to another window</p>
-                  <button
-                    type="button"
-                    onClick={handleReattachPreview}
-                    className="text-xs text-[#4B90FF] font-medium hover:underline"
-                  >
-                    Reattach here
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleReattachPreview}
+                  className="absolute inset-0 w-full h-full cursor-pointer bg-gray-800/90 hover:bg-gray-700/90 border-0 p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4B90FF] focus-visible:ring-inset"
+                  title="Preview detached to another window — click to reattach here"
+                  aria-label="Preview detached to another window. Reattach here."
+                />
               ) : liveEnabled && !isDetached ? (
                 <>
                   {frameDataUrl ? (
@@ -689,9 +691,11 @@ export default function EvaluationDetailPage() {
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-gray-400 mt-2 text-center">
-              Remote browser · same worker as recording
-            </p>
+            {!isDetached ? (
+              <p className="text-[10px] text-gray-400 mt-2 text-center">
+                Remote browser · same worker as recording
+              </p>
+            ) : null}
           </div>
 
           <section
@@ -918,17 +922,37 @@ export default function EvaluationDetailPage() {
                         : 'No trace in this session (start a run or reconnect while the evaluation is active).'}
                     </span>
                   ) : (
-                    evaluationTrace.map((line, idx) => (
-                      <div key={`${line.at}-${idx}`} className="border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
-                        <span className="text-amber-800/90 shrink-0">{line.at}</span>
-                        <span className="text-gray-700"> — {line.message}</span>
-                        {line.detail != null && Object.keys(line.detail).length > 0 ? (
-                          <pre className="mt-0.5 pl-2 text-gray-600 whitespace-pre-wrap break-words">
-                            {JSON.stringify(line.detail, null, 2)}
-                          </pre>
-                        ) : null}
-                      </div>
-                    ))
+                    evaluationTrace.map((line, idx) => {
+                      const keyCount =
+                        line.detail != null && typeof line.detail === 'object'
+                          ? Object.keys(line.detail as object).length
+                          : 0;
+                      const hasDetail = keyCount > 0;
+                      return (
+                        <div
+                          key={`${line.at}-${idx}`}
+                          className="border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0 text-[10px] leading-snug"
+                        >
+                          <div className="min-w-0">
+                            <span className="text-amber-800/90">{line.at}</span>{' '}
+                            <span className="text-gray-700 break-words">— {line.message}</span>
+                            {hasDetail ? (
+                              <>
+                                {' '}
+                                <details className="inline min-w-0 max-w-full align-baseline open:block open:w-full">
+                                  <summary className="inline cursor-pointer text-[9px] text-gray-500 hover:text-gray-700 marker:text-gray-400">
+                                    ({keyCount} keys)
+                                  </summary>
+                                  <pre className="mt-1 block w-full min-w-0 max-w-full pl-3 border-l border-amber-200/80 text-gray-600 whitespace-pre-wrap break-words text-[9px]">
+                                    {JSON.stringify(line.detail, null, 2)}
+                                  </pre>
+                                </details>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                   <div ref={traceEndRef} />
                 </div>
