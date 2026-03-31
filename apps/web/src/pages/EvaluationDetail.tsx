@@ -6,11 +6,12 @@ import {
   projectsApi,
   type AutoClerkOtpUiMode,
   type EvaluationRunMode,
+  type EvaluationStepDto,
   type ProjectDto,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { useEvaluationLive } from '@/hooks/useEvaluationLive';
+import { useEvaluationLive, type EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -23,7 +24,15 @@ import {
   Radio,
   RotateCcw,
   Save,
+  Image,
+  ScanSearch,
 } from 'lucide-react';
+import {
+  ViewportJpegPreviewIconButton,
+  getAnalyzerViewportJpegBase64,
+  getCodegenViewportJpegBase64,
+  omitBinaryPreviewKeys,
+} from '@/components/ui/ViewportJpegPreviewIconButton';
 
 function JsonBlock({ value }: { value: unknown }) {
   if (value == null || (typeof value === 'object' && value !== null && Object.keys(value as object).length === 0)) {
@@ -34,6 +43,108 @@ function JsonBlock({ value }: { value: unknown }) {
       {JSON.stringify(value, null, 2)}
     </pre>
   );
+}
+
+const PLACEHOLDER_STEP_PREFIX = '__pending__';
+
+function stepJsonPresent(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === 'object' && value !== null && Object.keys(value as object).length === 0) return false;
+  return true;
+}
+
+function mergeStepsWithLivePlaceholder(
+  steps: EvaluationStepDto[],
+  lastProgress: EvaluationProgressPayload | null,
+): EvaluationStepDto[] {
+  if (!lastProgress?.sequence) return steps;
+  const seq = lastProgress.sequence;
+  if (steps.some((s) => s.sequence === seq)) return steps;
+  const phase = String(lastProgress.phase ?? '');
+  if (phase !== 'proposing' && phase !== 'executing') return steps;
+  const placeholder: EvaluationStepDto = {
+    id: `${PLACEHOLDER_STEP_PREFIX}${seq}`,
+    sequence: seq,
+    pageUrl: typeof lastProgress.pageUrl === 'string' ? lastProgress.pageUrl : null,
+    stepTitle: null,
+    progressSummaryBefore:
+      typeof lastProgress.progressSummaryBefore === 'string' ? lastProgress.progressSummaryBefore : null,
+    codegenInputJson: null,
+    codegenOutputJson: null,
+    analyzerInputJson: null,
+    analyzerOutputJson: null,
+    thinkingText: null,
+    proposedCode: null,
+    expectedOutcome: null,
+    actualOutcome: null,
+    errorMessage: null,
+    decision: null,
+    analyzerRationale: null,
+    createdAt: new Date(0).toISOString(),
+  };
+  return [...steps, placeholder].sort((a, b) => a.sequence - b.sequence);
+}
+
+function getLiveLoadingFlags(
+  st: EvaluationStepDto,
+  lastProgress: EvaluationProgressPayload | null,
+): {
+  codegenInputs: boolean;
+  codegenOutputs: boolean;
+  analyzerInputs: boolean;
+  analyzerOutputs: boolean;
+} {
+  if (!lastProgress?.sequence || lastProgress.sequence !== st.sequence) {
+    return { codegenInputs: false, codegenOutputs: false, analyzerInputs: false, analyzerOutputs: false };
+  }
+  const phase = String(lastProgress.phase ?? '');
+  const hasCodegenIn = stepJsonPresent(st.codegenInputJson);
+  const hasCodegenOut = stepJsonPresent(st.codegenOutputJson);
+  const hasAnalyzerOut = stepJsonPresent(st.analyzerOutputJson);
+
+  if (phase === 'proposing') {
+    return {
+      codegenInputs: !hasCodegenIn,
+      codegenOutputs: true,
+      analyzerInputs: true,
+      analyzerOutputs: true,
+    };
+  }
+  if (phase === 'executing') {
+    return {
+      codegenInputs: !hasCodegenIn,
+      codegenOutputs: !hasCodegenOut,
+      analyzerInputs: !hasAnalyzerOut,
+      analyzerOutputs: !hasAnalyzerOut,
+    };
+  }
+  if (phase === 'analyzing') {
+    return {
+      codegenInputs: false,
+      codegenOutputs: false,
+      analyzerInputs: !hasAnalyzerOut,
+      analyzerOutputs: !hasAnalyzerOut,
+    };
+  }
+  return { codegenInputs: false, codegenOutputs: false, analyzerInputs: false, analyzerOutputs: false };
+}
+
+function PendingPanel({ label }: { label: string }) {
+  return (
+    <div
+      className="flex min-h-[72px] items-center justify-center gap-2 rounded border border-dashed border-gray-200 bg-gray-50/90 text-gray-500"
+      role="status"
+      aria-busy
+    >
+      <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+      <span className="text-xs">{label}</span>
+    </div>
+  );
+}
+
+function analyzerSectionPendingLabel(phase: string | undefined): string {
+  if (phase === 'proposing') return 'Waiting for codegen step…';
+  return 'Analyzer model running…';
 }
 
 function parseOptions(q: { optionsJson: string }): string[] {
@@ -96,11 +207,6 @@ export default function EvaluationDetailPage() {
       ev.status === 'WAITING_FOR_HUMAN' ||
       ev.status === 'WAITING_FOR_REVIEW');
 
-  useEffect(() => {
-    if (!ev?.steps?.length) return;
-    setSelectedStepIdx(ev.steps.length - 1);
-  }, [ev?.steps?.length, ev?.id]);
-
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['evaluation', id] });
     void queryClient.invalidateQueries({ queryKey: ['evaluations'] });
@@ -111,13 +217,23 @@ export default function EvaluationDetailPage() {
     onStale: invalidate,
   });
 
+  const displaySteps = useMemo(
+    () => mergeStepsWithLivePlaceholder(ev?.steps ?? [], lastProgress),
+    [ev?.steps, lastProgress],
+  );
+
+  useEffect(() => {
+    if (!displaySteps.length) return;
+    setSelectedStepIdx(displaySteps.length - 1);
+  }, [displaySteps.length, ev?.id]);
+
   useEffect(() => {
     const el = stepCardRefs.current[selectedStepIdx];
     if (el) {
       // Align trailing edge so the latest step stays toward the right as the strip grows leftward.
       el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
     }
-  }, [selectedStepIdx, ev?.steps?.length, lastProgress?.sequence]);
+  }, [selectedStepIdx, displaySteps.length, lastProgress?.sequence]);
 
   const handleDetachPreview = useCallback(() => {
     if (!id) return;
@@ -574,7 +690,7 @@ export default function EvaluationDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2 border-b border-gray-100">
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <h2 className="text-sm font-semibold text-gray-800 shrink-0">Step timeline</h2>
-                {ev.steps.length > 0 && (
+                {displaySteps.length > 0 && (
                   <div className="flex items-center gap-1 overflow-x-auto min-w-0 flex-1 py-1">
                     <button
                       type="button"
@@ -586,7 +702,7 @@ export default function EvaluationDetailPage() {
                       <ChevronLeft size={16} />
                     </button>
                     <div className="flex items-center gap-1 text-xs text-gray-600">
-                      {ev.steps.map((st, idx) => (
+                      {displaySteps.map((st, idx) => (
                         <button
                           key={st.id}
                           type="button"
@@ -607,9 +723,9 @@ export default function EvaluationDetailPage() {
                     <button
                       type="button"
                       className="p-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40 shrink-0"
-                      disabled={selectedStepIdx >= ev.steps.length - 1}
+                      disabled={selectedStepIdx >= displaySteps.length - 1}
                       onClick={() =>
-                        setSelectedStepIdx((i) => Math.min(ev.steps.length - 1, i + 1))
+                        setSelectedStepIdx((i) => Math.min(displaySteps.length - 1, i + 1))
                       }
                       aria-label="Next step"
                     >
@@ -630,69 +746,127 @@ export default function EvaluationDetailPage() {
                 </button>
               )}
             </div>
-            {ev.steps.length === 0 ? (
+            {displaySteps.length === 0 ? (
               <p className="text-sm text-gray-500 px-4 py-6">
                 No steps yet. Start the run to record each step (inputs and outputs appear after the model runs).
               </p>
             ) : (
               <div className="flex w-full min-w-0 flex-row gap-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 scroll-smooth snap-x snap-mandatory">
-                {ev.steps.map((st, idx) => (
-                  <div
-                    key={st.id}
-                    ref={(el) => {
-                      stepCardRefs.current[idx] = el;
-                    }}
-                    className={`snap-center shrink-0 min-w-0 flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
-                      selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <span className="font-semibold text-gray-900">Step {st.sequence}</span>
-                        {st.stepTitle ? (
-                          <p className="text-xs text-gray-600 mt-0.5">{st.stepTitle}</p>
+                {displaySteps.map((st, idx) => {
+                  const load = getLiveLoadingFlags(st, lastProgress);
+                  const showCodegenFromLive =
+                    load.codegenOutputs &&
+                    lastProgress?.sequence === st.sequence &&
+                    lastProgress.phase === 'executing' &&
+                    (lastProgress.thinking || lastProgress.playwrightCode);
+                  return (
+                    <div
+                      key={st.id}
+                      ref={(el) => {
+                        stepCardRefs.current[idx] = el;
+                      }}
+                      className={`snap-center shrink-0 min-w-0 flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
+                        selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <span className="font-semibold text-gray-900">Step {st.sequence}</span>
+                          {st.stepTitle ? (
+                            <p className="text-xs text-gray-600 mt-0.5">{st.stepTitle}</p>
+                          ) : null}
+                        </div>
+                        {st.decision ? (
+                          <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
+                            {st.decision}
+                          </span>
+                        ) : lastProgress?.sequence === st.sequence && lastProgress.phase ? (
+                          <span className="text-[10px] uppercase tracking-wide text-[#4B90FF] shrink-0 max-w-[120px] truncate" title={String(lastProgress.phase)}>
+                            {String(lastProgress.phase).replace(/_/g, ' ')}
+                          </span>
                         ) : null}
                       </div>
-                      {st.decision ? (
-                        <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
-                          {st.decision}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <span className="text-gray-500 font-medium block mb-1">Activity log before this step</span>
-                        <div className="max-h-24 overflow-y-auto rounded border border-gray-100 bg-gray-50/80 p-2 font-mono text-gray-700 whitespace-pre-wrap">
-                          {st.progressSummaryBefore?.trim() || '(empty)'}
+                      <div className="space-y-3 text-xs">
+                        <div>
+                          <span className="text-gray-500 font-medium block mb-1">Activity log before this step</span>
+                          <div className="max-h-24 overflow-y-auto rounded border border-gray-100 bg-gray-50/80 p-2 font-mono text-gray-700 whitespace-pre-wrap">
+                            {st.progressSummaryBefore?.trim() || '(empty)'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-gray-500 font-medium">Codegen inputs (LLM)</span>
+                            <ViewportJpegPreviewIconButton
+                              base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
+                              icon={Image}
+                              modalTitle="Codegen — viewport JPEG sent to the model"
+                              openLabel="Preview viewport JPEG sent to the codegen model"
+                              emptyLabel="No stored viewport JPEG (older runs did not persist it)"
+                            />
+                          </div>
+                          {load.codegenInputs ? (
+                            <PendingPanel
+                              label={
+                                lastProgress?.phase === 'proposing'
+                                  ? 'Capturing inputs for codegen…'
+                                  : 'Loading codegen inputs…'
+                              }
+                            />
+                          ) : (
+                            <JsonBlock
+                              value={omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64'])}
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-medium block mb-1">Codegen outputs</span>
+                          {load.codegenOutputs ? (
+                            showCodegenFromLive ? (
+                              <JsonBlock
+                                value={{
+                                  thinking: lastProgress.thinking,
+                                  playwrightCode: lastProgress.playwrightCode,
+                                  expectedOutcome: lastProgress.expectedOutcome,
+                                }}
+                              />
+                            ) : (
+                              <PendingPanel label="Codegen model running…" />
+                            )
+                          ) : (
+                            <JsonBlock value={st.codegenOutputJson} />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-gray-500 font-medium">Analyzer inputs</span>
+                            <ViewportJpegPreviewIconButton
+                              base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
+                              icon={ScanSearch}
+                              modalTitle="Analyzer — after-step viewport JPEG sent to the model"
+                              openLabel="Preview after-step viewport JPEG sent to the analyzer"
+                              emptyLabel="No stored after-step JPEG (step not analyzed yet or older runs)"
+                            />
+                          </div>
+                          {load.analyzerInputs ? (
+                            <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
+                          ) : (
+                            <JsonBlock
+                              value={omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64'])}
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-medium block mb-1">Analyzer outputs</span>
+                          {load.analyzerOutputs ? (
+                            <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
+                          ) : (
+                            <JsonBlock value={st.analyzerOutputJson} />
+                          )}
                         </div>
                       </div>
-                      <div>
-                        <span className="text-gray-500 font-medium block mb-1">Codegen inputs (LLM)</span>
-                        <JsonBlock value={st.codegenInputJson} />
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-medium block mb-1">Codegen outputs</span>
-                        <JsonBlock value={st.codegenOutputJson} />
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-medium block mb-1">Analyzer inputs</span>
-                        <JsonBlock value={st.analyzerInputJson} />
-                      </div>
-                      <div>
-                        <span className="text-gray-500 font-medium block mb-1">Analyzer outputs</span>
-                        <JsonBlock value={st.analyzerOutputJson} />
-                      </div>
-                      {lastProgress?.sequence === st.sequence && lastProgress.phase ? (
-                        <div className="pt-2 border-t border-dashed border-gray-200">
-                          <span className="text-gray-500">Live event · {String(lastProgress.phase)}</span>
-                          <pre className="mt-1 text-[10px] overflow-auto max-h-32 whitespace-pre-wrap break-words">
-                            {JSON.stringify(lastProgress, null, 2)}
-                          </pre>
-                        </div>
-                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {ev.progressSummary ? (

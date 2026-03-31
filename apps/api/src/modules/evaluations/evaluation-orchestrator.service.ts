@@ -177,6 +177,8 @@ export class EvaluationOrchestratorService {
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'proposing',
         sequence,
+        progressSummaryBefore,
+        pageUrl,
       });
 
       const codegenInputJson = {
@@ -186,7 +188,8 @@ export class EvaluationOrchestratorService {
         desiredOutput: ev.desiredOutput,
         progressSummaryBefore,
         priorStepsBrief: priorBrief,
-        note: 'Viewport JPEG sent to the model as a separate image attachment; not persisted in the database.',
+        viewportJpegBase64: screenshotB64,
+        note: 'Viewport JPEG sent to the codegen model (also stored as viewportJpegBase64 for UI preview).',
       };
 
       const proposed = await this.llm.evaluationProposePlaywrightStep(
@@ -254,6 +257,14 @@ export class EvaluationOrchestratorService {
       const afterB64 = afterJpeg.toString('base64');
       const afterUrl = page.url();
 
+      this.recording.emitEvaluationProgress(evaluationId, {
+        phase: 'analyzing',
+        sequence,
+        pageUrlAfter: afterUrl,
+        executionOk,
+        errorMessage: errorMessage ?? null,
+      });
+
       const analysis = await this.llm.evaluationAnalyzeAfterStep(
         {
           intent: ev.intent,
@@ -276,7 +287,8 @@ export class EvaluationOrchestratorService {
         executionOk,
         errorMessage: errorMessage ?? null,
         pageUrlAfter: afterUrl,
-        note: 'After-step viewport JPEG sent to the model as a separate image attachment; not persisted.',
+        afterStepViewportJpegBase64: afterB64,
+        note: 'After-step viewport JPEG sent to the analyzer model (also stored as afterStepViewportJpegBase64 for UI preview).',
       };
 
       const analyzerOutputJson = {

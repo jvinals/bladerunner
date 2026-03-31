@@ -2,6 +2,20 @@
 
 ## 2026-03-31
 
+- `0.10.98`: evaluation **live step cards** — placeholder step **as soon as** `proposing` runs (activity log + spinners); **`analyzing`** phase + richer **`proposing`** socket payload; refetch on **`executing`** / **`paused_review`**; spinners for codegen/analyzer sections until data arrives; live phase badge on step header. `@bladerunner/api 0.6.90`, `@bladerunner/web 0.7.55`.
+
+- `0.10.97`: removed session `3619df` debug ingest **`fetch`** from **`requestBrowserFromWorker`** and browser-worker control **`close`** handler; **clearer disconnect log line** retained. `@bladerunner/api 0.6.89`, `@bladerunner/browser-worker 0.2.5`.
+
+- `0.10.96`: debug ingest (session `3619df`) on **`requestBrowserFromWorker`** and browser-worker **control socket close** to confirm launch handshake; worker log clarifies disconnect is **expected** after launch. `@bladerunner/api 0.6.88`, `@bladerunner/browser-worker 0.2.4`.
+
+- `0.10.95`: evaluation step detail — **icon modal previews** for codegen viewport JPEG and analyzer after-step JPEG (`ViewportJpegPreviewIconButton`); orchestrator now persists **`viewportJpegBase64`** / **`afterStepViewportJpegBase64`** on step JSON. `@bladerunner/api 0.6.87`, `@bladerunner/web 0.7.54`.
+
+- `0.10.94`: removed session `3619df` debug ingest **`fetch`** instrumentation from evaluations `setRunModeIfQueued`, `resetForReprocess`, and **`POST /start`** / **`reprocess`** handlers. `@bladerunner/api 0.6.86`.
+
+- `0.10.93`: **`setRunModeIfQueued`** no-ops when the evaluation is already **RUNNING** / **WAITING_FOR_HUMAN** / **WAITING_FOR_REVIEW**, so a duplicate **`POST /start`** (e.g. after **Re-run** while the UI still showed queued) no longer returns 400. `@bladerunner/api 0.6.85`.
+
+- `0.10.92`: temporary debug instrumentation (session `3619df`) on `POST /evaluations/:id/start` and `reprocess`, plus `setRunModeIfQueued` / `resetForReprocess` for run-mode 400 diagnosis. `@bladerunner/api 0.6.84`.
+
 - `0.10.91`: **New evaluation** form fills **Start URL** from the selected project’s URL when present (adds `https://` if missing). `@bladerunner/web 0.7.53`.
 
 - `0.10.90`: evaluation step cards use **half the timeline strip width** (`flex-[0_0_calc(50%-0.5rem)]` with `gap-4`). `@bladerunner/web 0.7.52`.

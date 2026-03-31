@@ -92,7 +92,9 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('[browser-worker] Client disconnected');
+    console.log(
+      '[browser-worker] Control client disconnected (normal: API closes this socket after launch; browser server keeps running until shutdown)',
+    );
   });
 });
 

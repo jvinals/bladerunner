@@ -86,7 +86,11 @@ export class EvaluationsService {
     });
   }
 
-  /** Persist run mode when starting or re-running from QUEUED only. */
+  /**
+   * Persist run mode when the evaluation is queued for a new run.
+   * If the evaluation is already running (or paused for human/review), ignore redundant runMode
+   * payloads — duplicate POST /start after the run has begun must not 400.
+   */
   async setRunModeIfQueued(
     id: string,
     userId: string,
@@ -95,13 +99,21 @@ export class EvaluationsService {
     if (runMode === undefined) return;
     const ev = await this.prisma.evaluation.findFirst({ where: { id, userId }, select: { status: true } });
     if (!ev) throw new NotFoundException(`Evaluation ${id} not found`);
-    if (ev.status !== 'QUEUED') {
-      throw new BadRequestException('Run mode can only be set when the evaluation is queued');
+    if (ev.status === 'QUEUED') {
+      await this.prisma.evaluation.update({
+        where: { id, userId },
+        data: { runMode },
+      });
+      return;
     }
-    await this.prisma.evaluation.update({
-      where: { id, userId },
-      data: { runMode },
-    });
+    if (
+      ev.status === 'RUNNING' ||
+      ev.status === 'WAITING_FOR_HUMAN' ||
+      ev.status === 'WAITING_FOR_REVIEW'
+    ) {
+      return;
+    }
+    throw new BadRequestException('Run mode can only be set when the evaluation is queued');
   }
 
   async appendProgressSummary(id: string, userId: string, line: string) {

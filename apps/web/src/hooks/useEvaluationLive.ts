@@ -14,6 +14,11 @@ export type EvaluationProgressPayload = {
   rationale?: string;
   question?: string;
   options?: string[];
+  progressSummaryBefore?: string;
+  pageUrl?: string;
+  pageUrlAfter?: string;
+  executionOk?: boolean;
+  errorMessage?: string | null;
   [key: string]: unknown;
 };
 
@@ -59,7 +64,13 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
       if (payload.evaluationId !== evaluationId) return;
       setLastProgress(payload);
       const phase = payload.phase;
-      if (phase === 'analyzed' || phase === 'completed' || phase === 'waiting_human') {
+      if (
+        phase === 'analyzed' ||
+        phase === 'completed' ||
+        phase === 'waiting_human' ||
+        phase === 'executing' ||
+        phase === 'paused_review'
+      ) {
         onStaleRef.current?.();
       }
     };
