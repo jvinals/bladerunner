@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { evaluationsApi, type CreateEvaluationBody } from '@/lib/api';
+import {
+  evaluationsApi,
+  projectsApi,
+  type AutoClerkOtpUiMode,
+  type CreateEvaluationBody,
+  type ProjectDto,
+} from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ClipboardList, Plus, ExternalLink } from 'lucide-react';
@@ -13,10 +19,18 @@ export default function EvaluationsPage() {
   const [url, setUrl] = useState('https://');
   const [intent, setIntent] = useState('');
   const [desiredOutput, setDesiredOutput] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [autoSignIn, setAutoSignIn] = useState(false);
+  const [autoSignInOtp, setAutoSignInOtp] = useState<AutoClerkOtpUiMode>('default');
 
   const { data: rows = [], isLoading, error } = useQuery({
     queryKey: ['evaluations'],
     queryFn: () => evaluationsApi.list(),
+  });
+
+  const { data: projects = [] as ProjectDto[] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
   });
 
   const createMutation = useMutation({
@@ -27,6 +41,9 @@ export default function EvaluationsPage() {
       setUrl('https://');
       setIntent('');
       setDesiredOutput('');
+      setProjectId('');
+      setAutoSignIn(false);
+      setAutoSignInOtp('default');
       setPanelOpen(false);
     },
   });
@@ -34,12 +51,18 @@ export default function EvaluationsPage() {
   const submit = () => {
     const u = url.trim();
     if (!u || !intent.trim() || !desiredOutput.trim()) return;
-    createMutation.mutate({
+    const body: CreateEvaluationBody = {
       name: name.trim() || undefined,
       url: u,
       intent: intent.trim(),
       desiredOutput: desiredOutput.trim(),
-    });
+      ...(projectId ? { projectId } : {}),
+      autoSignIn,
+    };
+    if (autoSignIn && autoSignInOtp !== 'default') {
+      body.autoSignInClerkOtpMode = autoSignInOtp;
+    }
+    createMutation.mutate(body);
   };
 
   if (isLoading) return <LoadingState message="Loading evaluations..." />;
@@ -81,6 +104,55 @@ export default function EvaluationsPage() {
                 placeholder="e.g. Checkout happy path"
               />
             </label>
+            <label className="block sm:col-span-2">
+              <span className="text-xs font-medium text-gray-500">Project (optional)</span>
+              <select
+                className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 bg-white"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                aria-label="Project"
+              >
+                <option value="">No project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Manage projects under <Link to="/projects" className="text-[#4B90FF] hover:underline">Projects</Link>.
+              </p>
+            </label>
+            <div className="block sm:col-span-2 rounded-md border border-gray-100 bg-gray-50/80 px-3 py-3 space-y-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-gray-300"
+                  checked={autoSignIn}
+                  onChange={(e) => setAutoSignIn(e.target.checked)}
+                />
+                <span className="text-sm text-gray-800">
+                  Auto-sign in when the app shows a sign-in screen (Clerk or project test user credentials).
+                </span>
+              </label>
+              {autoSignIn && (
+                <div className="pl-6 flex flex-wrap items-center gap-2 text-[11px] text-gray-600">
+                  <label htmlFor="eval-create-clerk-otp" className="whitespace-nowrap">
+                    Clerk OTP
+                  </label>
+                  <select
+                    id="eval-create-clerk-otp"
+                    value={autoSignInOtp}
+                    onChange={(e) => setAutoSignInOtp(e.target.value as AutoClerkOtpUiMode)}
+                    className="flex-1 min-w-[160px] border border-gray-200 rounded-md px-2 py-1.5 text-[11px] text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                  >
+                    <option value="default">Server default</option>
+                    <option value="clerk_test_email">Test email (424242)</option>
+                    <option value="mailslurp">MailSlurp inbox</option>
+                  </select>
+                </div>
+              )}
+            </div>
             <label className="block sm:col-span-2">
               <span className="text-xs font-medium text-gray-500">Start URL</span>
               <input
@@ -144,6 +216,19 @@ export default function EvaluationsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900 truncate">{row.name}</span>
                     <StatusBadge status={row.status} size="sm" />
+                    {row.project && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] text-gray-500 max-w-[140px] truncate"
+                        title={row.project.name}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: row.project.color }}
+                          aria-hidden
+                        />
+                        {row.project.name}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1">
                     <ExternalLink size={12} className="shrink-0 opacity-60" />

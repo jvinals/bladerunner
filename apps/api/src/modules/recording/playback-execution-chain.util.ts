@@ -1,4 +1,4 @@
-import type { RunStep } from '@prisma/client';
+import type { RunStep } from '../../generated/prisma/client';
 import { isClerkAutoSignInMetadata } from './clerk-auto-sign-in-step-metadata';
 
 type StepMeta = { clerkAuthPhase?: boolean; clerkAutomationCanonical?: boolean };

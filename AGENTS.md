@@ -4,6 +4,7 @@
 - For AI prompt and vision flows, phrase steps as neutral QA on staging or local apps (e.g. verify errors, permissions, expected messages) rather than attack-like imperatives, to reduce empty model output from safety refusals.
 
 ## Learned Workspace Facts
+- Autonomous **evaluations**: use **Start run** only when status is **QUEUED**; after **FAILED**, **COMPLETED**, **CANCELLED**, or **WAITING_FOR_HUMAN**, use **Retry run** / **Re-run** (reprocess), which resets artifacts and re-queues. A second **Start run** while a run is already in progress returns `scheduled: false` and does not start a parallel orchestrator loop.
 - BladeRunner's default Clerk OTP mode for automatic sign-in should be MailSlurp when no explicit mode is selected.
 - Automatic sign-in during recording and playback is modeled as one first-class step, with provider-specific auth metadata kept separate from the normal Playwright step chain.
 - Generic email/password automatic sign-in should tolerate delayed auth UI and staged email-then-password flows (and similar) before failing; OTP completion must not treat same-host URLs as success while the OTP UI is still active.
@@ -12,3 +13,5 @@
 - For resumable runs, playback and continue-recording on run detail should key off whether a live recording session exists (not only persisted `RECORDING` status), because a run can be open for recording without an active in-memory browser session.
 - Run detail should keep `Continue recording` available during playback; handoff to the recording workspace should not block on awaiting full playback teardown (stop playback in the background).
 - Playback must rewrite or escape Playwright locator strings that embed single quotes inside `.locator('...')` / `.locator("...")` (e.g. `[class*='...']`) so the snippet stays valid JavaScript when compiled for execution.
+- Browser-worker should pass `channel: 'chromium'` into `chromium.launchServer` (especially when headless) so Playwright uses the main Chromium bundle from `playwright install chromium`, not the separate `chromium-headless-shell` path that often triggers missing-executable errors locally.
+- `POST /evaluations/:id/start` does not reset a FAILED evaluation to a runnable state; Retry uses `POST .../reprocess` (`resetForReprocess` → QUEUED). Calling Start while status is FAILED yields "Evaluation is not runnable".

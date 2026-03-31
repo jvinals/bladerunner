@@ -19,16 +19,61 @@ export class EvaluationOrchestratorService {
     private readonly evaluations: EvaluationsService,
   ) {}
 
-  /** Fire-and-forget autonomous loop (or resume after human). */
-  scheduleRun(evaluationId: string, userId: string, opts?: { resumeAfterHuman?: boolean }): void {
+  /**
+   * Fire-and-forget autonomous loop (or resume after human).
+   * @returns false if a run is already in progress for this id (caller should refetch; do not treat as error).
+   */
+  scheduleRun(evaluationId: string, userId: string, opts?: { resumeAfterHuman?: boolean }): boolean {
     if (this.active.has(evaluationId)) {
-      return;
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H1',
+          location: 'evaluation-orchestrator.service.ts:scheduleRun',
+          message: 'scheduleRun skipped — evaluationId already active',
+          data: { evaluationId },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return false;
     }
     this.active.add(evaluationId);
+    // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H2',
+        location: 'evaluation-orchestrator.service.ts:scheduleRun',
+        message: 'scheduleRun started runLoop',
+        data: { evaluationId },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     void this.runLoop(evaluationId, userId, opts ?? {})
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.error(`Evaluation ${evaluationId} failed: ${msg}`);
+        // #region agent log
+          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+            body: JSON.stringify({
+              sessionId: '3619df',
+              hypothesisId: 'H3',
+            location: 'evaluation-orchestrator.service.ts:runLoop.catch',
+            message: 'runLoop failed',
+            data: { evaluationId, error: msg.slice(0, 500) },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         void this.prisma.evaluation
           .update({
             where: { id: evaluationId, userId },
@@ -44,6 +89,7 @@ export class EvaluationOrchestratorService {
       .finally(() => {
         this.active.delete(evaluationId);
       });
+    return true;
   }
 
   private async runLoop(
@@ -53,8 +99,31 @@ export class EvaluationOrchestratorService {
   ): Promise<void> {
     const ev = await this.prisma.evaluation.findFirst({
       where: { id: evaluationId, userId },
+      include: {
+        project: {
+          select: {
+            testUserEmail: true,
+            testUserPassword: true,
+            testEmailProvider: true,
+          },
+        },
+      },
     });
     if (!ev) throw new NotFoundException('Evaluation not found');
+    // #region agent log
+    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+      body: JSON.stringify({
+        sessionId: '3619df',
+        hypothesisId: 'H2',
+        location: 'evaluation-orchestrator.service.ts:runLoop:entry',
+        message: 'runLoop loaded evaluation',
+        data: { evaluationId, status: ev.status },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (ev.status === 'COMPLETED' || ev.status === 'CANCELLED' || ev.status === 'FAILED') {
       throw new BadRequestException('Evaluation is not runnable');
     }
@@ -68,6 +137,8 @@ export class EvaluationOrchestratorService {
       },
     });
 
+    const authState = { clerkFullSignInDone: false };
+
     const sessionExists = !!this.recording.getEvaluationSession(evaluationId);
     if (!sessionExists) {
       await this.recording.startEvaluationSession(evaluationId, userId);
@@ -76,11 +147,36 @@ export class EvaluationOrchestratorService {
       if (!opts.resumeAfterHuman) {
         await s.page.goto(ev.url, { waitUntil: 'domcontentloaded', timeout: 120_000 });
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H6',
+          location: 'evaluation-orchestrator.service.ts:runLoop',
+          message: 'evaluation browser session ready and initial navigation done',
+          data: { evaluationId, pageUrl: s.page.url() },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
     }
 
     let stepCount = await this.prisma.evaluationStep.count({ where: { evaluationId } });
     while (stepCount < MAX_EVALUATION_STEPS) {
-      const fresh = await this.prisma.evaluation.findFirst({ where: { id: evaluationId, userId } });
+      const fresh = await this.prisma.evaluation.findFirst({
+        where: { id: evaluationId, userId },
+        include: {
+          project: {
+            select: {
+              testUserEmail: true,
+              testUserPassword: true,
+              testEmailProvider: true,
+            },
+          },
+        },
+      });
       if (!fresh || fresh.status === 'CANCELLED') {
         await this.recording.stopEvaluationSession(evaluationId, userId);
         return;
@@ -92,6 +188,26 @@ export class EvaluationOrchestratorService {
       const page = this.recording.getEvaluationSession(evaluationId)?.page;
       if (!page) {
         throw new Error('Browser session lost');
+      }
+
+      const projectForAuth = fresh.project
+        ? {
+            testUserEmail: fresh.project.testUserEmail,
+            testUserPassword: fresh.project.testUserPassword,
+            testEmailProvider: fresh.project.testEmailProvider,
+          }
+        : null;
+      const signInOtpMode = this.recording.resolveClerkOtpModeForEvaluation(fresh.autoSignInClerkOtpMode);
+
+      if (fresh.autoSignIn) {
+        await this.recording.maybeEvaluationAutoSignInAssist(evaluationId, userId, {
+          runUrl: fresh.url,
+          projectForAuth,
+          wantAuto: true,
+          clerkOtpMode: signInOtpMode,
+          state: authState,
+        });
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
       }
 
       const sequence = await this.evaluations.nextStepSequence(evaluationId);
@@ -153,6 +269,17 @@ export class EvaluationOrchestratorService {
       } catch (e) {
         executionOk = false;
         errorMessage = e instanceof Error ? e.message : String(e);
+      }
+
+      if (fresh.autoSignIn) {
+        await this.recording.maybeEvaluationAutoSignInAssist(evaluationId, userId, {
+          runUrl: fresh.url,
+          projectForAuth,
+          wantAuto: true,
+          clerkOtpMode: signInOtpMode,
+          state: authState,
+        });
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
       }
 
       const afterJpeg = await page.screenshot({ type: 'jpeg', quality: LLM_JPEG_QUALITY });

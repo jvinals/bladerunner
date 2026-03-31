@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { EvaluationStatus, EvaluationStepDecision, Prisma } from '@prisma/client';
+import type { EvaluationStatus, EvaluationStepDecision, Prisma } from '../../generated/prisma/client';
 
 type JsonValue = Prisma.InputJsonValue;
 
@@ -8,18 +8,37 @@ type JsonValue = Prisma.InputJsonValue;
 export class EvaluationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async assertProjectOwned(userId: string, projectId: string): Promise<void> {
+    const p = await this.prisma.project.findFirst({ where: { id: projectId, userId } });
+    if (!p) throw new BadRequestException('Project not found or access denied');
+  }
+
   async create(
     userId: string,
-    data: { name?: string; url: string; intent: string; desiredOutput: string },
+    data: {
+      name?: string;
+      url: string;
+      intent: string;
+      desiredOutput: string;
+      projectId?: string | null;
+      autoSignIn?: boolean;
+      autoSignInClerkOtpMode?: 'mailslurp' | 'clerk_test_email' | null;
+    },
   ) {
+    if (data.projectId) {
+      await this.assertProjectOwned(userId, data.projectId);
+    }
     return this.prisma.evaluation.create({
       data: {
         userId,
+        projectId: data.projectId ?? null,
         name: data.name?.trim() || 'Evaluation',
         url: data.url.trim(),
         intent: data.intent.trim(),
         desiredOutput: data.desiredOutput.trim(),
         status: 'QUEUED',
+        autoSignIn: data.autoSignIn ?? false,
+        autoSignInClerkOtpMode: data.autoSignInClerkOtpMode ?? null,
       },
     });
   }
@@ -32,11 +51,15 @@ export class EvaluationsService {
         id: true,
         name: true,
         url: true,
+        projectId: true,
         status: true,
         createdAt: true,
         updatedAt: true,
         startedAt: true,
         completedAt: true,
+        project: { select: { id: true, name: true, color: true } },
+        autoSignIn: true,
+        autoSignInClerkOtpMode: true,
       },
     });
   }
@@ -45,6 +68,7 @@ export class EvaluationsService {
     const ev = await this.prisma.evaluation.findFirst({
       where: { id, userId },
       include: {
+        project: { select: { id: true, name: true, color: true } },
         steps: { orderBy: { sequence: 'asc' } },
         questions: { orderBy: { createdAt: 'desc' } },
         reports: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -170,5 +194,73 @@ export class EvaluationsService {
       select: { sequence: true },
     });
     return (max?.sequence ?? 0) + 1;
+  }
+
+  /** Update copy fields when not actively running. */
+  async updateFields(
+    id: string,
+    userId: string,
+    data: {
+      name?: string;
+      intent?: string;
+      desiredOutput?: string;
+      projectId?: string | null;
+      autoSignIn?: boolean;
+      autoSignInClerkOtpMode?: 'mailslurp' | 'clerk_test_email' | null;
+    },
+  ) {
+    const ev = await this.prisma.evaluation.findFirst({ where: { id, userId } });
+    if (!ev) throw new NotFoundException(`Evaluation ${id} not found`);
+    if (ev.status === 'RUNNING') {
+      throw new BadRequestException('Cannot edit intent or output while the evaluation is running');
+    }
+    const patch: Prisma.EvaluationUpdateInput = {};
+    if (data.name !== undefined) patch.name = data.name.trim() || 'Evaluation';
+    if (data.intent !== undefined) patch.intent = data.intent.trim();
+    if (data.desiredOutput !== undefined) patch.desiredOutput = data.desiredOutput.trim();
+    if (data.autoSignIn !== undefined) patch.autoSignIn = data.autoSignIn;
+    if (data.autoSignInClerkOtpMode !== undefined) {
+      patch.autoSignInClerkOtpMode = data.autoSignInClerkOtpMode;
+    }
+    if (data.projectId !== undefined) {
+      if (data.projectId === null) {
+        patch.project = { disconnect: true };
+      } else {
+        await this.assertProjectOwned(userId, data.projectId);
+        patch.project = { connect: { id: data.projectId } };
+      }
+    }
+    if (Object.keys(patch).length === 0) {
+      return this.findOne(id, userId);
+    }
+    await this.prisma.evaluation.update({ where: { id, userId }, data: patch });
+    return this.findOne(id, userId);
+  }
+
+  /**
+   * Clear steps, questions, and reports; reset to QUEUED for a fresh run (same evaluation id).
+   * Caller should stop any live browser session first.
+   */
+  async resetForReprocess(id: string, userId: string): Promise<void> {
+    const ev = await this.prisma.evaluation.findFirst({ where: { id, userId } });
+    if (!ev) throw new NotFoundException(`Evaluation ${id} not found`);
+    if (ev.status === 'RUNNING') {
+      throw new BadRequestException('Cannot reprocess while the evaluation is running; cancel first');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.evaluationStep.deleteMany({ where: { evaluationId: id } });
+      await tx.evaluationQuestion.deleteMany({ where: { evaluationId: id } });
+      await tx.evaluationReport.deleteMany({ where: { evaluationId: id } });
+      await tx.evaluation.update({
+        where: { id, userId },
+        data: {
+          status: 'QUEUED',
+          progressSummary: null,
+          failureMessage: null,
+          startedAt: null,
+          completedAt: null,
+        },
+      });
+    });
   }
 }

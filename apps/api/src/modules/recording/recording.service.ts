@@ -19,7 +19,7 @@ type SnapshotStorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { Prisma, type RunStep } from '@prisma/client';
+import { Prisma, type RunStep } from '../../generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
@@ -625,7 +625,27 @@ export class RecordingService extends EventEmitter {
       streamSmoothness: 'high',
     });
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
-    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
+    let wsEndpoint: string;
+    try {
+      wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
+    } catch (err) {
+      // #region agent log
+      const msg = err instanceof Error ? err.message : String(err);
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H1',
+          location: 'recording.service.ts:startEvaluationSession:worker',
+          message: 'requestBrowserFromWorker failed',
+          data: { evaluationId, err: msg.slice(0, 500) },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      throw err;
+    }
     const browser = await chromium.connect(wsEndpoint);
     const ffmpegStagingPath = path.join(os.tmpdir(), `br-eval-screencast-${evaluationId}-${randomUUID()}.mp4`);
     const screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
@@ -664,6 +684,47 @@ export class RecordingService extends EventEmitter {
       }
       throw err;
     }
+  }
+
+  /**
+   * Clerk / generic test-user sign-in assist when the evaluation page looks like a login screen (same logic as playback).
+   * Call after navigation and after each Playwright step when `autoSignIn` is enabled on the evaluation.
+   */
+  async maybeEvaluationAutoSignInAssist(
+    evaluationId: string,
+    userId: string,
+    opts: {
+      runUrl: string;
+      projectForAuth: {
+        testUserEmail: string | null;
+        testUserPassword: string | null;
+        testEmailProvider: string | null;
+      } | null;
+      wantAuto: boolean;
+      clerkOtpMode: ClerkOtpMode;
+      state: { clerkFullSignInDone: boolean };
+    },
+  ): Promise<void> {
+    const session = this.evaluationSessions.get(evaluationId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+    const projectAuth = this.projectAuthFromProject(opts.projectForAuth);
+    await this.maybePlaybackClerkAuthAssist(
+      { page: session.page, projectAuth },
+      opts.runUrl,
+      opts.wantAuto,
+      opts.clerkOtpMode,
+      opts.state,
+    );
+  }
+
+  /** Resolve Clerk OTP mode for evaluations: stored preference or server default. */
+  resolveClerkOtpModeForEvaluation(stored: string | null | undefined): ClerkOtpMode {
+    if (stored === 'clerk_test_email' || stored === 'mailslurp') {
+      return stored;
+    }
+    return this.resolveClerkOtpMode(undefined);
   }
 
   async stopEvaluationSession(evaluationId: string, userId: string): Promise<void> {
@@ -4973,7 +5034,7 @@ export class RecordingService extends EventEmitter {
    * Clerk sign-in assist: test email (+clerk_test, code 424242) or MailSlurp inbox, when UI shows sign-in or OTP-only.
    */
   private async maybePlaybackClerkAuthAssist(
-    session: PlaybackSession,
+    session: Pick<PlaybackSession, 'page' | 'projectAuth'>,
     runUrl: string,
     wantAuto: boolean,
     otpMode: ClerkOtpMode,

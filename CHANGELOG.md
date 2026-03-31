@@ -2,6 +2,29 @@
 
 ## 2026-03-30
 
+- `0.10.83`: evaluation detail **Activity log** groups live last-event JSON and persisted progress in one bordered panel with internal scroll (`max-h-64`). `@bladerunner/web 0.7.46`.
+- `0.10.82`: debug instrumentation (session `3619df`) on evaluation `runLoop` entry, worker `requestBrowserFromWorker` failure, and `reprocess` path; `@bladerunner/api 0.6.81`, `@bladerunner/web 0.7.45`.
+- `0.10.81`: browser-worker `chromium.launchServer` sets `channel: 'chromium'` so headless uses the main bundled Chromium binary instead of `chromium-headless-shell` (avoids failures when only the shell path is missing from the Playwright cache).
+- `@bladerunner/browser-worker 0.2.3`: same.
+- `0.10.80`: root `postinstall` runs `playwright install chromium` so local dev (browser-worker `chromium.launchServer`) has matching Chromium / headless-shell binaries after `pnpm install`; set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` in CI if you do not need browsers. `@bladerunner/browser-worker 0.2.2`: align `playwright-core` to `^1.58.2` with the API package.
+- `0.10.79`: document that `evaluations.project_id` / auto-sign-in columns require `pnpm --filter @bladerunner/api migrate` (or `prisma migrate deploy`) so the DB matches the Prisma schema; fixes P2022 when migrations were not applied.
+- `@bladerunner/api 0.6.80`: same (operational fix; no code change beyond version).
+- `0.10.78`: evaluations support **Auto-sign in** (optional): when enabled, the autonomous browser uses the same Clerk / project test-user assist as playback whenever a sign-in page is detected (before each step and after Playwright execution).
+- `@bladerunner/api 0.6.79`: `Evaluation.autoSignIn`, `autoSignInClerkOtpMode`; `RecordingService.maybeEvaluationAutoSignInAssist` + `resolveClerkOtpModeForEvaluation`; migration `20260330180000_evaluation_auto_sign_in`.
+- `@bladerunner/web 0.7.44`: create + detail UI for auto sign-in and Clerk OTP mode.
+- `0.10.77`: evaluations can be linked to a **project** (optional `project_id` on evaluations; create/edit in UI from Projects-backed list).
+- `@bladerunner/api 0.6.78`: `Evaluation.projectId`, list/detail include `project` summary; create/update DTOs accept `projectId`; migration `20260330140000_evaluation_project_id`.
+- `@bladerunner/web 0.7.43`: project picker on evaluation create and detail; Evaluations list shows linked project name/color.
+- `0.10.76`: evaluations support editing global intent and desired output (PATCH), and **Re-run** / **Retry** via `POST /evaluations/:id/reprocess` which resets steps, questions, and reports then starts a new run.
+- `@bladerunner/api 0.6.77`: `UpdateEvaluationDto`, `PATCH /evaluations/:id`, `resetForReprocess`, `POST /evaluations/:id/reprocess`.
+- `@bladerunner/web 0.7.42`: evaluation detail textareas, Save changes, Re-run / Retry wired to reprocess; first-time **Start** remains for `QUEUED` only.
+- `0.10.75`: added detached evaluation live preview (`/evaluation-preview/:evaluationId`) with Detach / Reattach on the evaluation detail page, mirroring recording preview behavior.
+- `@bladerunner/web 0.7.41`: `DetachedEvaluationPreview` page, route, and inline preview hidden while detached (single stream via the detached window).
+- `0.10.74`: evaluation start now returns `scheduled` in the API JSON when a run was actually queued (skipped if a run is already in progress for that id); the detail page shows feedback and debug logs cover the start path.
+- `@bladerunner/web 0.7.40`: handle `scheduled: false` from `POST /evaluations/:id/start`, surface start errors, and instrument start mutation success/error.
+- `@bladerunner/api 0.6.76`: `scheduleRun` returns boolean; `scheduleRun` / `runLoop` / controller instrumented for session `91995d`.
+- `0.10.73`: fixed Prisma/pg TLS when `DATABASE_URL` includes `sslmode=require` so `ssl.rejectUnauthorized` is not overwritten by parsed connection options (resolves self-signed chain errors with `@prisma/adapter-pg`).
+- `@bladerunner/api 0.6.75`: build `PoolConfig` from `parse(DATABASE_URL)` with merged `ssl`, add direct `pg` + `pg-connection-string` dependencies.
 - `0.10.72`: added Evaluations (autonomous LLM + Playwright runs with human verification, final report, live UI, and socket progress).
 - `@bladerunner/web 0.7.39`: added `evaluationsApi`, `Evaluations` and `EvaluationDetail` pages, sidebar nav, `useEvaluationLive` for `/recording` frames and `evaluationProgress`, and status badges for evaluation states.
 - `@bladerunner/api 0.6.74`: added Prisma models and migrations, `EvaluationsModule` (orchestrator, REST + `start`/`cancel`/`human-answer`), evaluation browser sessions on the recording worker, `evaluationProgress` gateway events, and join-time catch-up frames for evaluation rooms.

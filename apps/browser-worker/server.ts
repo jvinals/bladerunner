@@ -36,8 +36,12 @@ wss.on('connection', (ws) => {
         }
 
         try {
+          // Default headless uses the separate "chromium-headless-shell" binary; if that cache entry is
+          // missing, launch fails. `channel: 'chromium'` uses the main bundled Chromium (same as
+          // `playwright install chromium`) — see playwright-core getExecutableName().
           browserServer = await chromium.launchServer({
             headless: true,
+            channel: 'chromium',
             args: [
               '--no-sandbox',
               '--disable-setuid-sandbox',

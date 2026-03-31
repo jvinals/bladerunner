@@ -479,10 +479,22 @@ export type EvaluationStatus =
   | 'FAILED'
   | 'CANCELLED';
 
+export type EvaluationProjectSummary = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 export type EvaluationRow = {
   id: string;
   name: string;
   url: string;
+  projectId: string | null;
+  project: EvaluationProjectSummary | null;
+  /** When true, the run attempts automatic sign-in when a login screen is detected (Clerk or project test user). */
+  autoSignIn: boolean;
+  /** Clerk OTP path when using auto sign-in on Clerk pages; null = server default. */
+  autoSignInClerkOtpMode: ClerkOtpMode | null;
   status: EvaluationStatus;
   createdAt: string;
   updatedAt: string;
@@ -538,6 +550,20 @@ export type CreateEvaluationBody = {
   url: string;
   intent: string;
   desiredOutput: string;
+  /** Optional project to associate (must be one of your projects). */
+  projectId?: string | null;
+  autoSignIn?: boolean;
+  /** Clerk OTP mode when auto sign-in hits Clerk; omit for server default. */
+  autoSignInClerkOtpMode?: ClerkOtpMode | null;
+};
+
+export type UpdateEvaluationBody = {
+  name?: string;
+  intent?: string;
+  desiredOutput?: string;
+  projectId?: string | null;
+  autoSignIn?: boolean;
+  autoSignInClerkOtpMode?: ClerkOtpMode | null;
 };
 
 export const evaluationsApi = {
@@ -545,8 +571,15 @@ export const evaluationsApi = {
   create: (body: CreateEvaluationBody) =>
     apiFetch<EvaluationRow>('/evaluations', { method: 'POST', body: JSON.stringify(body) }),
   get: (id: string) => apiFetch<EvaluationDetail>(`/evaluations/${id}`),
+  patch: (id: string, body: UpdateEvaluationBody) =>
+    apiFetch<EvaluationDetail>(`/evaluations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   start: (id: string) =>
-    apiFetch<{ accepted: boolean; evaluationId: string }>(`/evaluations/${id}/start`, {
+    apiFetch<{ accepted: boolean; scheduled: boolean; evaluationId: string }>(`/evaluations/${id}/start`, {
+      method: 'POST',
+    }),
+  /** Clear steps/reports/questions and queue a new run (not for QUEUED first start — use `start`). */
+  reprocess: (id: string) =>
+    apiFetch<{ accepted: boolean; scheduled: boolean; evaluationId: string }>(`/evaluations/${id}/reprocess`, {
       method: 'POST',
     }),
   cancel: (id: string) =>
