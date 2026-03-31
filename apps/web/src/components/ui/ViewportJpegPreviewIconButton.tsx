@@ -134,12 +134,16 @@ export function getAnalyzerViewportJpegBase64(analyzerInputJson: unknown): strin
   return typeof v === 'string' && v.length > 0 ? v : undefined;
 }
 
-/** Replace large base64 fields in a copy of step JSON for readable `JsonBlock` output. */
-export function omitBinaryPreviewKeys(value: unknown, keys: string[]): unknown {
+/** Replace large base64 or long-text fields in a copy of step JSON for readable `JsonBlock` output. */
+export function omitBinaryPreviewKeys(
+  value: unknown,
+  keys: string[],
+  placeholder = '[viewport JPEG — use preview icon]',
+): unknown {
   if (value == null || typeof value !== 'object') return value;
   const o = { ...(value as Record<string, unknown>) };
   for (const k of keys) {
-    if (k in o) o[k] = '[viewport JPEG — use preview icon]';
+    if (k in o) o[k] = placeholder;
   }
   return o;
 }

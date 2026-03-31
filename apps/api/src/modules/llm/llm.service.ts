@@ -15,6 +15,7 @@ import {
   buildGeminiVerifyPrompt,
   generateGeminiPlaywrightSnippet,
   verifyGeminiPlaywrightAgainstDom,
+  truncateDomSectionsForGemini,
 } from './gemini-instruction.client';
 import { geminiChat } from './gemini-llm-chat.adapter';
 import { LlmConfigService } from './llm-config.service';
@@ -79,7 +80,7 @@ Rules:
 
 const EVALUATION_CODEGEN_SYSTEM = `You are a QA automation agent exploring a web app with Playwright. The user authorized testing against their own staging or demo app.
 
-You receive a screenshot of the current page, the starting URL, the overall evaluation intent, desired final output, and a short summary of prior steps.
+You receive a full-page Set-of-Marks screenshot (numeric badges on interactives), an interactive manifest with the same [n] indices, a Playwright CDP accessibility snapshot, the starting URL, the overall evaluation intent, desired final output, and a short summary of prior steps. Use screenshot + manifest + snapshot together; emitted Playwright must use normal locators (getByRole, getByLabel, getByText, etc.) — never reference badge numbers in the code.
 
 Respond ONLY with valid JSON:
 {
@@ -92,10 +93,13 @@ Respond ONLY with valid JSON:
 Rules:
 - Output executable Playwright snippets only; no TypeScript types; no require/import.
 - Prefer getByRole, getByLabel, getByText with stable accessible names.
+- For custom selects/listboxes, use getByRole('option', { name: '…', exact: true }) or scope to the open listbox so strict mode does not match multiple options.
 - One focused step per response; avoid multi-page tours in one snippet.
 - If the goal appears complete from the screenshot, use a no-op or wait: e.g. await page.waitForTimeout(500); and explain in expectedOutcome that you are confirming completion.`;
 
 const EVALUATION_ANALYZER_SYSTEM = `You judge progress of an autonomous web evaluation. The app under test is owned by the user for QA.
+
+You receive a full-page Set-of-Marks screenshot after the step, plus manifest and accessibility snapshot text aligned with the same capture pipeline as codegen.
 
 Respond ONLY with valid JSON:
 {
@@ -931,9 +935,15 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       priorStepsBrief: string;
       screenshotBase64: string;
       pageUrl: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
     },
     opts?: { userId?: string; signal?: AbortSignal },
   ): Promise<{ stepTitle: string; thinking: string; playwrightCode: string; expectedOutcome: string }> {
+    const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
+      input.somManifest,
+      input.accessibilitySnapshot,
+    );
     const user = `Start URL: ${input.url}
 Current page URL: ${input.pageUrl}
 Overall intent:
@@ -948,7 +958,13 @@ ${input.progressSummary?.trim() || '(none yet)'}
 Prior steps (brief):
 ${input.priorStepsBrief.trim() || '(none)'}
 
-The attached image is the current viewport.`;
+Interactive manifest (Set-of-Marks [n] lines; aligned with badges on the attached full-page image):
+${somT || '(empty)'}
+
+Playwright CDP accessibility snapshot (captured before overlay; structural a11y tree):
+${a11yT || '(empty)'}
+
+The attached image is the full-page Set-of-Marks screenshot (numeric badges on interactives).`;
     const res = await this.chatJson(
       opts?.userId,
       'evaluation_codegen',
@@ -992,6 +1008,8 @@ The attached image is the current viewport.`;
       errorMessage?: string;
       pageUrlAfter: string;
       screenshotAfterBase64: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
     },
     opts?: { userId?: string; signal?: AbortSignal },
   ): Promise<{
@@ -1001,6 +1019,10 @@ The attached image is the current viewport.`;
     humanQuestion?: string;
     humanOptions?: string[];
   }> {
+    const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
+      input.somManifest,
+      input.accessibilitySnapshot,
+    );
     const user = `Overall intent:
 ${input.intent}
 
@@ -1018,7 +1040,13 @@ ${input.errorMessage ? `Error: ${input.errorMessage}` : ''}
 
 Page URL after step: ${input.pageUrlAfter}
 
-The attached image is the viewport after execution.`;
+Interactive manifest after step (Set-of-Marks [n]; aligned with badges on the image):
+${somT || '(empty)'}
+
+Accessibility snapshot after step:
+${a11yT || '(empty)'}
+
+The attached image is the full-page Set-of-Marks screenshot after execution.`;
     const res = await this.chatJson(
       opts?.userId,
       'evaluation_analyzer',

@@ -65,6 +65,7 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
       setLastProgress(payload);
       const phase = payload.phase;
       if (
+        phase === 'proposing' ||
         phase === 'analyzed' ||
         phase === 'completed' ||
         phase === 'waiting_human' ||

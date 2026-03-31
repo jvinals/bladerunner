@@ -5,7 +5,6 @@ import { LlmService } from '../llm/llm.service';
 import { EvaluationsService } from './evaluations.service';
 
 const MAX_EVALUATION_STEPS = 12;
-const LLM_JPEG_QUALITY = 85;
 
 export type EvaluationScheduleOpts = {
   resumeAfterHuman?: boolean;
@@ -144,6 +143,16 @@ export class EvaluationOrchestratorService {
         : null;
       const signInOtpMode = this.recording.resolveClerkOtpModeForEvaluation(fresh.autoSignInClerkOtpMode);
 
+      const sequence = await this.evaluations.nextStepSequence(evaluationId);
+      const progressSummaryBefore = fresh.progressSummary?.trim() ?? '';
+      /** Emit before sign-in + SOM capture so the UI can show a placeholder step with spinners immediately. */
+      this.recording.emitEvaluationProgress(evaluationId, {
+        phase: 'proposing',
+        sequence,
+        progressSummaryBefore,
+        pageUrl: page.url(),
+      });
+
       if (fresh.autoSignIn) {
         await this.recording.maybeEvaluationAutoSignInAssist(evaluationId, userId, {
           runUrl: fresh.url,
@@ -155,12 +164,12 @@ export class EvaluationOrchestratorService {
         await page.waitForLoadState('domcontentloaded').catch(() => {});
       }
 
-      const sequence = await this.evaluations.nextStepSequence(evaluationId);
-      const progressSummaryBefore = fresh.progressSummary?.trim() ?? '';
-
-      const jpeg = await page.screenshot({ type: 'jpeg', quality: LLM_JPEG_QUALITY });
-      const screenshotB64 = jpeg.toString('base64');
-      const pageUrl = page.url();
+      const codegenCtx = await this.recording.captureEvaluationLlmPageContext(evaluationId, userId);
+      const screenshotB64 = codegenCtx.screenshotBase64;
+      if (!screenshotB64) {
+        throw new Error('Evaluation codegen capture produced no screenshot');
+      }
+      const pageUrl = codegenCtx.pageUrl;
 
       const priorSteps = await this.prisma.evaluationStep.findMany({
         where: { evaluationId },
@@ -174,13 +183,6 @@ export class EvaluationOrchestratorService {
         )
         .join('\n');
 
-      this.recording.emitEvaluationProgress(evaluationId, {
-        phase: 'proposing',
-        sequence,
-        progressSummaryBefore,
-        pageUrl,
-      });
-
       const codegenInputJson = {
         startUrl: ev.url,
         pageUrl,
@@ -189,7 +191,10 @@ export class EvaluationOrchestratorService {
         progressSummaryBefore,
         priorStepsBrief: priorBrief,
         viewportJpegBase64: screenshotB64,
-        note: 'Viewport JPEG sent to the codegen model (also stored as viewportJpegBase64 for UI preview).',
+        somManifest: codegenCtx.somManifest,
+        accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
+        note:
+          'Full-page Set-of-Marks JPEG + SOM manifest + CDP accessibility sent to codegen (viewportJpegBase64 for UI preview).',
       };
 
       const proposed = await this.llm.evaluationProposePlaywrightStep(
@@ -201,6 +206,8 @@ export class EvaluationOrchestratorService {
           priorStepsBrief: priorBrief,
           screenshotBase64: screenshotB64,
           pageUrl,
+          somManifest: codegenCtx.somManifest,
+          accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
         },
         { userId },
       );
@@ -253,9 +260,12 @@ export class EvaluationOrchestratorService {
         await page.waitForLoadState('domcontentloaded').catch(() => {});
       }
 
-      const afterJpeg = await page.screenshot({ type: 'jpeg', quality: LLM_JPEG_QUALITY });
-      const afterB64 = afterJpeg.toString('base64');
-      const afterUrl = page.url();
+      const afterCtx = await this.recording.captureEvaluationLlmPageContext(evaluationId, userId);
+      const afterB64 = afterCtx.screenshotBase64;
+      if (!afterB64) {
+        throw new Error('Evaluation analyzer capture produced no screenshot');
+      }
+      const afterUrl = afterCtx.pageUrl;
 
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'analyzing',
@@ -275,6 +285,8 @@ export class EvaluationOrchestratorService {
           errorMessage,
           pageUrlAfter: afterUrl,
           screenshotAfterBase64: afterB64,
+          somManifest: afterCtx.somManifest,
+          accessibilitySnapshot: afterCtx.accessibilitySnapshot,
         },
         { userId },
       );
@@ -288,7 +300,10 @@ export class EvaluationOrchestratorService {
         errorMessage: errorMessage ?? null,
         pageUrlAfter: afterUrl,
         afterStepViewportJpegBase64: afterB64,
-        note: 'After-step viewport JPEG sent to the analyzer model (also stored as afterStepViewportJpegBase64 for UI preview).',
+        somManifest: afterCtx.somManifest,
+        accessibilitySnapshot: afterCtx.accessibilitySnapshot,
+        note:
+          'After-step full-page Set-of-Marks JPEG + manifest + accessibility sent to analyzer (afterStepViewportJpegBase64 for UI preview).',
       };
 
       const analyzerOutputJson = {

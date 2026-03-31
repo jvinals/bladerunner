@@ -36,6 +36,18 @@ assert.deepEqual(
   { kind: 'strict_mode', retryable: false, nonFatal: true },
 );
 
+/** Same strict error as evaluation/AI codegen: `executePwCode` uses `new Function` — stack is only `eval (<anonymous>)`. */
+const strictFromEval = new Error(
+  "locator.click: Error: strict mode violation: getByRole('option', { name: 'Male' }) resolved to 2 elements:\n    at eval (<anonymous>:11:52)",
+);
+assert.deepEqual(
+  {
+    kind: classifyRecordingAutomationFailure(strictFromEval).kind,
+    nonFatal: classifyRecordingAutomationFailure(strictFromEval).isKnownNonFatal,
+  },
+  { kind: 'strict_mode', nonFatal: true },
+);
+
 const genericErr = new Error('database connection exploded');
 assert.deepEqual(
   {

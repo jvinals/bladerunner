@@ -61,7 +61,8 @@ function mergeStepsWithLivePlaceholder(
   const seq = lastProgress.sequence;
   if (steps.some((s) => s.sequence === seq)) return steps;
   const phase = String(lastProgress.phase ?? '');
-  if (phase !== 'proposing' && phase !== 'executing') return steps;
+  /** Include `analyzing` so a placeholder row exists if the client has not refetched the new step yet. */
+  if (phase !== 'proposing' && phase !== 'executing' && phase !== 'analyzing') return steps;
   const placeholder: EvaluationStepDto = {
     id: `${PLACEHOLDER_STEP_PREFIX}${seq}`,
     sequence: seq,
@@ -100,21 +101,27 @@ function getLiveLoadingFlags(
   const phase = String(lastProgress.phase ?? '');
   const hasCodegenIn = stepJsonPresent(st.codegenInputJson);
   const hasCodegenOut = stepJsonPresent(st.codegenOutputJson);
+  const hasAnalyzerIn = stepJsonPresent(st.analyzerInputJson);
   const hasAnalyzerOut = stepJsonPresent(st.analyzerOutputJson);
 
+  /**
+   * Never hardcode spinners for a whole phase: `lastProgress.phase` can lag behind refetched
+   * step JSON (socket catch-up, missed events). Show PendingPanel only while the matching
+   * field is still absent.
+   */
   if (phase === 'proposing') {
     return {
       codegenInputs: !hasCodegenIn,
-      codegenOutputs: true,
-      analyzerInputs: true,
-      analyzerOutputs: true,
+      codegenOutputs: !hasCodegenOut,
+      analyzerInputs: !hasAnalyzerIn,
+      analyzerOutputs: !hasAnalyzerOut,
     };
   }
   if (phase === 'executing') {
     return {
       codegenInputs: !hasCodegenIn,
       codegenOutputs: !hasCodegenOut,
-      analyzerInputs: !hasAnalyzerOut,
+      analyzerInputs: !hasAnalyzerIn,
       analyzerOutputs: !hasAnalyzerOut,
     };
   }
@@ -122,7 +129,7 @@ function getLiveLoadingFlags(
     return {
       codegenInputs: false,
       codegenOutputs: false,
-      analyzerInputs: !hasAnalyzerOut,
+      analyzerInputs: !hasAnalyzerIn,
       analyzerOutputs: !hasAnalyzerOut,
     };
   }
@@ -799,8 +806,8 @@ export default function EvaluationDetailPage() {
                             <ViewportJpegPreviewIconButton
                               base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
                               icon={Image}
-                              modalTitle="Codegen — viewport JPEG sent to the model"
-                              openLabel="Preview viewport JPEG sent to the codegen model"
+                              modalTitle="Codegen — full-page Set-of-Marks JPEG sent to the model"
+                              openLabel="Preview JPEG sent to the codegen model"
                               emptyLabel="No stored viewport JPEG (older runs did not persist it)"
                             />
                           </div>
@@ -814,7 +821,11 @@ export default function EvaluationDetailPage() {
                             />
                           ) : (
                             <JsonBlock
-                              value={omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64'])}
+                              value={omitBinaryPreviewKeys(
+                                omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64']),
+                                ['somManifest', 'accessibilitySnapshot'],
+                                '[omitted — long text; see LLM inputs]',
+                              )}
                             />
                           )}
                         </div>
@@ -842,8 +853,8 @@ export default function EvaluationDetailPage() {
                             <ViewportJpegPreviewIconButton
                               base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
                               icon={ScanSearch}
-                              modalTitle="Analyzer — after-step viewport JPEG sent to the model"
-                              openLabel="Preview after-step viewport JPEG sent to the analyzer"
+                              modalTitle="Analyzer — after-step full-page Set-of-Marks JPEG"
+                              openLabel="Preview after-step JPEG sent to the analyzer"
                               emptyLabel="No stored after-step JPEG (step not analyzed yet or older runs)"
                             />
                           </div>
@@ -851,7 +862,11 @@ export default function EvaluationDetailPage() {
                             <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
                           ) : (
                             <JsonBlock
-                              value={omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64'])}
+                              value={omitBinaryPreviewKeys(
+                                omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64']),
+                                ['somManifest', 'accessibilitySnapshot'],
+                                '[omitted — long text; see LLM inputs]',
+                              )}
                             />
                           )}
                         </div>

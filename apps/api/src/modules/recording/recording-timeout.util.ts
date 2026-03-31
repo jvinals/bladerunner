@@ -45,12 +45,17 @@ export function classifyRecordingAutomationFailure(error: unknown): RecordingAut
     /\btimeout\b/i.test(message) ||
     /\bexceeded\b/i.test(message);
   const isStrictMode = /strict mode violation/i.test(message);
+  /** User snippets run via `new Function` / eval — stack is `at eval (<anonymous>:line:col)`, not `executePwCode`. */
+  const fromEvalPlaywrightSnippet =
+    /^\s*at eval \(|\(<anonymous>:\d+:\d+\)/m.test(stack) &&
+    (isStrictMode || isTimeout || isAbort || /locator\.|getByRole|getByText|Playwright/i.test(haystack));
   const fromRecordingAutomation =
     /modules\/recording\//i.test(stack) ||
     /modules\/runs\//i.test(stack) ||
     /\bexecutePwCode\b/.test(stack) ||
     /\bplayAiPromptStepOnPage\b/.test(stack) ||
-    /\btestAiPromptStep\b/.test(stack);
+    /\btestAiPromptStep\b/.test(stack) ||
+    fromEvalPlaywrightSnippet;
 
   let kind: RecordingAutomationFailureKind = 'other';
   if (isAbort) kind = 'abort';

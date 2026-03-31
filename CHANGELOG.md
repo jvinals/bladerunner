@@ -2,6 +2,16 @@
 
 ## 2026-03-31
 
+- `0.10.105`: evaluation step **live spinners** no longer stick forever when **`lastProgress.phase` lags** refetched step JSON — `getLiveLoadingFlags` uses presence of persisted codegen/analyzer JSON instead of hardcoded spinners during **`proposing`**. `@bladerunner/web 0.7.58`.
+
+- `0.10.104`: **WebSocket join catch-up** for **`evaluationProgress`**: store latest progress per evaluation and **replay on `join`** (same idea as frame catch-up) so clients that connect after the first **`proposing`** emit still get `lastProgress` and show step placeholders. `@bladerunner/api 0.6.96`.
+
+- `0.10.103`: evaluation **step card + placeholders** appear as soon as a step is scheduled: orchestrator emits **`proposing`** before sign-in + SOM capture; live merge treats **`analyzing`** as in-flight; socket **`proposing`** triggers detail refetch. `@bladerunner/api 0.6.95`, `@bladerunner/web 0.7.57`.
+
+- `0.10.102`: **Unhandled rejection** from evaluation/playback **user-generated Playwright** (stack `at eval (<anonymous>)` only) no longer **crashes the API** — `classifyRecordingAutomationFailure` treats eval-sourced strict/timeout/locator errors as known non-fatal (same as `executePwCode` frames). Evaluation codegen system prompt nudges **exact** option names for custom selects. `@bladerunner/api 0.6.94`.
+
+- `0.10.101`: autonomous **evaluation** codegen and analyzer now use the same **Set-of-Marks + CDP accessibility** pipeline as AI prompt steps (`RecordingService.captureEvaluationLlmPageContext` wrapping `captureLlmPageContext`); LLM prompts include truncated manifest and a11y text; step JSON persists full fields; UI `JsonBlock` omits long text for readability. `@bladerunner/api 0.6.93`, `@bladerunner/web 0.7.56`.
+
 - `0.10.100`: removed session `3619df` debug ingest around **`evaluationAnalyzeAfterStep`**. `@bladerunner/api 0.6.92`.
 
 - `0.10.99`: debug ingest (session `3619df`) around **`evaluationAnalyzeAfterStep`** (`analyzer_llm_await_start` / `done` / `throw`) to diagnose **analyzer** “hangs”. `@bladerunner/api 0.6.91`.

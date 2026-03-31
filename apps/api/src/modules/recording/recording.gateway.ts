@@ -66,6 +66,10 @@ export class RecordingGateway implements OnGatewayInit {
     if (latest && latest.length > 0) {
       client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
     }
+    const evalProgress = this.recordingService.getLatestEvaluationProgress(data.runId);
+    if (evalProgress) {
+      client.emit('evaluationProgress', evalProgress);
+    }
     return { event: 'joined', data: { runId: data.runId } };
   }
 

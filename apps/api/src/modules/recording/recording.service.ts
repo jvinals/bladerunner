@@ -323,6 +323,8 @@ export class RecordingService extends EventEmitter {
   private sessions = new Map<string, RecordingSession>();
   private playbackSessions = new Map<string, PlaybackSession>();
   private evaluationSessions = new Map<string, EvaluationLiveSession>();
+  /** Latest `evaluationProgress` payload per evaluation (for WebSocket join catch-up). */
+  private lastEvaluationProgressById = new Map<string, Record<string, unknown>>();
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
   private aiPromptTestInFlight = new Map<string, Promise<void>>();
   /** In-flight optimized prompt generation / refresh work keyed by `${runId}:${stepId}`. */
@@ -613,12 +615,39 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
+   * Full-page Set-of-Marks JPEG + manifest + CDP accessibility for evaluation codegen / analyzer.
+   * Same pipeline as AI prompt steps ({@link captureLlmPageContext}).
+   */
+  async captureEvaluationLlmPageContext(
+    evaluationId: string,
+    userId: string,
+  ): Promise<{
+    pageUrl: string;
+    somManifest: string;
+    accessibilitySnapshot: string;
+    screenshotBase64: string | undefined;
+  }> {
+    const session = this.evaluationSessions.get(evaluationId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('Evaluation browser session not found');
+    }
+    const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
+    return {
+      pageUrl: ctx.pageUrl,
+      somManifest: ctx.somManifest,
+      accessibilitySnapshot: ctx.accessibilitySnapshot,
+      screenshotBase64: ctx.screenshotBase64,
+    };
+  }
+
+  /**
    * Remote Playwright browser for Evaluations — frames emit on `frame` with id = evaluationId (join room `run:<evaluationId>`).
    */
   async startEvaluationSession(evaluationId: string, userId: string): Promise<void> {
     if (this.evaluationSessions.has(evaluationId)) {
       throw new ConflictException('Evaluation browser session already active');
     }
+    this.lastEvaluationProgressById.delete(evaluationId);
     const captureSettings = buildCaptureSettingsFromPresets({
       viewportPreset: 'wxga',
       streamQuality: 'high',
@@ -732,7 +761,13 @@ export class RecordingService extends EventEmitter {
       this.logger.warn(`evaluation browser close ${evaluationId}`, err);
     }
     this.evaluationSessions.delete(evaluationId);
+    this.lastEvaluationProgressById.delete(evaluationId);
     this.emit('status', evaluationId, { status: 'evaluation', evaluationId, phase: 'browser_stopped' });
+  }
+
+  /** For clients that join `run:<evaluationId>` after progress was already broadcast. */
+  getLatestEvaluationProgress(evaluationId: string): Record<string, unknown> | undefined {
+    return this.lastEvaluationProgressById.get(evaluationId);
   }
 
   async runEvaluationPlaywright(evaluationId: string, userId: string, code: string): Promise<void> {
@@ -744,6 +779,7 @@ export class RecordingService extends EventEmitter {
   }
 
   emitEvaluationProgress(evaluationId: string, payload: Record<string, unknown>): void {
+    this.lastEvaluationProgressById.set(evaluationId, { evaluationId, ...payload });
     this.emit('evaluationProgress', evaluationId, payload);
   }
 
