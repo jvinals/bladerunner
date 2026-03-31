@@ -47,12 +47,6 @@ function JsonBlock({ value }: { value: unknown }) {
 
 const PLACEHOLDER_STEP_PREFIX = '__pending__';
 
-function stepJsonPresent(value: unknown): boolean {
-  if (value == null) return false;
-  if (typeof value === 'object' && value !== null && Object.keys(value as object).length === 0) return false;
-  return true;
-}
-
 function mergeStepsWithLivePlaceholder(
   steps: EvaluationStepDto[],
   lastProgress: EvaluationProgressPayload | null,
@@ -99,10 +93,11 @@ function getLiveLoadingFlags(
     return { codegenInputs: false, codegenOutputs: false, analyzerInputs: false, analyzerOutputs: false };
   }
   const phase = String(lastProgress.phase ?? '');
-  const hasCodegenIn = stepJsonPresent(st.codegenInputJson);
-  const hasCodegenOut = stepJsonPresent(st.codegenOutputJson);
-  const hasAnalyzerIn = stepJsonPresent(st.analyzerInputJson);
-  const hasAnalyzerOut = stepJsonPresent(st.analyzerOutputJson);
+  /** Use `!= null` (not `stepJsonPresent`) so `{}` from the API still clears spinners — empty object is persisted, not "still loading". */
+  const hasCodegenIn = st.codegenInputJson != null;
+  const hasCodegenOut = st.codegenOutputJson != null;
+  const hasAnalyzerIn = st.analyzerInputJson != null;
+  const hasAnalyzerOut = st.analyzerOutputJson != null;
 
   /**
    * Never hardcode spinners for a whole phase: `lastProgress.phase` can lag behind refetched
@@ -765,7 +760,9 @@ export default function EvaluationDetailPage() {
                     load.codegenOutputs &&
                     lastProgress?.sequence === st.sequence &&
                     lastProgress.phase === 'executing' &&
-                    (lastProgress.thinking || lastProgress.playwrightCode);
+                    (lastProgress.thinking ||
+                      lastProgress.playwrightCode ||
+                      lastProgress.expectedOutcome);
                   return (
                     <div
                       key={st.id}

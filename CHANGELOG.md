@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.106`: evaluation step loading flags use **`!= null`** for persisted JSON (not “non-empty object”) so **`{}`** from the API clears spinners; **`showCodegenFromLive`** also accepts **`expectedOutcome`**. `@bladerunner/web 0.7.59`.
+
 - `0.10.105`: evaluation step **live spinners** no longer stick forever when **`lastProgress.phase` lags** refetched step JSON — `getLiveLoadingFlags` uses presence of persisted codegen/analyzer JSON instead of hardcoded spinners during **`proposing`**. `@bladerunner/web 0.7.58`.
 
 - `0.10.104`: **WebSocket join catch-up** for **`evaluationProgress`**: store latest progress per evaluation and **replay on `join`** (same idea as frame catch-up) so clients that connect after the first **`proposing`** emit still get `lastProgress` and show step placeholders. `@bladerunner/api 0.6.96`.
