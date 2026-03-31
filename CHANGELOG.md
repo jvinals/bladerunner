@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-03-31
+
+- `0.10.85`: evaluation **step review mode** — `EvaluationRunMode` (`continuous` | `step_review`), `WAITING_FOR_REVIEW`, step fields (`stepTitle`, `progressSummaryBefore`, codegen/analyzer JSON snapshots), orchestrator pause/resume via `POST /evaluations/:id/continue-review`, LLM `stepTitle` in codegen JSON. Migration `20260331120000_evaluation_review_mode`. `@bladerunner/api 0.6.82`, `@bladerunner/web 0.7.47`.
+
 ## 2026-03-30
 
 - `0.10.83`: evaluation detail **Activity log** groups live last-event JSON and persisted progress in one bordered panel with internal scroll (`max-h-64`). `@bladerunner/web 0.7.46`.

@@ -5,6 +5,7 @@ import {
   evaluationsApi,
   projectsApi,
   type AutoClerkOtpUiMode,
+  type EvaluationRunMode,
   type ProjectDto,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
@@ -12,6 +13,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useEvaluationLive } from '@/hooks/useEvaluationLive';
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Play,
   Square,
   ClipboardList,
@@ -21,6 +24,17 @@ import {
   RotateCcw,
   Save,
 } from 'lucide-react';
+
+function JsonBlock({ value }: { value: unknown }) {
+  if (value == null || (typeof value === 'object' && value !== null && Object.keys(value as object).length === 0)) {
+    return <span className="text-gray-400 text-xs">—</span>;
+  }
+  return (
+    <pre className="text-[11px] font-mono bg-gray-50 border border-gray-100 rounded p-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-gray-800">
+      {JSON.stringify(value, null, 2)}
+    </pre>
+  );
+}
 
 function parseOptions(q: { optionsJson: string }): string[] {
   try {
@@ -43,6 +57,9 @@ export default function EvaluationDetailPage() {
   const [projectIdDraft, setProjectIdDraft] = useState('');
   const [autoSignInDraft, setAutoSignInDraft] = useState(false);
   const [autoSignInOtpDraft, setAutoSignInOtpDraft] = useState<AutoClerkOtpUiMode>('default');
+  const [runModeDraft, setRunModeDraft] = useState<EvaluationRunMode>('continuous');
+  const [selectedStepIdx, setSelectedStepIdx] = useState(0);
+  const stepCardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const query = useQuery({
     queryKey: ['evaluation', id],
@@ -69,10 +86,20 @@ export default function EvaluationDetailPage() {
         ? ev.autoSignInClerkOtpMode
         : 'default',
     );
-  }, [ev?.id, ev?.intent, ev?.desiredOutput, ev?.projectId, ev?.autoSignIn, ev?.autoSignInClerkOtpMode]);
+    setRunModeDraft(ev.runMode ?? 'continuous');
+  }, [ev?.id, ev?.intent, ev?.desiredOutput, ev?.projectId, ev?.autoSignIn, ev?.autoSignInClerkOtpMode, ev?.runMode]);
 
   const liveEnabled =
-    !!id && !!ev && (ev.status === 'RUNNING' || ev.status === 'WAITING_FOR_HUMAN');
+    !!id &&
+    !!ev &&
+    (ev.status === 'RUNNING' ||
+      ev.status === 'WAITING_FOR_HUMAN' ||
+      ev.status === 'WAITING_FOR_REVIEW');
+
+  useEffect(() => {
+    if (!ev?.steps?.length) return;
+    setSelectedStepIdx(ev.steps.length - 1);
+  }, [ev?.steps?.length, ev?.id]);
 
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['evaluation', id] });
@@ -83,6 +110,13 @@ export default function EvaluationDetailPage() {
     enabled: liveEnabled && !isDetached,
     onStale: invalidate,
   });
+
+  useEffect(() => {
+    const el = stepCardRefs.current[selectedStepIdx];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [selectedStepIdx, ev?.steps?.length, lastProgress?.sequence]);
 
   const handleDetachPreview = useCallback(() => {
     if (!id) return;
@@ -110,22 +144,8 @@ export default function EvaluationDetailPage() {
   }, []);
 
   const startMutation = useMutation({
-    mutationFn: () => evaluationsApi.start(id!),
+    mutationFn: () => evaluationsApi.start(id!, { runMode: runModeDraft }),
     onSuccess: (data) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-        body: JSON.stringify({
-          sessionId: '3619df',
-          hypothesisId: 'H5',
-          location: 'EvaluationDetail.tsx:startMutation.onSuccess',
-          message: 'POST /evaluations/:id/start response',
-          data: { scheduled: data.scheduled, evaluationId: data.evaluationId },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       if (data.scheduled === false) {
         setStartFeedback('A run was already in progress for this evaluation — refreshing status.');
       } else {
@@ -134,20 +154,6 @@ export default function EvaluationDetailPage() {
       invalidate();
     },
     onError: (err: Error) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-        body: JSON.stringify({
-          sessionId: '3619df',
-          hypothesisId: 'H7',
-          location: 'EvaluationDetail.tsx:startMutation.onError',
-          message: String(err?.message ?? err).slice(0, 400),
-          data: {},
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setStartFeedback(err instanceof Error ? err.message : 'Start request failed');
     },
   });
@@ -172,7 +178,7 @@ export default function EvaluationDetailPage() {
   });
 
   const reprocessMutation = useMutation({
-    mutationFn: () => evaluationsApi.reprocess(id!),
+    mutationFn: () => evaluationsApi.reprocess(id!, { runMode: runModeDraft }),
     onSuccess: (data) => {
       if (data.scheduled === false) {
         setStartFeedback('A run was already in progress for this evaluation — refreshing status.');
@@ -183,6 +189,17 @@ export default function EvaluationDetailPage() {
     },
     onError: (err: Error) => {
       setStartFeedback(err instanceof Error ? err.message : 'Re-run request failed');
+    },
+  });
+
+  const continueReviewMutation = useMutation({
+    mutationFn: () => evaluationsApi.continueReview(id!),
+    onSuccess: () => {
+      setStartFeedback(null);
+      invalidate();
+    },
+    onError: (err: Error) => {
+      setStartFeedback(err instanceof Error ? err.message : 'Continue failed');
     },
   });
 
@@ -219,7 +236,10 @@ export default function EvaluationDetailPage() {
     );
   }
 
-  const canEditContent = ev.status !== 'RUNNING';
+  const canEditContent =
+    ev.status !== 'RUNNING' &&
+    ev.status !== 'WAITING_FOR_HUMAN' &&
+    ev.status !== 'WAITING_FOR_REVIEW';
   const serverOtp: AutoClerkOtpUiMode =
     ev.autoSignInClerkOtpMode === 'mailslurp' || ev.autoSignInClerkOtpMode === 'clerk_test_email'
       ? ev.autoSignInClerkOtpMode
@@ -235,8 +255,15 @@ export default function EvaluationDetailPage() {
     ev.status === 'FAILED' ||
     ev.status === 'COMPLETED' ||
     ev.status === 'CANCELLED' ||
-    ev.status === 'WAITING_FOR_HUMAN';
-  const canCancel = ev.status === 'RUNNING' || ev.status === 'QUEUED' || ev.status === 'WAITING_FOR_HUMAN';
+    ev.status === 'WAITING_FOR_HUMAN' ||
+    ev.status === 'WAITING_FOR_REVIEW';
+  const canCancel =
+    ev.status === 'RUNNING' ||
+    ev.status === 'QUEUED' ||
+    ev.status === 'WAITING_FOR_HUMAN' ||
+    ev.status === 'WAITING_FOR_REVIEW';
+  const runMode = ev.runMode ?? 'continuous';
+  const canContinueReview = ev.status === 'WAITING_FOR_REVIEW' && runMode === 'step_review';
   const showHuman =
     ev.status === 'WAITING_FOR_HUMAN' && pendingQuestion && parseOptions(pendingQuestion).length > 0;
 
@@ -399,13 +426,47 @@ export default function EvaluationDetailPage() {
                 Cancel
               </button>
             )}
-            {ev.status === 'RUNNING' && (
+            {(ev.status === 'RUNNING' ||
+              ev.status === 'WAITING_FOR_HUMAN' ||
+              ev.status === 'WAITING_FOR_REVIEW') && (
               <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
                 <Radio size={14} className={connected ? 'text-green-500' : 'text-amber-500'} />
                 {connected ? 'Live stream connected' : 'Connecting…'}
               </span>
             )}
           </div>
+
+          {ev.status === 'QUEUED' && (
+            <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2 text-sm">
+              <span className="text-xs font-medium text-gray-500 block mb-2">Run mode</span>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="eval-run-mode"
+                    checked={runModeDraft === 'continuous'}
+                    onChange={() => setRunModeDraft('continuous')}
+                  />
+                  <span>Normal — run all steps continuously</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="eval-run-mode"
+                    checked={runModeDraft === 'step_review'}
+                    onChange={() => setRunModeDraft('step_review')}
+                  />
+                  <span>Review — pause after each step (Continue to advance)</span>
+                </label>
+              </div>
+            </div>
+          )}
+          {ev.status !== 'QUEUED' && (
+            <p className="text-xs text-gray-500">
+              Run mode:{' '}
+              <strong>{runMode === 'step_review' ? 'Review (step-by-step)' : 'Normal (continuous)'}</strong>
+            </p>
+          )}
 
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-sm font-semibold text-gray-800 mb-2">Global intent</h2>
@@ -491,67 +552,142 @@ export default function EvaluationDetailPage() {
             </section>
           )}
 
-          {(!!(lastProgress && lastProgress.phase) || !!ev.progressSummary) && (
-            <section
-              className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
-              aria-label="Evaluation activity log"
-            >
-              <h2 className="text-sm font-semibold text-gray-800 px-4 pt-4 pb-2 border-b border-gray-100">
-                Activity log
-              </h2>
-              <div className="max-h-64 overflow-y-auto overflow-x-auto px-4 py-3 space-y-4">
-                {lastProgress && lastProgress.phase && (
-                  <div className="text-xs font-mono text-gray-700">
-                    <span className="text-gray-500">Last event · {lastProgress.phase}</span>
-                    <pre className="mt-2 whitespace-pre-wrap break-words">
-                      {JSON.stringify(lastProgress, null, 2)}
-                    </pre>
-                  </div>
-                )}
-                {ev.progressSummary && (
-                  <div className="text-xs text-gray-600">
-                    <span className="text-gray-500 font-medium block mb-2">Progress</span>
-                    <pre className="whitespace-pre-wrap font-mono">{ev.progressSummary}</pre>
+          <section
+            className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+            aria-label="Evaluation step timeline"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2 border-b border-gray-100">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <h2 className="text-sm font-semibold text-gray-800 shrink-0">Step timeline</h2>
+                {ev.steps.length > 0 && (
+                  <div className="flex items-center gap-1 overflow-x-auto max-w-[min(100%,42rem)] py-1">
+                    <button
+                      type="button"
+                      className="p-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40 shrink-0"
+                      disabled={selectedStepIdx <= 0}
+                      onClick={() => setSelectedStepIdx((i) => Math.max(0, i - 1))}
+                      aria-label="Previous step"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                      {ev.steps.map((st, idx) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setSelectedStepIdx(idx)}
+                          className={`whitespace-nowrap px-2 py-1 rounded-md border max-w-[140px] truncate ${
+                            selectedStepIdx === idx
+                              ? 'border-[#4B90FF] bg-[#4B90FF]/10 text-[#4B90FF] font-medium'
+                              : 'border-gray-200 hover:bg-gray-50'
+                          }`}
+                          title={st.stepTitle ?? `Step ${st.sequence}`}
+                        >
+                          {st.stepTitle
+                            ? `${st.sequence}. ${st.stepTitle.length > 20 ? `${st.stepTitle.slice(0, 20)}…` : st.stepTitle}`
+                            : `Step ${st.sequence}`}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="p-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40 shrink-0"
+                      disabled={selectedStepIdx >= ev.steps.length - 1}
+                      onClick={() =>
+                        setSelectedStepIdx((i) => Math.min(ev.steps.length - 1, i + 1))
+                      }
+                      aria-label="Next step"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
                   </div>
                 )}
               </div>
-            </section>
-          )}
-
-          <section>
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">Steps</h2>
+              {canContinueReview && (
+                <button
+                  type="button"
+                  disabled={continueReviewMutation.isPending}
+                  onClick={() => continueReviewMutation.mutate()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#4B90FF] text-white text-sm font-medium px-4 py-2 hover:bg-[#3d7fe6] disabled:opacity-50 shrink-0"
+                >
+                  {continueReviewMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : null}
+                  Continue
+                </button>
+              )}
+            </div>
             {ev.steps.length === 0 ? (
-              <p className="text-sm text-gray-500">No steps yet.</p>
+              <p className="text-sm text-gray-500 px-4 py-6">
+                No steps yet. Start the run to record each step (inputs and outputs appear after the model runs).
+              </p>
             ) : (
-              <ol className="space-y-3">
-                {ev.steps.map((st) => (
-                  <li
+              <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-4 pb-4 pt-2 scroll-smooth">
+                {ev.steps.map((st, idx) => (
+                  <div
                     key={st.id}
-                    className="rounded-lg border border-gray-200 bg-white p-3 text-sm"
+                    ref={(el) => {
+                      stepCardRefs.current[idx] = el;
+                    }}
+                    className={`snap-center shrink-0 w-[min(100%,28rem)] rounded-lg border p-3 text-sm ${
+                      selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
+                    }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-gray-900">Step {st.sequence}</span>
-                      {st.decision && (
-                        <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <span className="font-semibold text-gray-900">Step {st.sequence}</span>
+                        {st.stepTitle ? (
+                          <p className="text-xs text-gray-600 mt-0.5">{st.stepTitle}</p>
+                        ) : null}
+                      </div>
+                      {st.decision ? (
+                        <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
                           {st.decision}
                         </span>
-                      )}
+                      ) : null}
                     </div>
-                    {st.thinkingText && (
-                      <p className="text-gray-600 text-xs whitespace-pre-wrap mb-2">{st.thinkingText}</p>
-                    )}
-                    {st.proposedCode && (
-                      <pre className="text-[11px] bg-gray-900 text-gray-100 rounded-md p-2 overflow-x-auto max-h-40">
-                        {st.proposedCode}
-                      </pre>
-                    )}
-                    {st.analyzerRationale && (
-                      <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap">{st.analyzerRationale}</p>
-                    )}
-                  </li>
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <span className="text-gray-500 font-medium block mb-1">Activity log before this step</span>
+                        <div className="max-h-24 overflow-y-auto rounded border border-gray-100 bg-gray-50/80 p-2 font-mono text-gray-700 whitespace-pre-wrap">
+                          {st.progressSummaryBefore?.trim() || '(empty)'}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-medium block mb-1">Codegen inputs (LLM)</span>
+                        <JsonBlock value={st.codegenInputJson} />
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-medium block mb-1">Codegen outputs</span>
+                        <JsonBlock value={st.codegenOutputJson} />
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-medium block mb-1">Analyzer inputs</span>
+                        <JsonBlock value={st.analyzerInputJson} />
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-medium block mb-1">Analyzer outputs</span>
+                        <JsonBlock value={st.analyzerOutputJson} />
+                      </div>
+                      {lastProgress?.sequence === st.sequence && lastProgress.phase ? (
+                        <div className="pt-2 border-t border-dashed border-gray-200">
+                          <span className="text-gray-500">Live event · {String(lastProgress.phase)}</span>
+                          <pre className="mt-1 text-[10px] overflow-auto max-h-32 whitespace-pre-wrap break-words">
+                            {JSON.stringify(lastProgress, null, 2)}
+                          </pre>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 ))}
-              </ol>
+              </div>
             )}
+            {ev.progressSummary ? (
+              <div className="px-4 pb-4 pt-0 border-t border-gray-100">
+                <span className="text-xs font-medium text-gray-500">Full progress log</span>
+                <pre className="mt-1 text-[11px] font-mono text-gray-600 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                  {ev.progressSummary}
+                </pre>
+              </div>
+            ) : null}
           </section>
 
           {latestReport && (
@@ -585,7 +721,11 @@ export default function EvaluationDetailPage() {
                   <img src={frameDataUrl} alt="Live browser" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-gray-500 text-sm px-4 text-center">
-                    {ev.status === 'RUNNING' ? 'Waiting for video frame…' : 'Connecting…'}
+                    {ev.status === 'RUNNING' ||
+                    ev.status === 'WAITING_FOR_HUMAN' ||
+                    ev.status === 'WAITING_FOR_REVIEW'
+                      ? 'Waiting for video frame…'
+                      : 'Connecting…'}
                   </span>
                 )}
                 <button

@@ -23,6 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
   QUEUED: 'bg-gray-200 text-gray-700',
   RUNNING: 'bg-[#4B90FF] text-white',
   WAITING_FOR_HUMAN: 'bg-violet-500 text-white',
+  WAITING_FOR_REVIEW: 'bg-sky-600 text-white',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,6 +48,7 @@ const STATUS_LABELS: Record<string, string> = {
   QUEUED: 'Queued',
   RUNNING: 'Running',
   WAITING_FOR_HUMAN: 'Needs input',
+  WAITING_FOR_REVIEW: 'Review pause',
 };
 
 interface StatusBadgeProps {

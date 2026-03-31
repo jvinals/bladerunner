@@ -14,7 +14,12 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { EvaluationsService } from './evaluations.service';
 import { EvaluationOrchestratorService } from './evaluation-orchestrator.service';
-import { AnswerHumanDto, CreateEvaluationDto, UpdateEvaluationDto } from './evaluations.dto';
+import {
+  AnswerHumanDto,
+  CreateEvaluationDto,
+  StartEvaluationRunDto,
+  UpdateEvaluationDto,
+} from './evaluations.dto';
 import { RecordingService } from '../recording/recording.service';
 
 @ApiTags('evaluations')
@@ -75,24 +80,15 @@ export class EvaluationsController {
   @ApiOperation({
     summary: 'Clear prior run artifacts and queue a new autonomous run (failed, completed, cancelled, or waiting for human)',
   })
-  async reprocess(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+  async reprocess(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Body() body: StartEvaluationRunDto,
+  ) {
     const userId = req.user.sub;
     await this.recording.stopEvaluationSession(id, userId).catch(() => {});
     await this.evaluations.resetForReprocess(id, userId);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-      body: JSON.stringify({
-        sessionId: '3619df',
-        hypothesisId: 'H3',
-        location: 'evaluations.controller.ts:reprocess',
-        message: 'reprocess after resetForReprocess',
-        data: { evaluationId: id },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    await this.evaluations.setRunModeIfQueued(id, userId, body.runMode);
     const scheduled = this.orchestrator.scheduleRun(id, userId);
     return { accepted: true, scheduled, evaluationId: id };
   }
@@ -100,23 +96,22 @@ export class EvaluationsController {
   @Post(':id/start')
   @HttpCode(202)
   @ApiOperation({ summary: 'Start autonomous evaluation run (async)' })
-  start(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+  async start(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Body() body: StartEvaluationRunDto,
+  ) {
+    await this.evaluations.setRunModeIfQueued(id, req.user.sub, body.runMode);
     const scheduled = this.orchestrator.scheduleRun(id, req.user.sub);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-      body: JSON.stringify({
-        sessionId: '3619df',
-        hypothesisId: 'H4',
-        location: 'evaluations.controller.ts:start',
-        message: 'POST /evaluations/:id/start',
-        data: { evaluationId: id, scheduled },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return { accepted: true, scheduled, evaluationId: id };
+  }
+
+  @Post(':id/continue-review')
+  @HttpCode(202)
+  @ApiOperation({ summary: 'Resume evaluation after step-by-step review pause' })
+  async continueReview(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+    await this.orchestrator.resumeAfterReview(id, req.user.sub);
+    return { accepted: true, evaluationId: id };
   }
 
   @Post(':id/cancel')

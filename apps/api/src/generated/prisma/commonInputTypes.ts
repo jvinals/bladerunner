@@ -430,6 +430,13 @@ export type EnumEvaluationStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumEvaluationStatusFilter<$PrismaModel> | $Enums.EvaluationStatus
 }
 
+export type EnumEvaluationRunModeFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationRunMode | Prisma.EnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel> | $Enums.EvaluationRunMode
+}
+
 export type EnumEvaluationStatusWithAggregatesFilter<$PrismaModel = never> = {
   equals?: $Enums.EvaluationStatus | Prisma.EnumEvaluationStatusFieldRefInput<$PrismaModel>
   in?: $Enums.EvaluationStatus[] | Prisma.ListEnumEvaluationStatusFieldRefInput<$PrismaModel>
@@ -438,6 +445,16 @@ export type EnumEvaluationStatusWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumEvaluationStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumEvaluationStatusFilter<$PrismaModel>
+}
+
+export type EnumEvaluationRunModeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationRunMode | Prisma.EnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationRunModeWithAggregatesFilter<$PrismaModel> | $Enums.EvaluationRunMode
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
 }
 
 export type EnumEvaluationStepDecisionNullableFilter<$PrismaModel = never> = {
@@ -832,6 +849,13 @@ export type NestedEnumEvaluationStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumEvaluationStatusFilter<$PrismaModel> | $Enums.EvaluationStatus
 }
 
+export type NestedEnumEvaluationRunModeFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationRunMode | Prisma.EnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel> | $Enums.EvaluationRunMode
+}
+
 export type NestedEnumEvaluationStatusWithAggregatesFilter<$PrismaModel = never> = {
   equals?: $Enums.EvaluationStatus | Prisma.EnumEvaluationStatusFieldRefInput<$PrismaModel>
   in?: $Enums.EvaluationStatus[] | Prisma.ListEnumEvaluationStatusFieldRefInput<$PrismaModel>
@@ -840,6 +864,16 @@ export type NestedEnumEvaluationStatusWithAggregatesFilter<$PrismaModel = never>
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumEvaluationStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumEvaluationStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumEvaluationRunModeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationRunMode | Prisma.EnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationRunMode[] | Prisma.ListEnumEvaluationRunModeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationRunModeWithAggregatesFilter<$PrismaModel> | $Enums.EvaluationRunMode
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
 }
 
 export type NestedEnumEvaluationStepDecisionNullableFilter<$PrismaModel = never> = {

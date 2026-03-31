@@ -51,6 +51,12 @@ export class CreateEvaluationDto {
   autoSignInClerkOtpMode?: 'mailslurp' | 'clerk_test_email' | null;
 }
 
+export class StartEvaluationRunDto {
+  @IsOptional()
+  @IsIn(['continuous', 'step_review'])
+  runMode?: 'continuous' | 'step_review';
+}
+
 export class AnswerHumanDto {
   @IsString()
   @IsNotEmpty()

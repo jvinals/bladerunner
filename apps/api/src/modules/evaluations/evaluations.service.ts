@@ -60,6 +60,7 @@ export class EvaluationsService {
         project: { select: { id: true, name: true, color: true } },
         autoSignIn: true,
         autoSignInClerkOtpMode: true,
+        runMode: true,
       },
     });
   }
@@ -85,6 +86,24 @@ export class EvaluationsService {
     });
   }
 
+  /** Persist run mode when starting or re-running from QUEUED only. */
+  async setRunModeIfQueued(
+    id: string,
+    userId: string,
+    runMode: 'continuous' | 'step_review' | undefined,
+  ): Promise<void> {
+    if (runMode === undefined) return;
+    const ev = await this.prisma.evaluation.findFirst({ where: { id, userId }, select: { status: true } });
+    if (!ev) throw new NotFoundException(`Evaluation ${id} not found`);
+    if (ev.status !== 'QUEUED') {
+      throw new BadRequestException('Run mode can only be set when the evaluation is queued');
+    }
+    await this.prisma.evaluation.update({
+      where: { id, userId },
+      data: { runMode },
+    });
+  }
+
   async appendProgressSummary(id: string, userId: string, line: string) {
     const ev = await this.prisma.evaluation.findFirst({ where: { id, userId }, select: { progressSummary: true } });
     if (!ev) return;
@@ -102,6 +121,10 @@ export class EvaluationsService {
       evaluationId: string;
       sequence: number;
       pageUrl?: string | null;
+      stepTitle?: string | null;
+      progressSummaryBefore?: string | null;
+      codegenInputJson?: JsonValue | null;
+      codegenOutputJson?: JsonValue | null;
       thinkingText?: string | null;
       proposedCode?: string | null;
       expectedOutcome?: string | null;
@@ -117,6 +140,10 @@ export class EvaluationsService {
         evaluationId: data.evaluationId,
         sequence: data.sequence,
         pageUrl: data.pageUrl ?? null,
+        stepTitle: data.stepTitle ?? null,
+        progressSummaryBefore: data.progressSummaryBefore ?? null,
+        codegenInputJson: data.codegenInputJson ?? undefined,
+        codegenOutputJson: data.codegenOutputJson ?? undefined,
         thinkingText: data.thinkingText ?? null,
         proposedCode: data.proposedCode ?? null,
         expectedOutcome: data.expectedOutcome ?? null,
@@ -124,6 +151,31 @@ export class EvaluationsService {
         errorMessage: data.errorMessage ?? null,
         decision: data.decision ?? null,
         analyzerRationale: data.analyzerRationale ?? null,
+      },
+    });
+  }
+
+  async updateStepAfterAnalyzer(
+    evaluationId: string,
+    sequence: number,
+    data: {
+      analyzerInputJson: JsonValue;
+      analyzerOutputJson: JsonValue;
+      actualOutcome: string | null;
+      errorMessage: string | null;
+      decision: EvaluationStepDecision;
+      analyzerRationale: string;
+    },
+  ) {
+    return this.prisma.evaluationStep.updateMany({
+      where: { evaluationId, sequence },
+      data: {
+        analyzerInputJson: data.analyzerInputJson,
+        analyzerOutputJson: data.analyzerOutputJson,
+        actualOutcome: data.actualOutcome,
+        errorMessage: data.errorMessage,
+        decision: data.decision,
+        analyzerRationale: data.analyzerRationale,
       },
     });
   }
@@ -211,8 +263,8 @@ export class EvaluationsService {
   ) {
     const ev = await this.prisma.evaluation.findFirst({ where: { id, userId } });
     if (!ev) throw new NotFoundException(`Evaluation ${id} not found`);
-    if (ev.status === 'RUNNING') {
-      throw new BadRequestException('Cannot edit intent or output while the evaluation is running');
+    if (ev.status === 'RUNNING' || ev.status === 'WAITING_FOR_HUMAN' || ev.status === 'WAITING_FOR_REVIEW') {
+      throw new BadRequestException('Cannot edit intent or output while the evaluation is running or paused');
     }
     const patch: Prisma.EvaluationUpdateInput = {};
     if (data.name !== undefined) patch.name = data.name.trim() || 'Evaluation';

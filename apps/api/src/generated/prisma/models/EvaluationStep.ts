@@ -40,6 +40,8 @@ export type EvaluationStepMinAggregateOutputType = {
   userId: string | null
   sequence: number | null
   pageUrl: string | null
+  stepTitle: string | null
+  progressSummaryBefore: string | null
   thinkingText: string | null
   proposedCode: string | null
   expectedOutcome: string | null
@@ -56,6 +58,8 @@ export type EvaluationStepMaxAggregateOutputType = {
   userId: string | null
   sequence: number | null
   pageUrl: string | null
+  stepTitle: string | null
+  progressSummaryBefore: string | null
   thinkingText: string | null
   proposedCode: string | null
   expectedOutcome: string | null
@@ -72,6 +76,12 @@ export type EvaluationStepCountAggregateOutputType = {
   userId: number
   sequence: number
   pageUrl: number
+  stepTitle: number
+  progressSummaryBefore: number
+  codegenInputJson: number
+  codegenOutputJson: number
+  analyzerInputJson: number
+  analyzerOutputJson: number
   thinkingText: number
   proposedCode: number
   expectedOutcome: number
@@ -98,6 +108,8 @@ export type EvaluationStepMinAggregateInputType = {
   userId?: true
   sequence?: true
   pageUrl?: true
+  stepTitle?: true
+  progressSummaryBefore?: true
   thinkingText?: true
   proposedCode?: true
   expectedOutcome?: true
@@ -114,6 +126,8 @@ export type EvaluationStepMaxAggregateInputType = {
   userId?: true
   sequence?: true
   pageUrl?: true
+  stepTitle?: true
+  progressSummaryBefore?: true
   thinkingText?: true
   proposedCode?: true
   expectedOutcome?: true
@@ -130,6 +144,12 @@ export type EvaluationStepCountAggregateInputType = {
   userId?: true
   sequence?: true
   pageUrl?: true
+  stepTitle?: true
+  progressSummaryBefore?: true
+  codegenInputJson?: true
+  codegenOutputJson?: true
+  analyzerInputJson?: true
+  analyzerOutputJson?: true
   thinkingText?: true
   proposedCode?: true
   expectedOutcome?: true
@@ -233,6 +253,12 @@ export type EvaluationStepGroupByOutputType = {
   userId: string
   sequence: number
   pageUrl: string | null
+  stepTitle: string | null
+  progressSummaryBefore: string | null
+  codegenInputJson: runtime.JsonValue | null
+  codegenOutputJson: runtime.JsonValue | null
+  analyzerInputJson: runtime.JsonValue | null
+  analyzerOutputJson: runtime.JsonValue | null
   thinkingText: string | null
   proposedCode: string | null
   expectedOutcome: string | null
@@ -272,6 +298,12 @@ export type EvaluationStepWhereInput = {
   userId?: Prisma.StringFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntFilter<"EvaluationStep"> | number
   pageUrl?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  stepTitle?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  progressSummaryBefore?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  codegenInputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  codegenOutputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  analyzerInputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  analyzerOutputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
   thinkingText?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   proposedCode?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   expectedOutcome?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
@@ -289,6 +321,12 @@ export type EvaluationStepOrderByWithRelationInput = {
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrderInput | Prisma.SortOrder
+  stepTitle?: Prisma.SortOrderInput | Prisma.SortOrder
+  progressSummaryBefore?: Prisma.SortOrderInput | Prisma.SortOrder
+  codegenInputJson?: Prisma.SortOrderInput | Prisma.SortOrder
+  codegenOutputJson?: Prisma.SortOrderInput | Prisma.SortOrder
+  analyzerInputJson?: Prisma.SortOrderInput | Prisma.SortOrder
+  analyzerOutputJson?: Prisma.SortOrderInput | Prisma.SortOrder
   thinkingText?: Prisma.SortOrderInput | Prisma.SortOrder
   proposedCode?: Prisma.SortOrderInput | Prisma.SortOrder
   expectedOutcome?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -309,6 +347,12 @@ export type EvaluationStepWhereUniqueInput = Prisma.AtLeast<{
   userId?: Prisma.StringFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntFilter<"EvaluationStep"> | number
   pageUrl?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  stepTitle?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  progressSummaryBefore?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  codegenInputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  codegenOutputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  analyzerInputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  analyzerOutputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
   thinkingText?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   proposedCode?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   expectedOutcome?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
@@ -326,6 +370,12 @@ export type EvaluationStepOrderByWithAggregationInput = {
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrderInput | Prisma.SortOrder
+  stepTitle?: Prisma.SortOrderInput | Prisma.SortOrder
+  progressSummaryBefore?: Prisma.SortOrderInput | Prisma.SortOrder
+  codegenInputJson?: Prisma.SortOrderInput | Prisma.SortOrder
+  codegenOutputJson?: Prisma.SortOrderInput | Prisma.SortOrder
+  analyzerInputJson?: Prisma.SortOrderInput | Prisma.SortOrder
+  analyzerOutputJson?: Prisma.SortOrderInput | Prisma.SortOrder
   thinkingText?: Prisma.SortOrderInput | Prisma.SortOrder
   proposedCode?: Prisma.SortOrderInput | Prisma.SortOrder
   expectedOutcome?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -350,6 +400,12 @@ export type EvaluationStepScalarWhereWithAggregatesInput = {
   userId?: Prisma.StringWithAggregatesFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntWithAggregatesFilter<"EvaluationStep"> | number
   pageUrl?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
+  stepTitle?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
+  progressSummaryBefore?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
+  codegenInputJson?: Prisma.JsonNullableWithAggregatesFilter<"EvaluationStep">
+  codegenOutputJson?: Prisma.JsonNullableWithAggregatesFilter<"EvaluationStep">
+  analyzerInputJson?: Prisma.JsonNullableWithAggregatesFilter<"EvaluationStep">
+  analyzerOutputJson?: Prisma.JsonNullableWithAggregatesFilter<"EvaluationStep">
   thinkingText?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
   proposedCode?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
   expectedOutcome?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
@@ -365,6 +421,12 @@ export type EvaluationStepCreateInput = {
   userId: string
   sequence: number
   pageUrl?: string | null
+  stepTitle?: string | null
+  progressSummaryBefore?: string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: string | null
   proposedCode?: string | null
   expectedOutcome?: string | null
@@ -382,6 +444,12 @@ export type EvaluationStepUncheckedCreateInput = {
   userId: string
   sequence: number
   pageUrl?: string | null
+  stepTitle?: string | null
+  progressSummaryBefore?: string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: string | null
   proposedCode?: string | null
   expectedOutcome?: string | null
@@ -397,6 +465,12 @@ export type EvaluationStepUpdateInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -414,6 +488,12 @@ export type EvaluationStepUncheckedUpdateInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -430,6 +510,12 @@ export type EvaluationStepCreateManyInput = {
   userId: string
   sequence: number
   pageUrl?: string | null
+  stepTitle?: string | null
+  progressSummaryBefore?: string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: string | null
   proposedCode?: string | null
   expectedOutcome?: string | null
@@ -445,6 +531,12 @@ export type EvaluationStepUpdateManyMutationInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -461,6 +553,12 @@ export type EvaluationStepUncheckedUpdateManyInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -487,6 +585,12 @@ export type EvaluationStepCountOrderByAggregateInput = {
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
+  stepTitle?: Prisma.SortOrder
+  progressSummaryBefore?: Prisma.SortOrder
+  codegenInputJson?: Prisma.SortOrder
+  codegenOutputJson?: Prisma.SortOrder
+  analyzerInputJson?: Prisma.SortOrder
+  analyzerOutputJson?: Prisma.SortOrder
   thinkingText?: Prisma.SortOrder
   proposedCode?: Prisma.SortOrder
   expectedOutcome?: Prisma.SortOrder
@@ -507,6 +611,8 @@ export type EvaluationStepMaxOrderByAggregateInput = {
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
+  stepTitle?: Prisma.SortOrder
+  progressSummaryBefore?: Prisma.SortOrder
   thinkingText?: Prisma.SortOrder
   proposedCode?: Prisma.SortOrder
   expectedOutcome?: Prisma.SortOrder
@@ -523,6 +629,8 @@ export type EvaluationStepMinOrderByAggregateInput = {
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
+  stepTitle?: Prisma.SortOrder
+  progressSummaryBefore?: Prisma.SortOrder
   thinkingText?: Prisma.SortOrder
   proposedCode?: Prisma.SortOrder
   expectedOutcome?: Prisma.SortOrder
@@ -588,6 +696,12 @@ export type EvaluationStepCreateWithoutEvaluationInput = {
   userId: string
   sequence: number
   pageUrl?: string | null
+  stepTitle?: string | null
+  progressSummaryBefore?: string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: string | null
   proposedCode?: string | null
   expectedOutcome?: string | null
@@ -603,6 +717,12 @@ export type EvaluationStepUncheckedCreateWithoutEvaluationInput = {
   userId: string
   sequence: number
   pageUrl?: string | null
+  stepTitle?: string | null
+  progressSummaryBefore?: string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: string | null
   proposedCode?: string | null
   expectedOutcome?: string | null
@@ -648,6 +768,12 @@ export type EvaluationStepScalarWhereInput = {
   userId?: Prisma.StringFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntFilter<"EvaluationStep"> | number
   pageUrl?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  stepTitle?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  progressSummaryBefore?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  codegenInputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  codegenOutputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  analyzerInputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
+  analyzerOutputJson?: Prisma.JsonNullableFilter<"EvaluationStep">
   thinkingText?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   proposedCode?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   expectedOutcome?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
@@ -663,6 +789,12 @@ export type EvaluationStepCreateManyEvaluationInput = {
   userId: string
   sequence: number
   pageUrl?: string | null
+  stepTitle?: string | null
+  progressSummaryBefore?: string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: string | null
   proposedCode?: string | null
   expectedOutcome?: string | null
@@ -678,6 +810,12 @@ export type EvaluationStepUpdateWithoutEvaluationInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -693,6 +831,12 @@ export type EvaluationStepUncheckedUpdateWithoutEvaluationInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -708,6 +852,12 @@ export type EvaluationStepUncheckedUpdateManyWithoutEvaluationInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  codegenInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  codegenOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerInputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  analyzerOutputJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   thinkingText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   proposedCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expectedOutcome?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -726,6 +876,12 @@ export type EvaluationStepSelect<ExtArgs extends runtime.Types.Extensions.Intern
   userId?: boolean
   sequence?: boolean
   pageUrl?: boolean
+  stepTitle?: boolean
+  progressSummaryBefore?: boolean
+  codegenInputJson?: boolean
+  codegenOutputJson?: boolean
+  analyzerInputJson?: boolean
+  analyzerOutputJson?: boolean
   thinkingText?: boolean
   proposedCode?: boolean
   expectedOutcome?: boolean
@@ -743,6 +899,12 @@ export type EvaluationStepSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   userId?: boolean
   sequence?: boolean
   pageUrl?: boolean
+  stepTitle?: boolean
+  progressSummaryBefore?: boolean
+  codegenInputJson?: boolean
+  codegenOutputJson?: boolean
+  analyzerInputJson?: boolean
+  analyzerOutputJson?: boolean
   thinkingText?: boolean
   proposedCode?: boolean
   expectedOutcome?: boolean
@@ -760,6 +922,12 @@ export type EvaluationStepSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   userId?: boolean
   sequence?: boolean
   pageUrl?: boolean
+  stepTitle?: boolean
+  progressSummaryBefore?: boolean
+  codegenInputJson?: boolean
+  codegenOutputJson?: boolean
+  analyzerInputJson?: boolean
+  analyzerOutputJson?: boolean
   thinkingText?: boolean
   proposedCode?: boolean
   expectedOutcome?: boolean
@@ -777,6 +945,12 @@ export type EvaluationStepSelectScalar = {
   userId?: boolean
   sequence?: boolean
   pageUrl?: boolean
+  stepTitle?: boolean
+  progressSummaryBefore?: boolean
+  codegenInputJson?: boolean
+  codegenOutputJson?: boolean
+  analyzerInputJson?: boolean
+  analyzerOutputJson?: boolean
   thinkingText?: boolean
   proposedCode?: boolean
   expectedOutcome?: boolean
@@ -787,7 +961,7 @@ export type EvaluationStepSelectScalar = {
   createdAt?: boolean
 }
 
-export type EvaluationStepOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "evaluationId" | "userId" | "sequence" | "pageUrl" | "thinkingText" | "proposedCode" | "expectedOutcome" | "actualOutcome" | "errorMessage" | "decision" | "analyzerRationale" | "createdAt", ExtArgs["result"]["evaluationStep"]>
+export type EvaluationStepOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "evaluationId" | "userId" | "sequence" | "pageUrl" | "stepTitle" | "progressSummaryBefore" | "codegenInputJson" | "codegenOutputJson" | "analyzerInputJson" | "analyzerOutputJson" | "thinkingText" | "proposedCode" | "expectedOutcome" | "actualOutcome" | "errorMessage" | "decision" | "analyzerRationale" | "createdAt", ExtArgs["result"]["evaluationStep"]>
 export type EvaluationStepInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   evaluation?: boolean | Prisma.EvaluationDefaultArgs<ExtArgs>
 }
@@ -809,6 +983,15 @@ export type $EvaluationStepPayload<ExtArgs extends runtime.Types.Extensions.Inte
     userId: string
     sequence: number
     pageUrl: string | null
+    stepTitle: string | null
+    /**
+     * Rolling progress summary text before this step began (for review UI).
+     */
+    progressSummaryBefore: string | null
+    codegenInputJson: runtime.JsonValue | null
+    codegenOutputJson: runtime.JsonValue | null
+    analyzerInputJson: runtime.JsonValue | null
+    analyzerOutputJson: runtime.JsonValue | null
     thinkingText: string | null
     proposedCode: string | null
     expectedOutcome: string | null
@@ -1246,6 +1429,12 @@ export interface EvaluationStepFieldRefs {
   readonly userId: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly sequence: Prisma.FieldRef<"EvaluationStep", 'Int'>
   readonly pageUrl: Prisma.FieldRef<"EvaluationStep", 'String'>
+  readonly stepTitle: Prisma.FieldRef<"EvaluationStep", 'String'>
+  readonly progressSummaryBefore: Prisma.FieldRef<"EvaluationStep", 'String'>
+  readonly codegenInputJson: Prisma.FieldRef<"EvaluationStep", 'Json'>
+  readonly codegenOutputJson: Prisma.FieldRef<"EvaluationStep", 'Json'>
+  readonly analyzerInputJson: Prisma.FieldRef<"EvaluationStep", 'Json'>
+  readonly analyzerOutputJson: Prisma.FieldRef<"EvaluationStep", 'Json'>
   readonly thinkingText: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly proposedCode: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly expectedOutcome: Prisma.FieldRef<"EvaluationStep", 'String'>

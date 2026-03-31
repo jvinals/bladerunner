@@ -1484,6 +1484,7 @@ export const EvaluationScalarFieldEnum = {
   startedAt: 'startedAt',
   completedAt: 'completedAt',
   failureMessage: 'failureMessage',
+  runMode: 'runMode',
   autoSignIn: 'autoSignIn',
   autoSignInClerkOtpMode: 'autoSignInClerkOtpMode',
   createdAt: 'createdAt',
@@ -1499,6 +1500,12 @@ export const EvaluationStepScalarFieldEnum = {
   userId: 'userId',
   sequence: 'sequence',
   pageUrl: 'pageUrl',
+  stepTitle: 'stepTitle',
+  progressSummaryBefore: 'progressSummaryBefore',
+  codegenInputJson: 'codegenInputJson',
+  codegenOutputJson: 'codegenOutputJson',
+  analyzerInputJson: 'analyzerInputJson',
+  analyzerOutputJson: 'analyzerOutputJson',
   thinkingText: 'thinkingText',
   proposedCode: 'proposedCode',
   expectedOutcome: 'expectedOutcome',
@@ -1767,6 +1774,20 @@ export type EnumEvaluationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<
  * Reference to a field of type 'EvaluationStatus[]'
  */
 export type ListEnumEvaluationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EvaluationRunMode'
+ */
+export type EnumEvaluationRunModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationRunMode'>
+    
+
+
+/**
+ * Reference to a field of type 'EvaluationRunMode[]'
+ */
+export type ListEnumEvaluationRunModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationRunMode[]'>
     
 
 

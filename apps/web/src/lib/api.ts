@@ -475,9 +475,12 @@ export type EvaluationStatus =
   | 'QUEUED'
   | 'RUNNING'
   | 'WAITING_FOR_HUMAN'
+  | 'WAITING_FOR_REVIEW'
   | 'COMPLETED'
   | 'FAILED'
   | 'CANCELLED';
+
+export type EvaluationRunMode = 'continuous' | 'step_review';
 
 export type EvaluationProjectSummary = {
   id: string;
@@ -495,6 +498,7 @@ export type EvaluationRow = {
   autoSignIn: boolean;
   /** Clerk OTP path when using auto sign-in on Clerk pages; null = server default. */
   autoSignInClerkOtpMode: ClerkOtpMode | null;
+  runMode: EvaluationRunMode;
   status: EvaluationStatus;
   createdAt: string;
   updatedAt: string;
@@ -506,6 +510,12 @@ export type EvaluationStepDto = {
   id: string;
   sequence: number;
   pageUrl: string | null;
+  stepTitle: string | null;
+  progressSummaryBefore: string | null;
+  codegenInputJson: unknown;
+  codegenOutputJson: unknown;
+  analyzerInputJson: unknown;
+  analyzerOutputJson: unknown;
   thinkingText: string | null;
   proposedCode: string | null;
   expectedOutcome: string | null;
@@ -545,6 +555,10 @@ export type EvaluationDetail = EvaluationRow & {
   reports: EvaluationReportDto[];
 };
 
+export type StartEvaluationRunBody = {
+  runMode?: EvaluationRunMode;
+};
+
 export type CreateEvaluationBody = {
   name?: string;
   url: string;
@@ -573,13 +587,19 @@ export const evaluationsApi = {
   get: (id: string) => apiFetch<EvaluationDetail>(`/evaluations/${id}`),
   patch: (id: string, body: UpdateEvaluationBody) =>
     apiFetch<EvaluationDetail>(`/evaluations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  start: (id: string) =>
+  start: (id: string, body?: StartEvaluationRunBody) =>
     apiFetch<{ accepted: boolean; scheduled: boolean; evaluationId: string }>(`/evaluations/${id}/start`, {
       method: 'POST',
+      body: JSON.stringify(body ?? {}),
     }),
   /** Clear steps/reports/questions and queue a new run (not for QUEUED first start — use `start`). */
-  reprocess: (id: string) =>
+  reprocess: (id: string, body?: StartEvaluationRunBody) =>
     apiFetch<{ accepted: boolean; scheduled: boolean; evaluationId: string }>(`/evaluations/${id}/reprocess`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    }),
+  continueReview: (id: string) =>
+    apiFetch<{ accepted: boolean; evaluationId: string }>(`/evaluations/${id}/continue-review`, {
       method: 'POST',
     }),
   cancel: (id: string) =>

@@ -222,9 +222,16 @@ enum EvaluationStatus {
   QUEUED
   RUNNING
   WAITING_FOR_HUMAN
+  WAITING_FOR_REVIEW
   COMPLETED
   FAILED
   CANCELLED
+}
+
+/// How the evaluation orchestrator advances: continuous loop vs pause after each step for user review.
+enum EvaluationRunMode {
+  continuous
+  step_review
 }
 
 enum EvaluationStepDecision {
@@ -247,6 +254,7 @@ model Evaluation {
   startedAt        DateTime?         @map("started_at")
   completedAt      DateTime?         @map("completed_at")
   failureMessage   String?           @map("failure_message") @db.Text
+  runMode          EvaluationRunMode @default(continuous) @map("run_mode")
   /// When true, the evaluation browser attempts the same Clerk / project test-user sign-in as playback when a sign-in page is detected.
   autoSignIn                Boolean  @default(false) @map("auto_sign_in")
   /// Clerk OTP path when `autoSignIn` is true and the page uses Clerk (`mailslurp` | `clerk_test_email`). Null = server default (`PLAYBACK_CLERK_OTP_MODE`).
@@ -271,6 +279,13 @@ model EvaluationStep {
   userId            String                  @map("user_id")
   sequence          Int
   pageUrl           String?                 @map("page_url")
+  stepTitle         String?                 @map("step_title")
+  /// Rolling progress summary text before this step began (for review UI).
+  progressSummaryBefore String?            @map("progress_summary_before") @db.Text
+  codegenInputJson  Json?                   @map("codegen_input_json")
+  codegenOutputJson Json?                   @map("codegen_output_json")
+  analyzerInputJson Json?                   @map("analyzer_input_json")
+  analyzerOutputJson Json?                  @map("analyzer_output_json")
   thinkingText      String?                 @map("thinking_text") @db.Text
   proposedCode      String?                 @map("proposed_code") @db.Text
   expectedOutcome   String?                 @map("expected_outcome") @db.Text

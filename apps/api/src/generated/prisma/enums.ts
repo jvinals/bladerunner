@@ -76,12 +76,21 @@ export const EvaluationStatus = {
   QUEUED: 'QUEUED',
   RUNNING: 'RUNNING',
   WAITING_FOR_HUMAN: 'WAITING_FOR_HUMAN',
+  WAITING_FOR_REVIEW: 'WAITING_FOR_REVIEW',
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED',
   CANCELLED: 'CANCELLED'
 } as const
 
 export type EvaluationStatus = (typeof EvaluationStatus)[keyof typeof EvaluationStatus]
+
+
+export const EvaluationRunMode = {
+  continuous: 'continuous',
+  step_review: 'step_review'
+} as const
+
+export type EvaluationRunMode = (typeof EvaluationRunMode)[keyof typeof EvaluationRunMode]
 
 
 export const EvaluationStepDecision = {

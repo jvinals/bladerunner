@@ -37,6 +37,7 @@ export type EvaluationMinAggregateOutputType = {
   startedAt: Date | null
   completedAt: Date | null
   failureMessage: string | null
+  runMode: $Enums.EvaluationRunMode | null
   autoSignIn: boolean | null
   autoSignInClerkOtpMode: string | null
   createdAt: Date | null
@@ -56,6 +57,7 @@ export type EvaluationMaxAggregateOutputType = {
   startedAt: Date | null
   completedAt: Date | null
   failureMessage: string | null
+  runMode: $Enums.EvaluationRunMode | null
   autoSignIn: boolean | null
   autoSignInClerkOtpMode: string | null
   createdAt: Date | null
@@ -75,6 +77,7 @@ export type EvaluationCountAggregateOutputType = {
   startedAt: number
   completedAt: number
   failureMessage: number
+  runMode: number
   autoSignIn: number
   autoSignInClerkOtpMode: number
   createdAt: number
@@ -96,6 +99,7 @@ export type EvaluationMinAggregateInputType = {
   startedAt?: true
   completedAt?: true
   failureMessage?: true
+  runMode?: true
   autoSignIn?: true
   autoSignInClerkOtpMode?: true
   createdAt?: true
@@ -115,6 +119,7 @@ export type EvaluationMaxAggregateInputType = {
   startedAt?: true
   completedAt?: true
   failureMessage?: true
+  runMode?: true
   autoSignIn?: true
   autoSignInClerkOtpMode?: true
   createdAt?: true
@@ -134,6 +139,7 @@ export type EvaluationCountAggregateInputType = {
   startedAt?: true
   completedAt?: true
   failureMessage?: true
+  runMode?: true
   autoSignIn?: true
   autoSignInClerkOtpMode?: true
   createdAt?: true
@@ -226,6 +232,7 @@ export type EvaluationGroupByOutputType = {
   startedAt: Date | null
   completedAt: Date | null
   failureMessage: string | null
+  runMode: $Enums.EvaluationRunMode
   autoSignIn: boolean
   autoSignInClerkOtpMode: string | null
   createdAt: Date
@@ -266,6 +273,7 @@ export type EvaluationWhereInput = {
   startedAt?: Prisma.DateTimeNullableFilter<"Evaluation"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"Evaluation"> | Date | string | null
   failureMessage?: Prisma.StringNullableFilter<"Evaluation"> | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFilter<"Evaluation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFilter<"Evaluation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableFilter<"Evaluation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Evaluation"> | Date | string
@@ -289,6 +297,7 @@ export type EvaluationOrderByWithRelationInput = {
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   failureMessage?: Prisma.SortOrderInput | Prisma.SortOrder
+  runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -315,6 +324,7 @@ export type EvaluationWhereUniqueInput = Prisma.AtLeast<{
   startedAt?: Prisma.DateTimeNullableFilter<"Evaluation"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"Evaluation"> | Date | string | null
   failureMessage?: Prisma.StringNullableFilter<"Evaluation"> | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFilter<"Evaluation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFilter<"Evaluation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableFilter<"Evaluation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Evaluation"> | Date | string
@@ -338,6 +348,7 @@ export type EvaluationOrderByWithAggregationInput = {
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   failureMessage?: Prisma.SortOrderInput | Prisma.SortOrder
+  runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -363,6 +374,7 @@ export type EvaluationScalarWhereWithAggregatesInput = {
   startedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Evaluation"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Evaluation"> | Date | string | null
   failureMessage?: Prisma.StringNullableWithAggregatesFilter<"Evaluation"> | string | null
+  runMode?: Prisma.EnumEvaluationRunModeWithAggregatesFilter<"Evaluation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolWithAggregatesFilter<"Evaluation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableWithAggregatesFilter<"Evaluation"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Evaluation"> | Date | string
@@ -381,6 +393,7 @@ export type EvaluationCreateInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -404,6 +417,7 @@ export type EvaluationUncheckedCreateInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -425,6 +439,7 @@ export type EvaluationUpdateInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -448,6 +463,7 @@ export type EvaluationUncheckedUpdateInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -470,6 +486,7 @@ export type EvaluationCreateManyInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -488,6 +505,7 @@ export type EvaluationUpdateManyMutationInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -507,6 +525,7 @@ export type EvaluationUncheckedUpdateManyInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -536,6 +555,7 @@ export type EvaluationCountOrderByAggregateInput = {
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   failureMessage?: Prisma.SortOrder
+  runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -555,6 +575,7 @@ export type EvaluationMaxOrderByAggregateInput = {
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   failureMessage?: Prisma.SortOrder
+  runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -574,6 +595,7 @@ export type EvaluationMinOrderByAggregateInput = {
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   failureMessage?: Prisma.SortOrder
+  runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -631,6 +653,10 @@ export type EnumEvaluationStatusFieldUpdateOperationsInput = {
   set?: $Enums.EvaluationStatus
 }
 
+export type EnumEvaluationRunModeFieldUpdateOperationsInput = {
+  set?: $Enums.EvaluationRunMode
+}
+
 export type EvaluationCreateNestedOneWithoutStepsInput = {
   create?: Prisma.XOR<Prisma.EvaluationCreateWithoutStepsInput, Prisma.EvaluationUncheckedCreateWithoutStepsInput>
   connectOrCreate?: Prisma.EvaluationCreateOrConnectWithoutStepsInput
@@ -685,6 +711,7 @@ export type EvaluationCreateWithoutProjectInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -706,6 +733,7 @@ export type EvaluationUncheckedCreateWithoutProjectInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -757,6 +785,7 @@ export type EvaluationScalarWhereInput = {
   startedAt?: Prisma.DateTimeNullableFilter<"Evaluation"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"Evaluation"> | Date | string | null
   failureMessage?: Prisma.StringNullableFilter<"Evaluation"> | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFilter<"Evaluation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFilter<"Evaluation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableFilter<"Evaluation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Evaluation"> | Date | string
@@ -775,6 +804,7 @@ export type EvaluationCreateWithoutStepsInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -797,6 +827,7 @@ export type EvaluationUncheckedCreateWithoutStepsInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -833,6 +864,7 @@ export type EvaluationUpdateWithoutStepsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -855,6 +887,7 @@ export type EvaluationUncheckedUpdateWithoutStepsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -875,6 +908,7 @@ export type EvaluationCreateWithoutQuestionsInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -897,6 +931,7 @@ export type EvaluationUncheckedCreateWithoutQuestionsInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -933,6 +968,7 @@ export type EvaluationUpdateWithoutQuestionsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -955,6 +991,7 @@ export type EvaluationUncheckedUpdateWithoutQuestionsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -975,6 +1012,7 @@ export type EvaluationCreateWithoutReportsInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -997,6 +1035,7 @@ export type EvaluationUncheckedCreateWithoutReportsInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -1033,6 +1072,7 @@ export type EvaluationUpdateWithoutReportsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1055,6 +1095,7 @@ export type EvaluationUncheckedUpdateWithoutReportsInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1075,6 +1116,7 @@ export type EvaluationCreateManyProjectInput = {
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
@@ -1093,6 +1135,7 @@ export type EvaluationUpdateWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1114,6 +1157,7 @@ export type EvaluationUncheckedUpdateWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1135,6 +1179,7 @@ export type EvaluationUncheckedUpdateManyWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1203,6 +1248,7 @@ export type EvaluationSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   startedAt?: boolean
   completedAt?: boolean
   failureMessage?: boolean
+  runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
   createdAt?: boolean
@@ -1227,6 +1273,7 @@ export type EvaluationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   startedAt?: boolean
   completedAt?: boolean
   failureMessage?: boolean
+  runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
   createdAt?: boolean
@@ -1247,6 +1294,7 @@ export type EvaluationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   startedAt?: boolean
   completedAt?: boolean
   failureMessage?: boolean
+  runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
   createdAt?: boolean
@@ -1267,13 +1315,14 @@ export type EvaluationSelectScalar = {
   startedAt?: boolean
   completedAt?: boolean
   failureMessage?: boolean
+  runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type EvaluationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "name" | "url" | "intent" | "desiredOutput" | "progressSummary" | "status" | "startedAt" | "completedAt" | "failureMessage" | "autoSignIn" | "autoSignInClerkOtpMode" | "createdAt" | "updatedAt", ExtArgs["result"]["evaluation"]>
+export type EvaluationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "name" | "url" | "intent" | "desiredOutput" | "progressSummary" | "status" | "startedAt" | "completedAt" | "failureMessage" | "runMode" | "autoSignIn" | "autoSignInClerkOtpMode" | "createdAt" | "updatedAt", ExtArgs["result"]["evaluation"]>
 export type EvaluationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.Evaluation$projectArgs<ExtArgs>
   steps?: boolean | Prisma.Evaluation$stepsArgs<ExtArgs>
@@ -1309,6 +1358,7 @@ export type $EvaluationPayload<ExtArgs extends runtime.Types.Extensions.Internal
     startedAt: Date | null
     completedAt: Date | null
     failureMessage: string | null
+    runMode: $Enums.EvaluationRunMode
     /**
      * When true, the evaluation browser attempts the same Clerk / project test-user sign-in as playback when a sign-in page is detected.
      */
@@ -1758,6 +1808,7 @@ export interface EvaluationFieldRefs {
   readonly startedAt: Prisma.FieldRef<"Evaluation", 'DateTime'>
   readonly completedAt: Prisma.FieldRef<"Evaluation", 'DateTime'>
   readonly failureMessage: Prisma.FieldRef<"Evaluation", 'String'>
+  readonly runMode: Prisma.FieldRef<"Evaluation", 'EvaluationRunMode'>
   readonly autoSignIn: Prisma.FieldRef<"Evaluation", 'Boolean'>
   readonly autoSignInClerkOtpMode: Prisma.FieldRef<"Evaluation", 'String'>
   readonly createdAt: Prisma.FieldRef<"Evaluation", 'DateTime'>

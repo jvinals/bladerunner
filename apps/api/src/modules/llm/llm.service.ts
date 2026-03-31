@@ -83,6 +83,7 @@ You receive a screenshot of the current page, the starting URL, the overall eval
 
 Respond ONLY with valid JSON:
 {
+  "stepTitle": "<short human-readable name for this step (e.g. Open login form) — under 80 chars>",
   "thinking": "<what you observe and why you propose the next action toward the intent>",
   "playwrightCode": "<single async IIFE body using only \`page\` and \`expect\` from Playwright test — valid JavaScript statements, no imports; e.g. await page.getByRole('button', { name: 'Next' }).click();>",
   "expectedOutcome": "<what should change in the UI after this code runs>"
@@ -932,7 +933,7 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       pageUrl: string;
     },
     opts?: { userId?: string; signal?: AbortSignal },
-  ): Promise<{ thinking: string; playwrightCode: string; expectedOutcome: string }> {
+  ): Promise<{ stepTitle: string; thinking: string; playwrightCode: string; expectedOutcome: string }> {
     const user = `Start URL: ${input.url}
 Current page URL: ${input.pageUrl}
 Overall intent:
@@ -963,13 +964,19 @@ The attached image is the current viewport.`;
       },
     );
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const stepTitleRaw = typeof parsed.stepTitle === 'string' ? parsed.stepTitle.trim() : '';
     const thinking = typeof parsed.thinking === 'string' ? parsed.thinking.trim() : '';
     const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
     if (!playwrightCode) {
       throw new Error('evaluation_codegen returned empty playwrightCode');
     }
-    return { thinking, playwrightCode, expectedOutcome };
+    return {
+      stepTitle: stepTitleRaw.slice(0, 200) || 'Untitled step',
+      thinking,
+      playwrightCode,
+      expectedOutcome,
+    };
   }
 
   /**

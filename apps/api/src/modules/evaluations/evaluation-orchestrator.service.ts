@@ -7,6 +7,11 @@ import { EvaluationsService } from './evaluations.service';
 const MAX_EVALUATION_STEPS = 12;
 const LLM_JPEG_QUALITY = 85;
 
+export type EvaluationScheduleOpts = {
+  resumeAfterHuman?: boolean;
+  resumeAfterReview?: boolean;
+};
+
 @Injectable()
 export class EvaluationOrchestratorService {
   private readonly logger = new Logger(EvaluationOrchestratorService.name);
@@ -20,60 +25,18 @@ export class EvaluationOrchestratorService {
   ) {}
 
   /**
-   * Fire-and-forget autonomous loop (or resume after human).
+   * Fire-and-forget autonomous loop (or resume after human / review pause).
    * @returns false if a run is already in progress for this id (caller should refetch; do not treat as error).
    */
-  scheduleRun(evaluationId: string, userId: string, opts?: { resumeAfterHuman?: boolean }): boolean {
+  scheduleRun(evaluationId: string, userId: string, opts?: EvaluationScheduleOpts): boolean {
     if (this.active.has(evaluationId)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-        body: JSON.stringify({
-          sessionId: '3619df',
-          hypothesisId: 'H1',
-          location: 'evaluation-orchestrator.service.ts:scheduleRun',
-          message: 'scheduleRun skipped — evaluationId already active',
-          data: { evaluationId },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return false;
     }
     this.active.add(evaluationId);
-    // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-        body: JSON.stringify({
-          sessionId: '3619df',
-          hypothesisId: 'H2',
-        location: 'evaluation-orchestrator.service.ts:scheduleRun',
-        message: 'scheduleRun started runLoop',
-        data: { evaluationId },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     void this.runLoop(evaluationId, userId, opts ?? {})
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.error(`Evaluation ${evaluationId} failed: ${msg}`);
-        // #region agent log
-          fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-            body: JSON.stringify({
-              sessionId: '3619df',
-              hypothesisId: 'H3',
-            location: 'evaluation-orchestrator.service.ts:runLoop.catch',
-            message: 'runLoop failed',
-            data: { evaluationId, error: msg.slice(0, 500) },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         void this.prisma.evaluation
           .update({
             where: { id: evaluationId, userId },
@@ -95,7 +58,7 @@ export class EvaluationOrchestratorService {
   private async runLoop(
     evaluationId: string,
     userId: string,
-    opts: { resumeAfterHuman?: boolean },
+    opts: EvaluationScheduleOpts,
   ): Promise<void> {
     const ev = await this.prisma.evaluation.findFirst({
       where: { id: evaluationId, userId },
@@ -110,22 +73,15 @@ export class EvaluationOrchestratorService {
       },
     });
     if (!ev) throw new NotFoundException('Evaluation not found');
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-      body: JSON.stringify({
-        sessionId: '3619df',
-        hypothesisId: 'H2',
-        location: 'evaluation-orchestrator.service.ts:runLoop:entry',
-        message: 'runLoop loaded evaluation',
-        data: { evaluationId, status: ev.status },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+
     if (ev.status === 'COMPLETED' || ev.status === 'CANCELLED' || ev.status === 'FAILED') {
       throw new BadRequestException('Evaluation is not runnable');
+    }
+    if (ev.status === 'WAITING_FOR_HUMAN' && !opts.resumeAfterHuman) {
+      throw new BadRequestException('Evaluation is waiting for human input');
+    }
+    if (ev.status === 'WAITING_FOR_REVIEW' && !opts.resumeAfterReview) {
+      throw new BadRequestException('Evaluation is paused for review');
     }
 
     await this.prisma.evaluation.update({
@@ -144,23 +100,9 @@ export class EvaluationOrchestratorService {
       await this.recording.startEvaluationSession(evaluationId, userId);
       const s = this.recording.getEvaluationSession(evaluationId);
       if (!s) throw new Error('Evaluation session missing after start');
-      if (!opts.resumeAfterHuman) {
+      if (!opts.resumeAfterHuman && !opts.resumeAfterReview) {
         await s.page.goto(ev.url, { waitUntil: 'domcontentloaded', timeout: 120_000 });
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-        body: JSON.stringify({
-          sessionId: '3619df',
-          hypothesisId: 'H6',
-          location: 'evaluation-orchestrator.service.ts:runLoop',
-          message: 'evaluation browser session ready and initial navigation done',
-          data: { evaluationId, pageUrl: s.page.url() },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
     }
 
     let stepCount = await this.prisma.evaluationStep.count({ where: { evaluationId } });
@@ -182,6 +124,9 @@ export class EvaluationOrchestratorService {
         return;
       }
       if (fresh.status === 'WAITING_FOR_HUMAN') {
+        return;
+      }
+      if (fresh.status === 'WAITING_FOR_REVIEW') {
         return;
       }
 
@@ -211,6 +156,8 @@ export class EvaluationOrchestratorService {
       }
 
       const sequence = await this.evaluations.nextStepSequence(evaluationId);
+      const progressSummaryBefore = fresh.progressSummary?.trim() ?? '';
+
       const jpeg = await page.screenshot({ type: 'jpeg', quality: LLM_JPEG_QUALITY });
       const screenshotB64 = jpeg.toString('base64');
       const pageUrl = page.url();
@@ -232,6 +179,16 @@ export class EvaluationOrchestratorService {
         sequence,
       });
 
+      const codegenInputJson = {
+        startUrl: ev.url,
+        pageUrl,
+        intent: ev.intent,
+        desiredOutput: ev.desiredOutput,
+        progressSummaryBefore,
+        priorStepsBrief: priorBrief,
+        note: 'Viewport JPEG sent to the model as a separate image attachment; not persisted in the database.',
+      };
+
       const proposed = await this.llm.evaluationProposePlaywrightStep(
         {
           url: ev.url,
@@ -245,10 +202,21 @@ export class EvaluationOrchestratorService {
         { userId },
       );
 
+      const codegenOutputJson = {
+        stepTitle: proposed.stepTitle,
+        thinking: proposed.thinking,
+        playwrightCode: proposed.playwrightCode,
+        expectedOutcome: proposed.expectedOutcome,
+      };
+
       await this.evaluations.createStep(userId, {
         evaluationId,
         sequence,
         pageUrl,
+        stepTitle: proposed.stepTitle,
+        progressSummaryBefore,
+        codegenInputJson,
+        codegenOutputJson,
         thinkingText: proposed.thinking,
         proposedCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
@@ -300,14 +268,32 @@ export class EvaluationOrchestratorService {
         { userId },
       );
 
-      await this.prisma.evaluationStep.updateMany({
-        where: { evaluationId, sequence },
-        data: {
-          actualOutcome: executionOk ? `OK at ${afterUrl}` : errorMessage ?? 'failed',
-          errorMessage: executionOk ? null : errorMessage ?? 'error',
-          decision: analysis.decision,
-          analyzerRationale: analysis.rationale,
-        },
+      const analyzerInputJson = {
+        intent: ev.intent,
+        desiredOutput: ev.desiredOutput,
+        progressSummary: fresh.progressSummary,
+        executedCode: proposed.playwrightCode,
+        executionOk,
+        errorMessage: errorMessage ?? null,
+        pageUrlAfter: afterUrl,
+        note: 'After-step viewport JPEG sent to the model as a separate image attachment; not persisted.',
+      };
+
+      const analyzerOutputJson = {
+        goalProgress: analysis.goalProgress,
+        decision: analysis.decision,
+        rationale: analysis.rationale,
+        ...(analysis.humanQuestion ? { humanQuestion: analysis.humanQuestion } : {}),
+        ...(analysis.humanOptions?.length ? { humanOptions: analysis.humanOptions } : {}),
+      };
+
+      await this.evaluations.updateStepAfterAnalyzer(evaluationId, sequence, {
+        analyzerInputJson,
+        analyzerOutputJson,
+        actualOutcome: executionOk ? `OK at ${afterUrl}` : errorMessage ?? 'failed',
+        errorMessage: executionOk ? null : errorMessage ?? 'error',
+        decision: analysis.decision,
+        analyzerRationale: analysis.rationale,
       });
 
       await this.evaluations.appendProgressSummary(
@@ -350,6 +336,18 @@ export class EvaluationOrchestratorService {
       }
 
       stepCount += 1;
+
+      if (fresh.runMode === 'step_review') {
+        await this.prisma.evaluation.update({
+          where: { id: evaluationId, userId },
+          data: { status: 'WAITING_FOR_REVIEW' },
+        });
+        this.recording.emitEvaluationProgress(evaluationId, {
+          phase: 'paused_review',
+          sequence,
+        });
+        return;
+      }
     }
 
     const evDone = await this.prisma.evaluation.findFirst({
@@ -377,7 +375,7 @@ export class EvaluationOrchestratorService {
     const stepsMd = steps
       .map(
         (s) =>
-          `### Step ${s.sequence}\n- Thinking: ${s.thinkingText ?? ''}\n- Code: \`${(s.proposedCode ?? '').slice(0, 800)}\`\n- Decision: ${s.decision ?? ''}\n- Rationale: ${s.analyzerRationale ?? ''}\n`,
+          `### Step ${s.sequence}${s.stepTitle ? `: ${s.stepTitle}` : ''}\n- Thinking: ${s.thinkingText ?? ''}\n- Code: \`${(s.proposedCode ?? '').slice(0, 800)}\`\n- Decision: ${s.decision ?? ''}\n- Rationale: ${s.analyzerRationale ?? ''}\n`,
       )
       .join('\n');
 
@@ -432,5 +430,20 @@ export class EvaluationOrchestratorService {
       data: { status: 'RUNNING' },
     });
     this.scheduleRun(evaluationId, userId, { resumeAfterHuman: true });
+  }
+
+  async resumeAfterReview(evaluationId: string, userId: string): Promise<void> {
+    const ev = await this.prisma.evaluation.findFirst({
+      where: { id: evaluationId, userId },
+    });
+    if (!ev) throw new NotFoundException('Evaluation not found');
+    if (ev.status !== 'WAITING_FOR_REVIEW') {
+      throw new BadRequestException('Evaluation is not paused for review');
+    }
+    await this.prisma.evaluation.update({
+      where: { id: evaluationId, userId },
+      data: { status: 'RUNNING' },
+    });
+    this.scheduleRun(evaluationId, userId, { resumeAfterReview: true });
   }
 }
