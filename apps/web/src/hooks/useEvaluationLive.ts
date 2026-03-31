@@ -62,6 +62,20 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
 
     const onConnect = () => {
       setConnected(true);
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+        body: JSON.stringify({
+          sessionId: '3619df',
+          hypothesisId: 'H1-verify',
+          location: 'useEvaluationLive.ts:onConnect',
+          message: 'recording socket connected and joining room',
+          data: { evaluationId, enabled: true },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       socket.emit('join', { runId: evaluationId });
     };
 

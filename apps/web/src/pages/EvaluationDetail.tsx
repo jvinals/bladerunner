@@ -218,8 +218,9 @@ export default function EvaluationDetailPage() {
     void queryClient.invalidateQueries({ queryKey: ['evaluations'] });
   }, [queryClient, id]);
 
+  /** Keep socket + trace when preview is detached; only the inline frame is collapsed (see preview block). */
   const { frameDataUrl, lastProgress, evaluationTrace, connected } = useEvaluationLive(id, {
-    enabled: liveEnabled && !isDetached,
+    enabled: liveEnabled,
     onStale: invalidate,
   });
 
@@ -896,7 +897,7 @@ export default function EvaluationDetailPage() {
                 })}
               </div>
             )}
-            {(liveEnabled && !isDetached) || evaluationTrace.length > 0 ? (
+            {liveEnabled || evaluationTrace.length > 0 ? (
               <div className="px-4 pb-4 pt-2 border-t border-amber-200/80 bg-amber-50/40">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span className="text-xs font-semibold text-amber-950">Evaluation trace (live)</span>

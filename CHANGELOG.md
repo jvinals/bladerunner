@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.116`: **Evaluation trace** no longer disappears when the preview is **detached** — `useEvaluationLive` stayed enabled only when `!isDetached`, which cleared trace and dropped the socket; it now stays on for all **`liveEnabled`** runs. Trace panel visibility uses **`liveEnabled || evaluationTrace.length > 0`**. Debug ingest (session `3619df`) on socket connect for verification. `@bladerunner/web 0.7.68`.
+
 - `0.10.115`: **Evaluation trace** — every step-scoped log line is prefixed with **`[Step N]`**; run-level **`[Eval]`** and final-report **`[Report]`**; collapsed JSON control shows **`(N keys)`** only. `@bladerunner/api 0.6.101`, `@bladerunner/web 0.7.67`.
 
 - `0.10.114`: **Evaluation detail** — when the live preview is **detached**, the inline preview area collapses to **10px** height (thin strip; click to **reattach**); caption hidden while detached. `@bladerunner/web 0.7.66`.
