@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect, type RefObject } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,7 +11,11 @@ import {
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { useEvaluationLive, type EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
+import {
+  useEvaluationLive,
+  type EvaluationProgressPayload,
+  type EvaluationDebugLogLine,
+} from '@/hooks/useEvaluationLive';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -162,6 +166,237 @@ function parseOptions(q: { optionsJson: string }): string[] {
   }
 }
 
+type TimelineViewMode = 'stacked' | 'parallel';
+
+function EvaluationStepCard({
+  st,
+  idx,
+  selectedStepIdx,
+  lastProgress,
+  innerRef,
+  layout,
+}: {
+  st: EvaluationStepDto;
+  idx: number;
+  selectedStepIdx: number;
+  lastProgress: EvaluationProgressPayload | null;
+  innerRef?: (el: HTMLDivElement | null) => void;
+  layout: TimelineViewMode;
+}) {
+  const load = getLiveLoadingFlags(st, lastProgress);
+  const showCodegenFromLive =
+    load.codegenOutputs &&
+    lastProgress?.sequence === st.sequence &&
+    lastProgress.phase === 'executing' &&
+    (lastProgress.thinking || lastProgress.playwrightCode || lastProgress.expectedOutcome);
+
+  const outerClass =
+    layout === 'stacked'
+      ? `snap-center shrink-0 min-w-0 flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
+          selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
+        }`
+      : `w-full min-w-[100%] shrink-0 snap-center snap-always flex flex-col min-h-0 max-h-full overflow-y-auto rounded-lg border p-3 text-sm ${
+          selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
+        }`;
+
+  return (
+    <div ref={innerRef} className={outerClass}>
+      <div className="flex items-start justify-between gap-2 mb-2 shrink-0">
+        <div>
+          <span className="font-semibold text-gray-900">Step {st.sequence}</span>
+          {st.stepTitle ? <p className="text-xs text-gray-600 mt-0.5">{st.stepTitle}</p> : null}
+        </div>
+        {st.decision ? (
+          <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">{st.decision}</span>
+        ) : lastProgress?.sequence === st.sequence && lastProgress.phase ? (
+          <span
+            className="text-[10px] uppercase tracking-wide text-[#4B90FF] shrink-0 max-w-[120px] truncate"
+            title={String(lastProgress.phase)}
+          >
+            {String(lastProgress.phase).replace(/_/g, ' ')}
+          </span>
+        ) : null}
+      </div>
+      <div className="space-y-3 text-xs min-h-0">
+        <div>
+          <span className="text-gray-500 font-medium block mb-1">Activity log before this step</span>
+          <div className="max-h-24 overflow-y-auto rounded border border-gray-100 bg-gray-50/80 p-2 font-mono text-gray-700 whitespace-pre-wrap">
+            {st.progressSummaryBefore?.trim() || '(empty)'}
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-gray-500 font-medium">Codegen inputs (LLM)</span>
+            <ViewportJpegPreviewIconButton
+              base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
+              icon={Image}
+              modalTitle="Codegen — full-page Set-of-Marks JPEG sent to the model"
+              openLabel="Preview JPEG sent to the codegen model"
+              emptyLabel="No stored viewport JPEG (older runs did not persist it)"
+            />
+          </div>
+          {load.codegenInputs ? (
+            <PendingPanel
+              label={
+                lastProgress?.phase === 'proposing' ? 'Capturing inputs for codegen…' : 'Loading codegen inputs…'
+              }
+            />
+          ) : (
+            <JsonBlock
+              value={omitBinaryPreviewKeys(
+                omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64']),
+                ['somManifest', 'accessibilitySnapshot'],
+                '[omitted — long text; see LLM inputs]',
+              )}
+            />
+          )}
+        </div>
+        <div>
+          <span className="text-gray-500 font-medium block mb-1">Codegen outputs</span>
+          {load.codegenOutputs ? (
+            showCodegenFromLive ? (
+              <JsonBlock
+                value={{
+                  thinking: lastProgress.thinking,
+                  playwrightCode: lastProgress.playwrightCode,
+                  expectedOutcome: lastProgress.expectedOutcome,
+                }}
+              />
+            ) : lastProgress?.phase === 'proposing' ? (
+              <PendingPanel label="Queued: codegen runs after page capture (SOM, accessibility)…" />
+            ) : (
+              <PendingPanel label="Codegen model running…" />
+            )
+          ) : (
+            <JsonBlock value={st.codegenOutputJson} />
+          )}
+        </div>
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-gray-500 font-medium">Analyzer inputs</span>
+            <ViewportJpegPreviewIconButton
+              base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
+              icon={ScanSearch}
+              modalTitle="Analyzer — after-step full-page Set-of-Marks JPEG"
+              openLabel="Preview after-step JPEG sent to the analyzer"
+              emptyLabel="No stored after-step JPEG (step not analyzed yet or older runs)"
+            />
+          </div>
+          {load.analyzerInputs ? (
+            <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
+          ) : (
+            <JsonBlock
+              value={omitBinaryPreviewKeys(
+                omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64']),
+                ['somManifest', 'accessibilitySnapshot'],
+                '[omitted — long text; see LLM inputs]',
+              )}
+            />
+          )}
+        </div>
+        <div>
+          <span className="text-gray-500 font-medium block mb-1">Analyzer outputs</span>
+          {load.analyzerOutputs ? (
+            <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
+          ) : (
+            <JsonBlock value={st.analyzerOutputJson} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type EvaluationTracePanelProps = {
+  evaluationTrace: EvaluationDebugLogLine[];
+  connected: boolean;
+  liveEnabled: boolean;
+  runStatus: string | undefined;
+  traceEndRef: RefObject<HTMLDivElement | null>;
+  scrollClassName: string;
+  /** When true, panel stretches to fill a flex parent (parallel layout). */
+  fillHeight?: boolean;
+};
+
+function EvaluationTracePanel({
+  evaluationTrace,
+  connected,
+  liveEnabled,
+  runStatus,
+  traceEndRef,
+  scrollClassName,
+  fillHeight,
+}: EvaluationTracePanelProps) {
+  return (
+    <div
+      className={`flex flex-col min-h-0 min-w-0 border border-amber-200/80 bg-amber-50/40 rounded-lg overflow-hidden ${
+        fillHeight ? 'h-full min-h-0 flex-1' : ''
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-1 shrink-0">
+        <span className="text-xs font-semibold text-amber-950">Evaluation trace (live)</span>
+        <span className="text-[10px] text-gray-500 shrink-0">
+          {connected ? 'Socket connected' : 'Socket disconnected'}
+        </span>
+      </div>
+      <p className="text-[10px] text-gray-600 px-3 pb-2 leading-snug shrink-0">
+        Server-emitted timeline: auto sign-in, page capture (SOM + accessibility), LLM request/response milestones,
+        Playwright execution. Streaming model “thinking” is not available for JSON codegen (single round-trip);
+        Gemini request/response timings appear as separate lines.
+      </p>
+      <div className="px-2 pb-2 flex-1 min-h-0 flex flex-col font-mono text-[10px] leading-relaxed text-gray-900">
+        <div
+          className={`rounded border border-amber-100 bg-white p-2 shadow-inner flex-1 min-h-0 overflow-y-auto ${scrollClassName}`}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+        >
+          {evaluationTrace.length === 0 ? (
+            <span className="text-gray-400">
+              {runStatus === 'RUNNING' && liveEnabled
+                ? 'Waiting for trace lines from the server…'
+                : 'No trace in this session (start a run or reconnect while the evaluation is active).'}
+            </span>
+          ) : (
+            evaluationTrace.map((line, idx) => {
+              const keyCount =
+                line.detail != null && typeof line.detail === 'object'
+                  ? Object.keys(line.detail as object).length
+                  : 0;
+              const hasDetail = keyCount > 0;
+              return (
+                <div
+                  key={`${line.at}-${idx}`}
+                  className="border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0 text-[10px] leading-snug"
+                >
+                  <div className="min-w-0">
+                    <span className="text-amber-800/90">{line.at}</span>{' '}
+                    <span className="text-gray-700 break-words">— {line.message}</span>
+                    {hasDetail ? (
+                      <>
+                        {' '}
+                        <details className="inline min-w-0 max-w-full align-baseline open:block open:w-full">
+                          <summary className="inline cursor-pointer text-[9px] text-gray-500 hover:text-gray-700 marker:text-gray-400">
+                            ({keyCount} keys)
+                          </summary>
+                          <pre className="mt-1 block w-full min-w-0 max-w-full pl-3 border-l border-amber-200/80 text-gray-600 whitespace-pre-wrap break-words text-[9px]">
+                            {JSON.stringify(line.detail, null, 2)}
+                          </pre>
+                        </details>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={traceEndRef} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EvaluationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -176,7 +411,9 @@ export default function EvaluationDetailPage() {
   const [autoSignInOtpDraft, setAutoSignInOtpDraft] = useState<AutoClerkOtpUiMode>('default');
   const [runModeDraft, setRunModeDraft] = useState<EvaluationRunMode>('continuous');
   const [selectedStepIdx, setSelectedStepIdx] = useState(0);
+  const [timelineViewMode, setTimelineViewMode] = useState<TimelineViewMode>('stacked');
   const stepCardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const parallelStepsScrollRef = useRef<HTMLDivElement>(null);
 
   const query = useQuery({
     queryKey: ['evaluation', id],
@@ -240,12 +477,17 @@ export default function EvaluationDetailPage() {
   }, [displaySteps.length, ev?.id]);
 
   useEffect(() => {
-    const el = stepCardRefs.current[selectedStepIdx];
-    if (el) {
-      // Align trailing edge so the latest step stays toward the right as the strip grows leftward.
-      el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
+    if (timelineViewMode === 'parallel') {
+      const container = parallelStepsScrollRef.current;
+      const child = container?.children[selectedStepIdx] as HTMLElement | undefined;
+      child?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+    } else {
+      const el = stepCardRefs.current[selectedStepIdx];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
+      }
     }
-  }, [selectedStepIdx, displaySteps.length, lastProgress?.sequence]);
+  }, [selectedStepIdx, displaySteps.length, lastProgress?.sequence, timelineViewMode]);
 
   const handleDetachPreview = useCallback(() => {
     if (!id) return;
@@ -706,6 +948,34 @@ export default function EvaluationDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2 border-b border-gray-100">
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <h2 className="text-sm font-semibold text-gray-800 shrink-0">Step timeline</h2>
+                <div
+                  className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5 shrink-0"
+                  role="group"
+                  aria-label="Timeline layout"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTimelineViewMode('stacked')}
+                    className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
+                      timelineViewMode === 'stacked'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Stacked
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimelineViewMode('parallel')}
+                    className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
+                      timelineViewMode === 'parallel'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Parallel
+                  </button>
+                </div>
                 {displaySteps.length > 0 && (
                   <div className="flex items-center gap-1 overflow-x-auto min-w-0 flex-1 py-1">
                     <button
@@ -766,199 +1036,77 @@ export default function EvaluationDetailPage() {
               <p className="text-sm text-gray-500 px-4 py-6">
                 No steps yet. Start the run to record each step (inputs and outputs appear after the model runs).
               </p>
+            ) : timelineViewMode === 'parallel' ? (
+              <div className="flex flex-col lg:flex-row gap-4 px-4 pb-4 pt-2 min-h-[min(70vh,640px)] lg:items-stretch">
+                <div className="min-w-0 w-full lg:flex-1 flex flex-col min-h-[min(36vh,280px)] lg:min-h-0 lg:max-h-[min(70vh,640px)]">
+                  <div
+                    ref={parallelStepsScrollRef}
+                    className="flex min-h-0 flex-1 w-full overflow-x-auto overflow-y-visible snap-x snap-mandatory scroll-smooth rounded-lg border border-gray-100 bg-gray-50/30"
+                  >
+                    {displaySteps.map((st, idx) => (
+                      <EvaluationStepCard
+                        key={st.id}
+                        st={st}
+                        idx={idx}
+                        selectedStepIdx={selectedStepIdx}
+                        lastProgress={lastProgress}
+                        layout="parallel"
+                        innerRef={(el) => {
+                          stepCardRefs.current[idx] = el;
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="min-w-0 w-full lg:flex-1 flex flex-col min-h-[min(36vh,280px)] lg:min-h-0 lg:max-h-[min(70vh,640px)]">
+                  {liveEnabled || evaluationTrace.length > 0 ? (
+                    <EvaluationTracePanel
+                      evaluationTrace={evaluationTrace}
+                      connected={connected}
+                      liveEnabled={liveEnabled}
+                      runStatus={ev.status}
+                      traceEndRef={traceEndRef}
+                      scrollClassName=""
+                      fillHeight
+                    />
+                  ) : (
+                    <div className="flex flex-1 min-h-[12rem] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-amber-50/30 text-xs text-gray-500 px-4 text-center">
+                      Trace appears when the run is live or after lines arrive from the server.
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
-              <div className="flex w-full min-w-0 flex-row gap-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 scroll-smooth snap-x snap-mandatory">
-                {displaySteps.map((st, idx) => {
-                  const load = getLiveLoadingFlags(st, lastProgress);
-                  const showCodegenFromLive =
-                    load.codegenOutputs &&
-                    lastProgress?.sequence === st.sequence &&
-                    lastProgress.phase === 'executing' &&
-                    (lastProgress.thinking ||
-                      lastProgress.playwrightCode ||
-                      lastProgress.expectedOutcome);
-                  return (
-                    <div
+              <>
+                <div className="flex w-full min-w-0 flex-row gap-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 scroll-smooth snap-x snap-mandatory">
+                  {displaySteps.map((st, idx) => (
+                    <EvaluationStepCard
                       key={st.id}
-                      ref={(el) => {
+                      st={st}
+                      idx={idx}
+                      selectedStepIdx={selectedStepIdx}
+                      lastProgress={lastProgress}
+                      layout="stacked"
+                      innerRef={(el) => {
                         stepCardRefs.current[idx] = el;
                       }}
-                      className={`snap-center shrink-0 min-w-0 flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
-                        selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                          <span className="font-semibold text-gray-900">Step {st.sequence}</span>
-                          {st.stepTitle ? (
-                            <p className="text-xs text-gray-600 mt-0.5">{st.stepTitle}</p>
-                          ) : null}
-                        </div>
-                        {st.decision ? (
-                          <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
-                            {st.decision}
-                          </span>
-                        ) : lastProgress?.sequence === st.sequence && lastProgress.phase ? (
-                          <span className="text-[10px] uppercase tracking-wide text-[#4B90FF] shrink-0 max-w-[120px] truncate" title={String(lastProgress.phase)}>
-                            {String(lastProgress.phase).replace(/_/g, ' ')}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="space-y-3 text-xs">
-                        <div>
-                          <span className="text-gray-500 font-medium block mb-1">Activity log before this step</span>
-                          <div className="max-h-24 overflow-y-auto rounded border border-gray-100 bg-gray-50/80 p-2 font-mono text-gray-700 whitespace-pre-wrap">
-                            {st.progressSummaryBefore?.trim() || '(empty)'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-gray-500 font-medium">Codegen inputs (LLM)</span>
-                            <ViewportJpegPreviewIconButton
-                              base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
-                              icon={Image}
-                              modalTitle="Codegen — full-page Set-of-Marks JPEG sent to the model"
-                              openLabel="Preview JPEG sent to the codegen model"
-                              emptyLabel="No stored viewport JPEG (older runs did not persist it)"
-                            />
-                          </div>
-                          {load.codegenInputs ? (
-                            <PendingPanel
-                              label={
-                                lastProgress?.phase === 'proposing'
-                                  ? 'Capturing inputs for codegen…'
-                                  : 'Loading codegen inputs…'
-                              }
-                            />
-                          ) : (
-                            <JsonBlock
-                              value={omitBinaryPreviewKeys(
-                                omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64']),
-                                ['somManifest', 'accessibilitySnapshot'],
-                                '[omitted — long text; see LLM inputs]',
-                              )}
-                            />
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-gray-500 font-medium block mb-1">Codegen outputs</span>
-                          {load.codegenOutputs ? (
-                            showCodegenFromLive ? (
-                              <JsonBlock
-                                value={{
-                                  thinking: lastProgress.thinking,
-                                  playwrightCode: lastProgress.playwrightCode,
-                                  expectedOutcome: lastProgress.expectedOutcome,
-                                }}
-                              />
-                            ) : lastProgress?.phase === 'proposing' ? (
-                              <PendingPanel label="Queued: codegen runs after page capture (SOM, accessibility)…" />
-                            ) : (
-                              <PendingPanel label="Codegen model running…" />
-                            )
-                          ) : (
-                            <JsonBlock value={st.codegenOutputJson} />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-gray-500 font-medium">Analyzer inputs</span>
-                            <ViewportJpegPreviewIconButton
-                              base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
-                              icon={ScanSearch}
-                              modalTitle="Analyzer — after-step full-page Set-of-Marks JPEG"
-                              openLabel="Preview after-step JPEG sent to the analyzer"
-                              emptyLabel="No stored after-step JPEG (step not analyzed yet or older runs)"
-                            />
-                          </div>
-                          {load.analyzerInputs ? (
-                            <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
-                          ) : (
-                            <JsonBlock
-                              value={omitBinaryPreviewKeys(
-                                omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64']),
-                                ['somManifest', 'accessibilitySnapshot'],
-                                '[omitted — long text; see LLM inputs]',
-                              )}
-                            />
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-gray-500 font-medium block mb-1">Analyzer outputs</span>
-                          {load.analyzerOutputs ? (
-                            <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
-                          ) : (
-                            <JsonBlock value={st.analyzerOutputJson} />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    />
+                  ))}
+                </div>
+                {liveEnabled || evaluationTrace.length > 0 ? (
+                  <div className="px-4 pb-4 pt-2 border-t border-amber-100/80">
+                    <EvaluationTracePanel
+                      evaluationTrace={evaluationTrace}
+                      connected={connected}
+                      liveEnabled={liveEnabled}
+                      runStatus={ev.status}
+                      traceEndRef={traceEndRef}
+                      scrollClassName="max-h-72"
+                    />
+                  </div>
+                ) : null}
+              </>
             )}
-            {liveEnabled || evaluationTrace.length > 0 ? (
-              <div className="px-4 pb-4 pt-2 border-t border-amber-200/80 bg-amber-50/40">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-xs font-semibold text-amber-950">Evaluation trace (live)</span>
-                  <span className="text-[10px] text-gray-500 shrink-0">
-                    {connected ? 'Socket connected' : 'Socket disconnected'}
-                  </span>
-                </div>
-                <p className="text-[10px] text-gray-600 mb-2 leading-snug">
-                  Server-emitted timeline: auto sign-in, page capture (SOM + accessibility), LLM request/response
-                  milestones, Playwright execution. Streaming model “thinking” is not available for JSON codegen
-                  (single round-trip); Gemini request/response timings appear as separate lines.
-                </p>
-                <div
-                  className="max-h-72 overflow-y-auto rounded border border-amber-100 bg-white p-2 font-mono text-[10px] leading-relaxed text-gray-900 shadow-inner"
-                  role="log"
-                  aria-live="polite"
-                  aria-relevant="additions"
-                >
-                  {evaluationTrace.length === 0 ? (
-                    <span className="text-gray-400">
-                      {ev.status === 'RUNNING' && liveEnabled
-                        ? 'Waiting for trace lines from the server…'
-                        : 'No trace in this session (start a run or reconnect while the evaluation is active).'}
-                    </span>
-                  ) : (
-                    evaluationTrace.map((line, idx) => {
-                      const keyCount =
-                        line.detail != null && typeof line.detail === 'object'
-                          ? Object.keys(line.detail as object).length
-                          : 0;
-                      const hasDetail = keyCount > 0;
-                      return (
-                        <div
-                          key={`${line.at}-${idx}`}
-                          className="border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0 text-[10px] leading-snug"
-                        >
-                          <div className="min-w-0">
-                            <span className="text-amber-800/90">{line.at}</span>{' '}
-                            <span className="text-gray-700 break-words">— {line.message}</span>
-                            {hasDetail ? (
-                              <>
-                                {' '}
-                                <details className="inline min-w-0 max-w-full align-baseline open:block open:w-full">
-                                  <summary className="inline cursor-pointer text-[9px] text-gray-500 hover:text-gray-700 marker:text-gray-400">
-                                    ({keyCount} keys)
-                                  </summary>
-                                  <pre className="mt-1 block w-full min-w-0 max-w-full pl-3 border-l border-amber-200/80 text-gray-600 whitespace-pre-wrap break-words text-[9px]">
-                                    {JSON.stringify(line.detail, null, 2)}
-                                  </pre>
-                                </details>
-                              </>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                  <div ref={traceEndRef} />
-                </div>
-              </div>
-            ) : null}
             {ev.progressSummary ? (
               <div className="px-4 pb-4 pt-0 border-t border-gray-100">
                 <span className="text-xs font-medium text-gray-500">Full progress log</span>
