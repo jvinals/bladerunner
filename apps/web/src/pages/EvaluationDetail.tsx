@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback, useEffect, type RefObject } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -173,14 +173,12 @@ function EvaluationStepCard({
   idx,
   selectedStepIdx,
   lastProgress,
-  innerRef,
   layout,
 }: {
   st: EvaluationStepDto;
   idx: number;
   selectedStepIdx: number;
   lastProgress: EvaluationProgressPayload | null;
-  innerRef?: (el: HTMLDivElement | null) => void;
   layout: TimelineViewMode;
 }) {
   const load = getLiveLoadingFlags(st, lastProgress);
@@ -192,15 +190,15 @@ function EvaluationStepCard({
 
   const outerClass =
     layout === 'stacked'
-      ? `snap-center shrink-0 min-w-0 flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
+      ? `snap-center shrink-0 min-w-0 h-[1200px] flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
           selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
         }`
-      : `w-full min-w-[100%] shrink-0 snap-center snap-always flex flex-col min-h-0 max-h-full overflow-y-auto rounded-lg border p-3 text-sm ${
+      : `w-full min-w-[100%] shrink-0 snap-center snap-always flex flex-col h-[1200px] overflow-y-auto rounded-lg border p-3 text-sm ${
           selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
         }`;
 
   return (
-    <div ref={innerRef} className={outerClass}>
+    <div className={outerClass}>
       <div className="flex items-start justify-between gap-2 mb-2 shrink-0">
         <div>
           <span className="font-semibold text-gray-900">Step {st.sequence}</span>
@@ -312,7 +310,6 @@ type EvaluationTracePanelProps = {
   connected: boolean;
   liveEnabled: boolean;
   runStatus: string | undefined;
-  traceEndRef: RefObject<HTMLDivElement | null>;
   scrollClassName: string;
   /** When true, panel stretches to fill a flex parent (parallel layout). */
   fillHeight?: boolean;
@@ -323,10 +320,15 @@ function EvaluationTracePanel({
   connected,
   liveEnabled,
   runStatus,
-  traceEndRef,
   scrollClassName,
   fillHeight,
 }: EvaluationTracePanelProps) {
+  const traceScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = traceScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [evaluationTrace.length]);
+
   return (
     <div
       className={`flex flex-col min-h-0 min-w-0 border border-amber-200/80 bg-amber-50/40 rounded-lg overflow-hidden ${
@@ -346,6 +348,7 @@ function EvaluationTracePanel({
       </p>
       <div className="px-2 pb-2 flex-1 min-h-0 flex flex-col font-mono text-[10px] leading-relaxed text-gray-900">
         <div
+          ref={traceScrollRef}
           className={`rounded border border-amber-100 bg-white p-2 shadow-inner flex-1 min-h-0 overflow-y-auto ${scrollClassName}`}
           role="log"
           aria-live="polite"
@@ -390,7 +393,6 @@ function EvaluationTracePanel({
               );
             })
           )}
-          <div ref={traceEndRef} />
         </div>
       </div>
     </div>
@@ -412,8 +414,8 @@ export default function EvaluationDetailPage() {
   const [runModeDraft, setRunModeDraft] = useState<EvaluationRunMode>('continuous');
   const [selectedStepIdx, setSelectedStepIdx] = useState(0);
   const [timelineViewMode, setTimelineViewMode] = useState<TimelineViewMode>('stacked');
-  const stepCardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const parallelStepsScrollRef = useRef<HTMLDivElement>(null);
+  const stackedStepsScrollRef = useRef<HTMLDivElement>(null);
 
   const query = useQuery({
     queryKey: ['evaluation', id],
@@ -461,11 +463,6 @@ export default function EvaluationDetailPage() {
     onStale: invalidate,
   });
 
-  const traceEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    traceEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [evaluationTrace.length]);
-
   const displaySteps = useMemo(
     () => mergeStepsWithLivePlaceholder(ev?.steps ?? [], lastProgress),
     [ev?.steps, lastProgress],
@@ -477,15 +474,12 @@ export default function EvaluationDetailPage() {
   }, [displaySteps.length, ev?.id]);
 
   useEffect(() => {
-    if (timelineViewMode === 'parallel') {
-      const container = parallelStepsScrollRef.current;
-      const child = container?.children[selectedStepIdx] as HTMLElement | undefined;
-      child?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
-    } else {
-      const el = stepCardRefs.current[selectedStepIdx];
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
-      }
+    if (!displaySteps.length) return;
+    const container =
+      timelineViewMode === 'parallel' ? parallelStepsScrollRef.current : stackedStepsScrollRef.current;
+    const child = container?.children[selectedStepIdx] as HTMLElement | undefined;
+    if (container && child) {
+      container.scrollTo({ left: child.offsetLeft, behavior: 'smooth' });
     }
   }, [selectedStepIdx, displaySteps.length, lastProgress?.sequence, timelineViewMode]);
 
@@ -945,6 +939,21 @@ export default function EvaluationDetailPage() {
             className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
             aria-label="Evaluation step timeline"
           >
+            {ev.progressSummary ? (
+              <details className="group border-b border-gray-100 px-4 py-3">
+                <summary className="cursor-pointer list-none text-xs font-medium text-gray-500 marker:content-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5">
+                  <ChevronRight
+                    size={14}
+                    className="text-gray-400 shrink-0 transition-transform group-open:rotate-90"
+                    aria-hidden
+                  />
+                  Full progress log
+                </summary>
+                <pre className="mt-2 text-[11px] font-mono text-gray-600 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                  {ev.progressSummary}
+                </pre>
+              </details>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2 border-b border-gray-100">
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <h2 className="text-sm font-semibold text-gray-800 shrink-0">Step timeline</h2>
@@ -1037,11 +1046,11 @@ export default function EvaluationDetailPage() {
                 No steps yet. Start the run to record each step (inputs and outputs appear after the model runs).
               </p>
             ) : timelineViewMode === 'parallel' ? (
-              <div className="flex flex-col lg:flex-row gap-4 px-4 pb-4 pt-2 min-h-[min(70vh,640px)] lg:items-stretch">
-                <div className="min-w-0 w-full lg:flex-1 flex flex-col min-h-[min(36vh,280px)] lg:min-h-0 lg:max-h-[min(70vh,640px)]">
+              <div className="flex flex-col lg:flex-row gap-4 px-4 pb-4 pt-2 lg:h-[1200px] lg:max-h-[1200px] lg:min-h-0 lg:items-stretch">
+                <div className="min-w-0 w-full lg:flex-1 flex flex-col min-h-[1200px] lg:h-full lg:min-h-0">
                   <div
                     ref={parallelStepsScrollRef}
-                    className="flex min-h-0 flex-1 w-full overflow-x-auto overflow-y-visible snap-x snap-mandatory scroll-smooth rounded-lg border border-gray-100 bg-gray-50/30"
+                    className="flex h-full min-h-[1200px] lg:min-h-0 w-full overflow-x-auto overflow-y-visible snap-x snap-mandatory scroll-smooth rounded-lg border border-gray-100 bg-gray-50/30"
                   >
                     {displaySteps.map((st, idx) => (
                       <EvaluationStepCard
@@ -1051,26 +1060,22 @@ export default function EvaluationDetailPage() {
                         selectedStepIdx={selectedStepIdx}
                         lastProgress={lastProgress}
                         layout="parallel"
-                        innerRef={(el) => {
-                          stepCardRefs.current[idx] = el;
-                        }}
                       />
                     ))}
                   </div>
                 </div>
-                <div className="min-w-0 w-full lg:flex-1 flex flex-col min-h-[min(36vh,280px)] lg:min-h-0 lg:max-h-[min(70vh,640px)]">
+                <div className="min-w-0 w-full lg:flex-1 flex flex-col min-h-[1200px] lg:h-full lg:min-h-0">
                   {liveEnabled || evaluationTrace.length > 0 ? (
                     <EvaluationTracePanel
                       evaluationTrace={evaluationTrace}
                       connected={connected}
                       liveEnabled={liveEnabled}
                       runStatus={ev.status}
-                      traceEndRef={traceEndRef}
                       scrollClassName=""
                       fillHeight
                     />
                   ) : (
-                    <div className="flex flex-1 min-h-[12rem] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-amber-50/30 text-xs text-gray-500 px-4 text-center">
+                    <div className="flex h-full min-h-0 flex-1 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-amber-50/30 text-xs text-gray-500 px-4 text-center">
                       Trace appears when the run is live or after lines arrive from the server.
                     </div>
                   )}
@@ -1078,7 +1083,10 @@ export default function EvaluationDetailPage() {
               </div>
             ) : (
               <>
-                <div className="flex w-full min-w-0 flex-row gap-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 scroll-smooth snap-x snap-mandatory">
+                <div
+                  ref={stackedStepsScrollRef}
+                  className="flex w-full min-w-0 h-[1200px] flex-row gap-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 scroll-smooth snap-x snap-mandatory items-stretch"
+                >
                   {displaySteps.map((st, idx) => (
                     <EvaluationStepCard
                       key={st.id}
@@ -1087,9 +1095,6 @@ export default function EvaluationDetailPage() {
                       selectedStepIdx={selectedStepIdx}
                       lastProgress={lastProgress}
                       layout="stacked"
-                      innerRef={(el) => {
-                        stepCardRefs.current[idx] = el;
-                      }}
                     />
                   ))}
                 </div>
@@ -1100,21 +1105,12 @@ export default function EvaluationDetailPage() {
                       connected={connected}
                       liveEnabled={liveEnabled}
                       runStatus={ev.status}
-                      traceEndRef={traceEndRef}
                       scrollClassName="max-h-72"
                     />
                   </div>
                 ) : null}
               </>
             )}
-            {ev.progressSummary ? (
-              <div className="px-4 pb-4 pt-0 border-t border-gray-100">
-                <span className="text-xs font-medium text-gray-500">Full progress log</span>
-                <pre className="mt-1 text-[11px] font-mono text-gray-600 max-h-32 overflow-y-auto whitespace-pre-wrap">
-                  {ev.progressSummary}
-                </pre>
-              </div>
-            ) : null}
           </section>
 
           {showHuman && pendingQuestion && (

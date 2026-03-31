@@ -227,8 +227,8 @@ export class EvaluationOrchestratorService {
       );
       // #endregion
 
-      if (fresh.autoSignIn) {
-        trace('Auto sign-in: starting (Clerk/generic assist may run; external OTP/email polling can take time)', {
+      if (fresh.autoSignIn && sequence === 1) {
+        trace('Auto sign-in: starting (first step only; Clerk/generic assist may run; external OTP/email polling can take time)', {
           clerkOtpMode: signInOtpMode,
           msSinceStepStart: Date.now() - stepWallStart,
         });
@@ -242,6 +242,8 @@ export class EvaluationOrchestratorService {
         });
         await page.waitForLoadState('domcontentloaded').catch(() => {});
         trace('Auto sign-in: block finished', { ms: Date.now() - tSign, pageUrl: page.url() });
+      } else if (fresh.autoSignIn) {
+        trace('Auto sign-in: skipped (only runs once at step 1)', { sequence });
       } else {
         trace('Auto sign-in: skipped (evaluation.autoSignIn is false)');
       }
@@ -249,7 +251,12 @@ export class EvaluationOrchestratorService {
       dbgEvalStep(
         'evaluation-orchestrator.service.ts:after_auto_sign_in',
         'after auto sign-in block',
-        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart, ranAutoSignIn: fresh.autoSignIn },
+        {
+          evaluationId,
+          sequence,
+          elapsedMs: Date.now() - stepWallStart,
+          ranAutoSignIn: fresh.autoSignIn && sequence === 1,
+        },
         'H1',
       );
       // #endregion
@@ -390,19 +397,6 @@ export class EvaluationOrchestratorService {
         executionOk = false;
         errorMessage = e instanceof Error ? e.message : String(e);
         trace('Playwright execution: failed', { error: errorMessage });
-      }
-
-      if (fresh.autoSignIn) {
-        trace('Post-step auto sign-in: starting');
-        await this.recording.maybeEvaluationAutoSignInAssist(evaluationId, userId, {
-          runUrl: fresh.url,
-          projectForAuth,
-          wantAuto: true,
-          clerkOtpMode: signInOtpMode,
-          state: authState,
-        });
-        await page.waitForLoadState('domcontentloaded').catch(() => {});
-        trace('Post-step auto sign-in: finished');
       }
 
       trace('Analyzer capture: starting captureEvaluationLlmPageContext (after step)');

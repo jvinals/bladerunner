@@ -2,6 +2,20 @@
 
 ## 2026-03-31
 
+- `0.10.124`: **Evaluations** — **auto sign-in** runs **only at step 1** (start of first iteration). Removed **post-step** auto sign-in after each Playwright run (was redundant and could re-trigger Clerk/login flows). `@bladerunner/api 0.6.102`.
+
+- `0.10.123`: **Evaluation step timeline** — fixed timeline height **`1200px`** (was **1000px**). `@bladerunner/web 0.7.75`.
+
+- `0.10.122`: **Evaluation step timeline** — fixed timeline height **`1000px`** (was **700px**): step cards, stacked strip, and parallel row on **`lg+`**. `@bladerunner/web 0.7.74`.
+
+- `0.10.121`: **Evaluation step timeline** — step strip and step cards use **fixed `height: 700px`** (not `min-height`). **Parallel** row is **`700px` tall on `lg+`**; below `lg`, columns keep **`min-height: 700px`** so stacked layout doesn’t clip. `@bladerunner/web 0.7.73`.
+
+- `0.10.120`: **Evaluation detail** — no **document** auto-scroll from trace or step selection (trace follows inside its panel; step strip uses horizontal **`scrollTo`** only). **Full progress log** moved **above** the step timeline, **collapsed** by default (`<details>`). `@bladerunner/web 0.7.72`.
+
+- `0.10.119`: **Evaluation step timeline** — step timeline **`min-height: 700px`** (was 1000px). `@bladerunner/web 0.7.71`.
+
+- `0.10.118`: **Evaluation step timeline** — step cards and timeline row use **`min-height: 1000px`** (stacked strip + parallel columns + `EvaluationStepCard`). `@bladerunner/web 0.7.70`.
+
 - `0.10.117`: **Evaluation step timeline** — **Stacked** / **Parallel** toggle in the header. **Parallel**: one step at a time (horizontal snap scroll; follows the selected step), **Evaluation trace** fills the right column at the same height. **Stacked**: previous step strip + trace below. `@bladerunner/web 0.7.69`.
 
 - `0.10.116`: **Evaluation trace** no longer disappears when the preview is **detached** — `useEvaluationLive` stayed enabled only when `!isDetached`, which cleared trace and dropped the socket; it now stays on for all **`liveEnabled`** runs. Trace panel visibility uses **`liveEnabled || evaluationTrace.length > 0`**. Debug ingest (session `3619df`) on socket connect for verification. `@bladerunner/web 0.7.68`.
