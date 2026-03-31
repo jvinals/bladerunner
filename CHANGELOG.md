@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.107`: continual-learning pass — refreshed **`continual-learning-index.json`** (34 transcript paths + mtimes); **`AGENTS.md`** workspace fact on evaluation live timeline, socket progress catch-up, spinner/`{}` handling, and eval **`eval (<anonymous>)`** failure classification. Root version only.
+
 - `0.10.106`: evaluation step loading flags use **`!= null`** for persisted JSON (not “non-empty object”) so **`{}`** from the API clears spinners; **`showCodegenFromLive`** also accepts **`expectedOutcome`**. `@bladerunner/web 0.7.59`.
 
 - `0.10.105`: evaluation step **live spinners** no longer stick forever when **`lastProgress.phase` lags** refetched step JSON — `getLiveLoadingFlags` uses presence of persisted codegen/analyzer JSON instead of hardcoded spinners during **`proposing`**. `@bladerunner/web 0.7.58`.
