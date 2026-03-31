@@ -6,6 +6,47 @@ import { EvaluationsService } from './evaluations.service';
 
 const MAX_EVALUATION_STEPS = 12;
 
+/** Vision + JSON calls can stall indefinitely without an AbortSignal; Gemini honors `signal`. */
+function evaluationCodegenTimeoutMs(): number {
+  const n = Number(process.env.EVALUATION_CODEGEN_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 180_000;
+}
+
+function evaluationAnalyzerTimeoutMs(): number {
+  const n = Number(process.env.EVALUATION_ANALYZER_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 180_000;
+}
+
+function isAbortOrTimeoutError(e: unknown): boolean {
+  if (e instanceof Error) {
+    if (e.name === 'AbortError' || e.name === 'TimeoutError') return true;
+    if (/aborted|AbortError|timeout/i.test(e.message)) return true;
+  }
+  return false;
+}
+
+// #region agent log
+function dbgEvalStep(
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+  hypothesisId: string,
+): void {
+  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+    body: JSON.stringify({
+      sessionId: '3619df',
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 export type EvaluationScheduleOpts = {
   resumeAfterHuman?: boolean;
   resumeAfterReview?: boolean;
@@ -92,6 +133,13 @@ export class EvaluationOrchestratorService {
       },
     });
 
+    this.recording.clearEvaluationDebugLog(evaluationId);
+    this.recording.emitEvaluationDebugLog(evaluationId, 'Evaluation run loop started', {
+      evaluationId,
+      resumeAfterHuman: Boolean(opts.resumeAfterHuman),
+      resumeAfterReview: Boolean(opts.resumeAfterReview),
+    });
+
     const authState = { clerkFullSignInDone: false };
 
     const sessionExists = !!this.recording.getEvaluationSession(evaluationId);
@@ -145,6 +193,21 @@ export class EvaluationOrchestratorService {
 
       const sequence = await this.evaluations.nextStepSequence(evaluationId);
       const progressSummaryBefore = fresh.progressSummary?.trim() ?? '';
+      const trace = (message: string, detail?: Record<string, unknown>) =>
+        this.recording.emitEvaluationDebugLog(evaluationId, message, { sequence, ...detail });
+      // #region agent log
+      const stepWallStart = Date.now();
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:step_start',
+        'step iteration start',
+        { evaluationId, sequence, autoSignIn: fresh.autoSignIn },
+        'H0',
+      );
+      // #endregion
+      trace('Step iteration started', {
+        autoSignIn: fresh.autoSignIn,
+        pageUrl: page.url(),
+      });
       /** Emit before sign-in + SOM capture so the UI can show a placeholder step with spinners immediately. */
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'proposing',
@@ -152,8 +215,21 @@ export class EvaluationOrchestratorService {
         progressSummaryBefore,
         pageUrl: page.url(),
       });
+      // #region agent log
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:after_proposing_emit',
+        'emitted proposing',
+        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
+        'H1',
+      );
+      // #endregion
 
       if (fresh.autoSignIn) {
+        trace('Auto sign-in: starting (Clerk/generic assist may run; external OTP/email polling can take time)', {
+          clerkOtpMode: signInOtpMode,
+          msSinceStepStart: Date.now() - stepWallStart,
+        });
+        const tSign = Date.now();
         await this.recording.maybeEvaluationAutoSignInAssist(evaluationId, userId, {
           runUrl: fresh.url,
           projectForAuth,
@@ -162,14 +238,44 @@ export class EvaluationOrchestratorService {
           state: authState,
         });
         await page.waitForLoadState('domcontentloaded').catch(() => {});
+        trace('Auto sign-in: block finished', { ms: Date.now() - tSign, pageUrl: page.url() });
+      } else {
+        trace('Auto sign-in: skipped (evaluation.autoSignIn is false)');
       }
+      // #region agent log
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:after_auto_sign_in',
+        'after auto sign-in block',
+        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart, ranAutoSignIn: fresh.autoSignIn },
+        'H1',
+      );
+      // #endregion
 
+      trace('Codegen capture: starting captureEvaluationLlmPageContext (SOM overlay + screenshot + CDP a11y)', {
+        msSinceStepStart: Date.now() - stepWallStart,
+      });
+      const tCap = Date.now();
       const codegenCtx = await this.recording.captureEvaluationLlmPageContext(evaluationId, userId);
       const screenshotB64 = codegenCtx.screenshotBase64;
       if (!screenshotB64) {
         throw new Error('Evaluation codegen capture produced no screenshot');
       }
       const pageUrl = codegenCtx.pageUrl;
+      // #region agent log
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:after_codegen_capture',
+        'after captureEvaluationLlmPageContext',
+        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
+        'H2',
+      );
+      // #endregion
+      trace('Codegen capture: finished', {
+        ms: Date.now() - tCap,
+        pageUrl,
+        screenshotBase64Chars: screenshotB64.length,
+        somManifestChars: codegenCtx.somManifest?.length ?? 0,
+        accessibilitySnapshotChars: codegenCtx.accessibilitySnapshot?.length ?? 0,
+      });
 
       const priorSteps = await this.prisma.evaluationStep.findMany({
         where: { evaluationId },
@@ -197,6 +303,18 @@ export class EvaluationOrchestratorService {
           'Full-page Set-of-Marks JPEG + SOM manifest + CDP accessibility sent to codegen (viewportJpegBase64 for UI preview).',
       };
 
+      // #region agent log
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:before_codegen_llm',
+        'before evaluationProposePlaywrightStep',
+        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
+        'H3',
+      );
+      // #endregion
+      trace('Codegen LLM: calling evaluationProposePlaywrightStep', {
+        timeoutMs: evaluationCodegenTimeoutMs(),
+        msSinceStepStart: Date.now() - stepWallStart,
+      });
       const proposed = await this.llm.evaluationProposePlaywrightStep(
         {
           url: ev.url,
@@ -209,8 +327,20 @@ export class EvaluationOrchestratorService {
           somManifest: codegenCtx.somManifest,
           accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
         },
-        { userId },
+        {
+          userId,
+          signal: AbortSignal.timeout(evaluationCodegenTimeoutMs()),
+          onDebugLog: (m, d) => trace(m, d),
+        },
       );
+      // #region agent log
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:after_codegen_llm',
+        'after evaluationProposePlaywrightStep',
+        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
+        'H3',
+      );
+      // #endregion
 
       const codegenOutputJson = {
         stepTitle: proposed.stepTitle,
@@ -231,6 +361,7 @@ export class EvaluationOrchestratorService {
         proposedCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
       });
+      trace('Persisted evaluation step row (codegen inputs + outputs)', { stepTitle: proposed.stepTitle });
 
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'executing',
@@ -239,17 +370,27 @@ export class EvaluationOrchestratorService {
         playwrightCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
       });
+      trace('Socket: emitted phase executing with proposed Playwright snippet', {
+        codeChars: proposed.playwrightCode.length,
+      });
 
       let executionOk = true;
       let errorMessage: string | undefined;
       try {
+        trace('Playwright execution: starting runEvaluationPlaywright', {
+          msSinceStepStart: Date.now() - stepWallStart,
+        });
+        const tPw = Date.now();
         await this.recording.runEvaluationPlaywright(evaluationId, userId, proposed.playwrightCode);
+        trace('Playwright execution: finished OK', { ms: Date.now() - tPw });
       } catch (e) {
         executionOk = false;
         errorMessage = e instanceof Error ? e.message : String(e);
+        trace('Playwright execution: failed', { error: errorMessage });
       }
 
       if (fresh.autoSignIn) {
+        trace('Post-step auto sign-in: starting');
         await this.recording.maybeEvaluationAutoSignInAssist(evaluationId, userId, {
           runUrl: fresh.url,
           projectForAuth,
@@ -258,38 +399,22 @@ export class EvaluationOrchestratorService {
           state: authState,
         });
         await page.waitForLoadState('domcontentloaded').catch(() => {});
+        trace('Post-step auto sign-in: finished');
       }
 
+      trace('Analyzer capture: starting captureEvaluationLlmPageContext (after step)');
+      const tAfterCap = Date.now();
       const afterCtx = await this.recording.captureEvaluationLlmPageContext(evaluationId, userId);
       const afterB64 = afterCtx.screenshotBase64;
       if (!afterB64) {
         throw new Error('Evaluation analyzer capture produced no screenshot');
       }
       const afterUrl = afterCtx.pageUrl;
-
-      this.recording.emitEvaluationProgress(evaluationId, {
-        phase: 'analyzing',
-        sequence,
+      trace('Analyzer capture: finished', {
+        ms: Date.now() - tAfterCap,
         pageUrlAfter: afterUrl,
-        executionOk,
-        errorMessage: errorMessage ?? null,
+        afterScreenshotChars: afterB64.length,
       });
-
-      const analysis = await this.llm.evaluationAnalyzeAfterStep(
-        {
-          intent: ev.intent,
-          desiredOutput: ev.desiredOutput,
-          progressSummary: fresh.progressSummary,
-          executedCode: proposed.playwrightCode,
-          executionOk,
-          errorMessage,
-          pageUrlAfter: afterUrl,
-          screenshotAfterBase64: afterB64,
-          somManifest: afterCtx.somManifest,
-          accessibilitySnapshot: afterCtx.accessibilitySnapshot,
-        },
-        { userId },
-      );
 
       const analyzerInputJson = {
         intent: ev.intent,
@@ -305,6 +430,57 @@ export class EvaluationOrchestratorService {
         note:
           'After-step full-page Set-of-Marks JPEG + manifest + accessibility sent to analyzer (afterStepViewportJpegBase64 for UI preview).',
       };
+
+      await this.evaluations.updateStepAnalyzerInputsOnly(evaluationId, sequence, { analyzerInputJson });
+
+      this.recording.emitEvaluationProgress(evaluationId, {
+        phase: 'analyzing',
+        sequence,
+        pageUrlAfter: afterUrl,
+        executionOk,
+        errorMessage: errorMessage ?? null,
+      });
+      trace('Socket: emitted phase analyzing; analyzer inputs persisted');
+
+      let analysis: Awaited<ReturnType<LlmService['evaluationAnalyzeAfterStep']>>;
+      try {
+        trace('Analyzer LLM: calling evaluationAnalyzeAfterStep', {
+          timeoutMs: evaluationAnalyzerTimeoutMs(),
+        });
+        analysis = await this.llm.evaluationAnalyzeAfterStep(
+          {
+            intent: ev.intent,
+            desiredOutput: ev.desiredOutput,
+            progressSummary: fresh.progressSummary,
+            executedCode: proposed.playwrightCode,
+            executionOk,
+            errorMessage,
+            pageUrlAfter: afterUrl,
+            screenshotAfterBase64: afterB64,
+            somManifest: afterCtx.somManifest,
+            accessibilitySnapshot: afterCtx.accessibilitySnapshot,
+          },
+          {
+            userId,
+            signal: AbortSignal.timeout(evaluationAnalyzerTimeoutMs()),
+            onDebugLog: (m, d) => trace(m, d),
+          },
+        );
+      } catch (e) {
+        if (!isAbortOrTimeoutError(e)) {
+          throw e;
+        }
+        const ms = evaluationAnalyzerTimeoutMs();
+        this.logger.warn(
+          `evaluation_analyzer timed out or aborted (evaluationId=${evaluationId} sequence=${sequence} timeoutMs=${ms}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+        analysis = {
+          goalProgress: 'partial',
+          decision: 'retry',
+          rationale: `Analyzer model did not finish within ${Math.round(ms / 1000)}s (timeout or cancellation).`,
+        };
+        trace('Analyzer LLM: timeout or abort', { timeoutMs: ms });
+      }
 
       const analyzerOutputJson = {
         goalProgress: analysis.goalProgress,
@@ -335,6 +511,11 @@ export class EvaluationOrchestratorService {
         decision: analysis.decision,
         goalProgress: analysis.goalProgress,
         rationale: analysis.rationale,
+      });
+      trace('Step analyzed', {
+        decision: analysis.decision,
+        goalProgress: analysis.goalProgress,
+        msSinceStepStart: Date.now() - stepWallStart,
       });
 
       if (analysis.decision === 'finish' || analysis.goalProgress === 'complete') {
@@ -406,6 +587,9 @@ export class EvaluationOrchestratorService {
       )
       .join('\n');
 
+    this.recording.emitEvaluationDebugLog(evaluationId, 'Final report LLM: starting evaluationGenerateFinalReport', {
+      stepsCount: steps.length,
+    });
     const report = await this.llm.evaluationGenerateFinalReport(
       {
         intent,
@@ -413,8 +597,12 @@ export class EvaluationOrchestratorService {
         progressSummary: ev?.progressSummary ?? null,
         stepsMarkdown: stepsMd,
       },
-      { userId },
+      {
+        userId,
+        onDebugLog: (m, d) => this.recording.emitEvaluationDebugLog(evaluationId, m, d),
+      },
     );
+    this.recording.emitEvaluationDebugLog(evaluationId, 'Final report LLM: done', { markdownChars: report.markdown.length });
 
     await this.evaluations.saveReport(userId, {
       evaluationId,

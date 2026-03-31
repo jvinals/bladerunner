@@ -22,6 +22,12 @@ export type EvaluationProgressPayload = {
   [key: string]: unknown;
 };
 
+export type EvaluationDebugLogLine = {
+  at: string;
+  message: string;
+  detail?: Record<string, unknown>;
+};
+
 type UseEvaluationLiveOptions = {
   /** When false, socket is disconnected. */
   enabled: boolean;
@@ -33,6 +39,7 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
   const { enabled, onStale } = options;
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
   const [lastProgress, setLastProgress] = useState<EvaluationProgressPayload | null>(null);
+  const [evaluationTrace, setEvaluationTrace] = useState<EvaluationDebugLogLine[]>([]);
   const [connected, setConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const onStaleRef = useRef(onStale);
@@ -43,9 +50,12 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
   useEffect(() => {
     if (!evaluationId || !enabled) {
       setFrameDataUrl(null);
+      setEvaluationTrace([]);
       setConnected(false);
       return;
     }
+
+    setEvaluationTrace([]);
 
     const socket = createRecordingSocket();
     socketRef.current = socket;
@@ -60,12 +70,24 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
       setFrameDataUrl(`data:image/jpeg;base64,${payload.data}`);
     };
 
+    const onEvaluationDebugLog = (payload: EvaluationDebugLogLine & { evaluationId: string }) => {
+      if (payload.evaluationId !== evaluationId) return;
+      const { evaluationId: _e, ...line } = payload;
+      setEvaluationTrace((prev) => [...prev, line]);
+    };
+
+    const onEvaluationDebugLogBatch = (payload: { evaluationId: string; lines: EvaluationDebugLogLine[] }) => {
+      if (payload.evaluationId !== evaluationId) return;
+      setEvaluationTrace(payload.lines ?? []);
+    };
+
     const onEvaluationProgress = (payload: EvaluationProgressPayload) => {
       if (payload.evaluationId !== evaluationId) return;
       setLastProgress(payload);
       const phase = payload.phase;
       if (
         phase === 'proposing' ||
+        phase === 'analyzing' ||
         phase === 'analyzed' ||
         phase === 'completed' ||
         phase === 'waiting_human' ||
@@ -79,6 +101,8 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
     socket.on('connect', onConnect);
     socket.on('frame', onFrame);
     socket.on('evaluationProgress', onEvaluationProgress);
+    socket.on('evaluationDebugLog', onEvaluationDebugLog);
+    socket.on('evaluationDebugLogBatch', onEvaluationDebugLogBatch);
     socket.on('disconnect', () => setConnected(false));
 
     if (socket.connected) onConnect();
@@ -92,11 +116,13 @@ export function useEvaluationLive(evaluationId: string | undefined, options: Use
       socket.off('connect', onConnect);
       socket.off('frame', onFrame);
       socket.off('evaluationProgress', onEvaluationProgress);
+      socket.off('evaluationDebugLog', onEvaluationDebugLog);
+      socket.off('evaluationDebugLogBatch', onEvaluationDebugLogBatch);
       socket.disconnect();
       socketRef.current = null;
       setConnected(false);
     };
   }, [evaluationId, enabled]);
 
-  return { frameDataUrl, lastProgress, connected, clearFrame };
+  return { frameDataUrl, lastProgress, evaluationTrace, connected, clearFrame };
 }

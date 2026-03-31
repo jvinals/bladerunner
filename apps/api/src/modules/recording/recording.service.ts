@@ -325,6 +325,9 @@ export class RecordingService extends EventEmitter {
   private evaluationSessions = new Map<string, EvaluationLiveSession>();
   /** Latest `evaluationProgress` payload per evaluation (for WebSocket join catch-up). */
   private lastEvaluationProgressById = new Map<string, Record<string, unknown>>();
+  /** Real-time evaluation trace lines (orchestrator + LLM); capped for memory; join catch-up. */
+  private evaluationDebugLogById = new Map<string, Array<{ at: string; message: string; detail?: Record<string, unknown> }>>();
+  private static readonly EVAL_DEBUG_LOG_MAX_LINES = 2500;
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
   private aiPromptTestInFlight = new Map<string, Promise<void>>();
   /** In-flight optimized prompt generation / refresh work keyed by `${runId}:${stepId}`. */
@@ -781,6 +784,38 @@ export class RecordingService extends EventEmitter {
   emitEvaluationProgress(evaluationId: string, payload: Record<string, unknown>): void {
     this.lastEvaluationProgressById.set(evaluationId, { evaluationId, ...payload });
     this.emit('evaluationProgress', evaluationId, payload);
+  }
+
+  /**
+   * Append a timestamped line to the evaluation trace (WebSocket `evaluationDebugLog` + join catch-up batch).
+   * Do not log secrets; keep `detail` to sizes, flags, and short previews.
+   */
+  emitEvaluationDebugLog(
+    evaluationId: string,
+    message: string,
+    detail?: Record<string, unknown>,
+  ): void {
+    const at = new Date().toISOString();
+    const line = { at, message, detail };
+    let buf = this.evaluationDebugLogById.get(evaluationId);
+    if (!buf) {
+      buf = [];
+      this.evaluationDebugLogById.set(evaluationId, buf);
+    }
+    buf.push(line);
+    if (buf.length > RecordingService.EVAL_DEBUG_LOG_MAX_LINES) {
+      buf.splice(0, buf.length - RecordingService.EVAL_DEBUG_LOG_MAX_LINES);
+    }
+    this.emit('evaluationDebugLog', evaluationId, line);
+  }
+
+  getEvaluationDebugLogLines(evaluationId: string): Array<{ at: string; message: string; detail?: Record<string, unknown> }> {
+    return this.evaluationDebugLogById.get(evaluationId) ?? [];
+  }
+
+  /** Clears buffered trace lines (call when a new autonomous run starts). */
+  clearEvaluationDebugLog(evaluationId: string): void {
+    this.evaluationDebugLogById.delete(evaluationId);
   }
 
   private async createLiveRecordingSession(args: {

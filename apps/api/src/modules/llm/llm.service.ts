@@ -393,13 +393,19 @@ export class LlmService {
     messages: ChatMessage[],
     options?: LlmChatOptions,
   ): Promise<{ content: string; thinking?: string; provider: string; model: string }> {
+    const dbg = options?.onDebugLog;
     if (this.chatProviderOverride) {
+      dbg?.('LLM route: using override provider', { usage });
+      const t0 = Date.now();
       const result = await this.chatProviderOverride.chat(messages, options);
+      dbg?.('LLM override: response', { ms: Date.now() - t0, contentChars: result.content.length });
       return { ...result, provider: 'override', model: 'override' };
     }
 
+    dbg?.('LLM route: resolving config', { usage });
     const resolved = await this.llmConfig.resolve(userId, usage);
     const credentials = await this.llmConfig.resolveProviderCredentials(userId, resolved.provider);
+    dbg?.('LLM route: resolved', { usage, provider: resolved.provider, model: resolved.model });
     if (resolved.provider === 'gemini') {
       const key = credentials.apiKey;
       if (!key) {
@@ -409,8 +415,26 @@ export class LlmService {
       return { ...result, provider: resolved.provider, model: resolved.model };
     }
 
+    const sysLen = messages.find((m) => m.role === 'system')?.content?.length ?? 0;
+    const userLen = messages
+      .filter((m) => m.role === 'user')
+      .reduce((a, m) => a + m.content.length, 0);
+    dbg?.('LLM non-Gemini: request', {
+      provider: resolved.provider,
+      model: resolved.model,
+      systemChars: sysLen,
+      userChars: userLen,
+      hasImage: Boolean(options?.imageBase64?.trim()),
+    });
+    const t1 = Date.now();
     const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model, credentials);
     const result = await client.chat(messages, options);
+    dbg?.('LLM non-Gemini: response', {
+      provider: resolved.provider,
+      ms: Date.now() - t1,
+      contentChars: result.content.length,
+      thinkingChars: result.thinking?.length,
+    });
     return { ...result, provider: resolved.provider, model: resolved.model };
   }
 
@@ -938,12 +962,23 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       somManifest: string;
       accessibilitySnapshot: string;
     },
-    opts?: { userId?: string; signal?: AbortSignal },
+    opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{ stepTitle: string; thinking: string; playwrightCode: string; expectedOutcome: string }> {
+    const dbg = opts?.onDebugLog;
+    dbg?.('evaluation_codegen: start', {
+      pageUrl: input.pageUrl,
+      screenshotBase64Chars: input.screenshotBase64?.length ?? 0,
+      somManifestChars: input.somManifest?.length ?? 0,
+      accessibilitySnapshotChars: input.accessibilitySnapshot?.length ?? 0,
+    });
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
       input.accessibilitySnapshot,
     );
+    dbg?.('evaluation_codegen: after truncation for model', {
+      somChars: somT.length,
+      a11yChars: a11yT.length,
+    });
     const user = `Start URL: ${input.url}
 Current page URL: ${input.pageUrl}
 Overall intent:
@@ -965,6 +1000,11 @@ Playwright CDP accessibility snapshot (captured before overlay; structural a11y 
 ${a11yT || '(empty)'}
 
 The attached image is the full-page Set-of-Marks screenshot (numeric badges on interactives).`;
+    dbg?.('evaluation_codegen: user prompt assembled', {
+      userPromptChars: user.length,
+      systemPromptChars: EVALUATION_CODEGEN_SYSTEM.length,
+    });
+    dbg?.('evaluation_codegen: invoking chatJson (JSON mode + vision)', { usageKey: 'evaluation_codegen' });
     const res = await this.chatJson(
       opts?.userId,
       'evaluation_codegen',
@@ -977,13 +1017,24 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
         maxTokens: 8192,
         temperature: 0.2,
         signal: opts?.signal,
+        onDebugLog: dbg,
       },
     );
+    dbg?.('evaluation_codegen: raw JSON response received', {
+      contentChars: res.content.length,
+      hasThinkingField: res.thinking != null && res.thinking !== '',
+    });
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const stepTitleRaw = typeof parsed.stepTitle === 'string' ? parsed.stepTitle.trim() : '';
     const thinking = typeof parsed.thinking === 'string' ? parsed.thinking.trim() : '';
     const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
+    dbg?.('evaluation_codegen: parsed structured output', {
+      stepTitlePreview: stepTitleRaw.slice(0, 120),
+      thinkingChars: thinking.length,
+      playwrightCodeChars: playwrightCode.length,
+      expectedOutcomeChars: expectedOutcome.length,
+    });
     if (!playwrightCode) {
       throw new Error('evaluation_codegen returned empty playwrightCode');
     }
@@ -1011,7 +1062,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       somManifest: string;
       accessibilitySnapshot: string;
     },
-    opts?: { userId?: string; signal?: AbortSignal },
+    opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{
     goalProgress: 'partial' | 'complete' | 'blocked';
     decision: 'retry' | 'advance' | 'ask_human' | 'finish';
@@ -1019,6 +1070,13 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     humanQuestion?: string;
     humanOptions?: string[];
   }> {
+    const dbg = opts?.onDebugLog;
+    dbg?.('evaluation_analyzer: start', {
+      pageUrlAfter: input.pageUrlAfter,
+      executionOk: input.executionOk,
+      screenshotChars: input.screenshotAfterBase64?.length ?? 0,
+      executedCodeChars: input.executedCode?.length ?? 0,
+    });
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
       input.accessibilitySnapshot,
@@ -1047,6 +1105,10 @@ Accessibility snapshot after step:
 ${a11yT || '(empty)'}
 
 The attached image is the full-page Set-of-Marks screenshot after execution.`;
+    dbg?.('evaluation_analyzer: invoking chatJson', {
+      userPromptChars: user.length,
+      usageKey: 'evaluation_analyzer',
+    });
     const res = await this.chatJson(
       opts?.userId,
       'evaluation_analyzer',
@@ -1059,8 +1121,10 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         maxTokens: 4096,
         temperature: 0.2,
         signal: opts?.signal,
+        onDebugLog: dbg,
       },
     );
+    dbg?.('evaluation_analyzer: response received', { contentChars: res.content.length });
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const goalProgress = parsed.goalProgress === 'complete' || parsed.goalProgress === 'blocked' || parsed.goalProgress === 'partial' ? parsed.goalProgress : 'partial';
     const decision =
@@ -1080,6 +1144,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         humanOptions = ho.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 4);
       }
       if (!humanQuestion || !humanOptions?.length) {
+        dbg?.('evaluation_analyzer: ask_human payload invalid; falling back to advance', {});
         return {
           goalProgress,
           decision: 'advance',
@@ -1087,6 +1152,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         };
       }
     }
+    dbg?.('evaluation_analyzer: parsed decision', { goalProgress, decision, rationaleChars: rationale.length });
     return {
       goalProgress,
       decision,
@@ -1106,8 +1172,10 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       progressSummary: string | null;
       stepsMarkdown: string;
     },
-    opts?: { userId?: string; signal?: AbortSignal },
+    opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{ markdown: string; structured?: unknown }> {
+    const dbg = opts?.onDebugLog;
+    dbg?.('evaluation_report: start', { stepsMarkdownChars: input.stepsMarkdown.length });
     const user = `Overall intent:
 ${input.intent}
 
@@ -1119,6 +1187,10 @@ ${input.progressSummary?.trim() || '(none)'}
 
 Step-by-step trace:
 ${input.stepsMarkdown}`;
+    dbg?.('evaluation_report: invoking chatJson', {
+      userPromptChars: user.length,
+      usageKey: 'evaluation_report',
+    });
     const res = await this.chatJson(
       opts?.userId,
       'evaluation_report',
@@ -1126,11 +1198,12 @@ ${input.stepsMarkdown}`;
         { role: 'system', content: EVALUATION_REPORT_SYSTEM },
         { role: 'user', content: user },
       ],
-      { maxTokens: 16384, temperature: 0.3, signal: opts?.signal },
+      { maxTokens: 16384, temperature: 0.3, signal: opts?.signal, onDebugLog: dbg },
     );
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
     const structured = parsed.structured;
+    dbg?.('evaluation_report: parsed', { markdownChars: markdown.length, hasStructured: structured !== undefined });
     if (!markdown) {
       throw new Error('evaluation_report returned empty markdown');
     }

@@ -11,6 +11,8 @@ export interface LlmChatOptions {
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
   /** When aborted, the provider request should reject (best-effort). */
   signal?: AbortSignal;
+  /** Optional real-time trace for evaluation UI (never log secrets; prefer lengths and labels). */
+  onDebugLog?: (message: string, detail?: Record<string, unknown>) => void;
   /**
    * OpenAI-compatible only: `json_object` forces JSON output (default for legacy chat paths).
    * Use `text` for Playwright vision codegen (plain JavaScript, not JSON).

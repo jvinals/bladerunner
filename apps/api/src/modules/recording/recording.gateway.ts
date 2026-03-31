@@ -48,6 +48,16 @@ export class RecordingGateway implements OnGatewayInit {
       this.server.to(`run:${evaluationId}`).emit('evaluationProgress', { evaluationId, ...payload });
     });
 
+    this.recordingService.on(
+      'evaluationDebugLog',
+      (
+        evaluationId: string,
+        line: { at: string; message: string; detail?: Record<string, unknown> },
+      ) => {
+        this.server.to(`run:${evaluationId}`).emit('evaluationDebugLog', { evaluationId, ...line });
+      },
+    );
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 
@@ -69,6 +79,10 @@ export class RecordingGateway implements OnGatewayInit {
     const evalProgress = this.recordingService.getLatestEvaluationProgress(data.runId);
     if (evalProgress) {
       client.emit('evaluationProgress', evalProgress);
+    }
+    const traceLines = this.recordingService.getEvaluationDebugLogLines(data.runId);
+    if (traceLines.length > 0) {
+      client.emit('evaluationDebugLogBatch', { evaluationId: data.runId, lines: traceLines });
     }
     return { event: 'joined', data: { runId: data.runId } };
   }

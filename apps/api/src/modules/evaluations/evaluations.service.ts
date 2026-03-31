@@ -167,6 +167,18 @@ export class EvaluationsService {
     });
   }
 
+  /** Persist what we send to the analyzer LLM as soon as capture is done, before the model responds (so the UI can show inputs while waiting). */
+  async updateStepAnalyzerInputsOnly(
+    evaluationId: string,
+    sequence: number,
+    data: { analyzerInputJson: JsonValue },
+  ) {
+    return this.prisma.evaluationStep.updateMany({
+      where: { evaluationId, sequence },
+      data: { analyzerInputJson: data.analyzerInputJson },
+    });
+  }
+
   async updateStepAfterAnalyzer(
     evaluationId: string,
     sequence: number,

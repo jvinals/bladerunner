@@ -51,7 +51,7 @@ function mergeStepsWithLivePlaceholder(
   steps: EvaluationStepDto[],
   lastProgress: EvaluationProgressPayload | null,
 ): EvaluationStepDto[] {
-  if (!lastProgress?.sequence) return steps;
+  if (lastProgress == null || lastProgress.sequence == null) return steps;
   const seq = lastProgress.sequence;
   if (steps.some((s) => s.sequence === seq)) return steps;
   const phase = String(lastProgress.phase ?? '');
@@ -89,7 +89,11 @@ function getLiveLoadingFlags(
   analyzerInputs: boolean;
   analyzerOutputs: boolean;
 } {
-  if (!lastProgress?.sequence || lastProgress.sequence !== st.sequence) {
+  if (
+    lastProgress == null ||
+    lastProgress.sequence == null ||
+    lastProgress.sequence !== st.sequence
+  ) {
     return { codegenInputs: false, codegenOutputs: false, analyzerInputs: false, analyzerOutputs: false };
   }
   const phase = String(lastProgress.phase ?? '');
@@ -214,10 +218,15 @@ export default function EvaluationDetailPage() {
     void queryClient.invalidateQueries({ queryKey: ['evaluations'] });
   }, [queryClient, id]);
 
-  const { frameDataUrl, lastProgress, connected } = useEvaluationLive(id, {
+  const { frameDataUrl, lastProgress, evaluationTrace, connected } = useEvaluationLive(id, {
     enabled: liveEnabled && !isDetached,
     onStale: invalidate,
   });
+
+  const traceEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    traceEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [evaluationTrace.length]);
 
   const displaySteps = useMemo(
     () => mergeStepsWithLivePlaceholder(ev?.steps ?? [], lastProgress),
@@ -837,6 +846,8 @@ export default function EvaluationDetailPage() {
                                   expectedOutcome: lastProgress.expectedOutcome,
                                 }}
                               />
+                            ) : lastProgress?.phase === 'proposing' ? (
+                              <PendingPanel label="Queued: codegen runs after page capture (SOM, accessibility)…" />
                             ) : (
                               <PendingPanel label="Codegen model running…" />
                             )
@@ -881,6 +892,48 @@ export default function EvaluationDetailPage() {
                 })}
               </div>
             )}
+            {(liveEnabled && !isDetached) || evaluationTrace.length > 0 ? (
+              <div className="px-4 pb-4 pt-2 border-t border-amber-200/80 bg-amber-50/40">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-semibold text-amber-950">Evaluation trace (live)</span>
+                  <span className="text-[10px] text-gray-500 shrink-0">
+                    {connected ? 'Socket connected' : 'Socket disconnected'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-600 mb-2 leading-snug">
+                  Server-emitted timeline: auto sign-in, page capture (SOM + accessibility), LLM request/response
+                  milestones, Playwright execution. Streaming model “thinking” is not available for JSON codegen
+                  (single round-trip); Gemini request/response timings appear as separate lines.
+                </p>
+                <div
+                  className="max-h-72 overflow-y-auto rounded border border-amber-100 bg-white p-2 font-mono text-[10px] leading-relaxed text-gray-900 shadow-inner"
+                  role="log"
+                  aria-live="polite"
+                  aria-relevant="additions"
+                >
+                  {evaluationTrace.length === 0 ? (
+                    <span className="text-gray-400">
+                      {ev.status === 'RUNNING' && liveEnabled
+                        ? 'Waiting for trace lines from the server…'
+                        : 'No trace in this session (start a run or reconnect while the evaluation is active).'}
+                    </span>
+                  ) : (
+                    evaluationTrace.map((line, idx) => (
+                      <div key={`${line.at}-${idx}`} className="border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
+                        <span className="text-amber-800/90 shrink-0">{line.at}</span>
+                        <span className="text-gray-700"> — {line.message}</span>
+                        {line.detail != null && Object.keys(line.detail).length > 0 ? (
+                          <pre className="mt-0.5 pl-2 text-gray-600 whitespace-pre-wrap break-words">
+                            {JSON.stringify(line.detail, null, 2)}
+                          </pre>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                  <div ref={traceEndRef} />
+                </div>
+              </div>
+            ) : null}
             {ev.progressSummary ? (
               <div className="px-4 pb-4 pt-0 border-t border-gray-100">
                 <span className="text-xs font-medium text-gray-500">Full progress log</span>

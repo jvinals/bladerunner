@@ -32,6 +32,15 @@ export async function geminiChat(
     });
   }
 
+  const imgLen = options?.imageBase64?.trim()?.length ?? 0;
+  options?.onDebugLog?.('Gemini generateContent: request', {
+    model,
+    userTextChars: userText.length,
+    imageBase64Chars: imgLen,
+    hasImage: imgLen > 0,
+  });
+  const genStarted = Date.now();
+
   const result = await gm.generateContent(
     {
       contents: [{ role: 'user', parts }],
@@ -47,5 +56,10 @@ export async function geminiChat(
   if (!rawText) {
     throw new Error('Gemini returned empty text');
   }
+  options?.onDebugLog?.('Gemini generateContent: response', {
+    model,
+    ms: Date.now() - genStarted,
+    responseChars: rawText.length,
+  });
   return { content: rawText };
 }

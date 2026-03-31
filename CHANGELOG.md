@@ -2,6 +2,14 @@
 
 ## 2026-03-31
 
+- `0.10.111`: **Evaluation trace (live)** — WebSocket **`evaluationDebugLog`** / **`evaluationDebugLogBatch`** (join catch-up) streams timestamped server lines (orchestrator + LLM: sign-in, capture timings, Gemini/non-Gemini request/response, Playwright run). UI panel below the step timeline on **Evaluation detail**. `@bladerunner/api 0.6.100`, `@bladerunner/web 0.7.63`.
+
+- `0.10.110`: evaluation step timeline — during **`proposing`**, **Codegen outputs** no longer says **“Codegen model running”** while the server is still in **auto sign-in + SOM/a11y capture** (before the codegen LLM). **Debug ingest** (session `3619df`) logs wall-clock milestones: after **`proposing` emit**, after **auto sign-in**, after **capture**, before/after **codegen LLM**. `@bladerunner/api 0.6.99`, `@bladerunner/web 0.7.62`.
+
+- `0.10.109`: evaluation **analyzer inputs** are **persisted before** the analyzer LLM runs (`updateStepAnalyzerInputsOnly`); socket **`analyzing`** triggers detail **refetch** so the UI can show JPEG/JSON while **Analyzer outputs** still spin. `@bladerunner/api 0.6.98`, `@bladerunner/web 0.7.61`.
+
+- `0.10.108`: evaluation **analyzer/codegen LLM** calls use **`AbortSignal.timeout`** (default **180s** each; override with **`EVALUATION_CODEGEN_TIMEOUT_MS`** / **`EVALUATION_ANALYZER_TIMEOUT_MS`**). On analyzer timeout the orchestrator persists a **retry** outcome instead of hanging forever. Web: **`lastProgress.sequence`** checks use **`== null`** so sequence **0** is valid. `@bladerunner/api 0.6.97`, `@bladerunner/web 0.7.60`.
+
 - `0.10.107`: continual-learning pass — refreshed **`continual-learning-index.json`** (34 transcript paths + mtimes); **`AGENTS.md`** workspace fact on evaluation live timeline, socket progress catch-up, spinner/`{}` handling, and eval **`eval (<anonymous>)`** failure classification. Root version only.
 
 - `0.10.106`: evaluation step loading flags use **`!= null`** for persisted JSON (not “non-empty object”) so **`{}`** from the API clears spinners; **`showCodegenFromLive`** also accepts **`expectedOutcome`**. `@bladerunner/web 0.7.59`.
