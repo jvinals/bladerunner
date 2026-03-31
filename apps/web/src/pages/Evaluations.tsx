@@ -12,6 +12,14 @@ import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ClipboardList, Plus, ExternalLink } from 'lucide-react';
 
+/** Ensure API-required `https://` URL when copying from project settings. */
+function startUrlFromProject(projectUrl: string | null | undefined): string | null {
+  const t = projectUrl?.trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) return t;
+  return `https://${t}`;
+}
+
 export default function EvaluationsPage() {
   const queryClient = useQueryClient();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -109,7 +117,14 @@ export default function EvaluationsPage() {
               <select
                 className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 bg-white"
                 value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setProjectId(id);
+                  if (!id) return;
+                  const p = projects.find((x) => x.id === id);
+                  const next = startUrlFromProject(p?.url ?? null);
+                  if (next) setUrl(next);
+                }}
                 aria-label="Project"
               >
                 <option value="">No project</option>

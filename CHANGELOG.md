@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.91`: **New evaluation** form fills **Start URL** from the selected project’s URL when present (adds `https://` if missing). `@bladerunner/web 0.7.53`.
+
 - `0.10.90`: evaluation step cards use **half the timeline strip width** (`flex-[0_0_calc(50%-0.5rem)]` with `gap-4`). `@bladerunner/web 0.7.52`.
 
 - `0.10.89`: evaluation **Step timeline** uses horizontal scrolling again (snap + smooth scroll); active step follows with `inline: 'end'` so newer steps stay toward the right. `@bladerunner/web 0.7.51`.
