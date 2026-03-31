@@ -625,27 +625,7 @@ export class RecordingService extends EventEmitter {
       streamSmoothness: 'high',
     });
     const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
-    let wsEndpoint: string;
-    try {
-      wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
-    } catch (err) {
-      // #region agent log
-      const msg = err instanceof Error ? err.message : String(err);
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
-        body: JSON.stringify({
-          sessionId: '3619df',
-          hypothesisId: 'H1',
-          location: 'recording.service.ts:startEvaluationSession:worker',
-          message: 'requestBrowserFromWorker failed',
-          data: { evaluationId, err: msg.slice(0, 500) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      throw err;
-    }
+    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
     const browser = await chromium.connect(wsEndpoint);
     const ffmpegStagingPath = path.join(os.tmpdir(), `br-eval-screencast-${evaluationId}-${randomUUID()}.mp4`);
     const screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
@@ -1068,9 +1048,6 @@ export class RecordingService extends EventEmitter {
     if (!run) {
       throw new NotFoundException(`Run ${runId} not found`);
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId,hypothesisId:'H30',location:'apps/api/src/modules/recording/recording.service.ts:892',message:'resumeRecording backend loaded run',data:{userIdPresent:!!userId,runStatus:run.status,hasExistingSession:!!existingSession},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (run.status !== 'PAUSED' && run.status !== 'RECORDING') {
       throw new ConflictException('Only saved or dormant recordings can be resumed');
     }
@@ -1134,9 +1111,6 @@ export class RecordingService extends EventEmitter {
 
     this.emit('status', runId, { status: 'recording', runId });
     this.logger.log(`Recording resumed: ${runId}`);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId,hypothesisId:'H30',location:'apps/api/src/modules/recording/recording.service.ts:956',message:'resumeRecording backend success',data:{status:resumedRun.status,stepsCount:resumedRun.steps.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return resumedRun;
   }
 
@@ -3628,9 +3602,6 @@ export class RecordingService extends EventEmitter {
     },
   ): Promise<void> {
     const session = this.sessions.get(runId);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId,hypothesisId:'H23',location:'apps/api/src/modules/recording/recording.service.ts:3448',message:'dispatchRemotePointer received',data:{hasSession:!!session,userMatches:!!session && session.userId === userId,kind:payload.kind,x:payload.x ?? null,y:payload.y ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!session || session.userId !== userId) {
       return;
     }
@@ -3772,9 +3743,6 @@ export class RecordingService extends EventEmitter {
     payload: { type: 'down' | 'up'; key: string },
   ): Promise<void> {
     const session = this.sessions.get(runId);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId,hypothesisId:'H24',location:'apps/api/src/modules/recording/recording.service.ts:3589',message:'dispatchRemoteKey received',data:{hasSession:!!session,userMatches:!!session && session.userId === userId,type:payload.type,key:payload.key},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!session || session.userId !== userId) {
       return;
     }

@@ -27,30 +27,6 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
     const parsed = parse(raw);
     const poolConfig = buildPoolConfigWithRelaxedTls(parsed);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '91995d' },
-      body: JSON.stringify({
-        sessionId: '91995d',
-        hypothesisId: 'H1',
-        location: 'prisma.service.ts:constructor',
-        message: 'Pool config built without connectionString+ssl merge; TLS relaxed when ssl enabled',
-        data: {
-          host: poolConfig.host ?? null,
-          hasSsl: poolConfig.ssl !== undefined && poolConfig.ssl !== false,
-          rejectUnauthorized:
-            typeof poolConfig.ssl === 'object' &&
-            poolConfig.ssl !== null &&
-            'rejectUnauthorized' in poolConfig.ssl
-              ? (poolConfig.ssl as { rejectUnauthorized?: boolean }).rejectUnauthorized
-              : undefined,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
     const adapter = new PrismaPg(poolConfig);
     super({ adapter });
   }

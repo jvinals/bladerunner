@@ -268,7 +268,8 @@ export default function EvaluationDetailPage() {
     ev.status === 'WAITING_FOR_HUMAN' && pendingQuestion && parseOptions(pendingQuestion).length > 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
+      <div className="max-w-6xl mx-auto px-6 py-8">
       <div className="mb-6">
         <Link
           to="/evaluations"
@@ -751,6 +752,7 @@ export default function EvaluationDetailPage() {
             Remote browser · same worker as recording
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

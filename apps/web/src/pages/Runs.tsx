@@ -397,9 +397,6 @@ export default function RunsPage() {
 
   const handleResumeSelectedRun = useCallback(async (id: string) => {
     setStepsLoadError(null);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:id,hypothesisId:'H27',location:'apps/web/src/pages/Runs.tsx:390',message:'Runs handleResumeSelectedRun invoked',data:{selectedRunIdBefore:selectedRunId ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     await resumeRecording(id);
     setSelectedRunId(id);
     refetch();
@@ -991,9 +988,6 @@ export default function RunsPage() {
   }, [loadRunSteps]);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:requestedResumeRunId ?? null,hypothesisId:'H26',location:'apps/web/src/pages/Runs.tsx:982',message:'Runs resume effect evaluated',data:{requestedResumeRunId:requestedResumeRunId ?? null,isRecording,pendingResumeRunId:pendingResumeRunIdRef.current},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!requestedResumeRunId || isRecording || pendingResumeRunIdRef.current === requestedResumeRunId) return;
     pendingResumeRunIdRef.current = requestedResumeRunId;
     let cancelled = false;
@@ -1002,9 +996,6 @@ export default function RunsPage() {
         setSelectedRunId(requestedResumeRunId);
         await handleResumeSelectedRun(requestedResumeRunId);
       } catch (e) {
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:requestedResumeRunId,hypothesisId:'H31',location:'apps/web/src/pages/Runs.tsx:989',message:'Runs resume effect caught error',data:{error:e instanceof Error ? e.message : String(e)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (cancelled) return;
         const msg = e instanceof Error ? e.message : String(e);
         setStepsLoadError(msg);
@@ -1019,13 +1010,6 @@ export default function RunsPage() {
       cancelled = true;
     };
   }, [requestedResumeRunId, isRecording, handleResumeSelectedRun, navigate]);
-
-  useEffect(() => {
-    if (!isRecording) return;
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:runId ?? null,hypothesisId:'H22',location:'apps/web/src/pages/Runs.tsx:1003',message:'Runs recording preview state',data:{runId:runId ?? null,selectedRunId:selectedRunId ?? null,effectiveRunId:effectiveRunId ?? null,isRecording,isPlaying,socketConnected,playbackSessionId:playbackSessionId ?? null,playbackSourceRunId:playbackSourceRunId ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [isRecording, isPlaying, runId, selectedRunId, effectiveRunId, socketConnected, playbackSessionId, playbackSourceRunId]);
 
   const handleDetach = useCallback(() => {
     if (!runId) return;

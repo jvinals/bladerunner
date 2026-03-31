@@ -643,13 +643,6 @@ export default function RunDetailPage() {
     recordedSteps.length > 0 &&
     !waitingForSteps;
 
-  useEffect(() => {
-    if (!id || !run) return;
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:id,hypothesisId:'H33',location:'apps/web/src/pages/RunDetail.tsx:645',message:'RunDetail playback gate evaluation',data:{runStatus:(run as { status?: string } | undefined)?.status ?? null,hasLiveRecordingSession,recordedStepsLength:recordedSteps.length,waitingForSteps,stepsQueryPending,stepsQueryError:stepsQueryError ? String(stepsQueryError) : null,canPlayback,canResumeRecording,isPlaying,isPaused},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [id, run, hasLiveRecordingSession, recordedSteps.length, waitingForSteps, stepsQueryPending, stepsQueryError, canPlayback, canResumeRecording, isPlaying, isPaused]);
-
   const clerkAutoSignInSequence = useMemo(
     () => getClerkAutoSignInStepSequence(recordedSteps),
     [recordedSteps],
@@ -825,9 +818,6 @@ export default function RunDetailPage() {
           console.error('Stopping playback before continue recording failed:', e);
         });
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:id,hypothesisId:'H25',location:'apps/web/src/pages/RunDetail.tsx:821',message:'RunDetail navigate to runs for continue recording',data:{resumeRunId:id,runStatus:(run as { status?: unknown } | undefined)?.status ?? null,playbackSessionId:playbackSessionId ?? null,isPlaying,hasLiveRecordingSession},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     navigate('/runs', { state: { resumeRunId: id } });
   }, [id, navigate, isPlaying, playbackSessionId, hasLiveRecordingSession, stopPlayback]);
 

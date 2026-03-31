@@ -295,13 +295,7 @@ export function useRecording(): UseRecordingReturn {
   }, [runId]);
 
   const resumeRecording = useCallback(async (resumeRunId: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:resumeRunId,hypothesisId:'H28',location:'apps/web/src/hooks/useRecording.ts:297',message:'resumeRecording request start',data:{resumeRunId},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const result = await runsApi.resumeRecording(resumeRunId);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:result.runId,hypothesisId:'H29',location:'apps/web/src/hooks/useRecording.ts:298',message:'resumeRecording request resolved',data:{resumeRunId,resultRunId:result.runId},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     activeRunIdRef.current = result.runId;
     connectSocket(result.runId);
     let initialSteps: RecordedStep[] = [];
@@ -315,9 +309,6 @@ export function useRecording(): UseRecordingReturn {
     setIsRecording(true);
     setStatus('recording');
     setClerkAutoSignInError(null);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:result.runId,hypothesisId:'H19',location:'apps/web/src/hooks/useRecording.ts:297',message:'resumeRecording client state attached',data:{resumeRunId,activeRunId:result.runId,stepsLoaded:initialSteps.length,status:'recording'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }, [connectSocket]);
 
   const sendInstruction = useCallback(async (instruction: string): Promise<RecordedStep | null> => {
@@ -366,9 +357,6 @@ export function useRecording(): UseRecordingReturn {
   const sendRemotePointer = useCallback((userId: string, payload: RemotePointerPayload) => {
     const id = activeRunIdRef.current ?? runId;
     const s = socketRef.current;
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:id ?? null,hypothesisId:'H20',location:'apps/web/src/hooks/useRecording.ts:357',message:'sendRemotePointer attempted',data:{hasRunId:!!id,socketConnected:!!s?.connected,kind:payload.kind,x:payload.x ?? null,y:payload.y ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!id || !s?.connected) return;
     s.emit('pointer', { runId: id, userId, ...payload });
   }, [runId]);
@@ -376,9 +364,6 @@ export function useRecording(): UseRecordingReturn {
   const sendRemoteKey = useCallback((userId: string, type: 'down' | 'up', key: string) => {
     const id = activeRunIdRef.current ?? runId;
     const s = socketRef.current;
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:id ?? null,hypothesisId:'H21',location:'apps/web/src/hooks/useRecording.ts:364',message:'sendRemoteKey attempted',data:{hasRunId:!!id,socketConnected:!!s?.connected,type,key},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!id || !s?.connected) return;
     s.emit('key', { runId: id, userId, type, key });
   }, [runId]);

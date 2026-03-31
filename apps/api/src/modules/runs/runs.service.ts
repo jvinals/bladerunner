@@ -102,9 +102,6 @@ export class RunsService {
     });
     if (!run) return null;
     const hasLiveRecordingSession = !!this.recordingService.getSession(id);
-    // #region agent log
-    fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91995d'},body:JSON.stringify({sessionId:'91995d',runId:id,hypothesisId:'H32',location:'apps/api/src/modules/runs/runs.service.ts:104',message:'runs.findOne payload for playback gating',data:{dbStatus:run.status,hasLiveRecordingSession,stepsCount:run.steps.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     /** Match list DTO so Run detail metrics + playback gating can use `stepsCount` without a second round-trip. */
     return {
       ...run,

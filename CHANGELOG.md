@@ -2,6 +2,10 @@
 
 ## 2026-03-31
 
+- `0.10.87`: removed debug-session `fetch` instrumentation (evaluations run-mode probe, Prisma constructor, recording resume/pointer/key, runs `findOne`, Runs/RunDetail/useRecording hooks). `@bladerunner/api 0.6.83`, `@bladerunner/web 0.7.49`.
+
+- `0.10.86`: evaluation detail page scrolls in the main shell (`flex-1 min-h-0 overflow-y-auto`) so long step timelines and JSON blocks are reachable. `@bladerunner/web 0.7.48`.
+
 - `0.10.85`: evaluation **step review mode** — `EvaluationRunMode` (`continuous` | `step_review`), `WAITING_FOR_REVIEW`, step fields (`stepTitle`, `progressSummaryBefore`, codegen/analyzer JSON snapshots), orchestrator pause/resume via `POST /evaluations/:id/continue-review`, LLM `stepTitle` in codegen JSON. Migration `20260331120000_evaluation_review_mode`. `@bladerunner/api 0.6.82`, `@bladerunner/web 0.7.47`.
 
 ## 2026-03-30
