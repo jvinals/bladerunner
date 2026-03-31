@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.10.87",
+  "version": "0.10.90",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "postinstall": "playwright install chromium",

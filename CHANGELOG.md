@@ -2,6 +2,12 @@
 
 ## 2026-03-31
 
+- `0.10.90`: evaluation step cards use **half the timeline strip width** (`flex-[0_0_calc(50%-0.5rem)]` with `gap-4`). `@bladerunner/web 0.7.52`.
+
+- `0.10.89`: evaluation **Step timeline** uses horizontal scrolling again (snap + smooth scroll); active step follows with `inline: 'end'` so newer steps stay toward the right. `@bladerunner/web 0.7.51`.
+
+- `0.10.88`: evaluation detail layout — **Goal Definitions** card above actions; full-width live preview under run controls; **Step timeline** below preview with a two-column step grid on `md+`; human input after timeline. `@bladerunner/web 0.7.50`.
+
 - `0.10.87`: removed debug-session `fetch` instrumentation (evaluations run-mode probe, Prisma constructor, recording resume/pointer/key, runs `findOne`, Runs/RunDetail/useRecording hooks). `@bladerunner/api 0.6.83`, `@bladerunner/web 0.7.49`.
 
 - `0.10.86`: evaluation detail page scrolls in the main shell (`flex-1 min-h-0 overflow-y-auto`) so long step timelines and JSON blocks are reachable. `@bladerunner/web 0.7.48`.

@@ -114,7 +114,8 @@ export default function EvaluationDetailPage() {
   useEffect(() => {
     const el = stepCardRefs.current[selectedStepIdx];
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      // Align trailing edge so the latest step stays toward the right as the strip grows leftward.
+      el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
     }
   }, [selectedStepIdx, ev?.steps?.length, lastProgress?.sequence]);
 
@@ -280,8 +281,7 @@ export default function EvaluationDetailPage() {
         </Link>
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:items-start gap-8">
-        <div className="flex-1 min-w-0 space-y-6">
+      <div className="w-full space-y-6">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <h1 className="text-2xl font-semibold text-gray-900 tracking-tight flex items-center gap-2">
@@ -382,6 +382,53 @@ export default function EvaluationDetailPage() {
             )}
           </div>
 
+          <section className="w-full rounded-xl border border-gray-200 bg-white p-4" aria-labelledby="eval-goal-heading">
+            <h2 id="eval-goal-heading" className="text-sm font-semibold text-gray-800 mb-3">
+              Goal Definitions
+            </h2>
+            <p className="text-xs font-medium text-gray-500 mb-1">Intent</p>
+            {canEditContent ? (
+              <textarea
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                value={intentDraft}
+                onChange={(e) => setIntentDraft(e.target.value)}
+                aria-label="Evaluation intent"
+              />
+            ) : (
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{ev.intent}</p>
+            )}
+            <p className="text-xs font-medium text-gray-500 mt-4 mb-1">Desired output</p>
+            {canEditContent ? (
+              <textarea
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
+                value={desiredDraft}
+                onChange={(e) => setDesiredDraft(e.target.value)}
+                aria-label="Desired evaluation output"
+              />
+            ) : (
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{ev.desiredOutput}</p>
+            )}
+            {canEditContent && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-gray-500 max-w-xl">
+                  Save changes before <strong>Start</strong> or <strong>Re-run</strong> so the server uses your latest text.
+                  Re-run clears prior steps, questions, and the last report.
+                </p>
+                {draftsDirty && (
+                  <button
+                    type="button"
+                    disabled={patchMutation.isPending || !intentDraft.trim() || !desiredDraft.trim()}
+                    onClick={() => patchMutation.mutate()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:border-[#4B90FF]/40 hover:text-[#4B90FF] disabled:opacity-50"
+                  >
+                    {patchMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                    Save changes
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+
           <div className="flex flex-wrap gap-2">
             {canStartQueued && (
               <button
@@ -469,89 +516,56 @@ export default function EvaluationDetailPage() {
             </p>
           )}
 
-          <section className="rounded-xl border border-gray-200 bg-white p-4">
-            <h2 className="text-sm font-semibold text-gray-800 mb-2">Global intent</h2>
-            {canEditContent ? (
-              <textarea
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
-                value={intentDraft}
-                onChange={(e) => setIntentDraft(e.target.value)}
-                aria-label="Global intent"
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{ev.intent}</p>
-            )}
-            <h2 className="text-sm font-semibold text-gray-800 mt-4 mb-2">Desired output</h2>
-            {canEditContent ? (
-              <textarea
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#4B90FF]/30"
-                value={desiredDraft}
-                onChange={(e) => setDesiredDraft(e.target.value)}
-                aria-label="Desired output"
-              />
-            ) : (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{ev.desiredOutput}</p>
-            )}
-            {canEditContent && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-gray-500 max-w-xl">
-                  Save changes before <strong>Start</strong> or <strong>Re-run</strong> so the server uses your latest text.
-                  Re-run clears prior steps, questions, and the last report.
-                </p>
-                {draftsDirty && (
+          <div className="w-full">
+            <div className="w-full rounded-xl border border-gray-200 bg-black overflow-hidden aspect-video flex items-center justify-center relative min-h-[200px]">
+              {liveEnabled && isDetached ? (
+                <div className="text-center px-4 py-8">
+                  <ExternalLink size={28} className="mx-auto mb-2 text-gray-500" aria-hidden />
+                  <p className="text-sm text-gray-400 mb-2">Preview detached to another window</p>
                   <button
                     type="button"
-                    disabled={patchMutation.isPending || !intentDraft.trim() || !desiredDraft.trim()}
-                    onClick={() => patchMutation.mutate()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:border-[#4B90FF]/40 hover:text-[#4B90FF] disabled:opacity-50"
+                    onClick={handleReattachPreview}
+                    className="text-xs text-[#4B90FF] font-medium hover:underline"
                   >
-                    {patchMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
-                    Save changes
+                    Reattach here
                   </button>
-                )}
-              </div>
-            )}
-          </section>
-
-          {showHuman && pendingQuestion && (
-            <section className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
-              <h2 className="text-sm font-semibold text-violet-900 mb-2">Your input</h2>
-              <p className="text-sm text-gray-800 mb-3">{pendingQuestion.prompt}</p>
-              <div className="space-y-2">
-                {parseOptions(pendingQuestion).map((opt, idx) => (
-                  <label
-                    key={idx}
-                    className="flex items-center gap-2 text-sm cursor-pointer"
+                </div>
+              ) : liveEnabled && !isDetached ? (
+                <>
+                  {frameDataUrl ? (
+                    <img src={frameDataUrl} alt="Live browser" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-gray-500 text-sm px-4 text-center">
+                      {ev.status === 'RUNNING' ||
+                      ev.status === 'WAITING_FOR_HUMAN' ||
+                      ev.status === 'WAITING_FOR_REVIEW'
+                        ? 'Waiting for video frame…'
+                        : 'Connecting…'}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleDetachPreview}
+                    className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-700 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
+                    title="Detach preview to new window"
+                    aria-label="Detach evaluation preview to new window"
                   >
-                    <input
-                      type="radio"
-                      name="human-q"
-                      checked={(humanSelection[pendingQuestion.id] ?? -1) === idx}
-                      onChange={() =>
-                        setHumanSelection((s) => ({ ...s, [pendingQuestion.id]: idx }))
-                      }
-                    />
-                    {opt}
-                  </label>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="mt-4 rounded-lg bg-violet-600 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
-                disabled={
-                  humanMutation.isPending ||
-                  typeof humanSelection[pendingQuestion.id] !== 'number'
-                }
-                onClick={() => {
-                  const sel = humanSelection[pendingQuestion.id];
-                  if (typeof sel !== 'number') return;
-                  humanMutation.mutate({ questionId: pendingQuestion.id, selectedIndex: sel });
-                }}
-              >
-                {humanMutation.isPending ? 'Submitting…' : 'Submit answer'}
-              </button>
-            </section>
-          )}
+                    <ExternalLink size={12} aria-hidden />
+                    Detach
+                  </button>
+                </>
+              ) : (
+                <span className="text-gray-500 text-sm px-4 text-center">
+                  {ev.status === 'COMPLETED'
+                    ? 'Run finished'
+                    : 'Start the run to see the browser'}
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2 text-center">
+              Remote browser · same worker as recording
+            </p>
+          </div>
 
           <section
             className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
@@ -561,7 +575,7 @@ export default function EvaluationDetailPage() {
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <h2 className="text-sm font-semibold text-gray-800 shrink-0">Step timeline</h2>
                 {ev.steps.length > 0 && (
-                  <div className="flex items-center gap-1 overflow-x-auto max-w-[min(100%,42rem)] py-1">
+                  <div className="flex items-center gap-1 overflow-x-auto min-w-0 flex-1 py-1">
                     <button
                       type="button"
                       className="p-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40 shrink-0"
@@ -621,14 +635,14 @@ export default function EvaluationDetailPage() {
                 No steps yet. Start the run to record each step (inputs and outputs appear after the model runs).
               </p>
             ) : (
-              <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-4 pb-4 pt-2 scroll-smooth">
+              <div className="flex w-full min-w-0 flex-row gap-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 scroll-smooth snap-x snap-mandatory">
                 {ev.steps.map((st, idx) => (
                   <div
                     key={st.id}
                     ref={(el) => {
                       stepCardRefs.current[idx] = el;
                     }}
-                    className={`snap-center shrink-0 w-[min(100%,28rem)] rounded-lg border p-3 text-sm ${
+                    className={`snap-center shrink-0 min-w-0 flex-[0_0_calc(50%-0.5rem)] rounded-lg border p-3 text-sm ${
                       selectedStepIdx === idx ? 'border-[#4B90FF] ring-1 ring-[#4B90FF]/30' : 'border-gray-200'
                     }`}
                   >
@@ -691,6 +705,46 @@ export default function EvaluationDetailPage() {
             ) : null}
           </section>
 
+          {showHuman && pendingQuestion && (
+            <section className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+              <h2 className="text-sm font-semibold text-violet-900 mb-2">Your input</h2>
+              <p className="text-sm text-gray-800 mb-3">{pendingQuestion.prompt}</p>
+              <div className="space-y-2">
+                {parseOptions(pendingQuestion).map((opt, idx) => (
+                  <label
+                    key={idx}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <input
+                      type="radio"
+                      name="human-q"
+                      checked={(humanSelection[pendingQuestion.id] ?? -1) === idx}
+                      onChange={() =>
+                        setHumanSelection((s) => ({ ...s, [pendingQuestion.id]: idx }))
+                      }
+                    />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="mt-4 rounded-lg bg-violet-600 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
+                disabled={
+                  humanMutation.isPending ||
+                  typeof humanSelection[pendingQuestion.id] !== 'number'
+                }
+                onClick={() => {
+                  const sel = humanSelection[pendingQuestion.id];
+                  if (typeof sel !== 'number') return;
+                  humanMutation.mutate({ questionId: pendingQuestion.id, selectedIndex: sel });
+                }}
+              >
+                {humanMutation.isPending ? 'Submitting…' : 'Submit answer'}
+              </button>
+            </section>
+          )}
+
           {latestReport && (
             <section>
               <h2 className="text-sm font-semibold text-gray-800 mb-3">Report</h2>
@@ -700,58 +754,6 @@ export default function EvaluationDetailPage() {
             </section>
           )}
 
-        </div>
-
-        <div className="w-full lg:w-[420px] shrink-0">
-          <div className="sticky top-6 rounded-xl border border-gray-200 bg-black overflow-hidden aspect-video flex items-center justify-center relative min-h-[200px]">
-            {liveEnabled && isDetached ? (
-              <div className="text-center px-4 py-8">
-                <ExternalLink size={28} className="mx-auto mb-2 text-gray-500" aria-hidden />
-                <p className="text-sm text-gray-400 mb-2">Preview detached to another window</p>
-                <button
-                  type="button"
-                  onClick={handleReattachPreview}
-                  className="text-xs text-[#4B90FF] font-medium hover:underline"
-                >
-                  Reattach here
-                </button>
-              </div>
-            ) : liveEnabled && !isDetached ? (
-              <>
-                {frameDataUrl ? (
-                  <img src={frameDataUrl} alt="Live browser" className="w-full h-full object-contain" />
-                ) : (
-                  <span className="text-gray-500 text-sm px-4 text-center">
-                    {ev.status === 'RUNNING' ||
-                    ev.status === 'WAITING_FOR_HUMAN' ||
-                    ev.status === 'WAITING_FOR_REVIEW'
-                      ? 'Waiting for video frame…'
-                      : 'Connecting…'}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={handleDetachPreview}
-                  className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 backdrop-blur border border-gray-200 rounded-md text-xs text-gray-700 hover:text-[#4B90FF] hover:border-[#4B90FF]/30 transition-all shadow-sm"
-                  title="Detach preview to new window"
-                  aria-label="Detach evaluation preview to new window"
-                >
-                  <ExternalLink size={12} aria-hidden />
-                  Detach
-                </button>
-              </>
-            ) : (
-              <span className="text-gray-500 text-sm px-4 text-center">
-                {ev.status === 'COMPLETED'
-                  ? 'Run finished'
-                  : 'Start the run to see the browser'}
-              </span>
-            )}
-          </div>
-          <p className="text-[10px] text-gray-400 mt-2 text-center">
-            Remote browser · same worker as recording
-          </p>
-        </div>
       </div>
       </div>
     </div>
