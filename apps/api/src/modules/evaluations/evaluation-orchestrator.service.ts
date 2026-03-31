@@ -140,8 +140,6 @@ export class EvaluationOrchestratorService {
       resumeAfterReview: Boolean(opts.resumeAfterReview),
     });
 
-    const authState = { clerkFullSignInDone: false };
-
     const sessionExists = !!this.recording.getEvaluationSession(evaluationId);
     if (!sessionExists) {
       await this.recording.startEvaluationSession(evaluationId, userId);
@@ -151,6 +149,10 @@ export class EvaluationOrchestratorService {
         await s.page.goto(ev.url, { waitUntil: 'domcontentloaded', timeout: 120_000 });
       }
     }
+
+    const evalSession = this.recording.getEvaluationSession(evaluationId);
+    if (!evalSession) throw new Error('Evaluation session missing');
+    const authState = { clerkFullSignInDone: evalSession.autoSignInCompleted ?? false };
 
     let stepCount = await this.prisma.evaluationStep.count({ where: { evaluationId } });
     while (stepCount < MAX_EVALUATION_STEPS) {
@@ -227,9 +229,12 @@ export class EvaluationOrchestratorService {
       );
       // #endregion
 
-      if (fresh.autoSignIn && sequence === 1) {
-        trace('Auto sign-in: starting (first step only; Clerk/generic assist may run; external OTP/email polling can take time)', {
+      /** Until `authState.clerkFullSignInDone`, each step may land on login (step 1, 2, …); the recording layer only acts when the page looks like sign-in. After any successful assist, never call again. */
+      const autoSignInPending = fresh.autoSignIn && !authState.clerkFullSignInDone;
+      if (autoSignInPending) {
+        trace('Auto sign-in: attempting (until first success; Clerk/generic assist may run; external OTP/email polling can take time)', {
           clerkOtpMode: signInOtpMode,
+          sequence,
           msSinceStepStart: Date.now() - stepWallStart,
         });
         const tSign = Date.now();
@@ -241,9 +246,13 @@ export class EvaluationOrchestratorService {
           state: authState,
         });
         await page.waitForLoadState('domcontentloaded').catch(() => {});
-        trace('Auto sign-in: block finished', { ms: Date.now() - tSign, pageUrl: page.url() });
+        trace('Auto sign-in: block finished', {
+          ms: Date.now() - tSign,
+          pageUrl: page.url(),
+          completedThisRun: authState.clerkFullSignInDone,
+        });
       } else if (fresh.autoSignIn) {
-        trace('Auto sign-in: skipped (only runs once at step 1)', { sequence });
+        trace('Auto sign-in: skipped (already completed earlier this run)', { sequence });
       } else {
         trace('Auto sign-in: skipped (evaluation.autoSignIn is false)');
       }
@@ -255,7 +264,8 @@ export class EvaluationOrchestratorService {
           evaluationId,
           sequence,
           elapsedMs: Date.now() - stepWallStart,
-          ranAutoSignIn: fresh.autoSignIn && sequence === 1,
+          autoSignInAttempted: autoSignInPending,
+          clerkFullSignInDoneAfter: authState.clerkFullSignInDone,
         },
         'H1',
       );

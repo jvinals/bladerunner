@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.125`: **Evaluations** — **auto sign-in** runs **only while sign-in has not yet succeeded** (`!clerkFullSignInDone`): each step can be the one that lands on login (step 1, 2, …). **Playback** logic only acts when the page looks like sign-in; after success the flag is set and **orchestrator stops calling** `maybeEvaluationAutoSignInAssist`. Completion is **persisted on the evaluation browser session** so **resume after human/review** does not retry sign-in. **OTP-only** Clerk assist now sets **`clerkFullSignInDone`** after filling OTP. `@bladerunner/api 0.6.103`.
+
 - `0.10.124`: **Evaluations** — **auto sign-in** runs **only at step 1** (start of first iteration). Removed **post-step** auto sign-in after each Playwright run (was redundant and could re-trigger Clerk/login flows). `@bladerunner/api 0.6.102`.
 
 - `0.10.123`: **Evaluation step timeline** — fixed timeline height **`1200px`** (was **1000px**). `@bladerunner/web 0.7.75`.

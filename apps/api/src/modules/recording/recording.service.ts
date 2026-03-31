@@ -315,6 +315,8 @@ type EvaluationLiveSession = {
   latestFrame: Buffer | null;
   screencastVideo: ScreencastVideoEncoder | null;
   screencastClosing?: boolean;
+  /** Set after a successful auto sign-in assist; survives `runLoop` restarts (resume after human/review). */
+  autoSignInCompleted?: boolean;
 };
 
 @Injectable()
@@ -699,8 +701,9 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
-   * Clerk / generic test-user sign-in assist when the evaluation page looks like a login screen (same logic as playback).
-   * Call after navigation and after each Playwright step when `autoSignIn` is enabled on the evaluation.
+   * Clerk / generic test-user sign-in assist when the page looks like a login screen (same logic as playback).
+   * Pass a persistent `state` from the evaluation loop: the helper only performs work when sign-in UI is present,
+   * and sets `state.clerkFullSignInDone` after a successful assist so callers can skip further attempts.
    */
   async maybeEvaluationAutoSignInAssist(
     evaluationId: string,
@@ -729,6 +732,9 @@ export class RecordingService extends EventEmitter {
       opts.clerkOtpMode,
       opts.state,
     );
+    if (opts.state.clerkFullSignInDone) {
+      session.autoSignInCompleted = true;
+    }
   }
 
   /** Resolve Clerk OTP mode for evaluations: stored preference or server default. */
@@ -5141,6 +5147,7 @@ export class RecordingService extends EventEmitter {
         } else {
           await fillClerkOtpFromClerkTestEmail(page, { runUrl });
         }
+        state.clerkFullSignInDone = true;
         return;
       }
 
