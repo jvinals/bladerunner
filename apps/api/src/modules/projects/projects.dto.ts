@@ -60,6 +60,14 @@ export class CreateProjectDto {
   testEmailProvider?: TestEmailProviderDto;
 }
 
+export class PatchAgentKnowledgeDto {
+  @ApiPropertyOptional({ description: 'Manual instructions merged into agent prompts for this project' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16000)
+  manualInstructions?: string | null;
+}
+
 export class UpdateProjectDto {
   @ApiPropertyOptional()
   @IsOptional()

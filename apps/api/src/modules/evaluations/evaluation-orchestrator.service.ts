@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { LlmService } from '../llm/llm.service';
 import { EvaluationsService } from './evaluations.service';
+import { AgentContextService } from '../agent-context/agent-context.service';
 
 const MAX_EVALUATION_STEPS = 12;
 
@@ -62,6 +63,7 @@ export class EvaluationOrchestratorService {
     private readonly recording: RecordingService,
     private readonly llm: LlmService,
     private readonly evaluations: EvaluationsService,
+    private readonly agentContext: AgentContextService,
   ) {}
 
   /**
@@ -337,6 +339,10 @@ export class EvaluationOrchestratorService {
         timeoutMs: evaluationCodegenTimeoutMs(),
         msSinceStepStart: Date.now() - stepWallStart,
       });
+      const agentContextAppendix =
+        fresh.projectId != null
+          ? (await this.agentContext.getPromptInjectionBlock(userId, fresh.projectId)).trim() || undefined
+          : undefined;
       const proposed = await this.llm.evaluationProposePlaywrightStep(
         {
           url: ev.url,
@@ -350,6 +356,7 @@ export class EvaluationOrchestratorService {
           accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
           autoSignInEnabled: fresh.autoSignIn,
           autoSignInCompleted: authState.clerkFullSignInDone,
+          agentContextAppendix,
         },
         {
           userId,
@@ -474,6 +481,7 @@ export class EvaluationOrchestratorService {
             accessibilitySnapshot: afterCtx.accessibilitySnapshot,
             autoSignInEnabled: fresh.autoSignIn,
             autoSignInCompleted: authState.clerkFullSignInDone,
+            agentContextAppendix,
           },
           {
             userId,

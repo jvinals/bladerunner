@@ -72,6 +72,17 @@ export const StepOrigin = {
 export type StepOrigin = (typeof StepOrigin)[keyof typeof StepOrigin]
 
 
+export const ProjectDiscoveryStatus = {
+  idle: 'idle',
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed'
+} as const
+
+export type ProjectDiscoveryStatus = (typeof ProjectDiscoveryStatus)[keyof typeof ProjectDiscoveryStatus]
+
+
 export const EvaluationStatus = {
   QUEUED: 'QUEUED',
   RUNNING: 'RUNNING',

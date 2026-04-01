@@ -62,6 +62,8 @@ export interface InstructionToActionInput {
   /** Optional: failure details for regeneration / repair passes. */
   priorFailureKind?: string;
   priorFailureMessage?: string;
+  /** Optional: merged workspace + project + discovery instructions for codegen / verify. */
+  agentContextBlock?: string;
 }
 
 export interface InstructionToActionOutput {

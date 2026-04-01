@@ -384,7 +384,9 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 
 export const ModelName = {
+  UserAgentContext: 'UserAgentContext',
   Project: 'Project',
+  ProjectAgentKnowledge: 'ProjectAgentKnowledge',
   Run: 'Run',
   AiVisualIdTest: 'AiVisualIdTest',
   RunCheckpoint: 'RunCheckpoint',
@@ -411,10 +413,84 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "project" | "run" | "aiVisualIdTest" | "runCheckpoint" | "runStep" | "runRecording" | "userLlmPreferences" | "userLlmCredentials" | "evaluation" | "evaluationStep" | "evaluationQuestion" | "evaluationReport"
+    modelProps: "userAgentContext" | "project" | "projectAgentKnowledge" | "run" | "aiVisualIdTest" | "runCheckpoint" | "runStep" | "runRecording" | "userLlmPreferences" | "userLlmCredentials" | "evaluation" | "evaluationStep" | "evaluationQuestion" | "evaluationReport"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
+    UserAgentContext: {
+      payload: Prisma.$UserAgentContextPayload<ExtArgs>
+      fields: Prisma.UserAgentContextFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UserAgentContextFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UserAgentContextFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>
+        }
+        findFirst: {
+          args: Prisma.UserAgentContextFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UserAgentContextFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>
+        }
+        findMany: {
+          args: Prisma.UserAgentContextFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>[]
+        }
+        create: {
+          args: Prisma.UserAgentContextCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>
+        }
+        createMany: {
+          args: Prisma.UserAgentContextCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UserAgentContextCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>[]
+        }
+        delete: {
+          args: Prisma.UserAgentContextDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>
+        }
+        update: {
+          args: Prisma.UserAgentContextUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>
+        }
+        deleteMany: {
+          args: Prisma.UserAgentContextDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UserAgentContextUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UserAgentContextUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>[]
+        }
+        upsert: {
+          args: Prisma.UserAgentContextUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserAgentContextPayload>
+        }
+        aggregate: {
+          args: Prisma.UserAgentContextAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUserAgentContext>
+        }
+        groupBy: {
+          args: Prisma.UserAgentContextGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserAgentContextGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UserAgentContextCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserAgentContextCountAggregateOutputType> | number
+        }
+      }
+    }
     Project: {
       payload: Prisma.$ProjectPayload<ExtArgs>
       fields: Prisma.ProjectFieldRefs
@@ -486,6 +562,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.ProjectCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.ProjectCountAggregateOutputType> | number
+        }
+      }
+    }
+    ProjectAgentKnowledge: {
+      payload: Prisma.$ProjectAgentKnowledgePayload<ExtArgs>
+      fields: Prisma.ProjectAgentKnowledgeFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ProjectAgentKnowledgeFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ProjectAgentKnowledgeFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>
+        }
+        findFirst: {
+          args: Prisma.ProjectAgentKnowledgeFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ProjectAgentKnowledgeFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>
+        }
+        findMany: {
+          args: Prisma.ProjectAgentKnowledgeFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>[]
+        }
+        create: {
+          args: Prisma.ProjectAgentKnowledgeCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>
+        }
+        createMany: {
+          args: Prisma.ProjectAgentKnowledgeCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ProjectAgentKnowledgeCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>[]
+        }
+        delete: {
+          args: Prisma.ProjectAgentKnowledgeDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>
+        }
+        update: {
+          args: Prisma.ProjectAgentKnowledgeUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>
+        }
+        deleteMany: {
+          args: Prisma.ProjectAgentKnowledgeDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ProjectAgentKnowledgeUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ProjectAgentKnowledgeUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>[]
+        }
+        upsert: {
+          args: Prisma.ProjectAgentKnowledgeUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectAgentKnowledgePayload>
+        }
+        aggregate: {
+          args: Prisma.ProjectAgentKnowledgeAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateProjectAgentKnowledge>
+        }
+        groupBy: {
+          args: Prisma.ProjectAgentKnowledgeGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProjectAgentKnowledgeGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ProjectAgentKnowledgeCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProjectAgentKnowledgeCountAggregateOutputType> | number
         }
       }
     }
@@ -1342,6 +1492,15 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
+export const UserAgentContextScalarFieldEnum = {
+  userId: 'userId',
+  generalInstructions: 'generalInstructions',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UserAgentContextScalarFieldEnum = (typeof UserAgentContextScalarFieldEnum)[keyof typeof UserAgentContextScalarFieldEnum]
+
+
 export const ProjectScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1358,6 +1517,21 @@ export const ProjectScalarFieldEnum = {
 } as const
 
 export type ProjectScalarFieldEnum = (typeof ProjectScalarFieldEnum)[keyof typeof ProjectScalarFieldEnum]
+
+
+export const ProjectAgentKnowledgeScalarFieldEnum = {
+  projectId: 'projectId',
+  manualInstructions: 'manualInstructions',
+  discoveryStatus: 'discoveryStatus',
+  discoveryStartedAt: 'discoveryStartedAt',
+  discoveryCompletedAt: 'discoveryCompletedAt',
+  discoveryError: 'discoveryError',
+  discoverySummaryMarkdown: 'discoverySummaryMarkdown',
+  discoveryStructured: 'discoveryStructured',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProjectAgentKnowledgeScalarFieldEnum = (typeof ProjectAgentKnowledgeScalarFieldEnum)[keyof typeof ProjectAgentKnowledgeScalarFieldEnum]
 
 
 export const RunScalarFieldEnum = {
@@ -1617,6 +1791,20 @@ export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMod
 
 
 /**
+ * Reference to a field of type 'DateTime'
+ */
+export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+    
+
+
+/**
+ * Reference to a field of type 'DateTime[]'
+ */
+export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+/**
  * Reference to a field of type 'ProjectKind'
  */
 export type EnumProjectKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectKind'>
@@ -1645,16 +1833,30 @@ export type ListEnumTestEmailProviderFieldRefInput<$PrismaModel> = FieldRefInput
 
 
 /**
- * Reference to a field of type 'DateTime'
+ * Reference to a field of type 'ProjectDiscoveryStatus'
  */
-export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+export type EnumProjectDiscoveryStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectDiscoveryStatus'>
     
 
 
 /**
- * Reference to a field of type 'DateTime[]'
+ * Reference to a field of type 'ProjectDiscoveryStatus[]'
  */
-export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+export type ListEnumProjectDiscoveryStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectDiscoveryStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Json'
+ */
+export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+/**
+ * Reference to a field of type 'QueryMode'
+ */
+export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
     
 
 
@@ -1725,20 +1927,6 @@ export type EnumStepOriginFieldRefInput<$PrismaModel> = FieldRefInputType<$Prism
  * Reference to a field of type 'StepOrigin[]'
  */
 export type ListEnumStepOriginFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'StepOrigin[]'>
-    
-
-
-/**
- * Reference to a field of type 'Json'
- */
-export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
-    
-
-
-/**
- * Reference to a field of type 'QueryMode'
- */
-export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
     
 
 
@@ -1913,7 +2101,9 @@ export type PrismaClientOptions = ({
   comments?: runtime.SqlCommenterPlugin[]
 }
 export type GlobalOmitConfig = {
+  userAgentContext?: Prisma.UserAgentContextOmit
   project?: Prisma.ProjectOmit
+  projectAgentKnowledge?: Prisma.ProjectAgentKnowledgeOmit
   run?: Prisma.RunOmit
   aiVisualIdTest?: Prisma.AiVisualIdTestOmit
   runCheckpoint?: Prisma.RunCheckpointOmit

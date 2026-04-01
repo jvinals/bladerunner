@@ -457,6 +457,20 @@ export type CreateProjectBody = {
   testEmailProvider?: TestEmailProvider | null;
 };
 
+export type ProjectDiscoveryStatus = 'idle' | 'queued' | 'running' | 'completed' | 'failed';
+
+export type ProjectAgentKnowledgeDto = {
+  projectId: string;
+  manualInstructions: string | null;
+  discoveryStatus: ProjectDiscoveryStatus;
+  discoveryStartedAt: string | null;
+  discoveryCompletedAt: string | null;
+  discoveryError: string | null;
+  discoverySummaryMarkdown: string | null;
+  discoveryStructured: unknown;
+  updatedAt: string | null;
+};
+
 export const projectsApi = {
   list: () => apiFetch<ProjectDto[]>('/projects'),
   get: (id: string) => apiFetch<ProjectDto>(`/projects/${id}`),
@@ -468,6 +482,14 @@ export const projectsApi = {
     apiFetchVoid(`/projects/${id}`, {
       method: 'DELETE',
     }),
+  getAgentKnowledge: (id: string) => apiFetch<ProjectAgentKnowledgeDto>(`/projects/${id}/agent-knowledge`),
+  patchAgentKnowledge: (id: string, body: { manualInstructions?: string | null }) =>
+    apiFetch<ProjectAgentKnowledgeDto>(`/projects/${id}/agent-knowledge`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  triggerDiscovery: (id: string) =>
+    apiFetch<{ accepted: boolean; reason?: string }>(`/projects/${id}/discovery`, { method: 'POST' }),
 };
 
 // ─── Evaluations (autonomous browser + LLM) ────────────────────────────────────
@@ -616,6 +638,12 @@ export const settingsApi = {
   get: () => apiFetch<unknown>('/settings'),
   update: (data: unknown) =>
     apiFetch<unknown>('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  getAgentContext: () => apiFetch<{ generalInstructions: string }>('/settings/agent-context'),
+  patchAgentContext: (body: { generalInstructions?: string }) =>
+    apiFetch<{ generalInstructions: string }>('/settings/agent-context', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   getProviderModels: (providerId: string) =>
     apiFetch<{ providerId: string; models: Array<{ id: string; launchDate: string | null }> }>(
       `/settings/llm/models?providerId=${encodeURIComponent(providerId)}`,

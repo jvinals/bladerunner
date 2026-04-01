@@ -55,6 +55,24 @@ enum StepOrigin {
   AUTOMATIC
 }
 
+/// Background project discovery (Initial Run) job state.
+enum ProjectDiscoveryStatus {
+  idle
+  queued
+  running
+  completed
+  failed
+}
+
+/// Per-user default instructions merged into agent prompts (Settings).
+model UserAgentContext {
+  userId              String   @id @map("user_id")
+  generalInstructions String   @default("") @db.Text @map("general_instructions")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("user_agent_context")
+}
+
 model Project {
   id          String      @id @default(uuid())
   userId      String      @map("user_id")
@@ -77,9 +95,27 @@ model Project {
 
   runs        Run[]
   evaluations Evaluation[]
+  agentKnowledge ProjectAgentKnowledge?
 
   @@index([userId])
   @@map("projects")
+}
+
+/// Per-project manual notes + discovery artifacts for agent injection.
+model ProjectAgentKnowledge {
+  projectId                String                 @id @map("project_id")
+  manualInstructions       String?                @db.Text @map("manual_instructions")
+  discoveryStatus          ProjectDiscoveryStatus @default(idle) @map("discovery_status")
+  discoveryStartedAt       DateTime?              @map("discovery_started_at")
+  discoveryCompletedAt     DateTime?              @map("discovery_completed_at")
+  discoveryError           String?                @db.Text @map("discovery_error")
+  discoverySummaryMarkdown String?                @db.Text @map("discovery_summary_markdown")
+  discoveryStructured      Json?                  @map("discovery_structured")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_agent_knowledge")
 }
 
 model Run {

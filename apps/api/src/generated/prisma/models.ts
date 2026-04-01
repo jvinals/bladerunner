@@ -8,7 +8,9 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/UserAgentContext'
 export type * from './models/Project'
+export type * from './models/ProjectAgentKnowledge'
 export type * from './models/Run'
 export type * from './models/AiVisualIdTest'
 export type * from './models/RunCheckpoint'

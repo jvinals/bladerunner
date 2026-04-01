@@ -14,13 +14,17 @@ import {
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
+import { ProjectDiscoveryService } from './project-discovery.service';
+import { CreateProjectDto, PatchAgentKnowledgeDto, UpdateProjectDto } from './projects.dto';
 
 @ApiTags('projects')
 @Controller('projects')
 @UseGuards(ClerkAuthGuard)
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly projectDiscovery: ProjectDiscoveryService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all projects for the user' })
@@ -36,6 +40,29 @@ export class ProjectsController {
   create(@Req() req: { user: { sub: string } }, @Body() dto: CreateProjectDto) {
     const userId = req.user.sub;
     return this.projectsService.create(userId, dto);
+  }
+
+  @Get(':id/agent-knowledge')
+  @ApiOperation({ summary: 'Project agent knowledge (manual + discovery artifacts)' })
+  async getAgentKnowledge(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.projectsService.getAgentKnowledge(id, req.user.sub);
+  }
+
+  @Patch(':id/agent-knowledge')
+  @ApiOperation({ summary: 'Update project manual agent instructions' })
+  async patchAgentKnowledge(
+    @Param('id') id: string,
+    @Req() req: { user: { sub: string } },
+    @Body() dto: PatchAgentKnowledgeDto,
+  ) {
+    return this.projectsService.patchAgentKnowledge(id, req.user.sub, dto);
+  }
+
+  @Post(':id/discovery')
+  @HttpCode(202)
+  @ApiOperation({ summary: 'Run or refresh app discovery (async)' })
+  async triggerDiscovery(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.projectDiscovery.trigger(id, req.user.sub);
   }
 
   @Get(':id')

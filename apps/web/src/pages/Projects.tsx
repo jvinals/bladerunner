@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   projectsApi,
@@ -45,11 +45,28 @@ export default function ProjectsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProjectForm>({ ...emptyForm });
   const [showPassword, setShowPassword] = useState(false);
+  const [manualDraft, setManualDraft] = useState('');
 
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.list(),
   });
+
+  const { data: agentKnowledge } = useQuery({
+    queryKey: ['projectAgentKnowledge', editingId],
+    queryFn: () => projectsApi.getAgentKnowledge(editingId!),
+    enabled: !!editingId,
+    refetchInterval: (q) => {
+      const s = q.state.data?.discoveryStatus;
+      return s === 'queued' || s === 'running' ? 3000 : false;
+    },
+  });
+
+  useEffect(() => {
+    if (agentKnowledge?.manualInstructions != null) {
+      setManualDraft(agentKnowledge.manualInstructions);
+    }
+  }, [agentKnowledge?.manualInstructions, editingId]);
 
   const createMutation = useMutation({
     mutationFn: (body: CreateProjectBody) => projectsApi.create(body),
@@ -75,6 +92,20 @@ export default function ProjectsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   });
 
+  const saveAgentNotes = useMutation({
+    mutationFn: () => projectsApi.patchAgentKnowledge(editingId!, { manualInstructions: manualDraft }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectAgentKnowledge', editingId] });
+    },
+  });
+
+  const discoveryMutation = useMutation({
+    mutationFn: () => projectsApi.triggerDiscovery(editingId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectAgentKnowledge', editingId] });
+    },
+  });
+
   const startEdit = (p: ProjectDto) => {
     setEditingId(p.id);
     setForm({
@@ -88,12 +119,14 @@ export default function ProjectsPage() {
       testEmailProvider: p.testEmailProvider ?? '',
     });
     setShowPassword(false);
+    setManualDraft('');
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setForm({ ...emptyForm });
     setShowPassword(false);
+    setManualDraft('');
   };
 
   const submit = () => {
@@ -268,6 +301,66 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
+
+        {editingId && (
+          <div className="border border-gray-100 rounded-md p-4 space-y-3 bg-gray-50/50">
+            <p className="text-xs font-semibold text-gray-700">Agent knowledge (this project)</p>
+            <p className="text-[11px] text-gray-500">
+              Merged into recording AI, evaluations, and optimized prompts when a run uses this project. Discovery adds an automated map after you run it.
+            </p>
+            <textarea
+              value={manualDraft}
+              onChange={(e) => setManualDraft(e.target.value)}
+              rows={5}
+              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+              placeholder="Manual notes for agents (terminology, flaky areas, test data hints)…"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => saveAgentNotes.mutate()}
+                disabled={saveAgentNotes.isPending}
+                className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
+              >
+                Save agent notes
+              </button>
+              <span className="text-[11px] text-gray-500">
+                Discovery:{' '}
+                <span className="font-medium text-gray-700">
+                  {agentKnowledge?.discoveryStatus ?? '—'}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => discoveryMutation.mutate()}
+                disabled={
+                  discoveryMutation.isPending ||
+                  agentKnowledge?.discoveryStatus === 'running' ||
+                  agentKnowledge?.discoveryStatus === 'queued' ||
+                  form.kind !== 'WEB' ||
+                  !form.url?.trim()
+                }
+                className="px-3 py-1.5 text-sm bg-[#4B90FF] text-white rounded-md hover:bg-blue-500 disabled:opacity-40"
+              >
+                Run app discovery
+              </button>
+            </div>
+            {discoveryMutation.data && !discoveryMutation.data.accepted && discoveryMutation.data.reason && (
+              <p className="text-xs text-amber-700">{discoveryMutation.data.reason}</p>
+            )}
+            {agentKnowledge?.discoveryError && (
+              <p className="text-xs text-red-600">{agentKnowledge.discoveryError}</p>
+            )}
+            {agentKnowledge?.discoverySummaryMarkdown && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-gray-600 font-medium">Last discovery summary</summary>
+                <pre className="mt-2 p-3 bg-white border border-gray-100 rounded-md whitespace-pre-wrap text-gray-700 max-h-64 overflow-y-auto">
+                  {agentKnowledge.discoverySummaryMarkdown}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button

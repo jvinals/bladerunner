@@ -5,9 +5,10 @@ import { EvaluationOrchestratorService } from './evaluation-orchestrator.service
 import { RecordingModule } from '../recording/recording.module';
 import { LlmModule } from '../llm/llm.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AgentContextModule } from '../agent-context/agent-context.module';
 
 @Module({
-  imports: [PrismaModule, RecordingModule, LlmModule],
+  imports: [PrismaModule, RecordingModule, LlmModule, AgentContextModule],
   controllers: [EvaluationsController],
   providers: [EvaluationsService, EvaluationOrchestratorService],
   exports: [EvaluationsService],

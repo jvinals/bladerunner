@@ -67,6 +67,24 @@ export class SettingsService {
     return this.getSettings(userId);
   }
 
+  async getAgentContext(userId: string) {
+    const row = await this.prisma.userAgentContext.findUnique({ where: { userId } });
+    return { generalInstructions: row?.generalInstructions ?? '' };
+  }
+
+  async updateAgentContext(userId: string, data: { generalInstructions?: string }) {
+    const v = data.generalInstructions ?? '';
+    if (v.length > 16_000) {
+      throw new BadRequestException('generalInstructions exceeds maximum length');
+    }
+    await this.prisma.userAgentContext.upsert({
+      where: { userId },
+      create: { userId, generalInstructions: v },
+      update: { generalInstructions: v },
+    });
+    return this.getAgentContext(userId);
+  }
+
   private async applyLlmPatch(userId: string, llm: Record<string, unknown>): Promise<void> {
     const existing = await this.llmConfig.readUserLlmPreferencesJson(userId);
     const next: UserLlmPreferencesPayload = { ...existing };

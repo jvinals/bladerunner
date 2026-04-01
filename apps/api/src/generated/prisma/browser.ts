@@ -18,10 +18,20 @@ export { Prisma }
 export * as $Enums from './enums'
 export * from './enums';
 /**
+ * Model UserAgentContext
+ * Per-user default instructions merged into agent prompts (Settings).
+ */
+export type UserAgentContext = Prisma.UserAgentContextModel
+/**
  * Model Project
  * 
  */
 export type Project = Prisma.ProjectModel
+/**
+ * Model ProjectAgentKnowledge
+ * Per-project manual notes + discovery artifacts for agent injection.
+ */
+export type ProjectAgentKnowledge = Prisma.ProjectAgentKnowledgeModel
 /**
  * Model Run
  * 

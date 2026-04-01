@@ -58,7 +58,7 @@ import {
     },
   } as any;
 
-  const service = new RecordingService({} as any, {} as any, config) as any;
+  const service = new RecordingService({} as any, {} as any, config, {} as any) as any;
   const evidenceRef = await service.writeOptimizedPromptEvidence(
     'run-1',
     'user-1',

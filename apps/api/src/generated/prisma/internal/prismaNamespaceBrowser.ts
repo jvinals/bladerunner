@@ -51,7 +51,9 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
+  UserAgentContext: 'UserAgentContext',
   Project: 'Project',
+  ProjectAgentKnowledge: 'ProjectAgentKnowledge',
   Run: 'Run',
   AiVisualIdTest: 'AiVisualIdTest',
   RunCheckpoint: 'RunCheckpoint',
@@ -81,6 +83,15 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
+export const UserAgentContextScalarFieldEnum = {
+  userId: 'userId',
+  generalInstructions: 'generalInstructions',
+  updatedAt: 'updatedAt'
+} as const
+
+export type UserAgentContextScalarFieldEnum = (typeof UserAgentContextScalarFieldEnum)[keyof typeof UserAgentContextScalarFieldEnum]
+
+
 export const ProjectScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -97,6 +108,21 @@ export const ProjectScalarFieldEnum = {
 } as const
 
 export type ProjectScalarFieldEnum = (typeof ProjectScalarFieldEnum)[keyof typeof ProjectScalarFieldEnum]
+
+
+export const ProjectAgentKnowledgeScalarFieldEnum = {
+  projectId: 'projectId',
+  manualInstructions: 'manualInstructions',
+  discoveryStatus: 'discoveryStatus',
+  discoveryStartedAt: 'discoveryStartedAt',
+  discoveryCompletedAt: 'discoveryCompletedAt',
+  discoveryError: 'discoveryError',
+  discoverySummaryMarkdown: 'discoverySummaryMarkdown',
+  discoveryStructured: 'discoveryStructured',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProjectAgentKnowledgeScalarFieldEnum = (typeof ProjectAgentKnowledgeScalarFieldEnum)[keyof typeof ProjectAgentKnowledgeScalarFieldEnum]
 
 
 export const RunScalarFieldEnum = {

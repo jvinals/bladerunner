@@ -154,6 +154,25 @@ Run configuration (automatic sign-in):
 - Automatic sign-in for this evaluation has already completed for this run; normal "ask_human" rules apply (including new auth gates if needed).`;
 }
 
+function appendAgentContextUserBlock(baseUser: string, appendix?: string | null): string {
+  const a = appendix?.trim();
+  if (!a) return baseUser;
+  return `${baseUser}
+
+Agent instructions (workspace / project):
+${a}`;
+}
+
+const PROJECT_DISCOVERY_SYSTEM = `You document a web application for QA automation agents. The app is owned by the user for staging or demo testing; treat visible data as synthetic.
+
+Respond ONLY with valid JSON:
+{
+  "markdown": "<readable summary: product purpose, main areas, navigation, controls, tactical advice for Playwright agents>",
+  "structured": { "schemaVersion": 1, "routes": [ { "pathPattern": "...", "title": "...", "notes": "..." } ], "screens": [ { "id": "...", "title": "...", "pathPattern": "...", "notes": "...", "notableElements": [ "..." ] } ], "agentAdvice": [ "short bullets for automation" ] }
+}
+
+Ground the answer in the screenshot, Set-of-Marks manifest, and accessibility snapshot. Do not invent routes you cannot infer from the evidence; it is OK to note uncertainty.`;
+
 const EVALUATION_REPORT_SYSTEM = `You write structured evaluation reports for QA. The user tests their own applications; treat UI data as synthetic.
 
 Respond ONLY with valid JSON:
@@ -578,6 +597,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
       pageUrl: input.pageUrl,
       somManifest: input.somManifest,
       accessibilitySnapshot: input.accessibilitySnapshot,
+      agentContextBlock: input.agentContextBlock,
       failedPlaywrightCode: input.failedPlaywrightCode,
       recordedPlaywrightCode: input.recordedPlaywrightCode,
       priorFailureKind: input.priorFailureKind,
@@ -626,6 +646,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         somManifest: input.somManifest,
         accessibilitySnapshot: input.accessibilitySnapshot,
         draftPlaywrightCode,
+        agentContextBlock: input.agentContextBlock,
         failedPlaywrightCode: input.failedPlaywrightCode,
         recordedPlaywrightCode: input.recordedPlaywrightCode,
         priorFailureKind: input.priorFailureKind,
@@ -647,6 +668,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
               somManifest: input.somManifest,
               accessibilitySnapshot: input.accessibilitySnapshot,
               draftPlaywrightCode,
+              agentContextBlock: input.agentContextBlock,
               failedPlaywrightCode: input.failedPlaywrightCode,
               recordedPlaywrightCode: input.recordedPlaywrightCode,
               priorFailureKind: input.priorFailureKind,
@@ -668,6 +690,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
             somManifest: input.somManifest,
             accessibilitySnapshot: input.accessibilitySnapshot,
             draftPlaywrightCode,
+            agentContextBlock: input.agentContextBlock,
             failedPlaywrightCode: input.failedPlaywrightCode,
             recordedPlaywrightCode: input.recordedPlaywrightCode,
             priorFailureKind: input.priorFailureKind,
@@ -1003,6 +1026,8 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       autoSignInEnabled?: boolean;
       /** When true, automated sign-in already succeeded this run (`clerkFullSignInDone`). */
       autoSignInCompleted?: boolean;
+      /** Merged workspace + project + discovery instructions (when evaluation has a project). */
+      agentContextAppendix?: string;
     },
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{ stepTitle: string; thinking: string; playwrightCode: string; expectedOutcome: string }> {
@@ -1051,8 +1076,9 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       autoSignInEnabled,
       autoSignInCompleted,
     );
+    const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
     dbg?.('evaluation_codegen: user prompt assembled', {
-      userPromptChars: userWithAutoSignIn.length,
+      userPromptChars: userWithAgent.length,
       systemPromptChars: EVALUATION_CODEGEN_SYSTEM.length,
     });
     dbg?.('evaluation_codegen: invoking chatJson (JSON mode + vision)', { usageKey: 'evaluation_codegen' });
@@ -1061,7 +1087,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       'evaluation_codegen',
       [
         { role: 'system', content: EVALUATION_CODEGEN_SYSTEM },
-        { role: 'user', content: userWithAutoSignIn },
+        { role: 'user', content: userWithAgent },
       ],
       {
         imageBase64: input.screenshotBase64,
@@ -1114,6 +1140,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       accessibilitySnapshot: string;
       autoSignInEnabled?: boolean;
       autoSignInCompleted?: boolean;
+      agentContextAppendix?: string;
     },
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{
@@ -1167,8 +1194,9 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       autoSignInEnabled,
       autoSignInCompleted,
     );
+    const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
     dbg?.('evaluation_analyzer: invoking chatJson', {
-      userPromptChars: userWithAutoSignIn.length,
+      userPromptChars: userWithAgent.length,
       usageKey: 'evaluation_analyzer',
     });
     const res = await this.chatJson(
@@ -1176,7 +1204,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       'evaluation_analyzer',
       [
         { role: 'system', content: EVALUATION_ANALYZER_SYSTEM },
-        { role: 'user', content: userWithAutoSignIn },
+        { role: 'user', content: userWithAgent },
       ],
       {
         imageBase64: input.screenshotAfterBase64,
@@ -1222,6 +1250,68 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       ...(humanQuestion ? { humanQuestion } : {}),
       ...(humanOptions?.length ? { humanOptions } : {}),
     };
+  }
+
+  /**
+   * Initial project discovery: synthesize markdown + structured map from one captured page (MVP).
+   */
+  async projectDiscoverySynthesize(
+    input: {
+      projectName: string;
+      startUrl: string;
+      pageUrl: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
+      screenshotBase64: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{ markdown: string; structured: Record<string, unknown> }> {
+    const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
+      input.somManifest,
+      input.accessibilitySnapshot,
+    );
+    const user = `Project name: ${input.projectName}
+Start URL: ${input.startUrl}
+Current page URL: ${input.pageUrl}
+
+You are performing a first-pass discovery of a web app. This capture covers the initial page after load (and optional sign-in). Infer the product, navigation, and practical advice for automation.
+
+Interactive manifest (Set-of-Marks [n]):
+${somT || '(empty)'}
+
+Accessibility snapshot:
+${a11yT || '(empty)'}
+
+The attached image is a full-page Set-of-Marks screenshot.`;
+    const shot = input.screenshotBase64?.trim();
+    if (!shot) {
+      throw new Error('Project discovery requires a screenshot.');
+    }
+    const res = await this.chatJson(
+      opts?.userId,
+      'project_discovery',
+      [
+        { role: 'system', content: PROJECT_DISCOVERY_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      {
+        imageBase64: shot,
+        maxTokens: 8192,
+        temperature: 0.2,
+        signal: opts?.signal,
+      },
+    );
+    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
+    const structuredRaw = parsed.structured;
+    const structured =
+      typeof structuredRaw === 'object' && structuredRaw !== null && !Array.isArray(structuredRaw)
+        ? (structuredRaw as Record<string, unknown>)
+        : { schemaVersion: 1 };
+    if (!markdown) {
+      throw new Error('project_discovery returned empty markdown');
+    }
+    return { markdown, structured };
   }
 
   /**

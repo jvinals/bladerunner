@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Settings as SettingsIcon, Globe, Bot, Bell, Server,
   ExternalLink, Check, ChevronRight, Sparkles, PlugZap, RefreshCcw, ShieldCheck, KeyRound, BrainCircuit, Eye, Database, CircleCheckBig,
@@ -27,6 +28,7 @@ const LLM_USAGE_ROWS: { key: string; label: string }[] = [
   { key: 'evaluation_analyzer', label: 'Evaluation — analyze result and decide next action' },
   { key: 'evaluation_human_question', label: 'Evaluation — phrase human verification question' },
   { key: 'evaluation_report', label: 'Evaluation — final app report' },
+  { key: 'project_discovery', label: 'Project — app discovery (initial map + summary)' },
 ];
 
 type LlmProviderCapability = {
@@ -1060,6 +1062,23 @@ function IntegrationsSettings() {
 }
 
 function AgentsSettings() {
+  const queryClient = useQueryClient();
+  const { data: agentCtx } = useQuery({
+    queryKey: ['settingsAgentContext'],
+    queryFn: () => settingsApi.getAgentContext(),
+  });
+  const [generalDraft, setGeneralDraft] = useState('');
+  useEffect(() => {
+    if (agentCtx?.generalInstructions != null) setGeneralDraft(agentCtx.generalInstructions);
+  }, [agentCtx?.generalInstructions]);
+
+  const saveGeneral = useMutation({
+    mutationFn: () => settingsApi.patchAgentContext({ generalInstructions: generalDraft }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settingsAgentContext'] });
+    },
+  });
+
   const agents = [
     { name: 'Browser Agent — Chrome', type: 'browser', status: 'online', version: '1.2.0', capabilities: ['screenshot', 'interaction', 'visual_diff'] },
     { name: 'Mobile Agent — iOS Simulator', type: 'mobile', status: 'online', version: '1.1.0', capabilities: ['screenshot', 'gesture_replay', 'accessibility'] },
@@ -1068,6 +1087,30 @@ function AgentsSettings() {
 
   return (
     <div className="space-y-4">
+      <div className="bg-white border border-gray-100 rounded-lg p-5">
+        <p className="text-sm font-semibold text-gray-800 mb-1">General agent instructions</p>
+        <p className="text-xs text-gray-500 mb-3">
+          Applied to AI codegen and evaluations when no project-specific notes override them. Do not store secrets.
+        </p>
+        <textarea
+          value={generalDraft}
+          onChange={(e) => setGeneralDraft(e.target.value)}
+          rows={6}
+          className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400"
+          placeholder="e.g. Prefer neutral QA wording; our app uses a left nav and modal dialogs for confirmations…"
+        />
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => saveGeneral.mutate()}
+            disabled={saveGeneral.isPending}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#4B90FF] text-white text-sm font-medium rounded-md hover:bg-blue-500 disabled:opacity-40"
+          >
+            <Check size={14} /> Save instructions
+          </button>
+        </div>
+      </div>
+
       {agents.map((agent) => (
         <div key={agent.name} className="bg-white border border-gray-100 rounded-lg p-5">
           <div className="flex items-center justify-between mb-3">

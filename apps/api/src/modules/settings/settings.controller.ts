@@ -42,4 +42,16 @@ export class SettingsController {
   testProviderConnection(@Req() req: any, @Body() data: { providerId?: unknown; model?: unknown }) {
     return this.settingsService.testProviderConnection(req.user.sub, data);
   }
+
+  @Get('agent-context')
+  @ApiOperation({ summary: 'General agent instructions (user workspace)' })
+  getAgentContext(@Req() req: { user: { sub: string } }) {
+    return this.settingsService.getAgentContext(req.user.sub);
+  }
+
+  @Patch('agent-context')
+  @ApiOperation({ summary: 'Update general agent instructions' })
+  patchAgentContext(@Req() req: { user: { sub: string } }, @Body() body: { generalInstructions?: string }) {
+    return this.settingsService.updateAgentContext(req.user.sub, body);
+  }
 }

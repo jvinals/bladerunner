@@ -28,6 +28,7 @@ export async function generateNonGeminiVisionPlaywrightSnippet(params: {
     pageUrl: params.input.pageUrl,
     somManifest: params.input.somManifest,
     accessibilitySnapshot: params.input.accessibilitySnapshot,
+    agentContextBlock: params.input.agentContextBlock,
     failedPlaywrightCode: params.input.failedPlaywrightCode,
     recordedPlaywrightCode: params.input.recordedPlaywrightCode,
     priorFailureKind: params.input.priorFailureKind,
@@ -63,6 +64,7 @@ export async function verifyPlaywrightAgainstDomNonGemini(params: {
   somManifest: string;
   accessibilitySnapshot: string;
   draftPlaywrightCode: string;
+  agentContextBlock?: string;
   failedPlaywrightCode?: string;
   recordedPlaywrightCode?: string;
   priorFailureKind?: string;
@@ -75,6 +77,7 @@ export async function verifyPlaywrightAgainstDomNonGemini(params: {
     somManifest: params.somManifest,
     accessibilitySnapshot: params.accessibilitySnapshot,
     draftPlaywrightCode: params.draftPlaywrightCode,
+    agentContextBlock: params.agentContextBlock,
     failedPlaywrightCode: params.failedPlaywrightCode,
     recordedPlaywrightCode: params.recordedPlaywrightCode,
     priorFailureKind: params.priorFailureKind,

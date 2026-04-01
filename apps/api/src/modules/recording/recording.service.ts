@@ -23,6 +23,7 @@ import { Prisma, type RunStep } from '../../generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
+import { AgentContextService } from '../agent-context/agent-context.service';
 import { LlmService, type OptimizedPromptCompilerInput } from '../llm/llm.service';
 import type { AiPromptTestFailureHelp } from '../llm/llm.service';
 import { EventEmitter } from 'events';
@@ -319,12 +320,25 @@ type EvaluationLiveSession = {
   autoSignInCompleted?: boolean;
 };
 
+/** One-off project discovery browser — keyed by `discoverySessionId` (UUID per job). */
+type DiscoveryLiveSession = {
+  discoverySessionId: string;
+  userId: string;
+  browser: Browser;
+  page: Page;
+  cdpSession: CDPSession;
+  latestFrame: Buffer | null;
+  screencastVideo: ScreencastVideoEncoder | null;
+  screencastClosing?: boolean;
+};
+
 @Injectable()
 export class RecordingService extends EventEmitter {
   private readonly logger = new Logger(RecordingService.name);
   private sessions = new Map<string, RecordingSession>();
   private playbackSessions = new Map<string, PlaybackSession>();
   private evaluationSessions = new Map<string, EvaluationLiveSession>();
+  private discoverySessions = new Map<string, DiscoveryLiveSession>();
   /** Latest `evaluationProgress` payload per evaluation (for WebSocket join catch-up). */
   private lastEvaluationProgressById = new Map<string, Record<string, unknown>>();
   /** Real-time evaluation trace lines (orchestrator + LLM); capped for memory; join catch-up. */
@@ -343,6 +357,7 @@ export class RecordingService extends EventEmitter {
     private readonly prisma: PrismaService,
     private readonly llmService: LlmService,
     private readonly configService: ConfigService,
+    private readonly agentContextService: AgentContextService,
   ) {
     super();
   }
@@ -358,9 +373,15 @@ export class RecordingService extends EventEmitter {
   ): Promise<void> {
     let generated: { playwrightCode: string };
     try {
+      const runForProject = await this.prisma.run.findFirst({
+        where: { id: sourceRunId, userId: session.userId },
+        select: { projectId: true },
+      });
+      const projectId = runForProject?.projectId ?? null;
       generated = await this.runWithActivePlaybackStep(session, () =>
         this.playAiPromptStepOnPage(session.page, step.instruction, {
           userId: session.userId,
+          projectId,
           skipClickForce,
           progress: { runId: sourceRunId, stepId: step.id },
           phase: 'generateOnly',
@@ -452,9 +473,15 @@ export class RecordingService extends EventEmitter {
     if (!optimized?.canonical_playback_prompt?.trim()) {
       throw new Error('No optimized prompt available');
     }
+    const runForProject = await this.prisma.run.findFirst({
+      where: { id: sourceRunId, userId: session.userId },
+      select: { projectId: true },
+    });
+    const projectId = runForProject?.projectId ?? null;
     const generated = await this.runWithActivePlaybackStep(session, () =>
       this.playAiPromptStepOnPage(session.page, optimized.canonical_playback_prompt, {
         userId: session.userId,
+        projectId,
         skipClickForce,
         phase: 'generateOnly',
         repairContext: {
@@ -772,6 +799,156 @@ export class RecordingService extends EventEmitter {
     this.evaluationSessions.delete(evaluationId);
     this.lastEvaluationProgressById.delete(evaluationId);
     this.emit('status', evaluationId, { status: 'evaluation', evaluationId, phase: 'browser_stopped' });
+  }
+
+  /**
+   * Temporary browser for project discovery (no live stream room).
+   */
+  async startDiscoverySession(discoverySessionId: string, userId: string): Promise<void> {
+    if (this.discoverySessions.has(discoverySessionId)) {
+      throw new ConflictException('Discovery browser session already active');
+    }
+    const captureSettings = buildCaptureSettingsFromPresets({
+      viewportPreset: 'wxga',
+      streamQuality: 'high',
+      streamSmoothness: 'high',
+    });
+    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
+    const browser = await chromium.connect(wsEndpoint);
+    const ffmpegStagingPath = path.join(os.tmpdir(), `br-discovery-screencast-${discoverySessionId}-${randomUUID()}.mp4`);
+    const screencastVideo = createScreencastVideoEncoder(ffmpegStagingPath, this.logger);
+    try {
+      const context = await browser.newContext({
+        viewport: {
+          width: captureSettings.recordingViewportWidth,
+          height: captureSettings.recordingViewportHeight,
+        },
+        deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
+      });
+      const page = await context.newPage();
+      const cdpSession = await context.newCDPSession(page);
+      const session: DiscoveryLiveSession = {
+        discoverySessionId,
+        userId,
+        browser,
+        page,
+        cdpSession,
+        latestFrame: null,
+        screencastVideo,
+      };
+      this.discoverySessions.set(discoverySessionId, session);
+      await this.attachScreencast(session.cdpSession, session, discoverySessionId, captureSettings, {
+        onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
+      });
+    } catch (err) {
+      this.discoverySessions.delete(discoverySessionId);
+      screencastVideo?.kill();
+      await removePathIfExists(ffmpegStagingPath).catch(() => {});
+      try {
+        await browser.close();
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    }
+  }
+
+  async stopDiscoverySession(discoverySessionId: string, userId: string): Promise<void> {
+    const session = this.discoverySessions.get(discoverySessionId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+    const screencastVideo = session.screencastVideo;
+    session.screencastClosing = true;
+    try {
+      await session.cdpSession.send('Page.stopScreencast');
+    } catch (err) {
+      this.logger.warn(`discovery stopScreencast ${discoverySessionId}`, err);
+    }
+    if (screencastVideo) {
+      try {
+        await screencastVideo.finalize();
+      } catch (err) {
+        this.logger.warn(`discovery screencast finalize ${discoverySessionId}`, err);
+      }
+    }
+    try {
+      await session.browser.close();
+    } catch (err) {
+      this.logger.warn(`discovery browser close ${discoverySessionId}`, err);
+    }
+    this.discoverySessions.delete(discoverySessionId);
+  }
+
+  async captureDiscoveryLlmPageContext(
+    discoverySessionId: string,
+    userId: string,
+  ): Promise<{
+    pageUrl: string;
+    somManifest: string;
+    accessibilitySnapshot: string;
+    screenshotBase64: string | undefined;
+  }> {
+    const session = this.discoverySessions.get(discoverySessionId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('Discovery browser session not found');
+    }
+    const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
+    return {
+      pageUrl: ctx.pageUrl,
+      somManifest: ctx.somManifest,
+      accessibilitySnapshot: ctx.accessibilitySnapshot,
+      screenshotBase64: ctx.screenshotBase64,
+    };
+  }
+
+  async discoveryGoto(discoverySessionId: string, userId: string, url: string): Promise<void> {
+    const session = this.discoverySessions.get(discoverySessionId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('Discovery browser session not found');
+    }
+    await session.page.goto(url.trim(), { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  }
+
+  async discoveryWaitForDomContentLoaded(discoverySessionId: string, userId: string): Promise<void> {
+    const session = this.discoverySessions.get(discoverySessionId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+    await session.page.waitForLoadState('domcontentloaded').catch(() => {});
+  }
+
+  /**
+   * Optional Clerk / test-user sign-in during discovery (same assist as evaluations).
+   */
+  async maybeDiscoveryAutoSignInAssist(
+    discoverySessionId: string,
+    userId: string,
+    opts: {
+      runUrl: string;
+      projectForAuth: {
+        testUserEmail: string | null;
+        testUserPassword: string | null;
+        testEmailProvider: string | null;
+      } | null;
+      wantAuto: boolean;
+      clerkOtpMode: ClerkOtpMode;
+      state: { clerkFullSignInDone: boolean };
+    },
+  ): Promise<void> {
+    const session = this.discoverySessions.get(discoverySessionId);
+    if (!session || session.userId !== userId) {
+      return;
+    }
+    const projectAuth = this.projectAuthFromProject(opts.projectForAuth);
+    await this.maybePlaybackClerkAuthAssist(
+      { page: session.page, projectAuth },
+      opts.runUrl,
+      opts.wantAuto,
+      opts.clerkOtpMode,
+      opts.state,
+    );
   }
 
   /** For clients that join `run:<evaluationId>` after progress was already broadcast. */
@@ -1404,6 +1581,12 @@ export class RecordingService extends EventEmitter {
     const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } =
       await this.captureLlmPageContext(session.page);
 
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      select: { projectId: true },
+    });
+    const agentContextBlock = await this.agentContextService.getPromptInjectionBlock(userId, run?.projectId);
+
     const llmResult = await this.llmService.instructionToAction(
       {
         instruction,
@@ -1411,6 +1594,7 @@ export class RecordingService extends EventEmitter {
         somManifest,
         accessibilitySnapshot,
         screenshotBase64,
+        ...(agentContextBlock.trim() ? { agentContextBlock } : {}),
       },
       { userId },
     );
@@ -1476,6 +1660,12 @@ export class RecordingService extends EventEmitter {
     const { pageUrl, somManifest, accessibilitySnapshot, screenshotBase64 } =
       await this.captureLlmPageContext(session.page);
 
+    const run = await this.prisma.run.findFirst({
+      where: { id: runId, userId },
+      select: { projectId: true },
+    });
+    const agentContextBlock = await this.agentContextService.getPromptInjectionBlock(userId, run?.projectId);
+
     const llmResult = await this.llmService.instructionToAction(
       {
         instruction: trimmed,
@@ -1483,6 +1673,7 @@ export class RecordingService extends EventEmitter {
         somManifest,
         accessibilitySnapshot,
         screenshotBase64,
+        ...(agentContextBlock.trim() ? { agentContextBlock } : {}),
       },
       { userId },
     );
@@ -1899,6 +2090,12 @@ export class RecordingService extends EventEmitter {
           const state = await page.context().storageState();
           this.aiPromptPreTestSnapshots.set(this.aiPromptSnapshotKey(runId, stepId), { url, state });
 
+          const runRow = await this.prisma.run.findFirst({
+            where: { id: runId, userId },
+            select: { projectId: true },
+          });
+          const projectId = runRow?.projectId ?? null;
+
           let playwrightCode: string;
 
           if (apiPhase === 'run') {
@@ -1927,6 +2124,7 @@ export class RecordingService extends EventEmitter {
             lastAttemptedPlaywrightCode = pw;
             const runResult = await this.playAiPromptStepOnPage(page, instructionToRun, {
               userId,
+              projectId,
               skipClickForce: false,
               signal,
               progress: { runId, stepId },
@@ -1965,6 +2163,7 @@ export class RecordingService extends EventEmitter {
             const attemptPlayPhase = () =>
               this.playAiPromptStepOnPage(page, instructionToRun, {
                 userId,
+                projectId,
                 skipClickForce: false,
                 persistTranscript: { stepId, runId, userId, source: 'test' },
                 signal,
@@ -2523,12 +2722,19 @@ export class RecordingService extends EventEmitter {
     }
   }
 
-  private buildOptimizedPromptAppContext(run: {
-    id: string;
-    name: string;
-    url: string;
-    project?: { id: string; name?: string | null; kind?: string | null; url?: string | null } | null;
-  }): string {
+  private async buildOptimizedPromptAppContext(
+    run: {
+      id: string;
+      name: string;
+      url: string;
+      project?: { id: string; name?: string | null; kind?: string | null; url?: string | null } | null;
+    },
+    userId: string,
+  ): Promise<string> {
+    const agentFields = await this.agentContextService.getAppContextKnowledgeFields(
+      userId,
+      run.project?.id ?? null,
+    );
     return JSON.stringify(
       {
         runId: run.id,
@@ -2543,6 +2749,11 @@ export class RecordingService extends EventEmitter {
                 url: run.project.url ?? null,
               }
             : null,
+        agentKnowledge: {
+          general: agentFields.general,
+          projectManual: agentFields.projectManual,
+          discoverySummary: agentFields.discoverySummary,
+        },
       },
       null,
       2,
@@ -2638,7 +2849,7 @@ export class RecordingService extends EventEmitter {
       .filter(Boolean);
 
     const compilerInput: OptimizedPromptCompilerInput = {
-      appContext: this.buildOptimizedPromptAppContext(run),
+      appContext: await this.buildOptimizedPromptAppContext(run, userId),
       workflowContext: this.buildOptimizedPromptWorkflowContext(run, steps, current),
       stepId: current.id,
       stepIndex: current.sequence,
@@ -3230,6 +3441,8 @@ export class RecordingService extends EventEmitter {
     opts: {
       /** Clerk user id — selects per-user LLM model routing in Settings. */
       userId?: string;
+      /** When set (e.g. run linked to a project), merges project manual + discovery into codegen. */
+      projectId?: string | null;
       skipClickForce: boolean;
       signal?: AbortSignal;
       progress?: { runId: string; stepId: string };
@@ -3321,11 +3534,20 @@ export class RecordingService extends EventEmitter {
     }
     this.throwIfAborted(signal);
 
+    let agentContextBlock = '';
+    const uid = opts.userId ?? opts.persistTranscript?.userId;
+    if (uid) {
+      agentContextBlock = (
+        await this.agentContextService.getPromptInjectionBlock(uid, opts.projectId ?? null)
+      ).trim();
+    }
+
     const fullUserPrompt = buildGeminiInstructionPrompt({
       instruction: instruction.trim(),
       pageUrl,
       somManifest,
       accessibilitySnapshot,
+      ...(agentContextBlock ? { agentContextBlock } : {}),
       failedPlaywrightCode: opts.repairContext?.failedPlaywrightCode,
       recordedPlaywrightCode: opts.repairContext?.recordedPlaywrightCode,
       priorFailureKind: opts.repairContext?.priorFailureKind,
@@ -3341,6 +3563,7 @@ export class RecordingService extends EventEmitter {
         somManifest,
         accessibilitySnapshot,
         screenshotBase64,
+        ...(agentContextBlock ? { agentContextBlock } : {}),
         failedPlaywrightCode: opts.repairContext?.failedPlaywrightCode,
         recordedPlaywrightCode: opts.repairContext?.recordedPlaywrightCode,
         priorFailureKind: opts.repairContext?.priorFailureKind,

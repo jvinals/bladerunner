@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-01
+
+- `0.10.128`: **Agent knowledge framework** — per-user **general agent instructions** (Settings → Agents) and per-project **manual notes** + **app discovery** artifacts; API `GET`/`PATCH` `/settings/agent-context`, `GET`/`PATCH` `/projects/:id/agent-knowledge`, `POST` `/projects/:id/discovery`. Injected into **instruction-to-action** (recording AI), **evaluation** codegen/analyzer when a project is linked, and **optimized prompt** `appContext`. Discovery MVP: single-page capture + LLM synthesis into markdown + structured JSON; new LLM usage key `project_discovery`. `@bladerunner/api 0.6.105`, `@bladerunner/web 0.7.77`.
+
 ## 2026-03-31
 
 - `0.10.127`: **Evaluation detail** — **Run mode** (Normal vs Review) can be changed whenever **Start run** or **Re-run / Retry** is available, not only while `QUEUED`, so you can switch to **Normal (continuous)** before re-running after a review-mode run. Read-only run mode line only while a run is in progress and re-run is unavailable. `@bladerunner/web 0.7.76`.

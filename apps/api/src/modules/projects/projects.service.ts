@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
+import { CreateProjectDto, PatchAgentKnowledgeDto, UpdateProjectDto } from './projects.dto';
 
 const PROJECT_COLORS = [
   '#4B90FF', '#56A34A', '#EAB508', '#E05252',
@@ -69,5 +69,42 @@ export class ProjectsService {
     const existing = await this.findOne(id, userId);
     if (!existing) throw new NotFoundException(`Project ${id} not found`);
     await this.prisma.project.delete({ where: { id } });
+  }
+
+  async getAgentKnowledge(id: string, userId: string) {
+    const existing = await this.findOne(id, userId);
+    if (!existing) throw new NotFoundException(`Project ${id} not found`);
+    const k = await this.prisma.projectAgentKnowledge.findUnique({ where: { projectId: id } });
+    return {
+      projectId: id,
+      manualInstructions: k?.manualInstructions ?? null,
+      discoveryStatus: k?.discoveryStatus ?? 'idle',
+      discoveryStartedAt: k?.discoveryStartedAt?.toISOString() ?? null,
+      discoveryCompletedAt: k?.discoveryCompletedAt?.toISOString() ?? null,
+      discoveryError: k?.discoveryError ?? null,
+      discoverySummaryMarkdown: k?.discoverySummaryMarkdown ?? null,
+      discoveryStructured: k?.discoveryStructured ?? null,
+      updatedAt: k?.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  async patchAgentKnowledge(id: string, userId: string, dto: PatchAgentKnowledgeDto) {
+    const existing = await this.findOne(id, userId);
+    if (!existing) throw new NotFoundException(`Project ${id} not found`);
+    const manual = dto.manualInstructions;
+    if (manual != null && manual.length > 16_000) {
+      throw new BadRequestException('manualInstructions exceeds maximum length');
+    }
+    await this.prisma.projectAgentKnowledge.upsert({
+      where: { projectId: id },
+      create: {
+        projectId: id,
+        ...(manual !== undefined ? { manualInstructions: manual } : {}),
+      },
+      update: {
+        ...(manual !== undefined ? { manualInstructions: manual } : {}),
+      },
+    });
+    return this.getAgentKnowledge(id, userId);
   }
 }

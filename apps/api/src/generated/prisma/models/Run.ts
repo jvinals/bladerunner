@@ -804,10 +804,6 @@ export type NullableIntFieldUpdateOperationsInput = {
   divide?: number
 }
 
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
-}
-
 export type RunCreateNestedOneWithoutAiVisualIdTestsInput = {
   create?: Prisma.XOR<Prisma.RunCreateWithoutAiVisualIdTestsInput, Prisma.RunUncheckedCreateWithoutAiVisualIdTestsInput>
   connectOrCreate?: Prisma.RunCreateOrConnectWithoutAiVisualIdTestsInput

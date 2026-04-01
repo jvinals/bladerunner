@@ -34,6 +34,7 @@ const GEMINI_PAGE_URL_PLACEHOLDER = '[PAGE_URL]';
 const GEMINI_MANIFEST_PLACEHOLDER = '[INTERACTIVE_MANIFEST]';
 const GEMINI_ACCESSIBILITY_PLACEHOLDER = '[ACCESSIBILITY_TREE]';
 const GEMINI_REPAIR_CONTEXT_PLACEHOLDER = '[PLAYWRIGHT_REPAIR_CONTEXT]';
+const GEMINI_AGENT_CONTEXT_PLACEHOLDER = '[AGENT_CONTEXT]';
 
 export type GeminiVisionPromptInput = {
   instruction: string;
@@ -42,6 +43,8 @@ export type GeminiVisionPromptInput = {
   somManifest: string;
   /** Playwright CDP accessibility snapshot JSON (+ enrichment). */
   accessibilitySnapshot: string;
+  /** Optional merged user + project + discovery instructions from Settings / project knowledge. */
+  agentContextBlock?: string;
   failedPlaywrightCode?: string;
   recordedPlaywrightCode?: string;
   priorFailureKind?: string;
@@ -56,6 +59,9 @@ I am attaching a Set-of-Marks screenshot of the full scrollable page: high-contr
 
 Page URL:
 ${GEMINI_PAGE_URL_PLACEHOLDER}
+
+Agent instructions (workspace / project; apply when relevant; may be empty):
+${GEMINI_AGENT_CONTEXT_PLACEHOLDER}
 
 Task to perform:
 ${GEMINI_INSTRUCTION_ACTION_PLACEHOLDER}
@@ -132,8 +138,10 @@ export function buildGeminiInstructionPrompt(input: GeminiVisionPromptInput | st
   ]
     .filter(Boolean)
     .join('\n\n');
+  const agentCtx = resolved.agentContextBlock?.trim() ? resolved.agentContextBlock.trim() : '(none)';
   return GEMINI_INSTRUCTION_TEMPLATE.replace(GEMINI_INSTRUCTION_ACTION_PLACEHOLDER, action)
     .replace(GEMINI_PAGE_URL_PLACEHOLDER, url)
+    .replace(GEMINI_AGENT_CONTEXT_PLACEHOLDER, agentCtx)
     .replace(GEMINI_MANIFEST_PLACEHOLDER, manifestBlock)
     .replace(GEMINI_ACCESSIBILITY_PLACEHOLDER, a11yBlock)
     .replace(GEMINI_REPAIR_CONTEXT_PLACEHOLDER, repairContext || '(none)');
@@ -147,6 +155,7 @@ const GEMINI_VERIFY_SOM = '[SOM_MANIFEST]';
 const GEMINI_VERIFY_A11Y = '[ACCESSIBILITY_TREE]';
 const GEMINI_VERIFY_DRAFT = '[DRAFT_PLAYWRIGHT]';
 const GEMINI_VERIFY_REPAIR_CONTEXT = '[PLAYWRIGHT_REPAIR_CONTEXT]';
+const GEMINI_VERIFY_AGENT_CONTEXT = '[AGENT_CONTEXT]';
 
 const GEMINI_VERIFY_TEMPLATE = `You are an expert Playwright automation engineer performing a verification pass (no image).
 
@@ -160,6 +169,9 @@ Rules:
 
 Page URL:
 ${GEMINI_VERIFY_PAGE_URL}
+
+Agent instructions (workspace / project; may be empty):
+${GEMINI_VERIFY_AGENT_CONTEXT}
 
 Task:
 ${GEMINI_VERIFY_TASK}
@@ -183,6 +195,7 @@ export function buildGeminiVerifyPrompt(input: {
   somManifest: string;
   accessibilitySnapshot: string;
   draftPlaywrightCode: string;
+  agentContextBlock?: string;
   failedPlaywrightCode?: string;
   recordedPlaywrightCode?: string;
   priorFailureKind?: string;
@@ -206,7 +219,9 @@ export function buildGeminiVerifyPrompt(input: {
   ]
     .filter(Boolean)
     .join('\n\n');
+  const agentCtx = input.agentContextBlock?.trim() ? input.agentContextBlock.trim() : '(none)';
   return GEMINI_VERIFY_TEMPLATE.replace(GEMINI_VERIFY_PAGE_URL, url)
+    .replace(GEMINI_VERIFY_AGENT_CONTEXT, agentCtx)
     .replace(GEMINI_VERIFY_TASK, input.instruction.trim())
     .replace(GEMINI_VERIFY_SOM, som.length ? som : '(none)')
     .replace(GEMINI_VERIFY_A11Y, a11y.length ? a11y : '(none)')
@@ -222,6 +237,7 @@ export async function verifyGeminiPlaywrightAgainstDom(params: {
   somManifest: string;
   accessibilitySnapshot: string;
   draftPlaywrightCode: string;
+  agentContextBlock?: string;
   failedPlaywrightCode?: string;
   recordedPlaywrightCode?: string;
   priorFailureKind?: string;

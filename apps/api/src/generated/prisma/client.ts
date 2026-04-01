@@ -29,8 +29,8 @@ export * from "./enums"
  * const prisma = new PrismaClient({
  *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
  * })
- * // Fetch zero or more Projects
- * const projects = await prisma.project.findMany()
+ * // Fetch zero or more UserAgentContexts
+ * const userAgentContexts = await prisma.userAgentContext.findMany()
  * ```
  * 
  * Read more in our [docs](https://pris.ly/d/client).
@@ -40,10 +40,20 @@ export type PrismaClient<LogOpts extends Prisma.LogLevel = never, OmitOpts exten
 export { Prisma }
 
 /**
+ * Model UserAgentContext
+ * Per-user default instructions merged into agent prompts (Settings).
+ */
+export type UserAgentContext = Prisma.UserAgentContextModel
+/**
  * Model Project
  * 
  */
 export type Project = Prisma.ProjectModel
+/**
+ * Model ProjectAgentKnowledge
+ * Per-project manual notes + discovery artifacts for agent injection.
+ */
+export type ProjectAgentKnowledge = Prisma.ProjectAgentKnowledgeModel
 /**
  * Model Run
  * 

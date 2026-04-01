@@ -141,7 +141,7 @@ async function main() {
     },
   };
 
-  const service = new RecordingService(prisma, {} as any, config as any);
+  const service = new RecordingService(prisma, {} as any, config as any, {} as any);
   (service as any).waitForOptimizedPromptTasks = async () => {};
   (service as any).refreshOptimizedPromptsForRun = async () => {};
   (service as any).clearOptimizedPromptTasksForRun = () => {};
