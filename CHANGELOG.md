@@ -2,6 +2,8 @@
 
 ## 2026-03-31
 
+- `0.10.127`: **Evaluation detail** — **Run mode** (Normal vs Review) can be changed whenever **Start run** or **Re-run / Retry** is available, not only while `QUEUED`, so you can switch to **Normal (continuous)** before re-running after a review-mode run. Read-only run mode line only while a run is in progress and re-run is unavailable. `@bladerunner/web 0.7.76`.
+
 - `0.10.126`: **Evaluations** — **codegen** and **analyzer** LLM user prompts include **automatic sign-in** run flags (`autoSignInEnabled` / `autoSignInCompleted`); prompts steer away from **ask human** for credential walls and from Playwright that types secrets while sign-in is still pending. **Orchestrator** coerces **ask_human → retry** when auto sign-in is on and sign-in is not done yet. Persisted step JSON includes the same flags. `@bladerunner/api 0.6.104`.
 
 - `0.10.125`: **Evaluations** — **auto sign-in** runs **only while sign-in has not yet succeeded** (`!clerkFullSignInDone`): each step can be the one that lands on login (step 1, 2, …). **Playback** logic only acts when the page looks like sign-in; after success the flag is set and **orchestrator stops calling** `maybeEvaluationAutoSignInAssist`. Completion is **persisted on the evaluation browser session** so **resume after human/review** does not retry sign-in. **OTP-only** Clerk assist now sets **`clerkFullSignInDone`** after filling OTP. `@bladerunner/api 0.6.103`.

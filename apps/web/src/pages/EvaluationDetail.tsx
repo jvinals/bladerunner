@@ -628,6 +628,8 @@ export default function EvaluationDetailPage() {
     ev.status === 'WAITING_FOR_HUMAN' ||
     ev.status === 'WAITING_FOR_REVIEW';
   const runMode = ev.runMode ?? 'continuous';
+  /** Allow choosing Normal vs Review before Start, or before Re-run / Retry (not only while QUEUED). Otherwise a prior step_review run could not be switched to continuous without editing DB. */
+  const canPickRunMode = ev.status === 'QUEUED' || canReprocess;
   const canContinueReview = ev.status === 'WAITING_FOR_REVIEW' && runMode === 'step_review';
   const showHuman =
     ev.status === 'WAITING_FOR_HUMAN' && pendingQuestion && parseOptions(pendingQuestion).length > 0;
@@ -848,7 +850,7 @@ export default function EvaluationDetailPage() {
             )}
           </div>
 
-          {ev.status === 'QUEUED' && (
+          {canPickRunMode && (
             <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2 text-sm">
               <span className="text-xs font-medium text-gray-500 block mb-2">Run mode</span>
               <div className="flex flex-wrap gap-4">
@@ -871,9 +873,14 @@ export default function EvaluationDetailPage() {
                   <span>Review — pause after each step (Continue to advance)</span>
                 </label>
               </div>
+              {ev.status !== 'QUEUED' && (
+                <p className="text-[11px] text-gray-500 mt-2">
+                  Applies when you start or re-run this evaluation (only pauses for human questions in Normal mode).
+                </p>
+              )}
             </div>
           )}
-          {ev.status !== 'QUEUED' && (
+          {!canPickRunMode && (
             <p className="text-xs text-gray-500">
               Run mode:{' '}
               <strong>{runMode === 'step_review' ? 'Review (step-by-step)' : 'Normal (continuous)'}</strong>
