@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, PatchAgentKnowledgeDto, UpdateProjectDto } from './projects.dto';
+import { ProjectDiscoveryService } from './project-discovery.service';
 
 const PROJECT_COLORS = [
   '#4B90FF', '#56A34A', '#EAB508', '#E05252',
@@ -11,7 +12,10 @@ const PROJECT_COLORS = [
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectDiscovery: ProjectDiscoveryService,
+  ) {}
 
   findAll(userId: string) {
     return this.prisma.project.findMany({
@@ -75,7 +79,36 @@ export class ProjectsService {
   async getAgentKnowledge(id: string, userId: string) {
     const existing = await this.findOne(id, userId);
     if (!existing) throw new NotFoundException(`Project ${id} not found`);
-    const k = await this.prisma.projectAgentKnowledge.findUnique({ where: { projectId: id } });
+    let k = await this.prisma.projectAgentKnowledge.findUnique({ where: { projectId: id } });
+    const st = k?.discoveryStatus;
+    const looksActive = st === 'queued' || st === 'running';
+    const busyHere = this.projectDiscovery.isDiscoveryBusy(id);
+    if (looksActive && !busyHere) {
+      // #region agent log
+      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+        body: JSON.stringify({
+          sessionId: 'ba63e6',
+          location: 'projects.service.ts:getAgentKnowledge',
+          message: 'reconcile stale discovery (db active, not busy in-process)',
+          data: { projectId: id, dbStatus: st },
+          timestamp: Date.now(),
+          hypothesisId: 'H-stale',
+        }),
+      }).catch(() => {});
+      // #endregion
+      const errMsg =
+        'Discovery was interrupted (server restart or process ended). Run app discovery again.';
+      k = await this.prisma.projectAgentKnowledge.update({
+        where: { projectId: id },
+        data: {
+          discoveryStatus: 'failed',
+          discoveryCompletedAt: new Date(),
+          discoveryError: errMsg,
+        },
+      });
+    }
     return {
       projectId: id,
       manualInstructions: k?.manualInstructions ?? null,

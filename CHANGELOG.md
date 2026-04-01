@@ -2,6 +2,12 @@
 
 ## 2026-04-01
 
+- `0.10.147`: **Run app discovery stuck spinner** — if agent knowledge still shows **queued/running** after an API restart while no job runs in-process, **`GET /projects/:id/agent-knowledge`** reconciles to **failed** with a clear error so the button is usable again. `@bladerunner/api 0.6.115`.
+
+- `0.10.146`: **Discovery depth + map + scroll** — explorer prompts: infer **deeper levels** from manifest/a11y; note server **pre-scroll**. **Visited screens** + nav tree use **URL + normalized title** (`discoveryScreenKey`) so SPAs add Mermaid nodes; **Mermaid** labels show **title · pathname** and **dedupe edges**. Before each discovery capture: **scroll** document + overflow regions. `@bladerunner/api 0.6.114`.
+
+- `0.10.145`: **Discovery agent log — LLM transcripts** — each **`project_discovery`** call (explore / retry / final synthesis) emits **`detail.llm`** with **SENT** (system + user prompts, optional screenshot base64 up to a size cap) and **RECEIVED** (raw model JSON + optional thinking). Web UI: **expandable row** with nested collapsibles; long text / large fields use **View full** → modal; screenshot uses **View screenshot** → modal. `@bladerunner/api 0.6.113`, `@bladerunner/web 0.7.90`.
+
 - `0.10.144`: **Discovery navigation** — explorer prompt + user message: explicit **back / home / `page.goto(baseUrl)`** recovery order, **breadth** across primary sections (checklist from tree), target **depth 4–5** per area; tree summary lists **top-level areas seen**. Session **`ba63e6`** ingest logs (H1–H3) for subsectionComplete / goBack / goto / top-level counts until verified. `@bladerunner/api 0.6.112`.
 
 - `0.10.143`: **Discovery** — removed temporary debug ingest (`ba63e6`) from `project-discovery.service.ts` after verification. `@bladerunner/api 0.6.111`.

@@ -35,6 +35,11 @@ export class ProjectDiscoveryService {
     private readonly llm: LlmService,
   ) {}
 
+  /** True when this Node process has an in-flight discovery job (lost on restart; DB may still say queued/running). */
+  isDiscoveryBusy(projectId: string): boolean {
+    return this.busy.has(projectId);
+  }
+
   /**
    * @returns 202-style payload; runs async in-process.
    */
