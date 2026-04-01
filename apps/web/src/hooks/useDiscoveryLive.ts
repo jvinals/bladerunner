@@ -34,6 +34,19 @@ function formatLogTime(iso: string): string {
   }
 }
 
+/** One log entry as a single line (timestamp — message [detail JSON]). */
+export function formatDiscoveryLogSingleLine(
+  line: DiscoveryLogLine,
+  formatTime: (iso: string) => string,
+): string {
+  const msg = (line.message ?? '').replace(/\s+/g, ' ').trim();
+  const detail =
+    line.detail != null && Object.keys(line.detail).length > 0
+      ? ` ${JSON.stringify(line.detail)}`
+      : '';
+  return `${formatTime(line.at)} — ${msg}${detail}`;
+}
+
 /**
  * Live browser preview + discovery agent log during Run app discovery (join `run:discovery-${projectId}`).
  */

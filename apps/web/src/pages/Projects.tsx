@@ -9,7 +9,7 @@ import {
   TEST_EMAIL_PROVIDERS,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
-import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { formatDiscoveryLogSingleLine, useDiscoveryLive } from '@/hooks/useDiscoveryLive';
 import {
   FolderKanban,
   Plus,
@@ -585,20 +585,18 @@ export default function ProjectsPage() {
                             : 'Start discovery to see a timestamped log of each step.'}
                         </p>
                       ) : (
-                        discoveryLogLines.map((line, i) => (
-                          <div
-                            key={`${line.at}-${i}`}
-                            className="border-b border-gray-100 pb-1.5 mb-1.5 last:border-0 last:mb-0"
-                          >
-                            <div className="text-gray-500 tabular-nums">{formatDiscoveryLogTime(line.at)}</div>
-                            <div className="text-gray-800 whitespace-pre-wrap break-words">{line.message}</div>
-                            {line.detail != null && Object.keys(line.detail).length > 0 && (
-                              <pre className="text-[9px] text-gray-500 mt-0.5 whitespace-pre-wrap break-all max-h-24 overflow-y-auto">
-                                {JSON.stringify(line.detail)}
-                              </pre>
-                            )}
-                          </div>
-                        ))
+                        discoveryLogLines.map((line, i) => {
+                          const oneLine = formatDiscoveryLogSingleLine(line, formatDiscoveryLogTime);
+                          return (
+                            <div
+                              key={`${line.at}-${i}`}
+                              className="font-mono text-[10px] leading-tight border-b border-gray-100 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-800"
+                              title={oneLine}
+                            >
+                              {oneLine}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>

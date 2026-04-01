@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { formatDiscoveryLogSingleLine, useDiscoveryLive } from '@/hooks/useDiscoveryLive';
 
 /**
  * Full-window live JPEG stream + discovery agent log (join `run:discovery-${projectId}`).
@@ -46,17 +46,18 @@ export default function DetachedDiscoveryPreview() {
             {logLines.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No log lines yet.</p>
             ) : (
-              logLines.map((line, i) => (
-                <div key={`${line.at}-${i}`} className="border-b border-gray-700/80 pb-1.5 mb-1.5 last:border-0">
-                  <div className="text-gray-500 tabular-nums">{formatLogTime(line.at)}</div>
-                  <div className="text-gray-200 whitespace-pre-wrap break-words">{line.message}</div>
-                  {line.detail != null && Object.keys(line.detail).length > 0 && (
-                    <pre className="text-[9px] text-gray-500 mt-0.5 whitespace-pre-wrap break-all max-h-20 overflow-y-auto">
-                      {JSON.stringify(line.detail)}
-                    </pre>
-                  )}
-                </div>
-              ))
+              logLines.map((line, i) => {
+                const oneLine = formatDiscoveryLogSingleLine(line, formatLogTime);
+                return (
+                  <div
+                    key={`${line.at}-${i}`}
+                    className="font-mono text-[10px] leading-tight border-b border-gray-700/80 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-200"
+                    title={oneLine}
+                  >
+                    {oneLine}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
