@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsObject, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export enum ProjectKindDto {
   WEB = 'WEB',
@@ -66,6 +66,19 @@ export class PatchAgentKnowledgeDto {
   @IsString()
   @MaxLength(16000)
   manualInstructions?: string | null;
+
+  @ApiPropertyOptional({ description: 'Editable discovery summary markdown (after a run completes)' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(120_000)
+  discoverySummaryMarkdown?: string | null;
+
+  @ApiPropertyOptional({ description: 'Editable structured discovery JSON (object); null clears' })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsObject()
+  discoveryStructured?: Record<string, unknown> | null;
 }
 
 export class UpdateProjectDto {

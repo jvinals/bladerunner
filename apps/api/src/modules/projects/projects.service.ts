@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, PatchAgentKnowledgeDto, UpdateProjectDto } from './projects.dto';
 
@@ -95,14 +96,32 @@ export class ProjectsService {
     if (manual != null && manual.length > 16_000) {
       throw new BadRequestException('manualInstructions exceeds maximum length');
     }
+    const discMd = dto.discoverySummaryMarkdown;
+    if (discMd != null && discMd.length > 120_000) {
+      throw new BadRequestException('discoverySummaryMarkdown exceeds maximum length');
+    }
     await this.prisma.projectAgentKnowledge.upsert({
       where: { projectId: id },
       create: {
         projectId: id,
         ...(manual !== undefined ? { manualInstructions: manual } : {}),
+        ...(discMd !== undefined ? { discoverySummaryMarkdown: discMd } : {}),
+        ...(dto.discoveryStructured !== undefined
+          ? {
+              discoveryStructured:
+                dto.discoveryStructured === null ? Prisma.JsonNull : (dto.discoveryStructured as object),
+            }
+          : {}),
       },
       update: {
         ...(manual !== undefined ? { manualInstructions: manual } : {}),
+        ...(discMd !== undefined ? { discoverySummaryMarkdown: discMd } : {}),
+        ...(dto.discoveryStructured !== undefined
+          ? {
+              discoveryStructured:
+                dto.discoveryStructured === null ? Prisma.JsonNull : (dto.discoveryStructured as object),
+            }
+          : {}),
       },
     });
     return this.getAgentKnowledge(id, userId);

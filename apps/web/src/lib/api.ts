@@ -483,7 +483,14 @@ export const projectsApi = {
       method: 'DELETE',
     }),
   getAgentKnowledge: (id: string) => apiFetch<ProjectAgentKnowledgeDto>(`/projects/${id}/agent-knowledge`),
-  patchAgentKnowledge: (id: string, body: { manualInstructions?: string | null }) =>
+  patchAgentKnowledge: (
+    id: string,
+    body: {
+      manualInstructions?: string | null;
+      discoverySummaryMarkdown?: string | null;
+      discoveryStructured?: Record<string, unknown> | null;
+    },
+  ) =>
     apiFetch<ProjectAgentKnowledgeDto>(`/projects/${id}/agent-knowledge`, {
       method: 'PATCH',
       body: JSON.stringify(body),
