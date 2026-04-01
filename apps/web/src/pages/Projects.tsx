@@ -531,7 +531,7 @@ export default function ProjectsPage() {
               </div>
 
               {editingId && (
-                <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
+                <div className="rounded-md border border-gray-200 bg-white overflow-hidden max-w-xs w-full mx-auto">
                   <div className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border-b border-gray-200">
                     <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Live browser</span>
                     <div className="flex items-center gap-2">
