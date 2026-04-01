@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.137`: **Projects** — **Discovery agent log** panel is **wider** (`min-w-[30rem]`, flex grow) and **taller** (**320px** row height, matching live preview); section uses **`max-w-6xl`**. Detached preview log column **`min(40rem,48vw)`**. `@bladerunner/web 0.7.85`.
+
 - `0.10.136`: **Projects / detached discovery** — **Discovery agent log** panel to the **right** of the inline **Live browser** (timestamped lines + optional JSON detail); WebSocket **`discoveryDebugLog`** / **`discoveryDebugLogBatch`** via `useDiscoveryLive`. Detached preview shows the same log. `@bladerunner/web 0.7.84`.
 
 - `0.10.135`: **Run app discovery** — **longer crawl** (**80** steps, **30 min** wall clock for exploration); **minimum coverage budget** before honoring model stop (**28** executed steps **or** **14** distinct normalized URLs) unless blocked; up to **2** continuation retries with a forced prompt when the model stops early; **stricter explorer system prompt** (breadth-first, no “sufficiently explored” before budget); **5** consecutive Playwright failures before abort; **900ms** settle between steps. `@bladerunner/api 0.6.108`, `@bladerunner/web 0.7.83`.

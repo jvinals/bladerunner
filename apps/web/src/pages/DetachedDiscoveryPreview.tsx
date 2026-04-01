@@ -36,7 +36,7 @@ export default function DetachedDiscoveryPreview() {
             </p>
           )}
         </div>
-        <div className="w-full md:w-[min(28rem,40vw)] shrink-0 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col bg-gray-950 min-h-[12rem] md:min-h-0">
+        <div className="w-full md:w-[min(40rem,48vw)] shrink-0 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col bg-gray-950 min-h-[16rem] md:min-h-0">
           <div className="px-3 py-2 bg-gray-800 border-b border-gray-700">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
               Discovery agent log

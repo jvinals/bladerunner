@@ -534,7 +534,7 @@ export default function ProjectsPage() {
               </div>
 
               {editingId && (
-                <div className="flex flex-col md:flex-row gap-2 w-full max-w-4xl mx-auto">
+                <div className="flex flex-col md:flex-row gap-3 w-full max-w-6xl mx-auto">
                   <div className="rounded-md border border-gray-200 bg-white overflow-hidden flex-1 min-w-0 max-w-md md:max-w-none">
                     <div className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border-b border-gray-200">
                       <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
@@ -556,12 +556,12 @@ export default function ProjectsPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="relative w-full aspect-video max-h-[220px] bg-gray-950 flex items-center justify-center">
+                    <div className="relative w-full aspect-video max-h-[320px] bg-gray-950 flex items-center justify-center">
                       {discoveryFrameUrl ? (
                         <img
                           src={discoveryFrameUrl}
                           alt=""
-                          className="w-full h-full max-h-[220px] object-contain"
+                          className="w-full h-full max-h-[320px] object-contain"
                         />
                       ) : (
                         <p className="text-[11px] text-gray-500 px-3 text-center">
@@ -572,7 +572,7 @@ export default function ProjectsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="rounded-md border border-gray-200 bg-white overflow-hidden flex flex-col flex-1 min-w-0 min-h-[180px] md:min-h-0 md:h-[220px] md:max-w-[min(50%,22rem)]">
+                  <div className="rounded-md border border-gray-200 bg-white overflow-hidden flex flex-col flex-1 min-w-0 min-h-[240px] md:min-h-0 md:h-[320px] md:min-w-[30rem] md:flex-[1.15] md:max-w-none">
                     <div className="px-2.5 py-1.5 bg-gray-50 border-b border-gray-200 shrink-0">
                       <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                         Discovery agent log
