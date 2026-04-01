@@ -6,9 +6,15 @@ import { randomUUID } from 'node:crypto';
 import { sleepMs } from '@bladerunner/clerk-agentmail-signin';
 
 /** Max LLM-driven exploration steps (each may execute one Playwright snippet). */
-const DISCOVERY_MAX_EXPLORATION_STEPS = 40;
-/** Wall-clock cap for exploration + synthesis. */
-const DISCOVERY_MAX_WALL_MS = 12 * 60 * 1000;
+const DISCOVERY_MAX_EXPLORATION_STEPS = 80;
+/** Wall-clock cap for exploration (auth + final LLM synthesis are outside this window). */
+const DISCOVERY_MAX_WALL_MS = 30 * 60 * 1000;
+/** Do not honor model "stop" until this many steps have executed (unless blocked). */
+const DISCOVERY_MIN_STEPS_BEFORE_STOP = 28;
+/** Or until this many distinct normalized URLs have been seen. */
+const DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP = 14;
+/** Extra vision calls when the model stops before the budget. */
+const DISCOVERY_EXPLORE_MAX_RETRIES = 2;
 
 function normalizeDiscoveryUrlForDedup(url: string): string {
   try {
@@ -120,7 +126,7 @@ export class ProjectDiscoveryService {
       /** Let SPAs hydrate after auth before exploration. */
       await sleepMs(2500);
 
-      /** Exploration-only wall clock (auth + settle do not count toward the 12 min crawl cap). */
+      /** Exploration-only wall clock (auth + settle do not count toward the crawl cap). */
       const explorationStartedAt = Date.now();
       const authContextSummary = project.testUserEmail?.trim()
         ? `Test email configured (automatic sign-in attempted). Email provider: ${project.testEmailProvider ?? 'default'}. Password ${project.testUserPassword?.trim() ? 'configured' : 'not set'}.`
@@ -140,24 +146,52 @@ export class ProjectDiscoveryService {
         const visitedScreensSoFar = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
         const uniqNorm = new Set(visitedScreensSoFar.map((v) => normalizeDiscoveryUrlForDedup(v.url)));
 
-        const plan = await this.llm.projectDiscoveryExploreStep(
-          {
-            baseUrl: project.url.trim(),
-            authContextSummary,
-            maxNavigations: DISCOVERY_MAX_EXPLORATION_STEPS,
-            maxWallMs: DISCOVERY_MAX_WALL_MS,
-            elapsedMs,
-            stepIndex,
-            navigationsSoFar: uniqNorm.size,
-            visitedUrlsSample: [...uniqNorm],
-            pageUrl: ctx.pageUrl,
-            pageTitle: ctx.pageTitle,
-            somManifest: ctx.somManifest,
-            accessibilitySnapshot: ctx.accessibilitySnapshot,
-            screenshotBase64: shot,
-          },
-          { userId },
-        );
+        const exploreBase = {
+          baseUrl: project.url.trim(),
+          authContextSummary,
+          maxNavigations: DISCOVERY_MAX_EXPLORATION_STEPS,
+          maxWallMs: DISCOVERY_MAX_WALL_MS,
+          elapsedMs,
+          stepIndex,
+          navigationsSoFar: uniqNorm.size,
+          minStepsBeforeStop: DISCOVERY_MIN_STEPS_BEFORE_STOP,
+          minDistinctUrlsBeforeStop: DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP,
+          visitedUrlsSample: [...uniqNorm],
+          pageUrl: ctx.pageUrl,
+          pageTitle: ctx.pageTitle,
+          somManifest: ctx.somManifest,
+          accessibilitySnapshot: ctx.accessibilitySnapshot,
+          screenshotBase64: shot,
+        };
+
+        let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, { userId });
+
+        for (let r = 0; r < DISCOVERY_EXPLORE_MAX_RETRIES; r++) {
+          const valid = !plan.stop && !!plan.playwrightCode?.trim();
+          if (valid) {
+            break;
+          }
+          const underBudget =
+            stepIndex < DISCOVERY_MIN_STEPS_BEFORE_STOP && uniqNorm.size < DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP;
+          const wallRemainingMs = DISCOVERY_MAX_WALL_MS - (Date.now() - explorationStartedAt);
+          if (!underBudget || wallRemainingMs < 120_000) {
+            break;
+          }
+          this.logger.warn(
+            `Discovery: retrying explore after premature stop (project ${projectId}, completedSteps=${stepIndex}, urls=${uniqNorm.size}, retry ${r + 1})`,
+          );
+          explorationLogLines.push(
+            `Premature stop or empty code — retry ${r + 1}/${DISCOVERY_EXPLORE_MAX_RETRIES}: ${plan.reason}`,
+          );
+          plan = await this.llm.projectDiscoveryExploreStep(
+            {
+              ...exploreBase,
+              continuationHint:
+                'You are below the minimum exploration budget. Do not stop. Open a different major area: pick a visible sidebar, top nav, or menu destination you have not followed yet; or open one list row / primary action on the current screen. Prefer breadth across product areas. Return stop=false with one playwrightCode line.',
+            },
+            { userId },
+          );
+        }
 
         if (plan.stop || !plan.playwrightCode?.trim()) {
           explorationLogLines.push(`Explore stop at step ${stepIndex + 1}: ${plan.reason}`);
@@ -180,14 +214,14 @@ export class ProjectDiscoveryService {
           consecutiveFailures += 1;
           const msg = err instanceof Error ? err.message : String(err);
           explorationLogLines.push(`Step ${stepIndex + 1} FAILED: ${msg}`);
-          if (consecutiveFailures >= 3) {
-            explorationLogLines.push('Aborted exploration after 3 consecutive failures.');
+          if (consecutiveFailures >= 5) {
+            explorationLogLines.push('Aborted exploration after 5 consecutive failures.');
             break;
           }
         }
 
         await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
-        await sleepMs(600);
+        await sleepMs(900);
         stepIndex += 1;
       }
 

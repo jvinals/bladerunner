@@ -176,7 +176,7 @@ Ground the answer in the screenshot, Set-of-Marks manifest, and accessibility sn
 
 const PROJECT_DISCOVERY_EXPLORER_SYSTEM = `You are a Browser Automation Discovery Agent exploring a SaaS web application for QA. The user owns the app; treat visible data as synthetic. Phrase actions as neutral staging verification.
 
-Your job is to choose the **single next** exploratory Playwright step to broaden coverage: top-level nav, major list views, auth-adjacent areas, and representative detail routes—breadth first, then one level deeper when appropriate.
+Your job is to choose the **single next** exploratory Playwright step to **maximize breadth and depth** before stopping: open every visible top-level sidebar item, main nav link, workspace switcher, and user-menu entry that leads to a different area; then open representative list views and one detail view per major area when possible.
 
 Respond ONLY with valid JSON:
 {
@@ -190,7 +190,8 @@ Rules:
 - If stop is false, playwrightCode must be non-empty and execute one logical step (one click, fill+submit, navigate, or wait for content).
 - Prefer getByRole, getByLabel, getByText with stable accessible names. Never use page.locator('div') or page.locator('span') alone.
 - Do not chain a full workflow; one step per response.
-- Set stop to true when: caps are nearly reached, the app is sufficiently explored, you are blocked (overlay, permission), or further clicks would likely repeat the same screen.
+- **Stopping:** The user message includes a **budget** (minimum completed steps and/or minimum distinct URLs). Until that budget is met, you must set stop=false and propose the next action unless you are **truly blocked** (CAPTCHA, hard 403, unclosable modal, or no interactive targets in manifest/snapshot). "Looks explored" or "covered enough" is **not** a valid reason to stop before the budget.
+- After the budget is met, you may set stop=true when caps are nearly reached, you are blocked, or further actions would not add new product areas.
 - Do not invent URLs or elements not supported by the manifest or snapshot.
 - Never output secrets or credentials in reason or code.`;
 
@@ -1394,12 +1395,16 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       elapsedMs: number;
       stepIndex: number;
       navigationsSoFar: number;
+      minStepsBeforeStop: number;
+      minDistinctUrlsBeforeStop: number;
       visitedUrlsSample: string[];
       pageUrl: string;
       pageTitle: string;
       somManifest: string;
       accessibilitySnapshot: string;
       screenshotBase64: string;
+      /** Appended when retrying after a premature stop. */
+      continuationHint?: string;
     },
     opts?: { userId?: string; signal?: AbortSignal },
   ): Promise<{ stop: boolean; reason: string; playwrightCode?: string }> {
@@ -1411,14 +1416,21 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       input.visitedUrlsSample.length > 0
         ? input.visitedUrlsSample.slice(-35).join('\n')
         : '(none yet)';
+    const budgetMet =
+      input.stepIndex >= input.minStepsBeforeStop || input.navigationsSoFar >= input.minDistinctUrlsBeforeStop;
+    const cont = input.continuationHint?.trim();
     const user = `TASK INPUTS
 Base URL: ${input.baseUrl}
 Credentials or auth context: ${input.authContextSummary}
 Max navigations: ${input.maxNavigations}
 Max wall time (ms): ${input.maxWallMs}
 Elapsed (ms): ${input.elapsedMs}
-Exploration step index (0-based): ${input.stepIndex}
-Meaningful navigation count so far: ${input.navigationsSoFar}
+Completed exploration steps so far (executed): ${input.stepIndex}
+Distinct normalized URLs visited so far: ${input.navigationsSoFar}
+
+EXPLORATION BUDGET (hard rules)
+- Do NOT set stop=true until either (a) at least ${input.minStepsBeforeStop} steps have been **executed**, OR (b) at least ${input.minDistinctUrlsBeforeStop} **distinct** URLs appear in the visited list — unless you are blocked (CAPTCHA, 403, no targets).
+- Budget met for this decision: ${budgetMet ? 'yes — you may stop if exploration is complete or capped' : 'no — you must continue with stop=false and playwrightCode'}.
 
 Recent normalized URLs visited (sample):
 ${visitedLines}
@@ -1432,7 +1444,8 @@ ${somT || '(empty)'}
 Accessibility snapshot:
 ${a11yT || '(empty)'}
 
-The image is a full-page Set-of-Marks screenshot. Propose the next single exploratory action or stop.`;
+The image is a full-page Set-of-Marks screenshot. Propose the next single exploratory action or stop.
+${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\n` : ''}`;
     const shot = input.screenshotBase64?.trim();
     if (!shot) {
       throw new Error('Discovery explore step requires a screenshot.');

@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.135`: **Run app discovery** — **longer crawl** (**80** steps, **30 min** wall clock for exploration); **minimum coverage budget** before honoring model stop (**28** executed steps **or** **14** distinct normalized URLs) unless blocked; up to **2** continuation retries with a forced prompt when the model stops early; **stricter explorer system prompt** (breadth-first, no “sufficiently explored” before budget); **5** consecutive Playwright failures before abort; **900ms** settle between steps. `@bladerunner/api 0.6.108`, `@bladerunner/web 0.7.83`.
+
 - `0.10.134`: **Projects** — inline **Live browser** preview uses **`max-w-xs`** (`20rem`) centered (`mx-auto`) so it is narrower than the full edit card. `@bladerunner/web 0.7.82`.
 
 - `0.10.133`: **Run app discovery** — **LLM exploration loop** (up to **40** Playwright steps, **12 min** wall clock for the crawl after auth) plus **final report** with evidence-based **Discovery Summary** and **structured JSON** (`app`, `routes`, `screens`, `agentAdvice`, `unknowns`, etc.); stored markdown leads with **`# Screens Visited`** (authoritative navigations) then **`# Discovery Summary`**. **Explore** and **final** prompts align with the Browser Automation Discovery Agent design (QA staging framing). `@bladerunner/api 0.6.107`, `@bladerunner/web 0.7.81`.
