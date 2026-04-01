@@ -56,14 +56,18 @@ export function DiscoveryAgentLogPanel({ lines, formatTime, variant, emptyMessag
           {emptyMessage}
         </p>
       ) : (
-        [...lines].reverse().map((line, i) => (
-          <DiscoveryLogLineRow
-            key={`${line.at}-${i}`}
-            line={line}
-            formatTime={formatTime}
-            variant={variant}
-          />
-        ))
+        // Keys must use the index in the *original* `lines` array (append order). Using the index
+        // after `.reverse()` shifts when new lines arrive and remounts rows — closing open modals.
+        lines
+          .map((line, i) => (
+            <DiscoveryLogLineRow
+              key={`${i}-${line.at}`}
+              line={line}
+              formatTime={formatTime}
+              variant={variant}
+            />
+          ))
+          .reverse()
       )}
     </div>
   );
