@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.157`: **Discovery explore JSON truncation** — `projectDiscoveryExploreStep` used `maxTokens: 2048`; OpenAI GPT-5 counts **reasoning** inside `max_completion_tokens`, so the visible JSON could be cut off mid-`playwrightCode` (~few hundred chars) and `parseJsonFromLlmText` failed. Raised to **8192** and set **`reasoningEffort: 'low'`** (aligned with other vision+JSON routes). Clearer parse error when extraction finds no balanced `{...}` (likely truncation). `@bladerunner/api 0.6.121`.
+
 - `0.10.156`: **AGENTS.md (continual learning)** — merged **AI Prompt** / **AI Visual ID** workspace facts into one bullet (12-bullet guideline); clarified **LLM JSON** fence wording. Refreshed `.cursor/hooks/state/continual-learning-index.json` with current mtimes for all **35** `agent-transcripts` `*.jsonl` files.
 
 - `0.10.155`: **LLM JSON parse (prose + JSON)** — `parseJsonFromLlmText` extracts the first balanced `{ ... }` with string-aware brace matching when the model adds CoT or text before/after the object (fixes `Unexpected token 'C'` when prose leads). `@bladerunner/api 0.6.120`.

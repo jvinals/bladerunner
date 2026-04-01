@@ -653,8 +653,13 @@ function parseJsonFromLlmText(raw: string): unknown {
   const firstMsg = 'Could not parse JSON after fence strip and object extraction';
   const head = payload.slice(0, 120);
   const tail = payload.slice(-120);
+  const looksTruncated =
+    payload.includes('{') && extractFirstJsonObject(payload) === null && payload.length >= 80;
+  const hint = looksTruncated
+    ? ' Hint: JSON looks truncated (no balanced closing brace). On OpenAI GPT-5 vision+JSON, raise max_completion_tokens for this route and/or use reasoning_effort low so visible output fits.'
+    : '';
   throw new Error(
-    `${firstMsg}; response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}`,
+    `${firstMsg}; response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}${hint}`,
   );
 }
 
@@ -1653,7 +1658,9 @@ ${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\
       ],
       {
         imageBase64: shot,
-        maxTokens: 2048,
+        /** Match project_discovery synthesize/final; GPT-5 counts reasoning inside max_completion_tokens — 2048 can truncate JSON to a few hundred chars. */
+        maxTokens: 8192,
+        reasoningEffort: 'low',
         temperature: 0.15,
         signal: opts?.signal,
       },
