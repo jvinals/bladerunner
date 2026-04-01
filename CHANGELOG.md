@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.138`: **Discovery agent log** — removed **`scrollIntoView`** auto-follow so the **page** no longer jumps when new log lines arrive. `@bladerunner/web 0.7.86`.
+
 - `0.10.137`: **Projects** — **Discovery agent log** panel is **wider** (`min-w-[30rem]`, flex grow) and **taller** (**320px** row height, matching live preview); section uses **`max-w-6xl`**. Detached preview log column **`min(40rem,48vw)`**. `@bladerunner/web 0.7.85`.
 
 - `0.10.136`: **Projects / detached discovery** — **Discovery agent log** panel to the **right** of the inline **Live browser** (timestamped lines + optional JSON detail); WebSocket **`discoveryDebugLog`** / **`discoveryDebugLogBatch`** via `useDiscoveryLive`. Detached preview shows the same log. `@bladerunner/web 0.7.84`.

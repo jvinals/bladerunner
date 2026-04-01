@@ -6,7 +6,7 @@ import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
  */
 export default function DetachedDiscoveryPreview() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { frameDataUrl, connected, logLines, formatLogTime, logEndRef } = useDiscoveryLive(projectId, {
+  const { frameDataUrl, connected, logLines, formatLogTime } = useDiscoveryLive(projectId, {
     enabled: !!projectId,
   });
 
@@ -58,7 +58,6 @@ export default function DetachedDiscoveryPreview() {
                 </div>
               ))
             )}
-            <div ref={logEndRef} />
           </div>
         </div>
       </div>

@@ -43,7 +43,6 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
   const [connected, setConnected] = useState(false);
   const [logLines, setLogLines] = useState<DiscoveryLogLine[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const logEndRef = useRef<HTMLDivElement | null>(null);
 
   const clearFrame = useCallback(() => setFrameDataUrl(null), []);
 
@@ -104,9 +103,5 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
     };
   }, [projectId, enabled]);
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logLines.length]);
-
-  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime, logEndRef };
+  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime };
 }

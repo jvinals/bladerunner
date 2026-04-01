@@ -150,7 +150,6 @@ export default function ProjectsPage() {
     connected: discoverySocketConnected,
     logLines: discoveryLogLines,
     formatLogTime: formatDiscoveryLogTime,
-    logEndRef: discoveryLogEndRef,
   } = useDiscoveryLive(editingId ?? undefined, { enabled: discoveryLiveEnabled });
   const discoveryScreensVisited = screensVisitedFromStructured(agentKnowledge?.discoveryStructured);
 
@@ -601,7 +600,6 @@ export default function ProjectsPage() {
                           </div>
                         ))
                       )}
-                      <div ref={discoveryLogEndRef} />
                     </div>
                   </div>
                 </div>
