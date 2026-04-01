@@ -64,7 +64,7 @@ export function formatDiscoveryLogSingleLine(
   const msg = (line.message ?? '').replace(/\s+/g, ' ').trim();
   const llm = line.detail?.llm;
   if (llm) {
-    return `${formatTime(line.at)} — ${msg} · expand for SENT / RECEIVED sections`;
+    return `${formatTime(line.at)} — ${msg} · click to review full exchange`;
   }
   const detail =
     line.detail != null && Object.keys(line.detail).length > 0
