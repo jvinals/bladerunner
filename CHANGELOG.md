@@ -2,6 +2,12 @@
 
 ## 2026-04-01
 
+- `0.10.144`: **Discovery navigation** — explorer prompt + user message: explicit **back / home / `page.goto(baseUrl)`** recovery order, **breadth** across primary sections (checklist from tree), target **depth 4–5** per area; tree summary lists **top-level areas seen**. Session **`ba63e6`** ingest logs (H1–H3) for subsectionComplete / goBack / goto / top-level counts until verified. `@bladerunner/api 0.6.112`.
+
+- `0.10.143`: **Discovery** — removed temporary debug ingest (`ba63e6`) from `project-discovery.service.ts` after verification. `@bladerunner/api 0.6.111`.
+
+- `0.10.142`: **Discovery exploration budget** — stop is honored only after **both** minimum executed steps **and** minimum distinct normalized URLs (**32**); continuation retries use the same rule (retry while either minimum is unmet). Fixes premature completion when **14** distinct URLs was reached quickly. `@bladerunner/api 0.6.110`.
+
 - `0.10.141`: **Discovery agent log** — **newest first** (reversed list); **hidden horizontal scrollbars** on each line (still scrollable). `@bladerunner/web 0.7.89`.
 
 - `0.10.140`: **Run app discovery** — **DFS-style** navigation tree (max depth **5**), **`subsectionComplete`** in explore LLM JSON, **live Mermaid** map (`discoveryNavigationMermaid` column + WebSocket **`discoveryNavigationMermaid`**); **Projects** panel below live preview + log; **agent context** includes truncated Mermaid. Caps: **200** steps, **45 min** exploration wall clock. `@bladerunner/api 0.6.109`, `@bladerunner/web 0.7.88`.

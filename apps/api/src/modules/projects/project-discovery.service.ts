@@ -13,8 +13,8 @@ const DISCOVERY_MAX_EXPLORATION_STEPS = 200;
 const DISCOVERY_MAX_WALL_MS = 45 * 60 * 1000;
 /** Do not honor model "stop" until this many steps have executed (unless blocked). */
 const DISCOVERY_MIN_STEPS_BEFORE_STOP = 28;
-/** Or until this many distinct normalized URLs have been seen. */
-const DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP = 14;
+/** And until this many distinct normalized URLs have been seen (AND with min steps). */
+const DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP = 32;
 /** Extra vision calls when the model stops before the budget. */
 const DISCOVERY_EXPLORE_MAX_RETRIES = 2;
 
@@ -176,6 +176,9 @@ export class ProjectDiscoveryService {
         finalMermaid = navTree.toMermaid();
         this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
         const uniqNorm = new Set(visitedScreensSoFar.map((v) => normalizeDiscoveryUrlForDedup(v.url)));
+        const explorationIncomplete =
+          stepIndex < DISCOVERY_MIN_STEPS_BEFORE_STOP ||
+          uniqNorm.size < DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP;
         log('Visited screens count', {
           rawNavigations: visitedScreensSoFar.length,
           distinctNormalizedUrls: uniqNorm.size,
@@ -216,10 +219,8 @@ export class ProjectDiscoveryService {
           if (valid) {
             break;
           }
-          const underBudget =
-            stepIndex < DISCOVERY_MIN_STEPS_BEFORE_STOP && uniqNorm.size < DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP;
           const wallRemainingMs = DISCOVERY_MAX_WALL_MS - (Date.now() - explorationStartedAt);
-          if (!underBudget || wallRemainingMs < 120_000) {
+          if (!explorationIncomplete || wallRemainingMs < 120_000) {
             break;
           }
           this.logger.warn(
@@ -244,6 +245,26 @@ export class ProjectDiscoveryService {
             playwrightCodeChars: plan.playwrightCode?.length ?? 0,
           });
         }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+          body: JSON.stringify({
+            sessionId: 'ba63e6',
+            hypothesisId: 'H1',
+            location: 'project-discovery.service.ts:plan-ready',
+            message: 'explore plan before execute',
+            data: {
+              stepIndex,
+              subsectionComplete: plan.subsectionComplete,
+              stop: plan.stop,
+              hasCode: !!plan.playwrightCode?.trim(),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
 
         if (plan.stop || !plan.playwrightCode?.trim()) {
           log('Exploration stopping (model stop or empty code)', { reason: plan.reason?.slice(0, 500) });
@@ -289,6 +310,46 @@ export class ProjectDiscoveryService {
           }
           finalMermaid = navTree.toMermaid();
           this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
+          // #region agent log
+          {
+            const c = (plan.playwrightCode ?? '').toLowerCase();
+            const bu = project.url.trim().toLowerCase();
+            const host = bu.replace(/^https?:\/\//, '').split('/')[0] ?? '';
+            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+              body: JSON.stringify({
+                sessionId: 'ba63e6',
+                hypothesisId: 'H2',
+                location: 'project-discovery.service.ts:after-step',
+                message: 'recovery signals in playwright code',
+                data: {
+                  goBack: c.includes('goback'),
+                  goto: c.includes('.goto('),
+                  gotoContainsHost: host.length > 0 && c.includes(host),
+                  subsectionComplete: plan.subsectionComplete,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+              body: JSON.stringify({
+                sessionId: 'ba63e6',
+                hypothesisId: 'H3',
+                location: 'project-discovery.service.ts:tree-state',
+                message: 'nav tree breadth',
+                data: {
+                  focusDepth: navTree.depthOf(navTree.focusId),
+                  topLevelCount: navTree.topLevelLabels().length,
+                  treeNodes: navTree.nodes.size,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+          }
+          // #endregion
         }
         stepIndex += 1;
       }

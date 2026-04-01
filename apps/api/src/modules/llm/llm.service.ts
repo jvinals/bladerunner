@@ -176,7 +176,14 @@ Ground the answer in the screenshot, Set-of-Marks manifest, and accessibility sn
 
 const PROJECT_DISCOVERY_EXPLORER_SYSTEM = `You are a Browser Automation Discovery Agent exploring a SaaS web application for QA. The user owns the app; treat visible data as synthetic. Phrase actions as neutral staging verification.
 
-Use **depth-first** exploration: finish exploring the current subsection (nested views, tabs, drill-downs) up to the **max depth** in the user message before opening unrelated top-level areas. Prefer going deeper (one child action) until the subsection has no meaningful new navigation, then set subsectionComplete and use **back** (page.goBack() or a visible parent nav) before picking a sibling area.
+Use **depth-first** exploration within each **primary app area** (sidebar item, top-nav tab, main hub): go deeper (tabs, nested routes, drill-downs, drawers) until you reach the **max depth** in the user message or there are no new meaningful child destinations in the manifest/snapshot. Then set **subsectionComplete: true** for that branch.
+
+**Breadth across the product:** The user message lists **top-level areas seen so far** in the navigation tree. Over the run, you must **cover every primary section** you can identify in the manifest (sidebar, top nav, app launcher) — not only the first area you opened. When a subsection is done, **recover** toward a hub so you can open a **different** primary area you have not yet explored to full depth.
+
+**How to go back / toward home (prefer in order):**
+1. Click a visible **parent** control: breadcrumb, “Home”, app logo, main section in the sidebar, or a back chevron that returns to a list/hub.
+2. \`await page.goBack()\` **only** if the app uses real history (avoid loops on SPAs that push the same shell URL).
+3. **Shell reset:** \`await page.goto(baseUrl)\` using the **exact Base URL** from the user message — then navigate to the **next** primary menu item you have not yet explored deeply. Use this when back does not reach a clear hub or you are stuck deep in one branch.
 
 Your job is to choose the **single next** exploratory Playwright step: one click, navigate, or short wait.
 
@@ -189,12 +196,12 @@ Respond ONLY with valid JSON:
 }
 
 Rules:
-- **subsectionComplete:** Set true when this screen/branch has no further meaningful child destinations in the manifest/snapshot (or you are at max depth and must backtrack). When true and stop is false, playwrightCode should usually navigate back or to a sibling/parent hub.
+- **subsectionComplete:** Set true when this screen/branch has no further meaningful child destinations in the manifest/snapshot (or you are at max depth and must backtrack). When true and stop is false, playwrightCode **must** perform a recovery step: parent/breadcrumb click, **or** \`page.goBack()\`, **or** \`page.goto(baseUrl)\` then navigate toward the next **unexplored** primary section from the manifest. Do not set subsectionComplete true on every step — only when the current subsection is genuinely exhausted or at depth cap.
 - If stop is true, omit playwrightCode or use empty string.
 - If stop is false, playwrightCode must be non-empty and execute one logical step.
 - Prefer getByRole, getByLabel, getByText with stable accessible names. Never use page.locator('div') or page.locator('span') alone.
 - Do not chain a full workflow; one step per response.
-- **Stopping:** The user message includes a **budget** (minimum completed steps and/or minimum distinct URLs). Until that budget is met, you must set stop=false and propose the next action unless you are **truly blocked** (CAPTCHA, hard 403, unclosable modal, or no interactive targets in manifest/snapshot). "Looks explored" or "covered enough" is **not** a valid reason to stop before the budget.
+- **Stopping:** The user message includes a **budget** (minimum completed steps **and** minimum distinct URLs). Until **both** minimums are met, you must set stop=false and propose the next action unless you are **truly blocked** (CAPTCHA, hard 403, unclosable modal, or no interactive targets in manifest/snapshot). "Looks explored" or "covered enough" is **not** a valid reason to stop before the budget.
 - After the budget is met, you may set stop=true when caps are nearly reached, you are blocked, or further actions would not add new product areas.
 - Do not invent URLs or elements not supported by the manifest or snapshot.
 - Never output secrets or credentials in reason or code.`;
@@ -1424,8 +1431,10 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       input.visitedUrlsSample.length > 0
         ? input.visitedUrlsSample.slice(-35).join('\n')
         : '(none yet)';
+    /** Both minimums must be satisfied before the model may set stop (unless blocked). */
     const budgetMet =
-      input.stepIndex >= input.minStepsBeforeStop || input.navigationsSoFar >= input.minDistinctUrlsBeforeStop;
+      input.stepIndex >= input.minStepsBeforeStop &&
+      input.navigationsSoFar >= input.minDistinctUrlsBeforeStop;
     const cont = input.continuationHint?.trim();
     const navTree = input.navigationTreeSummary?.trim();
     const maxD = input.maxNavDepth ?? 5;
@@ -1440,8 +1449,13 @@ Completed exploration steps so far (executed): ${input.stepIndex}
 Distinct normalized URLs visited so far: ${input.navigationsSoFar}
 IA navigation depth (current / max): ${curD} / ${maxD}
 ${navTree ? `Navigation tree (DFS):\n${navTree}\n` : ''}
+NAVIGATION POLICY (sections & depth ${maxD})
+- **Base URL for full shell reset:** Use the **Base URL** in TASK INPUTS verbatim inside \`await page.goto(...)\` when you need to return to the app entry, then open a **different** primary sidebar/top-nav area from the manifest.
+- **Target depth:** Explore each chosen primary area to **nested depth up to ${maxD}** (tabs, child routes, drill-downs) before marking **subsectionComplete** and recovering toward hub/home.
+- **Breadth:** Use the "Top-level areas seen so far" line in the tree summary as a checklist — keep opening **new** primary destinations until the manifest shows no major areas left, not only the first screen you landed on.
+
 EXPLORATION BUDGET (hard rules)
-- Do NOT set stop=true until either (a) at least ${input.minStepsBeforeStop} steps have been **executed**, OR (b) at least ${input.minDistinctUrlsBeforeStop} **distinct** URLs appear in the visited list — unless you are blocked (CAPTCHA, 403, no targets).
+- Do NOT set stop=true until **both** (a) at least ${input.minStepsBeforeStop} steps have been **executed**, **and** (b) at least ${input.minDistinctUrlsBeforeStop} **distinct** URLs appear in the visited list — unless you are blocked (CAPTCHA, 403, no targets).
 - Budget met for this decision: ${budgetMet ? 'yes — you may stop if exploration is complete or capped' : 'no — you must continue with stop=false and playwrightCode'}.
 
 Recent normalized URLs visited (sample):

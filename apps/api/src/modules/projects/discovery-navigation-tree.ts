@@ -112,6 +112,17 @@ export class DiscoveryNavigationTree {
     return this.nodes.get(nodeId)?.depth ?? 0;
   }
 
+  /** Labels of nodes attached directly under the synthetic root (breadth checklist for the LLM). */
+  topLevelLabels(): string[] {
+    const labels: string[] = [];
+    for (const n of this.nodes.values()) {
+      if (n.parentId === this.rootId && n.urlNorm) {
+        labels.push(n.label || n.urlNorm.slice(0, 80));
+      }
+    }
+    return labels;
+  }
+
   /** Compact path + stack for explore prompt. */
   formatSummaryForLlm(): string {
     const path: string[] = [];
@@ -125,7 +136,9 @@ export class DiscoveryNavigationTree {
       cur = n.parentId;
     }
     const tail = path.slice(-12).join(' → ');
+    const top = this.topLevelLabels();
     let out = `Current focus depth: ${this.depthOf(this.focusId)} / max ${this.maxDepth}\nPath (root→focus): ${tail || '(root)'}\n`;
+    out += `Top-level areas seen so far (${top.length}): ${top.length ? top.slice(0, 28).join(' | ') : '(none yet — open each primary sidebar/top-nav item in turn)'}\n`;
     out += `Distinct screens in tree: ${this.nodes.size - 1}\n`;
     if (out.length > MAX_LLM_TREE_CHARS) {
       return `${out.slice(0, MAX_LLM_TREE_CHARS)}\n… [truncated]`;
