@@ -468,6 +468,7 @@ export type ProjectAgentKnowledgeDto = {
   discoveryError: string | null;
   discoverySummaryMarkdown: string | null;
   discoveryStructured: unknown;
+  discoveryNavigationMermaid: string | null;
   updatedAt: string | null;
 };
 
@@ -489,6 +490,7 @@ export const projectsApi = {
       manualInstructions?: string | null;
       discoverySummaryMarkdown?: string | null;
       discoveryStructured?: Record<string, unknown> | null;
+      discoveryNavigationMermaid?: string | null;
     },
   ) =>
     apiFetch<ProjectAgentKnowledgeDto>(`/projects/${id}/agent-knowledge`, {

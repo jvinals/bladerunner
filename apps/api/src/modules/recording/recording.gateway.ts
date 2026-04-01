@@ -65,6 +65,10 @@ export class RecordingGateway implements OnGatewayInit {
       },
     );
 
+    this.recordingService.on('discoveryNavigationMermaid', (projectId: string, mermaid: string) => {
+      this.server.to(`run:discovery-${projectId}`).emit('discoveryNavigationMermaid', { projectId, mermaid });
+    });
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 
@@ -107,6 +111,10 @@ export class RecordingGateway implements OnGatewayInit {
       const discoveryLines = this.recordingService.getDiscoveryDebugLogLines(discoveryProjectId);
       if (discoveryLines.length > 0) {
         client.emit('discoveryDebugLogBatch', { projectId: discoveryProjectId, lines: discoveryLines });
+      }
+      const mermaid = this.recordingService.getDiscoveryNavigationMermaid(discoveryProjectId);
+      if (mermaid) {
+        client.emit('discoveryNavigationMermaid', { projectId: discoveryProjectId, mermaid });
       }
     }
     return { event: 'joined', data: { runId: data.runId } };

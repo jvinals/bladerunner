@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.6.108",
+  "version": "0.6.109",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build && prisma generate",
@@ -27,6 +27,7 @@
     "test:recording-timeout": "tsx src/modules/recording/recording-timeout.selftest.ts",
     "test:llm-suggest-skip": "tsx src/modules/llm/llm-suggest-skip.selftest.ts",
     "test:gemini-instruction": "tsx src/modules/llm/gemini-instruction.selftest.ts",
+    "test:discovery-navigation-tree": "tsx src/modules/projects/discovery-navigation-tree.selftest.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {

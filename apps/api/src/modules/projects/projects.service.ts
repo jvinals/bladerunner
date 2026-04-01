@@ -85,6 +85,7 @@ export class ProjectsService {
       discoveryError: k?.discoveryError ?? null,
       discoverySummaryMarkdown: k?.discoverySummaryMarkdown ?? null,
       discoveryStructured: k?.discoveryStructured ?? null,
+      discoveryNavigationMermaid: k?.discoveryNavigationMermaid ?? null,
       updatedAt: k?.updatedAt?.toISOString() ?? null,
     };
   }
@@ -100,6 +101,10 @@ export class ProjectsService {
     if (discMd != null && discMd.length > 120_000) {
       throw new BadRequestException('discoverySummaryMarkdown exceeds maximum length');
     }
+    const discMermaid = dto.discoveryNavigationMermaid;
+    if (discMermaid != null && discMermaid.length > 500_000) {
+      throw new BadRequestException('discoveryNavigationMermaid exceeds maximum length');
+    }
     await this.prisma.projectAgentKnowledge.upsert({
       where: { projectId: id },
       create: {
@@ -112,6 +117,7 @@ export class ProjectsService {
                 dto.discoveryStructured === null ? Prisma.JsonNull : (dto.discoveryStructured as object),
             }
           : {}),
+        ...(discMermaid !== undefined ? { discoveryNavigationMermaid: discMermaid } : {}),
       },
       update: {
         ...(manual !== undefined ? { manualInstructions: manual } : {}),
@@ -122,6 +128,7 @@ export class ProjectsService {
                 dto.discoveryStructured === null ? Prisma.JsonNull : (dto.discoveryStructured as object),
             }
           : {}),
+        ...(discMermaid !== undefined ? { discoveryNavigationMermaid: discMermaid } : {}),
       },
     });
     return this.getAgentKnowledge(id, userId);

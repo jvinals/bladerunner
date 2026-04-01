@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { formatDiscoveryLogSingleLine, useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
 import {
   FolderKanban,
   Plus,
@@ -150,7 +151,19 @@ export default function ProjectsPage() {
     connected: discoverySocketConnected,
     logLines: discoveryLogLines,
     formatLogTime: formatDiscoveryLogTime,
+    navigationMermaid: discoveryLiveMermaid,
   } = useDiscoveryLive(editingId ?? undefined, { enabled: discoveryLiveEnabled });
+  const discoveryMermaidSource =
+    discoveryLiveMermaid?.trim() ||
+    (typeof agentKnowledge?.discoveryNavigationMermaid === 'string'
+      ? agentKnowledge.discoveryNavigationMermaid
+      : null) ||
+    null;
+  const showDiscoveryNavMap =
+    !!editingId &&
+    (!!discoveryMermaidSource?.trim() ||
+      agentKnowledge?.discoveryStatus === 'queued' ||
+      agentKnowledge?.discoveryStatus === 'running');
   const discoveryScreensVisited = screensVisitedFromStructured(agentKnowledge?.discoveryStructured);
 
   useEffect(() => {
@@ -533,7 +546,8 @@ export default function ProjectsPage() {
               </div>
 
               {editingId && (
-                <div className="flex flex-col md:flex-row gap-3 w-full max-w-6xl mx-auto">
+                <div className="flex flex-col gap-3 w-full max-w-6xl mx-auto">
+                  <div className="flex flex-col md:flex-row gap-3 w-full">
                   <div className="rounded-md border border-gray-200 bg-white overflow-hidden flex-1 min-w-0 max-w-md md:max-w-none">
                     <div className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border-b border-gray-200">
                       <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
@@ -600,6 +614,10 @@ export default function ProjectsPage() {
                       )}
                     </div>
                   </div>
+                  </div>
+                  {showDiscoveryNavMap && (
+                    <DiscoveryMermaidPanel source={discoveryMermaidSource} />
+                  )}
                 </div>
               )}
 

@@ -354,6 +354,8 @@ export class RecordingService extends EventEmitter {
     Array<{ at: string; message: string; detail?: Record<string, unknown> }>
   >();
   private static readonly DISCOVERY_DEBUG_LOG_MAX_LINES = 3000;
+  /** Latest Mermaid navigation diagram per project (discovery live UI + join catch-up). */
+  private discoveryNavigationMermaidByProjectId = new Map<string, string>();
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
   private aiPromptTestInFlight = new Map<string, Promise<void>>();
   /** In-flight optimized prompt generation / refresh work keyed by `${runId}:${stepId}`. */
@@ -676,6 +678,18 @@ export class RecordingService extends EventEmitter {
   /** Clears buffered discovery log lines when a new run starts for the same project. */
   clearDiscoveryDebugLog(projectId: string): void {
     this.discoveryDebugLogByProjectId.delete(projectId);
+    this.discoveryNavigationMermaidByProjectId.delete(projectId);
+  }
+
+  getDiscoveryNavigationMermaid(projectId: string): string | null {
+    return this.discoveryNavigationMermaidByProjectId.get(projectId) ?? null;
+  }
+
+  /** Push latest Mermaid diagram to WebSocket `discoveryNavigationMermaid` + join catch-up. */
+  emitDiscoveryNavigationMermaid(projectId: string, mermaid: string): void {
+    const trimmed = mermaid.trim();
+    this.discoveryNavigationMermaidByProjectId.set(projectId, trimmed);
+    this.emit('discoveryNavigationMermaid', projectId, trimmed);
   }
 
   getDiscoveryDebugLogLines(projectId: string): Array<{ at: string; message: string; detail?: Record<string, unknown> }> {

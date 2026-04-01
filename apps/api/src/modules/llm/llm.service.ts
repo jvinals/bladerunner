@@ -176,18 +176,22 @@ Ground the answer in the screenshot, Set-of-Marks manifest, and accessibility sn
 
 const PROJECT_DISCOVERY_EXPLORER_SYSTEM = `You are a Browser Automation Discovery Agent exploring a SaaS web application for QA. The user owns the app; treat visible data as synthetic. Phrase actions as neutral staging verification.
 
-Your job is to choose the **single next** exploratory Playwright step to **maximize breadth and depth** before stopping: open every visible top-level sidebar item, main nav link, workspace switcher, and user-menu entry that leads to a different area; then open representative list views and one detail view per major area when possible.
+Use **depth-first** exploration: finish exploring the current subsection (nested views, tabs, drill-downs) up to the **max depth** in the user message before opening unrelated top-level areas. Prefer going deeper (one child action) until the subsection has no meaningful new navigation, then set subsectionComplete and use **back** (page.goBack() or a visible parent nav) before picking a sibling area.
+
+Your job is to choose the **single next** exploratory Playwright step: one click, navigate, or short wait.
 
 Respond ONLY with valid JSON:
 {
   "stop": <boolean>,
+  "subsectionComplete": <boolean>,
   "reason": "<one short sentence: why stopping OR what this step targets>",
   "playwrightCode": "<optional: only when stop is false. Async function body using only \`page\` and \`expect\` — statements only, no import/require. One focused action or a short wait (e.g. await page.waitForTimeout(500))>"
 }
 
 Rules:
+- **subsectionComplete:** Set true when this screen/branch has no further meaningful child destinations in the manifest/snapshot (or you are at max depth and must backtrack). When true and stop is false, playwrightCode should usually navigate back or to a sibling/parent hub.
 - If stop is true, omit playwrightCode or use empty string.
-- If stop is false, playwrightCode must be non-empty and execute one logical step (one click, fill+submit, navigate, or wait for content).
+- If stop is false, playwrightCode must be non-empty and execute one logical step.
 - Prefer getByRole, getByLabel, getByText with stable accessible names. Never use page.locator('div') or page.locator('span') alone.
 - Do not chain a full workflow; one step per response.
 - **Stopping:** The user message includes a **budget** (minimum completed steps and/or minimum distinct URLs). Until that budget is met, you must set stop=false and propose the next action unless you are **truly blocked** (CAPTCHA, hard 403, unclosable modal, or no interactive targets in manifest/snapshot). "Looks explored" or "covered enough" is **not** a valid reason to stop before the budget.
@@ -1403,11 +1407,15 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       somManifest: string;
       accessibilitySnapshot: string;
       screenshotBase64: string;
+      /** DFS navigation tree summary (path, depth). */
+      navigationTreeSummary?: string;
+      maxNavDepth?: number;
+      currentNavDepth?: number;
       /** Appended when retrying after a premature stop. */
       continuationHint?: string;
     },
     opts?: { userId?: string; signal?: AbortSignal },
-  ): Promise<{ stop: boolean; reason: string; playwrightCode?: string }> {
+  ): Promise<{ stop: boolean; reason: string; playwrightCode?: string; subsectionComplete?: boolean }> {
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
       input.accessibilitySnapshot,
@@ -1419,6 +1427,9 @@ The attached image is a full-page Set-of-Marks screenshot.`;
     const budgetMet =
       input.stepIndex >= input.minStepsBeforeStop || input.navigationsSoFar >= input.minDistinctUrlsBeforeStop;
     const cont = input.continuationHint?.trim();
+    const navTree = input.navigationTreeSummary?.trim();
+    const maxD = input.maxNavDepth ?? 5;
+    const curD = input.currentNavDepth ?? 0;
     const user = `TASK INPUTS
 Base URL: ${input.baseUrl}
 Credentials or auth context: ${input.authContextSummary}
@@ -1427,7 +1438,8 @@ Max wall time (ms): ${input.maxWallMs}
 Elapsed (ms): ${input.elapsedMs}
 Completed exploration steps so far (executed): ${input.stepIndex}
 Distinct normalized URLs visited so far: ${input.navigationsSoFar}
-
+IA navigation depth (current / max): ${curD} / ${maxD}
+${navTree ? `Navigation tree (DFS):\n${navTree}\n` : ''}
 EXPLORATION BUDGET (hard rules)
 - Do NOT set stop=true until either (a) at least ${input.minStepsBeforeStop} steps have been **executed**, OR (b) at least ${input.minDistinctUrlsBeforeStop} **distinct** URLs appear in the visited list — unless you are blocked (CAPTCHA, 403, no targets).
 - Budget met for this decision: ${budgetMet ? 'yes — you may stop if exploration is complete or capped' : 'no — you must continue with stop=false and playwrightCode'}.
@@ -1466,11 +1478,13 @@ ${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\
     );
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const stop = parsed.stop === true;
+    const subsectionComplete = parsed.subsectionComplete === true;
     const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
     const playwrightCode =
       typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     return {
       stop,
+      subsectionComplete,
       reason: reason || (stop ? 'stopped' : 'continue'),
       playwrightCode: playwrightCode || undefined,
     };

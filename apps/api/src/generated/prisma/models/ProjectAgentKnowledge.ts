@@ -32,6 +32,7 @@ export type ProjectAgentKnowledgeMinAggregateOutputType = {
   discoveryCompletedAt: Date | null
   discoveryError: string | null
   discoverySummaryMarkdown: string | null
+  discoveryNavigationMermaid: string | null
   updatedAt: Date | null
 }
 
@@ -43,6 +44,7 @@ export type ProjectAgentKnowledgeMaxAggregateOutputType = {
   discoveryCompletedAt: Date | null
   discoveryError: string | null
   discoverySummaryMarkdown: string | null
+  discoveryNavigationMermaid: string | null
   updatedAt: Date | null
 }
 
@@ -55,6 +57,7 @@ export type ProjectAgentKnowledgeCountAggregateOutputType = {
   discoveryError: number
   discoverySummaryMarkdown: number
   discoveryStructured: number
+  discoveryNavigationMermaid: number
   updatedAt: number
   _all: number
 }
@@ -68,6 +71,7 @@ export type ProjectAgentKnowledgeMinAggregateInputType = {
   discoveryCompletedAt?: true
   discoveryError?: true
   discoverySummaryMarkdown?: true
+  discoveryNavigationMermaid?: true
   updatedAt?: true
 }
 
@@ -79,6 +83,7 @@ export type ProjectAgentKnowledgeMaxAggregateInputType = {
   discoveryCompletedAt?: true
   discoveryError?: true
   discoverySummaryMarkdown?: true
+  discoveryNavigationMermaid?: true
   updatedAt?: true
 }
 
@@ -91,6 +96,7 @@ export type ProjectAgentKnowledgeCountAggregateInputType = {
   discoveryError?: true
   discoverySummaryMarkdown?: true
   discoveryStructured?: true
+  discoveryNavigationMermaid?: true
   updatedAt?: true
   _all?: true
 }
@@ -176,6 +182,7 @@ export type ProjectAgentKnowledgeGroupByOutputType = {
   discoveryError: string | null
   discoverySummaryMarkdown: string | null
   discoveryStructured: runtime.JsonValue | null
+  discoveryNavigationMermaid: string | null
   updatedAt: Date
   _count: ProjectAgentKnowledgeCountAggregateOutputType | null
   _min: ProjectAgentKnowledgeMinAggregateOutputType | null
@@ -209,6 +216,7 @@ export type ProjectAgentKnowledgeWhereInput = {
   discoveryError?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   discoverySummaryMarkdown?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   discoveryStructured?: Prisma.JsonNullableFilter<"ProjectAgentKnowledge">
+  discoveryNavigationMermaid?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   updatedAt?: Prisma.DateTimeFilter<"ProjectAgentKnowledge"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
 }
@@ -222,6 +230,7 @@ export type ProjectAgentKnowledgeOrderByWithRelationInput = {
   discoveryError?: Prisma.SortOrderInput | Prisma.SortOrder
   discoverySummaryMarkdown?: Prisma.SortOrderInput | Prisma.SortOrder
   discoveryStructured?: Prisma.SortOrderInput | Prisma.SortOrder
+  discoveryNavigationMermaid?: Prisma.SortOrderInput | Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
 }
@@ -238,6 +247,7 @@ export type ProjectAgentKnowledgeWhereUniqueInput = Prisma.AtLeast<{
   discoveryError?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   discoverySummaryMarkdown?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   discoveryStructured?: Prisma.JsonNullableFilter<"ProjectAgentKnowledge">
+  discoveryNavigationMermaid?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   updatedAt?: Prisma.DateTimeFilter<"ProjectAgentKnowledge"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
 }, "projectId">
@@ -251,6 +261,7 @@ export type ProjectAgentKnowledgeOrderByWithAggregationInput = {
   discoveryError?: Prisma.SortOrderInput | Prisma.SortOrder
   discoverySummaryMarkdown?: Prisma.SortOrderInput | Prisma.SortOrder
   discoveryStructured?: Prisma.SortOrderInput | Prisma.SortOrder
+  discoveryNavigationMermaid?: Prisma.SortOrderInput | Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.ProjectAgentKnowledgeCountOrderByAggregateInput
   _max?: Prisma.ProjectAgentKnowledgeMaxOrderByAggregateInput
@@ -269,6 +280,7 @@ export type ProjectAgentKnowledgeScalarWhereWithAggregatesInput = {
   discoveryError?: Prisma.StringNullableWithAggregatesFilter<"ProjectAgentKnowledge"> | string | null
   discoverySummaryMarkdown?: Prisma.StringNullableWithAggregatesFilter<"ProjectAgentKnowledge"> | string | null
   discoveryStructured?: Prisma.JsonNullableWithAggregatesFilter<"ProjectAgentKnowledge">
+  discoveryNavigationMermaid?: Prisma.StringNullableWithAggregatesFilter<"ProjectAgentKnowledge"> | string | null
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"ProjectAgentKnowledge"> | Date | string
 }
 
@@ -280,6 +292,7 @@ export type ProjectAgentKnowledgeCreateInput = {
   discoveryError?: string | null
   discoverySummaryMarkdown?: string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: string | null
   updatedAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutAgentKnowledgeInput
 }
@@ -293,6 +306,7 @@ export type ProjectAgentKnowledgeUncheckedCreateInput = {
   discoveryError?: string | null
   discoverySummaryMarkdown?: string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: string | null
   updatedAt?: Date | string
 }
 
@@ -304,6 +318,7 @@ export type ProjectAgentKnowledgeUpdateInput = {
   discoveryError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoverySummaryMarkdown?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutAgentKnowledgeNestedInput
 }
@@ -317,6 +332,7 @@ export type ProjectAgentKnowledgeUncheckedUpdateInput = {
   discoveryError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoverySummaryMarkdown?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -329,6 +345,7 @@ export type ProjectAgentKnowledgeCreateManyInput = {
   discoveryError?: string | null
   discoverySummaryMarkdown?: string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: string | null
   updatedAt?: Date | string
 }
 
@@ -340,6 +357,7 @@ export type ProjectAgentKnowledgeUpdateManyMutationInput = {
   discoveryError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoverySummaryMarkdown?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -352,6 +370,7 @@ export type ProjectAgentKnowledgeUncheckedUpdateManyInput = {
   discoveryError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoverySummaryMarkdown?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -369,6 +388,7 @@ export type ProjectAgentKnowledgeCountOrderByAggregateInput = {
   discoveryError?: Prisma.SortOrder
   discoverySummaryMarkdown?: Prisma.SortOrder
   discoveryStructured?: Prisma.SortOrder
+  discoveryNavigationMermaid?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -380,6 +400,7 @@ export type ProjectAgentKnowledgeMaxOrderByAggregateInput = {
   discoveryCompletedAt?: Prisma.SortOrder
   discoveryError?: Prisma.SortOrder
   discoverySummaryMarkdown?: Prisma.SortOrder
+  discoveryNavigationMermaid?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -391,6 +412,7 @@ export type ProjectAgentKnowledgeMinOrderByAggregateInput = {
   discoveryCompletedAt?: Prisma.SortOrder
   discoveryError?: Prisma.SortOrder
   discoverySummaryMarkdown?: Prisma.SortOrder
+  discoveryNavigationMermaid?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -442,6 +464,7 @@ export type ProjectAgentKnowledgeCreateWithoutProjectInput = {
   discoveryError?: string | null
   discoverySummaryMarkdown?: string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: string | null
   updatedAt?: Date | string
 }
 
@@ -453,6 +476,7 @@ export type ProjectAgentKnowledgeUncheckedCreateWithoutProjectInput = {
   discoveryError?: string | null
   discoverySummaryMarkdown?: string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: string | null
   updatedAt?: Date | string
 }
 
@@ -480,6 +504,7 @@ export type ProjectAgentKnowledgeUpdateWithoutProjectInput = {
   discoveryError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoverySummaryMarkdown?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -491,6 +516,7 @@ export type ProjectAgentKnowledgeUncheckedUpdateWithoutProjectInput = {
   discoveryError?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoverySummaryMarkdown?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -505,6 +531,7 @@ export type ProjectAgentKnowledgeSelect<ExtArgs extends runtime.Types.Extensions
   discoveryError?: boolean
   discoverySummaryMarkdown?: boolean
   discoveryStructured?: boolean
+  discoveryNavigationMermaid?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectAgentKnowledge"]>
@@ -518,6 +545,7 @@ export type ProjectAgentKnowledgeSelectCreateManyAndReturn<ExtArgs extends runti
   discoveryError?: boolean
   discoverySummaryMarkdown?: boolean
   discoveryStructured?: boolean
+  discoveryNavigationMermaid?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectAgentKnowledge"]>
@@ -531,6 +559,7 @@ export type ProjectAgentKnowledgeSelectUpdateManyAndReturn<ExtArgs extends runti
   discoveryError?: boolean
   discoverySummaryMarkdown?: boolean
   discoveryStructured?: boolean
+  discoveryNavigationMermaid?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectAgentKnowledge"]>
@@ -544,10 +573,11 @@ export type ProjectAgentKnowledgeSelectScalar = {
   discoveryError?: boolean
   discoverySummaryMarkdown?: boolean
   discoveryStructured?: boolean
+  discoveryNavigationMermaid?: boolean
   updatedAt?: boolean
 }
 
-export type ProjectAgentKnowledgeOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"projectId" | "manualInstructions" | "discoveryStatus" | "discoveryStartedAt" | "discoveryCompletedAt" | "discoveryError" | "discoverySummaryMarkdown" | "discoveryStructured" | "updatedAt", ExtArgs["result"]["projectAgentKnowledge"]>
+export type ProjectAgentKnowledgeOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"projectId" | "manualInstructions" | "discoveryStatus" | "discoveryStartedAt" | "discoveryCompletedAt" | "discoveryError" | "discoverySummaryMarkdown" | "discoveryStructured" | "discoveryNavigationMermaid" | "updatedAt", ExtArgs["result"]["projectAgentKnowledge"]>
 export type ProjectAgentKnowledgeInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }
@@ -572,6 +602,10 @@ export type $ProjectAgentKnowledgePayload<ExtArgs extends runtime.Types.Extensio
     discoveryError: string | null
     discoverySummaryMarkdown: string | null
     discoveryStructured: runtime.JsonValue | null
+    /**
+     * Live-built navigation map (Mermaid) for agent prompts; updated when discovery completes.
+     */
+    discoveryNavigationMermaid: string | null
     updatedAt: Date
   }, ExtArgs["result"]["projectAgentKnowledge"]>
   composites: {}
@@ -1005,6 +1039,7 @@ export interface ProjectAgentKnowledgeFieldRefs {
   readonly discoveryError: Prisma.FieldRef<"ProjectAgentKnowledge", 'String'>
   readonly discoverySummaryMarkdown: Prisma.FieldRef<"ProjectAgentKnowledge", 'String'>
   readonly discoveryStructured: Prisma.FieldRef<"ProjectAgentKnowledge", 'Json'>
+  readonly discoveryNavigationMermaid: Prisma.FieldRef<"ProjectAgentKnowledge", 'String'>
   readonly updatedAt: Prisma.FieldRef<"ProjectAgentKnowledge", 'DateTime'>
 }
     

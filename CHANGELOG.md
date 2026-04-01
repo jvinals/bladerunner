@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.140`: **Run app discovery** — **DFS-style** navigation tree (max depth **5**), **`subsectionComplete`** in explore LLM JSON, **live Mermaid** map (`discoveryNavigationMermaid` column + WebSocket **`discoveryNavigationMermaid`**); **Projects** panel below live preview + log; **agent context** includes truncated Mermaid. Caps: **200** steps, **45 min** exploration wall clock. `@bladerunner/api 0.6.109`, `@bladerunner/web 0.7.88`.
+
 - `0.10.139`: **Discovery agent log** — **one entry = one line** (timestamp — message + optional JSON detail); horizontal scroll per row; **`formatDiscoveryLogSingleLine`** in `useDiscoveryLive`. `@bladerunner/web 0.7.87`.
 
 - `0.10.138`: **Discovery agent log** — removed **`scrollIntoView`** auto-follow so the **page** no longer jumps when new log lines arrive. `@bladerunner/web 0.7.86`.

@@ -4,11 +4,13 @@ import { RecordingService } from '../recording/recording.service';
 import { LlmService } from '../llm/llm.service';
 import { randomUUID } from 'node:crypto';
 import { sleepMs } from '@bladerunner/clerk-agentmail-signin';
+import { normalizeDiscoveryUrlForDedup } from './discovery-url.util';
+import { DiscoveryNavigationTree } from './discovery-navigation-tree';
 
 /** Max LLM-driven exploration steps (each may execute one Playwright snippet). */
-const DISCOVERY_MAX_EXPLORATION_STEPS = 80;
+const DISCOVERY_MAX_EXPLORATION_STEPS = 200;
 /** Wall-clock cap for exploration (auth + final LLM synthesis are outside this window). */
-const DISCOVERY_MAX_WALL_MS = 30 * 60 * 1000;
+const DISCOVERY_MAX_WALL_MS = 45 * 60 * 1000;
 /** Do not honor model "stop" until this many steps have executed (unless blocked). */
 const DISCOVERY_MIN_STEPS_BEFORE_STOP = 28;
 /** Or until this many distinct normalized URLs have been seen. */
@@ -16,21 +18,8 @@ const DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP = 14;
 /** Extra vision calls when the model stops before the budget. */
 const DISCOVERY_EXPLORE_MAX_RETRIES = 2;
 
-function normalizeDiscoveryUrlForDedup(url: string): string {
-  try {
-    const u = new URL(url);
-    const drop = new Set(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid']);
-    for (const k of [...u.searchParams.keys()]) {
-      if (k.startsWith('utm_') || drop.has(k)) {
-        u.searchParams.delete(k);
-      }
-    }
-    u.hash = '';
-    return u.toString();
-  } catch {
-    return url;
-  }
-}
+/** Max depth in the IA tree (0 = root). */
+export const DISCOVERY_MAX_NAV_DEPTH = 5;
 
 /**
  * LLM-driven breadth-first exploration + final evidence-based report.
@@ -65,10 +54,11 @@ export class ProjectDiscoveryService {
 
     await this.prisma.projectAgentKnowledge.upsert({
       where: { projectId },
-      create: { projectId, discoveryStatus: 'queued' },
+      create: { projectId, discoveryStatus: 'queued', discoveryNavigationMermaid: null },
       update: {
         discoveryStatus: 'queued',
         discoveryError: null,
+        discoveryNavigationMermaid: null,
       },
     });
 
@@ -81,6 +71,7 @@ export class ProjectDiscoveryService {
     const discoverySessionId = randomUUID();
     const log = (message: string, detail?: Record<string, unknown>) =>
       this.recording.emitDiscoveryDebugLog(projectId, message, detail);
+    let finalMermaid: string | null = null;
     try {
       this.recording.clearDiscoveryDebugLog(projectId);
       log('Discovery run started', { discoverySessionId });
@@ -90,6 +81,7 @@ export class ProjectDiscoveryService {
           discoveryStatus: 'running',
           discoveryStartedAt: new Date(),
           discoveryError: null,
+          discoveryNavigationMermaid: null,
         },
       });
       log('Status set to running; persisting discoveryStartedAt');
@@ -157,6 +149,10 @@ export class ProjectDiscoveryService {
       const explorationLogLines: string[] = [];
       let stepIndex = 0;
       let consecutiveFailures = 0;
+      const navTree = new DiscoveryNavigationTree(DISCOVERY_MAX_NAV_DEPTH);
+      navTree.syncFromVisitedScreens(this.recording.getDiscoveryVisitedScreens(discoverySessionId));
+      finalMermaid = navTree.toMermaid();
+      this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
 
       while (stepIndex < DISCOVERY_MAX_EXPLORATION_STEPS && Date.now() - explorationStartedAt < DISCOVERY_MAX_WALL_MS) {
         const elapsedMs = Date.now() - explorationStartedAt;
@@ -176,6 +172,9 @@ export class ProjectDiscoveryService {
           screenshotChars: shot.length,
         });
         const visitedScreensSoFar = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
+        navTree.syncFromVisitedScreens(visitedScreensSoFar);
+        finalMermaid = navTree.toMermaid();
+        this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
         const uniqNorm = new Set(visitedScreensSoFar.map((v) => normalizeDiscoveryUrlForDedup(v.url)));
         log('Visited screens count', {
           rawNavigations: visitedScreensSoFar.length,
@@ -198,12 +197,16 @@ export class ProjectDiscoveryService {
           somManifest: ctx.somManifest,
           accessibilitySnapshot: ctx.accessibilitySnapshot,
           screenshotBase64: shot,
+          navigationTreeSummary: navTree.formatSummaryForLlm(),
+          maxNavDepth: DISCOVERY_MAX_NAV_DEPTH,
+          currentNavDepth: navTree.depthOf(navTree.focusId),
         };
 
         log('Calling explore LLM (project_discovery) for next action');
         let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, { userId });
         log('Explore LLM response', {
           stop: plan.stop,
+          subsectionComplete: plan.subsectionComplete,
           reason: plan.reason?.slice(0, 500),
           playwrightCodeChars: plan.playwrightCode?.length ?? 0,
         });
@@ -248,6 +251,7 @@ export class ProjectDiscoveryService {
           break;
         }
 
+        let stepOk = false;
         try {
           log('Executing Playwright snippet from explore step');
           await this.recording.discoveryRunPlaywrightSnippet(
@@ -262,6 +266,7 @@ export class ProjectDiscoveryService {
             `Step ${stepIndex + 1}: ${plan.reason}\n\`\`\`js\n${codePreview}\n\`\`\``,
           );
           consecutiveFailures = 0;
+          stepOk = true;
         } catch (err) {
           consecutiveFailures += 1;
           const msg = err instanceof Error ? err.message : String(err);
@@ -277,6 +282,14 @@ export class ProjectDiscoveryService {
         await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
         log('Waiting 900ms before next exploration step');
         await sleepMs(900);
+        if (stepOk) {
+          navTree.syncFromVisitedScreens(this.recording.getDiscoveryVisitedScreens(discoverySessionId));
+          if (plan.subsectionComplete) {
+            navTree.subsectionComplete();
+          }
+          finalMermaid = navTree.toMermaid();
+          this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
+        }
         stepIndex += 1;
       }
 
@@ -335,6 +348,7 @@ export class ProjectDiscoveryService {
           discoveryCompletedAt: new Date(),
           discoverySummaryMarkdown,
           discoveryStructured: structuredMerged as object,
+          discoveryNavigationMermaid: finalMermaid,
           discoveryError: null,
         },
       });
@@ -343,6 +357,7 @@ export class ProjectDiscoveryService {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`Project discovery failed for ${projectId}: ${msg}`);
       this.recording.emitDiscoveryDebugLog(projectId, 'Discovery run failed', { error: msg.slice(0, 2000) });
+      const partialMermaid = this.recording.getDiscoveryNavigationMermaid(projectId);
       await this.prisma.projectAgentKnowledge
         .update({
           where: { projectId },
@@ -350,6 +365,7 @@ export class ProjectDiscoveryService {
             discoveryStatus: 'failed',
             discoveryCompletedAt: new Date(),
             discoveryError: msg.slice(0, 8000),
+            ...(partialMermaid ? { discoveryNavigationMermaid: partialMermaid } : {}),
           },
         })
         .catch(() => {});

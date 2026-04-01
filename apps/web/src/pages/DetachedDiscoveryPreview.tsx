@@ -1,12 +1,13 @@
 import { useParams } from 'react-router-dom';
 import { formatDiscoveryLogSingleLine, useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
 
 /**
- * Full-window live JPEG stream + discovery agent log (join `run:discovery-${projectId}`).
+ * Full-window live JPEG stream + discovery agent log + navigation map (join `run:discovery-${projectId}`).
  */
 export default function DetachedDiscoveryPreview() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { frameDataUrl, connected, logLines, formatLogTime } = useDiscoveryLive(projectId, {
+  const { frameDataUrl, connected, logLines, formatLogTime, navigationMermaid } = useDiscoveryLive(projectId, {
     enabled: !!projectId,
   });
 
@@ -22,6 +23,7 @@ export default function DetachedDiscoveryPreview() {
           <span className="text-xs text-gray-400">{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
       </div>
+      <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         <div className="flex-1 flex items-center justify-center overflow-auto p-4 min-h-0">
           {frameDataUrl ? (
@@ -61,6 +63,13 @@ export default function DetachedDiscoveryPreview() {
             )}
           </div>
         </div>
+      </div>
+      <div className="shrink-0 border-t border-gray-700 max-h-[min(40vh,300px)] min-h-[160px] overflow-hidden bg-gray-950 px-2 pb-2">
+        <DiscoveryMermaidPanel
+          source={navigationMermaid}
+          className="border-gray-700 bg-gray-900 max-h-[min(40vh,300px)] [&_.bg-gray-50]:bg-gray-800/80"
+        />
+      </div>
       </div>
       <p className="text-[10px] text-gray-500 text-center px-4 py-2 border-t border-gray-800 shrink-0">
         Read-only stream · controls stay on the Projects page

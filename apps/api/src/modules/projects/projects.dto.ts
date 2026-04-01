@@ -79,6 +79,13 @@ export class PatchAgentKnowledgeDto {
   @ValidateIf((_, v) => v != null)
   @IsObject()
   discoveryStructured?: Record<string, unknown> | null;
+
+  @ApiPropertyOptional({ description: 'Mermaid navigation map from discovery; null clears' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(500_000)
+  discoveryNavigationMermaid?: string | null;
 }
 
 export class UpdateProjectDto {

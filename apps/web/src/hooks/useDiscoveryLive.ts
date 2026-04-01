@@ -55,6 +55,7 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [logLines, setLogLines] = useState<DiscoveryLogLine[]>([]);
+  const [navigationMermaid, setNavigationMermaid] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const clearFrame = useCallback(() => setFrameDataUrl(null), []);
@@ -64,10 +65,12 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
       setFrameDataUrl(null);
       setConnected(false);
       setLogLines([]);
+      setNavigationMermaid(null);
       return;
     }
 
     setLogLines([]);
+    setNavigationMermaid(null);
 
     const runId = discoveryLiveRunId(projectId);
     const socket = createRecordingSocket();
@@ -94,10 +97,16 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
       setLogLines(payload.lines ?? []);
     };
 
+    const onDiscoveryMermaid = (payload: { projectId: string; mermaid: string }) => {
+      if (payload.projectId !== projectId) return;
+      setNavigationMermaid(payload.mermaid ?? null);
+    };
+
     socket.on('connect', onConnect);
     socket.on('frame', onFrame);
     socket.on('discoveryDebugLog', onDiscoveryLog);
     socket.on('discoveryDebugLogBatch', onDiscoveryLogBatch);
+    socket.on('discoveryNavigationMermaid', onDiscoveryMermaid);
     socket.on('disconnect', () => setConnected(false));
 
     if (socket.connected) onConnect();
@@ -113,8 +122,9 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
       setFrameDataUrl(null);
       setConnected(false);
       setLogLines([]);
+      setNavigationMermaid(null);
     };
   }, [projectId, enabled]);
 
-  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime };
+  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime, navigationMermaid };
 }

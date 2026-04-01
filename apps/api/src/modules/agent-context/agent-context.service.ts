@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export type AgentContextBundle = {
   general: string;
   projectManual: string;
-  /** Truncated markdown + structured excerpt for prompt injection. */
+  /** Truncated markdown + structured excerpt + optional Mermaid map for prompt injection. */
   discoveryInjection: string;
 };
 
@@ -12,6 +12,7 @@ const MAX_GENERAL = 16_000;
 const MAX_MANUAL = 16_000;
 const MAX_DISCOVERY_MARKDOWN = 12_000;
 const MAX_DISCOVERY_JSON = 8_000;
+const MAX_DISCOVERY_MERMAID = 8_000;
 
 @Injectable()
 export class AgentContextService {
@@ -88,6 +89,12 @@ export class AgentContextService {
       this.logger.log(`Agent context: truncated discovery markdown for project ${projectId} (chars=${MAX_DISCOVERY_MARKDOWN})`);
     }
 
+    const rawMermaid = k?.discoveryNavigationMermaid ?? '';
+    const discMermaid = rawMermaid ? truncate(rawMermaid.trim(), MAX_DISCOVERY_MERMAID) : '';
+    if (discMermaid && discMermaid.length < rawMermaid.length) {
+      this.logger.log(`Agent context: truncated discovery Mermaid for project ${projectId} (chars=${MAX_DISCOVERY_MERMAID})`);
+    }
+
     let discoveryInjection = discMd;
     if (k?.discoveryStructured != null) {
       let jsonStr = '';
@@ -103,6 +110,11 @@ export class AgentContextService {
         }
         discoveryInjection = [discMd.trim(), `Structured map (excerpt):\n${ex}`].filter(Boolean).join('\n\n');
       }
+    }
+    if (discMermaid) {
+      discoveryInjection = [discoveryInjection.trim(), `Navigation map (Mermaid):\n${discMermaid}`]
+        .filter(Boolean)
+        .join('\n\n');
     }
 
     return { general, projectManual, discoveryInjection };
