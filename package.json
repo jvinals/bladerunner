@@ -1,7 +1,7 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.10.128",
+  "version": "0.10.129",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
     "postinstall": "playwright install chromium",
@@ -16,6 +16,7 @@
     "clean": "pnpm -r run clean",
     "typecheck": "pnpm -r run typecheck",
     "check:db-tcp": "node --env-file=.env scripts/check-db-tcp.mjs",
+    "migrate:api": "pnpm --filter @bladerunner/api run migrate",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",

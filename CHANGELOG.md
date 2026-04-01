@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.129`: Root **`pnpm run migrate:api`** runs **`prisma migrate deploy`** in **`@bladerunner/api`** (schema lives under `apps/api/prisma/`; running `prisma migrate` from the repo root fails with “Could not find Prisma Schema”).
+
 - `0.10.128`: **Agent knowledge framework** — per-user **general agent instructions** (Settings → Agents) and per-project **manual notes** + **app discovery** artifacts; API `GET`/`PATCH` `/settings/agent-context`, `GET`/`PATCH` `/projects/:id/agent-knowledge`, `POST` `/projects/:id/discovery`. Injected into **instruction-to-action** (recording AI), **evaluation** codegen/analyzer when a project is linked, and **optimized prompt** `appContext`. Discovery MVP: single-page capture + LLM synthesis into markdown + structured JSON; new LLM usage key `project_discovery`. `@bladerunner/api 0.6.105`, `@bladerunner/web 0.7.77`.
 
 ## 2026-03-31
