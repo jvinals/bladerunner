@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.131`: **Edit project** — **Run app discovery** shows a **pipeline** (Ready → Queued → Discovering → Result), **timestamps**, status/errors, and **editable** discovery **summary (markdown)** and **structured JSON** with save/clear. Drafts stay stable while discovery **polls**; they refresh when a run **finishes** or you **save**. `@bladerunner/web 0.7.79`.
+
 - `0.10.130`: **Projects** page uses **`max-w-7xl`** for the form + table (was `max-w-4xl`); projects table wrapper uses **`overflow-x-auto`** instead of clipping (`overflow-hidden`), **`table-fixed`** + column widths + **`Actions`** header so Edit/Delete stay visible. `@bladerunner/web 0.7.78`.
 
 - `0.10.129`: Root **`pnpm run migrate:api`** runs **`prisma migrate deploy`** in **`@bladerunner/api`** (schema lives under `apps/api/prisma/`; running `prisma migrate` from the repo root fails with “Could not find Prisma Schema”).

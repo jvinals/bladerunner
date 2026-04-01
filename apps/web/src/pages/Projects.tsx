@@ -1,14 +1,69 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   projectsApi,
   type ProjectDto,
   type CreateProjectBody,
   type TestEmailProvider,
+  type ProjectDiscoveryStatus,
   TEST_EMAIL_PROVIDERS,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
-import { FolderKanban, Plus, Trash2, Pencil, Eye, EyeOff } from 'lucide-react';
+import {
+  FolderKanban,
+  Plus,
+  Trash2,
+  Pencil,
+  Eye,
+  EyeOff,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react';
+
+const DISCOVERY_STEPS = [
+  { id: 'ready', label: 'Ready' },
+  { id: 'queued', label: 'Queued' },
+  { id: 'running', label: 'Discovering' },
+  { id: 'result', label: 'Result' },
+] as const;
+
+function discoveryStepVisual(
+  status: ProjectDiscoveryStatus,
+  stepIndex: number,
+): 'done' | 'active' | 'pending' | 'activeError' | 'activeSuccess' {
+  if (status === 'idle') {
+    return stepIndex === 0 ? 'active' : 'pending';
+  }
+  if (status === 'queued') {
+    if (stepIndex === 0) return 'done';
+    if (stepIndex === 1) return 'active';
+    return 'pending';
+  }
+  if (status === 'running') {
+    if (stepIndex < 2) return 'done';
+    if (stepIndex === 2) return 'active';
+    return 'pending';
+  }
+  if (status === 'completed') {
+    if (stepIndex < 3) return 'done';
+    return 'activeSuccess';
+  }
+  if (status === 'failed') {
+    if (stepIndex < 3) return 'done';
+    return 'activeError';
+  }
+  return 'pending';
+}
+
+function formatDiscoveryTimestamp(iso: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
+}
 
 const KINDS: CreateProjectBody['kind'][] = ['WEB', 'IOS', 'ANDROID'];
 
@@ -46,6 +101,11 @@ export default function ProjectsPage() {
   const [form, setForm] = useState<ProjectForm>({ ...emptyForm });
   const [showPassword, setShowPassword] = useState(false);
   const [manualDraft, setManualDraft] = useState('');
+  const [discoveryMarkdownDraft, setDiscoveryMarkdownDraft] = useState('');
+  const [discoveryJsonDraft, setDiscoveryJsonDraft] = useState('');
+  const [structuredJsonError, setStructuredJsonError] = useState<string | null>(null);
+  const discoverySeededForEditingId = useRef<string | null>(null);
+  const prevDiscoveryStatusRef = useRef<ProjectDiscoveryStatus | null>(null);
 
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
@@ -67,6 +127,38 @@ export default function ProjectsPage() {
       setManualDraft(agentKnowledge.manualInstructions);
     }
   }, [agentKnowledge?.manualInstructions, editingId]);
+
+  useEffect(() => {
+    if (!editingId) {
+      discoverySeededForEditingId.current = null;
+      prevDiscoveryStatusRef.current = null;
+      return;
+    }
+    if (!agentKnowledge) return;
+
+    const status = agentKnowledge.discoveryStatus;
+    const prev = prevDiscoveryStatusRef.current;
+    const firstSeed = discoverySeededForEditingId.current !== editingId;
+    const justFinished =
+      prev != null &&
+      (prev === 'running' || prev === 'queued') &&
+      (status === 'completed' || status === 'failed');
+
+    if (!firstSeed && !justFinished) {
+      prevDiscoveryStatusRef.current = status;
+      return;
+    }
+
+    setDiscoveryMarkdownDraft(agentKnowledge.discoverySummaryMarkdown ?? '');
+    setDiscoveryJsonDraft(
+      agentKnowledge.discoveryStructured != null
+        ? JSON.stringify(agentKnowledge.discoveryStructured, null, 2)
+        : '',
+    );
+    setStructuredJsonError(null);
+    discoverySeededForEditingId.current = editingId;
+    prevDiscoveryStatusRef.current = status;
+  }, [editingId, agentKnowledge]);
 
   const createMutation = useMutation({
     mutationFn: (body: CreateProjectBody) => projectsApi.create(body),
@@ -106,6 +198,46 @@ export default function ProjectsPage() {
     },
   });
 
+  const saveDiscoverySummaryMutation = useMutation({
+    mutationFn: () =>
+      projectsApi.patchAgentKnowledge(editingId!, { discoverySummaryMarkdown: discoveryMarkdownDraft }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['projectAgentKnowledge', editingId] });
+      setDiscoveryMarkdownDraft(data.discoverySummaryMarkdown ?? '');
+    },
+  });
+
+  const saveDiscoveryStructuredMutation = useMutation({
+    mutationFn: (structured: Record<string, unknown> | null) =>
+      projectsApi.patchAgentKnowledge(editingId!, { discoveryStructured: structured }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['projectAgentKnowledge', editingId] });
+      setStructuredJsonError(null);
+      setDiscoveryJsonDraft(
+        data.discoveryStructured != null ? JSON.stringify(data.discoveryStructured, null, 2) : '',
+      );
+    },
+  });
+
+  const saveStructuredDiscovery = () => {
+    setStructuredJsonError(null);
+    const trimmed = discoveryJsonDraft.trim();
+    if (!trimmed) {
+      saveDiscoveryStructuredMutation.mutate(null);
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        setStructuredJsonError('Structured data must be a JSON object (not an array or primitive).');
+        return;
+      }
+      saveDiscoveryStructuredMutation.mutate(parsed as Record<string, unknown>);
+    } catch (e) {
+      setStructuredJsonError(e instanceof Error ? e.message : 'Invalid JSON');
+    }
+  };
+
   const startEdit = (p: ProjectDto) => {
     setEditingId(p.id);
     setForm({
@@ -120,6 +252,11 @@ export default function ProjectsPage() {
     });
     setShowPassword(false);
     setManualDraft('');
+    setDiscoveryMarkdownDraft('');
+    setDiscoveryJsonDraft('');
+    setStructuredJsonError(null);
+    discoverySeededForEditingId.current = null;
+    prevDiscoveryStatusRef.current = null;
   };
 
   const cancelEdit = () => {
@@ -127,6 +264,11 @@ export default function ProjectsPage() {
     setForm({ ...emptyForm });
     setShowPassword(false);
     setManualDraft('');
+    setDiscoveryMarkdownDraft('');
+    setDiscoveryJsonDraft('');
+    setStructuredJsonError(null);
+    discoverySeededForEditingId.current = null;
+    prevDiscoveryStatusRef.current = null;
   };
 
   const submit = () => {
@@ -303,62 +445,186 @@ export default function ProjectsPage() {
         </div>
 
         {editingId && (
-          <div className="border border-gray-100 rounded-md p-4 space-y-3 bg-gray-50/50">
-            <p className="text-xs font-semibold text-gray-700">Agent knowledge (this project)</p>
-            <p className="text-[11px] text-gray-500">
-              Merged into recording AI, evaluations, and optimized prompts when a run uses this project. Discovery adds an automated map after you run it.
-            </p>
-            <textarea
-              value={manualDraft}
-              onChange={(e) => setManualDraft(e.target.value)}
-              rows={5}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
-              placeholder="Manual notes for agents (terminology, flaky areas, test data hints)…"
-            />
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="border border-gray-100 rounded-md p-4 space-y-4 bg-gray-50/50">
+            <div>
+              <p className="text-xs font-semibold text-gray-700">Agent knowledge (this project)</p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Merged into recording AI, evaluations, and optimized prompts when a run uses this project.
+              </p>
+              <textarea
+                value={manualDraft}
+                onChange={(e) => setManualDraft(e.target.value)}
+                rows={4}
+                className="mt-2 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                placeholder="Manual notes for agents (terminology, flaky areas, test data hints)…"
+              />
               <button
                 type="button"
                 onClick={() => saveAgentNotes.mutate()}
                 disabled={saveAgentNotes.isPending}
-                className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
+                className="mt-2 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
               >
                 Save agent notes
               </button>
-              <span className="text-[11px] text-gray-500">
-                Discovery:{' '}
-                <span className="font-medium text-gray-700">
-                  {agentKnowledge?.discoveryStatus ?? '—'}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => discoveryMutation.mutate()}
-                disabled={
-                  discoveryMutation.isPending ||
-                  agentKnowledge?.discoveryStatus === 'running' ||
-                  agentKnowledge?.discoveryStatus === 'queued' ||
-                  form.kind !== 'WEB' ||
-                  !form.url?.trim()
-                }
-                className="px-3 py-1.5 text-sm bg-[#4B90FF] text-white rounded-md hover:bg-blue-500 disabled:opacity-40"
-              >
-                Run app discovery
-              </button>
             </div>
-            {discoveryMutation.data && !discoveryMutation.data.accepted && discoveryMutation.data.reason && (
-              <p className="text-xs text-amber-700">{discoveryMutation.data.reason}</p>
-            )}
-            {agentKnowledge?.discoveryError && (
-              <p className="text-xs text-red-600">{agentKnowledge.discoveryError}</p>
-            )}
-            {agentKnowledge?.discoverySummaryMarkdown && (
-              <details className="text-xs">
-                <summary className="cursor-pointer text-gray-600 font-medium">Last discovery summary</summary>
-                <pre className="mt-2 p-3 bg-white border border-gray-100 rounded-md whitespace-pre-wrap text-gray-700 max-h-64 overflow-y-auto">
-                  {agentKnowledge.discoverySummaryMarkdown}
-                </pre>
-              </details>
-            )}
+
+            <div className="border-t border-gray-200 pt-4 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-gray-700">Run app discovery</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Crawls the project URL and fills the summary and structured map below. You can edit them after a run.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => discoveryMutation.mutate()}
+                  disabled={
+                    discoveryMutation.isPending ||
+                    agentKnowledge?.discoveryStatus === 'running' ||
+                    agentKnowledge?.discoveryStatus === 'queued' ||
+                    form.kind !== 'WEB' ||
+                    !form.url?.trim()
+                  }
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[#4B90FF] text-white rounded-md hover:bg-blue-500 disabled:opacity-40"
+                >
+                  {(discoveryMutation.isPending ||
+                    agentKnowledge?.discoveryStatus === 'running' ||
+                    agentKnowledge?.discoveryStatus === 'queued') && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  Run app discovery
+                </button>
+              </div>
+
+              <div className="rounded-md border border-gray-200 bg-white p-3">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Pipeline</p>
+                <div className="flex flex-wrap items-center gap-1 sm:gap-0">
+                  {DISCOVERY_STEPS.map((step, idx) => {
+                    const dStatus = agentKnowledge?.discoveryStatus ?? 'idle';
+                    const visual = discoveryStepVisual(dStatus, idx);
+                    const isLast = idx === DISCOVERY_STEPS.length - 1;
+                    return (
+                      <div key={step.id} className="flex items-center min-w-0">
+                        <div className="flex flex-col items-center gap-1 min-w-[4.5rem] sm:min-w-[5.5rem]">
+                          <span className="flex h-7 w-7 items-center justify-center">
+                            {visual === 'done' && <CheckCircle2 className="w-5 h-5 text-emerald-600" aria-hidden />}
+                            {visual === 'active' && <Loader2 className="w-5 h-5 text-blue-500 animate-spin" aria-hidden />}
+                            {visual === 'activeSuccess' && (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600" aria-hidden />
+                            )}
+                            {visual === 'activeError' && <XCircle className="w-5 h-5 text-red-600" aria-hidden />}
+                            {visual === 'pending' && (
+                              <span className="h-5 w-5 rounded-full border-2 border-gray-300 bg-gray-50" aria-hidden />
+                            )}
+                          </span>
+                          <span
+                            className={`text-[10px] text-center leading-tight px-0.5 ${
+                              visual === 'active' || visual === 'activeError' || visual === 'activeSuccess'
+                                ? 'font-semibold text-gray-800'
+                                : 'text-gray-500'
+                            }`}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                        {!isLast && (
+                          <div
+                            className={`hidden sm:block h-px w-4 sm:w-6 shrink-0 -mt-4 ${
+                              discoveryStepVisual(dStatus, idx) === 'done' ? 'bg-emerald-300' : 'bg-gray-200'
+                            }`}
+                            aria-hidden
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600">
+                  <span>
+                    Status:{' '}
+                    <span className="font-medium text-gray-800">{agentKnowledge?.discoveryStatus ?? '—'}</span>
+                  </span>
+                  <span>
+                    Started:{' '}
+                    <span className="font-medium text-gray-800">
+                      {formatDiscoveryTimestamp(agentKnowledge?.discoveryStartedAt ?? null)}
+                    </span>
+                  </span>
+                  <span>
+                    Finished:{' '}
+                    <span className="font-medium text-gray-800">
+                      {formatDiscoveryTimestamp(agentKnowledge?.discoveryCompletedAt ?? null)}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {discoveryMutation.data && !discoveryMutation.data.accepted && discoveryMutation.data.reason && (
+                <p className="text-xs text-amber-700">{discoveryMutation.data.reason}</p>
+              )}
+              {agentKnowledge?.discoveryError && (
+                <p className="text-xs text-red-600">{agentKnowledge.discoveryError}</p>
+              )}
+
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Discovery summary (markdown)</label>
+                <textarea
+                  value={discoveryMarkdownDraft}
+                  onChange={(e) => setDiscoveryMarkdownDraft(e.target.value)}
+                  rows={8}
+                  className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm font-mono"
+                  placeholder="Populated after discovery runs, or paste your own notes…"
+                />
+                <button
+                  type="button"
+                  onClick={() => saveDiscoverySummaryMutation.mutate()}
+                  disabled={saveDiscoverySummaryMutation.isPending}
+                  className="mt-2 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
+                >
+                  Save discovery summary
+                </button>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Structured discovery (JSON object)</label>
+                <textarea
+                  value={discoveryJsonDraft}
+                  onChange={(e) => {
+                    setDiscoveryJsonDraft(e.target.value);
+                    setStructuredJsonError(null);
+                  }}
+                  rows={10}
+                  className={`mt-1 w-full border rounded-md px-3 py-2 text-xs font-mono ${
+                    structuredJsonError ? 'border-red-300' : 'border-gray-200'
+                  }`}
+                  placeholder='{}'
+                />
+                {structuredJsonError && <p className="mt-1 text-xs text-red-600">{structuredJsonError}</p>}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={saveStructuredDiscovery}
+                    disabled={saveDiscoveryStructuredMutation.isPending}
+                    className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Save structured JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscoveryJsonDraft('');
+                      setStructuredJsonError(null);
+                      saveDiscoveryStructuredMutation.mutate(null);
+                    }}
+                    disabled={saveDiscoveryStructuredMutation.isPending}
+                    className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-40"
+                  >
+                    Clear structured data
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
