@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.153`: **Discovery explorer system prompt** — replaced the explorer LLM system prompt with the Playwright Exploration Agent template (tree traversal, primary areas, recovery order, evidence/scrolling/list rules, JSON output). `@bladerunner/api 0.6.118`.
+
 - `0.10.152`: **Run app discovery — cancel** — `POST /projects/:id/discovery/cancel` aborts the in-process run (`AbortSignal` + LLM cancellation); DB ends as **failed** with `Cancelled by user.` Projects UI: **Cancel discovery** while **queued** or **running**, then **Run app discovery** again. `@bladerunner/api 0.6.117`, `@bladerunner/web 0.7.95`.
 
 - `0.10.151`: **Discovery agent log — LLM modal closes** — list keys used the index **after** `reverse()`, so new log lines shifted keys and **remounted** rows (modals closed). Keys now use the stable **original** line index. `@bladerunner/web 0.7.94`.
