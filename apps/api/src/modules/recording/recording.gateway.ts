@@ -58,6 +58,13 @@ export class RecordingGateway implements OnGatewayInit {
       },
     );
 
+    this.recordingService.on(
+      'discoveryDebugLog',
+      (projectId: string, line: { at: string; message: string; detail?: Record<string, unknown> }) => {
+        this.server.to(`run:discovery-${projectId}`).emit('discoveryDebugLog', { projectId, ...line });
+      },
+    );
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 
@@ -95,6 +102,12 @@ export class RecordingGateway implements OnGatewayInit {
     const traceLines = this.recordingService.getEvaluationDebugLogLines(data.runId);
     if (traceLines.length > 0) {
       client.emit('evaluationDebugLogBatch', { evaluationId: data.runId, lines: traceLines });
+    }
+    if (discoveryProjectId) {
+      const discoveryLines = this.recordingService.getDiscoveryDebugLogLines(discoveryProjectId);
+      if (discoveryLines.length > 0) {
+        client.emit('discoveryDebugLogBatch', { projectId: discoveryProjectId, lines: discoveryLines });
+      }
     }
     return { event: 'joined', data: { runId: data.runId } };
   }

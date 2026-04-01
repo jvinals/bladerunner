@@ -79,7 +79,11 @@ export class ProjectDiscoveryService {
 
   private async runJob(projectId: string, userId: string): Promise<void> {
     const discoverySessionId = randomUUID();
+    const log = (message: string, detail?: Record<string, unknown>) =>
+      this.recording.emitDiscoveryDebugLog(projectId, message, detail);
     try {
+      this.recording.clearDiscoveryDebugLog(projectId);
+      log('Discovery run started', { discoverySessionId });
       await this.prisma.projectAgentKnowledge.update({
         where: { projectId },
         data: {
@@ -88,8 +92,10 @@ export class ProjectDiscoveryService {
           discoveryError: null,
         },
       });
+      log('Status set to running; persisting discoveryStartedAt');
 
       await this.recording.startDiscoverySession(discoverySessionId, userId, projectId);
+      log('Remote browser connected (browser-worker); screencast attached');
 
       const project = await this.prisma.project.findFirst({
         where: { id: projectId, userId },
@@ -97,14 +103,22 @@ export class ProjectDiscoveryService {
       if (!project?.url?.trim()) {
         throw new Error('Project URL missing');
       }
+      log('Loaded project record', { name: project.name, url: project.url?.trim() });
 
+      log('Navigating to base URL (domcontentloaded)', { url: project.url.trim() });
       await this.recording.discoveryGoto(discoverySessionId, userId, project.url.trim());
+      log('Initial navigation finished');
 
       const authState = { clerkFullSignInDone: false };
       /** Match evaluations: attempt assist whenever a test email is set (Clerk can use env credentials; generic still needs password in project). */
       const wantAuto = !!project.testUserEmail?.trim();
       const signInMaxIters = 15;
+      log('Starting automatic sign-in assist phase', {
+        wantAuto,
+        iterationsMax: signInMaxIters,
+      });
       for (let i = 0; i < signInMaxIters; i++) {
+        log(`Auto sign-in assist iteration ${i + 1}/${signInMaxIters}`);
         await this.recording.maybeDiscoveryAutoSignInAssist(discoverySessionId, userId, {
           runUrl: project.url.trim(),
           projectForAuth: {
@@ -117,6 +131,7 @@ export class ProjectDiscoveryService {
           state: authState,
         });
         await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
+        log('Assist iteration complete', { clerkFullSignInDone: authState.clerkFullSignInDone });
         if (authState.clerkFullSignInDone) {
           break;
         }
@@ -124,10 +139,17 @@ export class ProjectDiscoveryService {
       }
       await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
       /** Let SPAs hydrate after auth before exploration. */
+      log('Waiting 2.5s for SPA to settle after auth');
       await sleepMs(2500);
 
       /** Exploration-only wall clock (auth + settle do not count toward the crawl cap). */
       const explorationStartedAt = Date.now();
+      log('Exploration phase started', {
+        maxSteps: DISCOVERY_MAX_EXPLORATION_STEPS,
+        maxWallMs: DISCOVERY_MAX_WALL_MS,
+        minStepsBeforeStop: DISCOVERY_MIN_STEPS_BEFORE_STOP,
+        minDistinctUrlsBeforeStop: DISCOVERY_MIN_DISTINCT_URLS_BEFORE_STOP,
+      });
       const authContextSummary = project.testUserEmail?.trim()
         ? `Test email configured (automatic sign-in attempted). Email provider: ${project.testEmailProvider ?? 'default'}. Password ${project.testUserPassword?.trim() ? 'configured' : 'not set'}.`
         : 'No test email configured; only public/unauthenticated flows were available.';
@@ -138,13 +160,27 @@ export class ProjectDiscoveryService {
 
       while (stepIndex < DISCOVERY_MAX_EXPLORATION_STEPS && Date.now() - explorationStartedAt < DISCOVERY_MAX_WALL_MS) {
         const elapsedMs = Date.now() - explorationStartedAt;
+        log(`Exploration loop iteration (completed steps: ${stepIndex})`, {
+          elapsedMs,
+          wallRemainingMs: DISCOVERY_MAX_WALL_MS - elapsedMs,
+        });
+        log('Capturing page for exploration (Set-of-Marks + accessibility + screenshot)');
         const ctx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
         const shot = ctx.screenshotBase64?.trim();
         if (!shot) {
           throw new Error('Discovery capture produced no screenshot');
         }
+        log('Page snapshot captured', {
+          pageUrl: ctx.pageUrl,
+          pageTitle: ctx.pageTitle?.slice(0, 200),
+          screenshotChars: shot.length,
+        });
         const visitedScreensSoFar = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
         const uniqNorm = new Set(visitedScreensSoFar.map((v) => normalizeDiscoveryUrlForDedup(v.url)));
+        log('Visited screens count', {
+          rawNavigations: visitedScreensSoFar.length,
+          distinctNormalizedUrls: uniqNorm.size,
+        });
 
         const exploreBase = {
           baseUrl: project.url.trim(),
@@ -164,7 +200,13 @@ export class ProjectDiscoveryService {
           screenshotBase64: shot,
         };
 
+        log('Calling explore LLM (project_discovery) for next action');
         let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, { userId });
+        log('Explore LLM response', {
+          stop: plan.stop,
+          reason: plan.reason?.slice(0, 500),
+          playwrightCodeChars: plan.playwrightCode?.length ?? 0,
+        });
 
         for (let r = 0; r < DISCOVERY_EXPLORE_MAX_RETRIES; r++) {
           const valid = !plan.stop && !!plan.playwrightCode?.trim();
@@ -180,6 +222,9 @@ export class ProjectDiscoveryService {
           this.logger.warn(
             `Discovery: retrying explore after premature stop (project ${projectId}, completedSteps=${stepIndex}, urls=${uniqNorm.size}, retry ${r + 1})`,
           );
+          log(`Retrying explore LLM after premature stop (${r + 1}/${DISCOVERY_EXPLORE_MAX_RETRIES})`, {
+            reason: plan.reason?.slice(0, 300),
+          });
           explorationLogLines.push(
             `Premature stop or empty code — retry ${r + 1}/${DISCOVERY_EXPLORE_MAX_RETRIES}: ${plan.reason}`,
           );
@@ -191,19 +236,26 @@ export class ProjectDiscoveryService {
             },
             { userId },
           );
+          log('Explore LLM retry response', {
+            stop: plan.stop,
+            playwrightCodeChars: plan.playwrightCode?.length ?? 0,
+          });
         }
 
         if (plan.stop || !plan.playwrightCode?.trim()) {
+          log('Exploration stopping (model stop or empty code)', { reason: plan.reason?.slice(0, 500) });
           explorationLogLines.push(`Explore stop at step ${stepIndex + 1}: ${plan.reason}`);
           break;
         }
 
         try {
+          log('Executing Playwright snippet from explore step');
           await this.recording.discoveryRunPlaywrightSnippet(
             discoverySessionId,
             userId,
             plan.playwrightCode,
           );
+          log('Playwright snippet completed');
           const codePreview =
             plan.playwrightCode.length > 500 ? `${plan.playwrightCode.slice(0, 500)}…` : plan.playwrightCode;
           explorationLogLines.push(
@@ -213,30 +265,40 @@ export class ProjectDiscoveryService {
         } catch (err) {
           consecutiveFailures += 1;
           const msg = err instanceof Error ? err.message : String(err);
+          log('Playwright snippet failed', { error: msg.slice(0, 800), consecutiveFailures });
           explorationLogLines.push(`Step ${stepIndex + 1} FAILED: ${msg}`);
           if (consecutiveFailures >= 5) {
+            log('Aborting exploration after 5 consecutive Playwright failures');
             explorationLogLines.push('Aborted exploration after 5 consecutive failures.');
             break;
           }
         }
 
         await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
+        log('Waiting 900ms before next exploration step');
         await sleepMs(900);
         stepIndex += 1;
       }
 
       if (Date.now() - explorationStartedAt >= DISCOVERY_MAX_WALL_MS) {
+        log('Exploration ended: wall clock cap reached');
         explorationLogLines.push('Exploration stopped: wall clock cap reached.');
       } else if (stepIndex >= DISCOVERY_MAX_EXPLORATION_STEPS) {
+        log('Exploration ended: max steps reached');
         explorationLogLines.push('Exploration stopped: max exploration steps reached.');
       }
 
+      log('Starting final page capture for synthesis');
       const finalCtx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
       const visitedScreens = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
       const finalShot = finalCtx.screenshotBase64?.trim();
       if (!finalShot) {
         throw new Error('Discovery final capture produced no screenshot');
       }
+      log('Calling final discovery LLM (project_discovery synthesis)', {
+        screensVisitedCount: visitedScreens.length,
+        explorationLogChars: explorationLogLines.join('\n').length,
+      });
 
       const finalReport = await this.llm.projectDiscoveryFinalReport(
         {
@@ -265,6 +327,7 @@ export class ProjectDiscoveryService {
         screensVisited: visitedScreens,
       };
 
+      log('Persisting discovery results to database (completed)');
       await this.prisma.projectAgentKnowledge.update({
         where: { projectId },
         data: {
@@ -275,9 +338,11 @@ export class ProjectDiscoveryService {
           discoveryError: null,
         },
       });
+      log('Discovery run completed successfully');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`Project discovery failed for ${projectId}: ${msg}`);
+      this.recording.emitDiscoveryDebugLog(projectId, 'Discovery run failed', { error: msg.slice(0, 2000) });
       await this.prisma.projectAgentKnowledge
         .update({
           where: { projectId },
@@ -289,6 +354,7 @@ export class ProjectDiscoveryService {
         })
         .catch(() => {});
     } finally {
+      this.recording.emitDiscoveryDebugLog(projectId, 'Closing remote browser session');
       await this.recording.stopDiscoverySession(discoverySessionId, userId).catch(() => {});
     }
   }

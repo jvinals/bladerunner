@@ -348,6 +348,12 @@ export class RecordingService extends EventEmitter {
   /** Real-time evaluation trace lines (orchestrator + LLM); capped for memory; join catch-up. */
   private evaluationDebugLogById = new Map<string, Array<{ at: string; message: string; detail?: Record<string, unknown> }>>();
   private static readonly EVAL_DEBUG_LOG_MAX_LINES = 2500;
+  /** Project discovery agent log lines (keyed by project id); join catch-up on `run:discovery-{projectId}`. */
+  private discoveryDebugLogByProjectId = new Map<
+    string,
+    Array<{ at: string; message: string; detail?: Record<string, unknown> }>
+  >();
+  private static readonly DISCOVERY_DEBUG_LOG_MAX_LINES = 3000;
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
   private aiPromptTestInFlight = new Map<string, Promise<void>>();
   /** In-flight optimized prompt generation / refresh work keyed by `${runId}:${stepId}`. */
@@ -665,6 +671,34 @@ export class RecordingService extends EventEmitter {
     navigatedAt: string;
   }> {
     return this.discoverySessions.get(discoverySessionId)?.visitedScreens ?? [];
+  }
+
+  /** Clears buffered discovery log lines when a new run starts for the same project. */
+  clearDiscoveryDebugLog(projectId: string): void {
+    this.discoveryDebugLogByProjectId.delete(projectId);
+  }
+
+  getDiscoveryDebugLogLines(projectId: string): Array<{ at: string; message: string; detail?: Record<string, unknown> }> {
+    return this.discoveryDebugLogByProjectId.get(projectId) ?? [];
+  }
+
+  /**
+   * Append a timestamped line to the project discovery agent log (WebSocket `discoveryDebugLog` + join catch-up).
+   * Do not log secrets; keep `detail` to sizes and short previews.
+   */
+  emitDiscoveryDebugLog(projectId: string, message: string, detail?: Record<string, unknown>): void {
+    const at = new Date().toISOString();
+    const line = { at, message, detail };
+    let buf = this.discoveryDebugLogByProjectId.get(projectId);
+    if (!buf) {
+      buf = [];
+      this.discoveryDebugLogByProjectId.set(projectId, buf);
+    }
+    buf.push(line);
+    if (buf.length > RecordingService.DISCOVERY_DEBUG_LOG_MAX_LINES) {
+      buf.splice(0, buf.length - RecordingService.DISCOVERY_DEBUG_LOG_MAX_LINES);
+    }
+    this.emit('discoveryDebugLog', projectId, line);
   }
 
   /**
