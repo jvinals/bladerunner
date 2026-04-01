@@ -499,6 +499,8 @@ export const projectsApi = {
     }),
   triggerDiscovery: (id: string) =>
     apiFetch<{ accepted: boolean; reason?: string }>(`/projects/${id}/discovery`, { method: 'POST' }),
+  cancelDiscovery: (id: string) =>
+    apiFetch<{ cancelled: boolean; reason?: string }>(`/projects/${id}/discovery/cancel`, { method: 'POST' }),
 };
 
 // ─── Evaluations (autonomous browser + LLM) ────────────────────────────────────

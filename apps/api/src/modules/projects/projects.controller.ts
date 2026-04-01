@@ -58,6 +58,13 @@ export class ProjectsController {
     return this.projectsService.patchAgentKnowledge(id, req.user.sub, dto);
   }
 
+  @Post(':id/discovery/cancel')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Cancel in-progress app discovery' })
+  async cancelDiscovery(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.projectDiscovery.cancel(id, req.user.sub);
+  }
+
   @Post(':id/discovery')
   @HttpCode(202)
   @ApiOperation({ summary: 'Run or refresh app discovery (async)' })

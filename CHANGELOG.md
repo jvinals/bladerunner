@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.152`: **Run app discovery — cancel** — `POST /projects/:id/discovery/cancel` aborts the in-process run (`AbortSignal` + LLM cancellation); DB ends as **failed** with `Cancelled by user.` Projects UI: **Cancel discovery** while **queued** or **running**, then **Run app discovery** again. `@bladerunner/api 0.6.117`, `@bladerunner/web 0.7.95`.
+
 - `0.10.151`: **Discovery agent log — LLM modal closes** — list keys used the index **after** `reverse()`, so new log lines shifted keys and **remounted** rows (modals closed). Keys now use the stable **original** line index. `@bladerunner/web 0.7.94`.
 
 - `0.10.150`: **Discovery LLM log — modal review** — LLM rows no longer use nested collapsibles; **click the row** to open one **scrollable modal** with full **SENT** (system, user, screenshot) and **RECEIVED** (model + thinking). `@bladerunner/web 0.7.93`.

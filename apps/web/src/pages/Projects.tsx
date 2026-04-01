@@ -243,6 +243,13 @@ export default function ProjectsPage() {
     },
   });
 
+  const cancelDiscoveryMutation = useMutation({
+    mutationFn: () => projectsApi.cancelDiscovery(editingId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectAgentKnowledge', editingId] });
+    },
+  });
+
   const saveDiscoverySummaryMutation = useMutation({
     mutationFn: () =>
       projectsApi.patchAgentKnowledge(editingId!, { discoverySummaryMarkdown: discoveryMarkdownDraft }),
@@ -525,25 +532,41 @@ export default function ProjectsPage() {
                     <strong className="font-medium text-gray-600">Detach</strong> for a full-window live view.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => discoveryMutation.mutate()}
-                  disabled={
-                    discoveryMutation.isPending ||
-                    agentKnowledge?.discoveryStatus === 'running' ||
-                    agentKnowledge?.discoveryStatus === 'queued' ||
-                    form.kind !== 'WEB' ||
-                    !form.url?.trim()
-                  }
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[#4B90FF] text-white rounded-md hover:bg-blue-500 disabled:opacity-40"
-                >
-                  {(discoveryMutation.isPending ||
-                    agentKnowledge?.discoveryStatus === 'running' ||
+                <div className="shrink-0 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => discoveryMutation.mutate()}
+                    disabled={
+                      discoveryMutation.isPending ||
+                      agentKnowledge?.discoveryStatus === 'running' ||
+                      agentKnowledge?.discoveryStatus === 'queued' ||
+                      form.kind !== 'WEB' ||
+                      !form.url?.trim()
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[#4B90FF] text-white rounded-md hover:bg-blue-500 disabled:opacity-40"
+                  >
+                    {(discoveryMutation.isPending ||
+                      agentKnowledge?.discoveryStatus === 'running' ||
+                      agentKnowledge?.discoveryStatus === 'queued') && (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    )}
+                    Run app discovery
+                  </button>
+                  {(agentKnowledge?.discoveryStatus === 'running' ||
                     agentKnowledge?.discoveryStatus === 'queued') && (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <button
+                      type="button"
+                      onClick={() => cancelDiscoveryMutation.mutate()}
+                      disabled={cancelDiscoveryMutation.isPending}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 bg-white text-gray-800 rounded-md hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      {cancelDiscoveryMutation.isPending && (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      )}
+                      Cancel discovery
+                    </button>
                   )}
-                  Run app discovery
-                </button>
+                </div>
               </div>
 
               {editingId && (

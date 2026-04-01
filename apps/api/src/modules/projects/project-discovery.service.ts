@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { LlmService } from '../llm/llm.service';
 import { randomUUID } from 'node:crypto';
-import { sleepMs } from '@bladerunner/clerk-agentmail-signin';
 import { normalizeDiscoveryUrlForDedup } from './discovery-url.util';
 import { DiscoveryNavigationTree } from './discovery-navigation-tree';
 import type { DiscoveryLlmExchangePayload } from '../llm/discovery-llm-log.types';
@@ -22,6 +21,26 @@ const DISCOVERY_EXPLORE_MAX_RETRIES = 2;
 /** Max depth in the IA tree (0 = root). */
 export const DISCOVERY_MAX_NAV_DEPTH = 5;
 
+async function sleepMsOrAbort(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw new DOMException('Discovery cancelled', 'AbortError');
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(t);
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('Discovery cancelled', 'AbortError'));
+    };
+    const t = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort);
+  });
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw new DOMException('Discovery cancelled', 'AbortError');
+}
+
 /**
  * LLM-driven breadth-first exploration + final evidence-based report.
  */
@@ -29,6 +48,7 @@ export const DISCOVERY_MAX_NAV_DEPTH = 5;
 export class ProjectDiscoveryService {
   private readonly logger = new Logger(ProjectDiscoveryService.name);
   private readonly busy = new Set<string>();
+  private readonly runAbortControllers = new Map<string, AbortController>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -39,6 +59,23 @@ export class ProjectDiscoveryService {
   /** True when this Node process has an in-flight discovery job (lost on restart; DB may still say queued/running). */
   isDiscoveryBusy(projectId: string): boolean {
     return this.busy.has(projectId);
+  }
+
+  /**
+   * Request cancellation of the in-process discovery run (abort signal + best-effort cleanup in finally).
+   */
+  async cancel(projectId: string, userId: string): Promise<{ cancelled: boolean; reason?: string }> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, userId },
+    });
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
+    if (!this.busy.has(projectId)) {
+      return { cancelled: false, reason: 'No discovery run is in progress for this project.' };
+    }
+    this.runAbortControllers.get(projectId)?.abort();
+    return { cancelled: true };
   }
 
   /**
@@ -69,11 +106,16 @@ export class ProjectDiscoveryService {
     });
 
     this.busy.add(projectId);
-    void this.runJob(projectId, userId).finally(() => this.busy.delete(projectId));
+    const ac = new AbortController();
+    this.runAbortControllers.set(projectId, ac);
+    void this.runJob(projectId, userId, ac.signal).finally(() => {
+      this.busy.delete(projectId);
+      this.runAbortControllers.delete(projectId);
+    });
     return { accepted: true };
   }
 
-  private async runJob(projectId: string, userId: string): Promise<void> {
+  private async runJob(projectId: string, userId: string, signal: AbortSignal): Promise<void> {
     const discoverySessionId = randomUUID();
     const log = (message: string, detail?: Record<string, unknown>) =>
       this.recording.emitDiscoveryDebugLog(projectId, message, detail);
@@ -81,6 +123,7 @@ export class ProjectDiscoveryService {
       this.recording.emitDiscoveryDebugLog(projectId, message, { llm: payload });
     let finalMermaid: string | null = null;
     try {
+      throwIfAborted(signal);
       this.recording.clearDiscoveryDebugLog(projectId);
       log('Discovery run started', { discoverySessionId });
       await this.prisma.projectAgentKnowledge.update({
@@ -118,6 +161,7 @@ export class ProjectDiscoveryService {
         iterationsMax: signInMaxIters,
       });
       for (let i = 0; i < signInMaxIters; i++) {
+        throwIfAborted(signal);
         log(`Auto sign-in assist iteration ${i + 1}/${signInMaxIters}`);
         await this.recording.maybeDiscoveryAutoSignInAssist(discoverySessionId, userId, {
           runUrl: project.url.trim(),
@@ -135,12 +179,12 @@ export class ProjectDiscoveryService {
         if (authState.clerkFullSignInDone) {
           break;
         }
-        await sleepMs(1200);
+        await sleepMsOrAbort(1200, signal);
       }
       await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
       /** Let SPAs hydrate after auth before exploration. */
       log('Waiting 2.5s for SPA to settle after auth');
-      await sleepMs(2500);
+      await sleepMsOrAbort(2500, signal);
 
       /** Exploration-only wall clock (auth + settle do not count toward the crawl cap). */
       const explorationStartedAt = Date.now();
@@ -163,6 +207,7 @@ export class ProjectDiscoveryService {
       this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
 
       while (stepIndex < DISCOVERY_MAX_EXPLORATION_STEPS && Date.now() - explorationStartedAt < DISCOVERY_MAX_WALL_MS) {
+        throwIfAborted(signal);
         const elapsedMs = Date.now() - explorationStartedAt;
         log(`Exploration loop iteration (completed steps: ${stepIndex})`, {
           elapsedMs,
@@ -215,6 +260,7 @@ export class ProjectDiscoveryService {
 
         let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, {
           userId,
+          signal,
           onLlmExchange: (payload) => emitLlmExchange(`LLM explore step ${stepIndex + 1}`, payload),
         });
 
@@ -244,6 +290,7 @@ export class ProjectDiscoveryService {
             },
             {
               userId,
+              signal,
               onLlmExchange: (payload) =>
                 emitLlmExchange(
                   `LLM explore step ${stepIndex + 1} (retry ${r + 1}/${DISCOVERY_EXPLORE_MAX_RETRIES})`,
@@ -289,7 +336,7 @@ export class ProjectDiscoveryService {
 
         await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
         log('Waiting 900ms before next exploration step');
-        await sleepMs(900);
+        await sleepMsOrAbort(900, signal);
         if (stepOk) {
           navTree.syncFromVisitedScreens(this.recording.getDiscoveryVisitedScreens(discoverySessionId));
           if (plan.subsectionComplete) {
@@ -309,6 +356,7 @@ export class ProjectDiscoveryService {
         explorationLogLines.push('Exploration stopped: max exploration steps reached.');
       }
 
+      throwIfAborted(signal);
       log('Starting final page capture for synthesis');
       const finalCtx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
       const visitedScreens = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
@@ -331,6 +379,7 @@ export class ProjectDiscoveryService {
         },
         {
           userId,
+          signal,
           onLlmExchange: (payload) => emitLlmExchange('LLM project_discovery (final synthesis)', payload),
         },
       );
@@ -360,9 +409,19 @@ export class ProjectDiscoveryService {
       });
       log('Discovery run completed successfully');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const aborted =
+        signal.aborted ||
+        (e instanceof DOMException && e.name === 'AbortError') ||
+        (e instanceof Error && e.name === 'AbortError');
+      const msg = aborted
+        ? 'Cancelled by user.'
+        : e instanceof Error
+          ? e.message
+          : String(e);
       this.logger.warn(`Project discovery failed for ${projectId}: ${msg}`);
-      this.recording.emitDiscoveryDebugLog(projectId, 'Discovery run failed', { error: msg.slice(0, 2000) });
+      this.recording.emitDiscoveryDebugLog(projectId, aborted ? 'Discovery cancelled' : 'Discovery run failed', {
+        error: msg.slice(0, 2000),
+      });
       const partialMermaid = this.recording.getDiscoveryNavigationMermaid(projectId);
       await this.prisma.projectAgentKnowledge
         .update({
