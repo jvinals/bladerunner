@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.155`: **LLM JSON parse (prose + JSON)** — `parseJsonFromLlmText` extracts the first balanced `{ ... }` with string-aware brace matching when the model adds CoT or text before/after the object (fixes `Unexpected token 'C'` when prose leads). `@bladerunner/api 0.6.120`.
+
 - `0.10.154`: **LLM JSON parse** — `parseJsonFromLlmText` strips optional \`\`\`json fences even when the **closing** fence is missing (models often omit it); fallback slice from first \`{\` to last \`}\` if needed. `@bladerunner/api 0.6.119`.
 
 - `0.10.153`: **Discovery explorer system prompt** — replaced the explorer LLM system prompt with the Playwright Exploration Agent template (tree traversal, primary areas, recovery order, evidence/scrolling/list rules, JSON output). `@bladerunner/api 0.6.118`.

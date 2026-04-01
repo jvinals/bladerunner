@@ -583,39 +583,79 @@ function stripJsonMarkdownFences(raw: string): string {
   return t.trim();
 }
 
+/**
+ * First complete `{ ... }` by depth counting, respecting JSON string rules (so `}` inside strings does not end the object).
+ * Use when the model prepends/appends prose, chain-of-thought, or truncated markers outside the JSON.
+ */
+function extractFirstJsonObject(raw: string): string | null {
+  const start = raw.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < raw.length; i++) {
+    const c = raw[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (inString) {
+      if (c === '\\') escape = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === '{') depth += 1;
+    else if (c === '}') {
+      depth -= 1;
+      if (depth === 0) return raw.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function parseJsonFromLlmText(raw: string): unknown {
   const t = raw.trim();
   if (!t) {
     throw new Error('LLM returned empty response (no JSON to parse)');
   }
-  let payload = stripJsonMarkdownFences(t);
+  const payload = stripJsonMarkdownFences(t);
   if (!payload) {
     throw new Error('LLM returned empty JSON payload after extraction');
   }
-  try {
-    return JSON.parse(payload);
-  } catch (first) {
-    const firstMsg = first instanceof Error ? first.message : String(first);
-    const braceSlice = (s: string): string | null => {
-      const start = s.indexOf('{');
-      const end = s.lastIndexOf('}');
-      if (start === -1 || end <= start) return null;
-      return s.slice(start, end + 1);
-    };
-    const fallback = braceSlice(payload);
-    if (fallback && fallback !== payload) {
-      try {
-        return JSON.parse(fallback);
-      } catch {
-        /* use outer error */
-      }
+
+  const tryParse = (s: string): unknown | undefined => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return undefined;
     }
-    const head = payload.slice(0, 120);
-    const tail = payload.slice(-120);
-    throw new Error(
-      `JSON parse failed (${firstMsg}); response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}`,
-    );
+  };
+
+  const direct = tryParse(payload);
+  if (direct !== undefined) return direct;
+
+  const fromFenceBody = extractFirstJsonObject(payload);
+  if (fromFenceBody) {
+    const parsed = tryParse(fromFenceBody);
+    if (parsed !== undefined) return parsed;
   }
+
+  const fromRaw = extractFirstJsonObject(t);
+  if (fromRaw && fromRaw !== fromFenceBody) {
+    const parsed = tryParse(fromRaw);
+    if (parsed !== undefined) return parsed;
+  }
+
+  const firstMsg = 'Could not parse JSON after fence strip and object extraction';
+  const head = payload.slice(0, 120);
+  const tail = payload.slice(-120);
+  throw new Error(
+    `${firstMsg}; response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}`,
+  );
 }
 
 @Injectable()
