@@ -9,7 +9,8 @@ import {
   TEST_EMAIL_PROVIDERS,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
-import { formatDiscoveryLogSingleLine, useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { DiscoveryLogLineRow } from '@/components/DiscoveryLogLine';
 import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
 import {
   FolderKanban,
@@ -599,18 +600,14 @@ export default function ProjectsPage() {
                             : 'Start discovery to see a timestamped log of each step.'}
                         </p>
                       ) : (
-                        [...discoveryLogLines].reverse().map((line, i) => {
-                          const oneLine = formatDiscoveryLogSingleLine(line, formatDiscoveryLogTime);
-                          return (
-                            <div
-                              key={`${line.at}-${i}`}
-                              className="font-mono text-[10px] leading-tight border-b border-gray-100 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-800 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                              title={oneLine}
-                            >
-                              {oneLine}
-                            </div>
-                          );
-                        })
+                        [...discoveryLogLines].reverse().map((line, i) => (
+                          <DiscoveryLogLineRow
+                            key={`${line.at}-${i}`}
+                            line={line}
+                            formatTime={formatDiscoveryLogTime}
+                            variant="light"
+                          />
+                        ))
                       )}
                     </div>
                   </div>

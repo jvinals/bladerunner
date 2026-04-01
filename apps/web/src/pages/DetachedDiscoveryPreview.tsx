@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
-import { formatDiscoveryLogSingleLine, useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
+import { DiscoveryLogLineRow } from '@/components/DiscoveryLogLine';
 import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
 
 /**
@@ -48,18 +49,14 @@ export default function DetachedDiscoveryPreview() {
             {logLines.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No log lines yet.</p>
             ) : (
-              [...logLines].reverse().map((line, i) => {
-                const oneLine = formatDiscoveryLogSingleLine(line, formatLogTime);
-                return (
-                  <div
-                    key={`${line.at}-${i}`}
-                    className="font-mono text-[10px] leading-tight border-b border-gray-700/80 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                    title={oneLine}
-                  >
-                    {oneLine}
-                  </div>
-                );
-              })
+              [...logLines].reverse().map((line, i) => (
+                <DiscoveryLogLineRow
+                  key={`${line.at}-${i}`}
+                  line={line}
+                  formatTime={formatLogTime}
+                  variant="dark"
+                />
+              ))
             )}
           </div>
         </div>

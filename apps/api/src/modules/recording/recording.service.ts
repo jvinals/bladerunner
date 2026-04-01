@@ -64,6 +64,7 @@ import {
 } from './ai-prompt-step-metadata';
 import type { InstructionToActionLlmTranscript } from '../llm/providers/llm-provider.interface';
 import { buildGeminiInstructionPrompt } from '../llm/gemini-instruction.client';
+import { discoveryScreenKey, normalizeDiscoveryUrlForDedup } from '../projects/discovery-url.util';
 import { injectSetOfMarkOverlay, removeSetOfMarkOverlay } from './set-of-mark-capture';
 import {
   fallbackNamedComboboxClicksForPlayback,
@@ -332,7 +333,7 @@ type DiscoveryLiveSession = {
   latestFrame: Buffer | null;
   screencastVideo: ScreencastVideoEncoder | null;
   screencastClosing?: boolean;
-  /** Main-frame navigations during this session (deduped by consecutive URL). */
+  /** Main-frame navigations + logical SPA screens (URL/title pairs; see appendDiscoveryVisitedIfChanged). */
   visitedScreens: Array<{ url: string; title: string | null; navigatedAt: string }>;
 };
 
@@ -982,6 +983,90 @@ export class RecordingService extends EventEmitter {
     this.discoverySessions.delete(discoverySessionId);
   }
 
+  /**
+   * Scroll the document and common overflow regions so SOM/a11y see off-screen controls,
+   * then record a visit if URL+title changed (SPA views without navigation events).
+   */
+  private async discoveryScrollRevealPage(page: Page): Promise<void> {
+    try {
+      await page.evaluate(async () => {
+        const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+        const doc = document.documentElement;
+        const body = document.body;
+        const maxH = Math.max(doc.scrollHeight, body?.scrollHeight ?? 0, 1);
+        const maxW = Math.max(doc.scrollWidth, body?.scrollWidth ?? 0, 1);
+        const step = 450;
+        for (let y = 0; y <= maxH; y += step) {
+          window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+          await sleep(35);
+        }
+        window.scrollTo({ top: maxH, left: 0, behavior: 'instant' });
+        for (let x = 0; x <= maxW; x += step) {
+          window.scrollTo({ top: maxH, left: x, behavior: 'instant' });
+          await sleep(35);
+        }
+        window.scrollTo({ top: maxH, left: maxW, behavior: 'instant' });
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        const candidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter((el) => {
+          const st = window.getComputedStyle(el);
+          const oy = st.overflowY;
+          const ox = st.overflowX;
+          const scrollY =
+            (oy === 'auto' || oy === 'scroll' || oy === 'overlay') && el.scrollHeight > el.clientHeight + 24;
+          const scrollX =
+            (ox === 'auto' || ox === 'scroll' || ox === 'overlay') && el.scrollWidth > el.clientWidth + 24;
+          return scrollY || scrollX;
+        }).slice(0, 35);
+        for (const el of candidates) {
+          try {
+            el.scrollTop = el.scrollHeight;
+            el.scrollLeft = el.scrollWidth;
+            await sleep(40);
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+      await sleepMs(150);
+    } catch (err) {
+      this.logger.warn('discoveryScrollRevealPage failed', err);
+    }
+  }
+
+  /** Append to visitedScreens when the logical screen (URL + normalized title) differs from the last entry. */
+  private async appendDiscoveryVisitedIfChanged(session: DiscoveryLiveSession): Promise<void> {
+    const { page } = session;
+    let url = '';
+    try {
+      url = page.url();
+    } catch {
+      return;
+    }
+    if (!url || url === 'about:blank') {
+      return;
+    }
+    let title: string | null = null;
+    try {
+      title = await page.title();
+    } catch {
+      title = null;
+    }
+    const urlNorm = normalizeDiscoveryUrlForDedup(url);
+    const key = discoveryScreenKey(urlNorm, title);
+    const last = session.visitedScreens[session.visitedScreens.length - 1];
+    if (last) {
+      const lastKey = discoveryScreenKey(normalizeDiscoveryUrlForDedup(last.url), last.title);
+      if (lastKey === key) {
+        return;
+      }
+    }
+    session.visitedScreens.push({
+      url,
+      title,
+      navigatedAt: new Date().toISOString(),
+    });
+  }
+
   async captureDiscoveryLlmPageContext(
     discoverySessionId: string,
     userId: string,
@@ -996,6 +1081,8 @@ export class RecordingService extends EventEmitter {
     if (!session || session.userId !== userId) {
       throw new BadRequestException('Discovery browser session not found');
     }
+    await this.discoveryScrollRevealPage(session.page);
+    await this.appendDiscoveryVisitedIfChanged(session);
     const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
     let pageTitle = '';
     try {

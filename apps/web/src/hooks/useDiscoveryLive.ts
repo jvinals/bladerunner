@@ -7,10 +7,32 @@ export function discoveryLiveRunId(projectId: string): string {
   return `discovery-${projectId}`;
 }
 
+/** Mirrors API `DiscoveryLlmExchangePayload` (project discovery LLM calls). */
+export type DiscoveryLlmLogDetail = {
+  kind: 'explore' | 'final';
+  usageKey: 'project_discovery';
+  sent: {
+    systemPrompt: string;
+    systemPromptTruncated?: boolean;
+    userPrompt: string;
+    userPromptTruncated?: boolean;
+    hasImage: boolean;
+    imageBase64?: string;
+    imageTruncated?: boolean;
+    imageOmittedDueToSize?: boolean;
+    imageSizeChars?: number;
+  };
+  received: {
+    content: string;
+    contentTruncated?: boolean;
+    thinking?: string;
+  };
+};
+
 export type DiscoveryLogLine = {
   at: string;
   message: string;
-  detail?: Record<string, unknown>;
+  detail?: Record<string, unknown> & { llm?: DiscoveryLlmLogDetail };
 };
 
 type UseDiscoveryLiveOptions = {
@@ -40,6 +62,10 @@ export function formatDiscoveryLogSingleLine(
   formatTime: (iso: string) => string,
 ): string {
   const msg = (line.message ?? '').replace(/\s+/g, ' ').trim();
+  const llm = line.detail?.llm;
+  if (llm) {
+    return `${formatTime(line.at)} — ${msg} · expand row for SENT / RECEIVED`;
+  }
   const detail =
     line.detail != null && Object.keys(line.detail).length > 0
       ? ` ${JSON.stringify(line.detail)}`

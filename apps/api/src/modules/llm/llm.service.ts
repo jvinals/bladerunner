@@ -17,6 +17,14 @@ import {
   verifyGeminiPlaywrightAgainstDom,
   truncateDomSectionsForGemini,
 } from './gemini-instruction.client';
+import {
+  buildDiscoveryImageSentFields,
+  truncateDiscoveryLlmField,
+  type DiscoveryLlmExchangePayload,
+  DISCOVERY_LLM_LOG_MAX_PROMPT_CHARS,
+  DISCOVERY_LLM_LOG_MAX_RESPONSE_CHARS,
+  DISCOVERY_LLM_LOG_MAX_THINKING_CHARS,
+} from './discovery-llm-log.types';
 import { geminiChat } from './gemini-llm-chat.adapter';
 import { LlmConfigService } from './llm-config.service';
 import { createChatLlmProvider } from './llm-provider-factory';
@@ -184,6 +192,10 @@ Use **depth-first** exploration within each **primary app area** (sidebar item, 
 1. Click a visible **parent** control: breadcrumb, “Home”, app logo, main section in the sidebar, or a back chevron that returns to a list/hub.
 2. \`await page.goBack()\` **only** if the app uses real history (avoid loops on SPAs that push the same shell URL).
 3. **Shell reset:** \`await page.goto(baseUrl)\` using the **exact Base URL** from the user message — then navigate to the **next** primary menu item you have not yet explored deeply. Use this when back does not reach a clear hub or you are stuck deep in one branch.
+
+**Depth from evidence:** Use the **Set-of-Marks manifest** and **accessibility snapshot** on every step. Look for **links**, **tabs**, **tree rows**, **sidebar items**, **expand/collapse**, **“View” / “Details” / row actions**, or **navigation regions** that imply a **deeper** logical level than the current view. If you are **below** max depth and see a credible child destination you have not opened yet, **open that next** instead of setting subsectionComplete. Only treat a subsection as “exhausted” when those sources show no further meaningful drill-down at this depth (or you are at max depth).
+
+**Scrolling:** The server **scrolls the main document and major overflow containers** before each capture. If the manifest still shows clipped controls, lazy regions, or an inner scroller, add one step: \`scrollIntoViewIfNeeded()\` on a tagged element, wheel inside a scroll container, or a short \`waitForTimeout\` after expand.
 
 Your job is to choose the **single next** exploratory Playwright step: one click, navigate, or short wait.
 
@@ -1421,7 +1433,11 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       /** Appended when retrying after a premature stop. */
       continuationHint?: string;
     },
-    opts?: { userId?: string; signal?: AbortSignal },
+    opts?: {
+      userId?: string;
+      signal?: AbortSignal;
+      onLlmExchange?: (payload: DiscoveryLlmExchangePayload) => void;
+    },
   ): Promise<{ stop: boolean; reason: string; playwrightCode?: string; subsectionComplete?: boolean }> {
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
@@ -1453,6 +1469,7 @@ NAVIGATION POLICY (sections & depth ${maxD})
 - **Base URL for full shell reset:** Use the **Base URL** in TASK INPUTS verbatim inside \`await page.goto(...)\` when you need to return to the app entry, then open a **different** primary sidebar/top-nav area from the manifest.
 - **Target depth:** Explore each chosen primary area to **nested depth up to ${maxD}** (tabs, child routes, drill-downs) before marking **subsectionComplete** and recovering toward hub/home.
 - **Breadth:** Use the "Top-level areas seen so far" line in the tree summary as a checklist — keep opening **new** primary destinations until the manifest shows no major areas left, not only the first screen you landed on.
+- **Capture:** The pipeline **scrolls the page vertically and horizontally** (and common inner scrollers) before this snapshot; still verify the manifest for off-screen or nested-scroll UI.
 
 EXPLORATION BUDGET (hard rules)
 - Do NOT set stop=true until **both** (a) at least ${input.minStepsBeforeStop} steps have been **executed**, **and** (b) at least ${input.minDistinctUrlsBeforeStop} **distinct** URLs appear in the visited list — unless you are blocked (CAPTCHA, 403, no targets).
@@ -1490,6 +1507,31 @@ ${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\
         signal: opts?.signal,
       },
     );
+    if (opts?.onLlmExchange) {
+      const sysT = truncateDiscoveryLlmField(PROJECT_DISCOVERY_EXPLORER_SYSTEM, DISCOVERY_LLM_LOG_MAX_PROMPT_CHARS);
+      const userT = truncateDiscoveryLlmField(user, DISCOVERY_LLM_LOG_MAX_PROMPT_CHARS);
+      const respT = truncateDiscoveryLlmField(res.content, DISCOVERY_LLM_LOG_MAX_RESPONSE_CHARS);
+      const thinkT = res.thinking?.trim()
+        ? truncateDiscoveryLlmField(res.thinking, DISCOVERY_LLM_LOG_MAX_THINKING_CHARS)
+        : null;
+      const img = buildDiscoveryImageSentFields(shot);
+      opts.onLlmExchange({
+        kind: 'explore',
+        usageKey: 'project_discovery',
+        sent: {
+          systemPrompt: sysT.value,
+          ...(sysT.truncated ? { systemPromptTruncated: true } : {}),
+          userPrompt: userT.value,
+          ...(userT.truncated ? { userPromptTruncated: true } : {}),
+          ...img,
+        },
+        received: {
+          content: respT.value,
+          ...(respT.truncated ? { contentTruncated: true } : {}),
+          ...(thinkT ? { thinking: thinkT.value } : {}),
+        },
+      });
+    }
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const stop = parsed.stop === true;
     const subsectionComplete = parsed.subsectionComplete === true;
@@ -1520,7 +1562,11 @@ ${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\
       accessibilitySnapshot: string;
       screenshotBase64: string;
     },
-    opts?: { userId?: string; signal?: AbortSignal },
+    opts?: {
+      userId?: string;
+      signal?: AbortSignal;
+      onLlmExchange?: (payload: DiscoveryLlmExchangePayload) => void;
+    },
   ): Promise<{ discoverySummaryBodyMarkdown: string; structured: Record<string, unknown> }> {
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
@@ -1570,6 +1616,31 @@ The attached image is the final Set-of-Marks screenshot. Produce the JSON report
         signal: opts?.signal,
       },
     );
+    if (opts?.onLlmExchange) {
+      const sysT = truncateDiscoveryLlmField(PROJECT_DISCOVERY_FINAL_SYSTEM, DISCOVERY_LLM_LOG_MAX_PROMPT_CHARS);
+      const userT = truncateDiscoveryLlmField(user, DISCOVERY_LLM_LOG_MAX_PROMPT_CHARS);
+      const respT = truncateDiscoveryLlmField(res.content, DISCOVERY_LLM_LOG_MAX_RESPONSE_CHARS);
+      const thinkT = res.thinking?.trim()
+        ? truncateDiscoveryLlmField(res.thinking, DISCOVERY_LLM_LOG_MAX_THINKING_CHARS)
+        : null;
+      const img = buildDiscoveryImageSentFields(shot);
+      opts.onLlmExchange({
+        kind: 'final',
+        usageKey: 'project_discovery',
+        sent: {
+          systemPrompt: sysT.value,
+          ...(sysT.truncated ? { systemPromptTruncated: true } : {}),
+          userPrompt: userT.value,
+          ...(userT.truncated ? { userPromptTruncated: true } : {}),
+          ...img,
+        },
+        received: {
+          content: respT.value,
+          ...(respT.truncated ? { contentTruncated: true } : {}),
+          ...(thinkT ? { thinking: thinkT.value } : {}),
+        },
+      });
+    }
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const body =
       typeof parsed.discoverySummaryMarkdown === 'string' ? parsed.discoverySummaryMarkdown.trim() : '';
