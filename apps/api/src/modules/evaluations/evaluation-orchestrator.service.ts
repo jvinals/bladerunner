@@ -319,6 +319,8 @@ export class EvaluationOrchestratorService {
         viewportJpegBase64: screenshotB64,
         somManifest: codegenCtx.somManifest,
         accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
+        autoSignInEnabled: fresh.autoSignIn,
+        autoSignInCompleted: authState.clerkFullSignInDone,
         note:
           'Full-page Set-of-Marks JPEG + SOM manifest + CDP accessibility sent to codegen (viewportJpegBase64 for UI preview).',
       };
@@ -346,6 +348,8 @@ export class EvaluationOrchestratorService {
           pageUrl,
           somManifest: codegenCtx.somManifest,
           accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
+          autoSignInEnabled: fresh.autoSignIn,
+          autoSignInCompleted: authState.clerkFullSignInDone,
         },
         {
           userId,
@@ -434,6 +438,8 @@ export class EvaluationOrchestratorService {
         afterStepViewportJpegBase64: afterB64,
         somManifest: afterCtx.somManifest,
         accessibilitySnapshot: afterCtx.accessibilitySnapshot,
+        autoSignInEnabled: fresh.autoSignIn,
+        autoSignInCompleted: authState.clerkFullSignInDone,
         note:
           'After-step full-page Set-of-Marks JPEG + manifest + accessibility sent to analyzer (afterStepViewportJpegBase64 for UI preview).',
       };
@@ -466,6 +472,8 @@ export class EvaluationOrchestratorService {
             screenshotAfterBase64: afterB64,
             somManifest: afterCtx.somManifest,
             accessibilitySnapshot: afterCtx.accessibilitySnapshot,
+            autoSignInEnabled: fresh.autoSignIn,
+            autoSignInCompleted: authState.clerkFullSignInDone,
           },
           {
             userId,
@@ -487,6 +495,23 @@ export class EvaluationOrchestratorService {
           rationale: `Analyzer model did not finish within ${Math.round(ms / 1000)}s (timeout or cancellation).`,
         };
         trace('Analyzer LLM: timeout or abort', { timeoutMs: ms });
+      }
+
+      if (
+        analysis.decision === 'ask_human' &&
+        fresh.autoSignIn &&
+        !authState.clerkFullSignInDone
+      ) {
+        const suffix =
+          ' (overridden: automatic sign-in is enabled and still in progress; not pausing for credentials.)';
+        analysis = {
+          ...analysis,
+          decision: 'retry',
+          rationale: `${analysis.rationale}${suffix}`.slice(0, 8000),
+          humanQuestion: undefined,
+          humanOptions: undefined,
+        };
+        trace('Analyzer: coerced ask_human to retry while auto sign-in pending', { sequence });
       }
 
       const analyzerOutputJson = {

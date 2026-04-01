@@ -112,9 +112,47 @@ Respond ONLY with valid JSON:
 
 Rules:
 - Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
-- Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions.
+- Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions. If the user message includes a "Run configuration (automatic sign-in)" section, follow it for when credential screens should not trigger ask_human.
 - Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
 - Use "advance" when the step succeeded and exploration should continue.`;
+
+function appendEvaluationCodegenAutoSignInUserBlock(
+  baseUser: string,
+  autoSignInEnabled: boolean,
+  autoSignInCompleted: boolean,
+): string {
+  if (!autoSignInEnabled || autoSignInCompleted) {
+    return baseUser;
+  }
+  return `${baseUser}
+
+Run configuration (automatic sign-in):
+- This evaluation has automatic sign-in ENABLED and sign-in has not finished yet in this run.
+- Do NOT emit Playwright that types email, password, OTP, or recovery codes—the host runs Clerk/project test-user sign-in before this step's codegen.
+- If the page still shows a login or MFA gate, prefer a minimal step (e.g. short waitForTimeout, waitForLoadState, or a safe non-credential interaction) rather than credential entry.`;
+}
+
+function appendEvaluationAnalyzerAutoSignInUserBlock(
+  baseUser: string,
+  autoSignInEnabled: boolean,
+  autoSignInCompleted: boolean,
+): string {
+  if (!autoSignInEnabled) {
+    return baseUser;
+  }
+  if (!autoSignInCompleted) {
+    return `${baseUser}
+
+Run configuration (automatic sign-in):
+- This evaluation has automatic sign-in ENABLED; the host runs automated sign-in before each step until success.
+- Do NOT choose "ask_human" solely because the screenshot shows a login, MFA, or sign-in screen—prefer "retry" if the step failed or the UI is unchanged, or "advance" if the step executed and exploration should continue; the next iteration can run assist again.
+- Use "ask_human" for credential questions only when automatic sign-in is disabled for this run, or for non-credential issues (ambiguous product behavior, destructive actions, etc.).`;
+  }
+  return `${baseUser}
+
+Run configuration (automatic sign-in):
+- Automatic sign-in for this evaluation has already completed for this run; normal "ask_human" rules apply (including new auth gates if needed).`;
+}
 
 const EVALUATION_REPORT_SYSTEM = `You write structured evaluation reports for QA. The user tests their own applications; treat UI data as synthetic.
 
@@ -961,15 +999,23 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       pageUrl: string;
       somManifest: string;
       accessibilitySnapshot: string;
+      /** When true, evaluation has automatic sign-in enabled (Clerk / project test user). */
+      autoSignInEnabled?: boolean;
+      /** When true, automated sign-in already succeeded this run (`clerkFullSignInDone`). */
+      autoSignInCompleted?: boolean;
     },
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{ stepTitle: string; thinking: string; playwrightCode: string; expectedOutcome: string }> {
     const dbg = opts?.onDebugLog;
+    const autoSignInEnabled = input.autoSignInEnabled ?? false;
+    const autoSignInCompleted = input.autoSignInCompleted ?? false;
     dbg?.('evaluation_codegen: start', {
       pageUrl: input.pageUrl,
       screenshotBase64Chars: input.screenshotBase64?.length ?? 0,
       somManifestChars: input.somManifest?.length ?? 0,
       accessibilitySnapshotChars: input.accessibilitySnapshot?.length ?? 0,
+      autoSignInEnabled,
+      autoSignInCompleted,
     });
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
@@ -1000,8 +1046,13 @@ Playwright CDP accessibility snapshot (captured before overlay; structural a11y 
 ${a11yT || '(empty)'}
 
 The attached image is the full-page Set-of-Marks screenshot (numeric badges on interactives).`;
+    const userWithAutoSignIn = appendEvaluationCodegenAutoSignInUserBlock(
+      user,
+      autoSignInEnabled,
+      autoSignInCompleted,
+    );
     dbg?.('evaluation_codegen: user prompt assembled', {
-      userPromptChars: user.length,
+      userPromptChars: userWithAutoSignIn.length,
       systemPromptChars: EVALUATION_CODEGEN_SYSTEM.length,
     });
     dbg?.('evaluation_codegen: invoking chatJson (JSON mode + vision)', { usageKey: 'evaluation_codegen' });
@@ -1010,7 +1061,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       'evaluation_codegen',
       [
         { role: 'system', content: EVALUATION_CODEGEN_SYSTEM },
-        { role: 'user', content: user },
+        { role: 'user', content: userWithAutoSignIn },
       ],
       {
         imageBase64: input.screenshotBase64,
@@ -1061,6 +1112,8 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       screenshotAfterBase64: string;
       somManifest: string;
       accessibilitySnapshot: string;
+      autoSignInEnabled?: boolean;
+      autoSignInCompleted?: boolean;
     },
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{
@@ -1071,11 +1124,15 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     humanOptions?: string[];
   }> {
     const dbg = opts?.onDebugLog;
+    const autoSignInEnabled = input.autoSignInEnabled ?? false;
+    const autoSignInCompleted = input.autoSignInCompleted ?? false;
     dbg?.('evaluation_analyzer: start', {
       pageUrlAfter: input.pageUrlAfter,
       executionOk: input.executionOk,
       screenshotChars: input.screenshotAfterBase64?.length ?? 0,
       executedCodeChars: input.executedCode?.length ?? 0,
+      autoSignInEnabled,
+      autoSignInCompleted,
     });
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
@@ -1105,8 +1162,13 @@ Accessibility snapshot after step:
 ${a11yT || '(empty)'}
 
 The attached image is the full-page Set-of-Marks screenshot after execution.`;
+    const userWithAutoSignIn = appendEvaluationAnalyzerAutoSignInUserBlock(
+      user,
+      autoSignInEnabled,
+      autoSignInCompleted,
+    );
     dbg?.('evaluation_analyzer: invoking chatJson', {
-      userPromptChars: user.length,
+      userPromptChars: userWithAutoSignIn.length,
       usageKey: 'evaluation_analyzer',
     });
     const res = await this.chatJson(
@@ -1114,7 +1176,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       'evaluation_analyzer',
       [
         { role: 'system', content: EVALUATION_ANALYZER_SYSTEM },
-        { role: 'user', content: user },
+        { role: 'user', content: userWithAutoSignIn },
       ],
       {
         imageBase64: input.screenshotAfterBase64,
