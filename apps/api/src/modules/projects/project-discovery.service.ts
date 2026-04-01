@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { sleepMs } from '@bladerunner/clerk-agentmail-signin';
 import { normalizeDiscoveryUrlForDedup } from './discovery-url.util';
 import { DiscoveryNavigationTree } from './discovery-navigation-tree';
+import type { DiscoveryLlmExchangePayload } from '../llm/discovery-llm-log.types';
 
 /** Max LLM-driven exploration steps (each may execute one Playwright snippet). */
 const DISCOVERY_MAX_EXPLORATION_STEPS = 200;
@@ -76,6 +77,8 @@ export class ProjectDiscoveryService {
     const discoverySessionId = randomUUID();
     const log = (message: string, detail?: Record<string, unknown>) =>
       this.recording.emitDiscoveryDebugLog(projectId, message, detail);
+    const emitLlmExchange = (message: string, payload: DiscoveryLlmExchangePayload) =>
+      this.recording.emitDiscoveryDebugLog(projectId, message, { llm: payload });
     let finalMermaid: string | null = null;
     try {
       this.recording.clearDiscoveryDebugLog(projectId);
@@ -210,13 +213,9 @@ export class ProjectDiscoveryService {
           currentNavDepth: navTree.depthOf(navTree.focusId),
         };
 
-        log('Calling explore LLM (project_discovery) for next action');
-        let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, { userId });
-        log('Explore LLM response', {
-          stop: plan.stop,
-          subsectionComplete: plan.subsectionComplete,
-          reason: plan.reason?.slice(0, 500),
-          playwrightCodeChars: plan.playwrightCode?.length ?? 0,
+        let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, {
+          userId,
+          onLlmExchange: (payload) => emitLlmExchange(`LLM explore step ${stepIndex + 1}`, payload),
         });
 
         for (let r = 0; r < DISCOVERY_EXPLORE_MAX_RETRIES; r++) {
@@ -243,33 +242,16 @@ export class ProjectDiscoveryService {
               continuationHint:
                 'You are below the minimum exploration budget. Do not stop. Open a different major area: pick a visible sidebar, top nav, or menu destination you have not followed yet; or open one list row / primary action on the current screen. Prefer breadth across product areas. Return stop=false with one playwrightCode line.',
             },
-            { userId },
-          );
-          log('Explore LLM retry response', {
-            stop: plan.stop,
-            playwrightCodeChars: plan.playwrightCode?.length ?? 0,
-          });
-        }
-
-        // #region agent log
-        fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-          body: JSON.stringify({
-            sessionId: 'ba63e6',
-            hypothesisId: 'H1',
-            location: 'project-discovery.service.ts:plan-ready',
-            message: 'explore plan before execute',
-            data: {
-              stepIndex,
-              subsectionComplete: plan.subsectionComplete,
-              stop: plan.stop,
-              hasCode: !!plan.playwrightCode?.trim(),
+            {
+              userId,
+              onLlmExchange: (payload) =>
+                emitLlmExchange(
+                  `LLM explore step ${stepIndex + 1} (retry ${r + 1}/${DISCOVERY_EXPLORE_MAX_RETRIES})`,
+                  payload,
+                ),
             },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
+          );
+        }
 
         if (plan.stop || !plan.playwrightCode?.trim()) {
           log('Exploration stopping (model stop or empty code)', { reason: plan.reason?.slice(0, 500) });
@@ -315,46 +297,6 @@ export class ProjectDiscoveryService {
           }
           finalMermaid = navTree.toMermaid();
           this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
-          // #region agent log
-          {
-            const c = (plan.playwrightCode ?? '').toLowerCase();
-            const bu = project.url.trim().toLowerCase();
-            const host = bu.replace(/^https?:\/\//, '').split('/')[0] ?? '';
-            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-              body: JSON.stringify({
-                sessionId: 'ba63e6',
-                hypothesisId: 'H2',
-                location: 'project-discovery.service.ts:after-step',
-                message: 'recovery signals in playwright code',
-                data: {
-                  goBack: c.includes('goback'),
-                  goto: c.includes('.goto('),
-                  gotoContainsHost: host.length > 0 && c.includes(host),
-                  subsectionComplete: plan.subsectionComplete,
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-              body: JSON.stringify({
-                sessionId: 'ba63e6',
-                hypothesisId: 'H3',
-                location: 'project-discovery.service.ts:tree-state',
-                message: 'nav tree breadth',
-                data: {
-                  focusDepth: navTree.depthOf(navTree.focusId),
-                  topLevelCount: navTree.topLevelLabels().length,
-                  treeNodes: navTree.nodes.size,
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-          }
-          // #endregion
         }
         stepIndex += 1;
       }
@@ -374,11 +316,6 @@ export class ProjectDiscoveryService {
       if (!finalShot) {
         throw new Error('Discovery final capture produced no screenshot');
       }
-      log('Calling final discovery LLM (project_discovery synthesis)', {
-        screensVisitedCount: visitedScreens.length,
-        explorationLogChars: explorationLogLines.join('\n').length,
-      });
-
       const finalReport = await this.llm.projectDiscoveryFinalReport(
         {
           projectName: project.name,
@@ -392,7 +329,10 @@ export class ProjectDiscoveryService {
           accessibilitySnapshot: finalCtx.accessibilitySnapshot,
           screenshotBase64: finalShot,
         },
-        { userId },
+        {
+          userId,
+          onLlmExchange: (payload) => emitLlmExchange('LLM project_discovery (final synthesis)', payload),
+        },
       );
 
       const section1Lines = visitedScreens

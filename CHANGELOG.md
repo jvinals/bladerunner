@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.148`: **Discovery agent log — LLM SENT / RECEIVED** — API emits **`detail.llm`** for every explore and final **`project_discovery`** call. Web: each LLM row expands to **collapsible SENT** (system prompt, user prompt, screenshot with modal) and **collapsible RECEIVED** (model message + optional thinking); each text field has a **modal** (expand icon) for full content. `@bladerunner/api 0.6.116`, `@bladerunner/web 0.7.91`.
+
 - `0.10.147`: **Run app discovery stuck spinner** — if agent knowledge still shows **queued/running** after an API restart while no job runs in-process, **`GET /projects/:id/agent-knowledge`** reconciles to **failed** with a clear error so the button is usable again. `@bladerunner/api 0.6.115`.
 
 - `0.10.146`: **Discovery depth + map + scroll** — explorer prompts: infer **deeper levels** from manifest/a11y; note server **pre-scroll**. **Visited screens** + nav tree use **URL + normalized title** (`discoveryScreenKey`) so SPAs add Mermaid nodes; **Mermaid** labels show **title · pathname** and **dedupe edges**. Before each discovery capture: **scroll** document + overflow regions. `@bladerunner/api 0.6.114`.
