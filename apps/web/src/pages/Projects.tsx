@@ -152,7 +152,7 @@ export default function ProjectsPage() {
   if (error) return <ErrorState message="Failed to load projects" />;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 max-w-4xl">
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 lg:px-10 py-8 w-full max-w-7xl mx-auto">
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <p className="ce-section-label mb-2">Workspace</p>
@@ -385,17 +385,17 @@ export default function ProjectsPage() {
       </div>
 
       {/* ── Table ─────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-100 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white border border-gray-100 rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[56rem] text-sm table-fixed">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/80 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Kind</th>
-              <th className="px-4 py-3">URL</th>
-              <th className="px-4 py-3">Test user</th>
-              <th className="px-4 py-3">Provider</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3 w-24" />
+              <th className="px-4 py-3 w-[18%]">Name</th>
+              <th className="px-4 py-3 w-[8%]">Kind</th>
+              <th className="px-4 py-3 w-[22%]">URL</th>
+              <th className="px-4 py-3 w-[18%]">Test user</th>
+              <th className="px-4 py-3 w-[12%]">Provider</th>
+              <th className="px-4 py-3 w-[14%]">Created</th>
+              <th className="px-4 py-3 w-[8%] text-right whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -418,10 +418,10 @@ export default function ProjectsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{p.kind}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate" title={p.url ?? ''}>
+                  <td className="px-4 py-3 text-gray-500 truncate" title={p.url ?? ''}>
                     {p.url || '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate" title={p.testUserEmail ?? ''}>
+                  <td className="px-4 py-3 text-gray-500 truncate" title={p.testUserEmail ?? ''}>
                     {p.testUserEmail || '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500">
@@ -432,8 +432,8 @@ export default function ProjectsPage() {
                   <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                     {new Date(p.createdAt).toLocaleString()}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 justify-end">
+                  <td className="px-4 py-3 align-middle">
+                    <div className="flex gap-1 justify-end shrink-0">
                       <button
                         type="button"
                         title="Edit"
