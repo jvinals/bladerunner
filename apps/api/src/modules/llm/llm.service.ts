@@ -571,24 +571,49 @@ export type AiPromptTestFailureHelp = {
   suggestedPrompt: string;
 };
 
+/**
+ * Strips optional markdown fences. Models often wrap JSON in ```json … ``` but sometimes omit the closing fence;
+ * the old whole-string regex then failed and JSON.parse saw leading ```json.
+ */
+function stripJsonMarkdownFences(raw: string): string {
+  let t = raw.trim();
+  if (!t) return t;
+  t = t.replace(/^```(?:json)?\s*\r?\n?/i, '');
+  t = t.replace(/\r?\n?```\s*$/i, '');
+  return t.trim();
+}
+
 function parseJsonFromLlmText(raw: string): unknown {
   const t = raw.trim();
   if (!t) {
     throw new Error('LLM returned empty response (no JSON to parse)');
   }
-  const fence = /^```(?:json)?\s*\n?([\s\S]*?)```\s*$/m.exec(t);
-  const payload = fence ? fence[1].trim() : t;
+  let payload = stripJsonMarkdownFences(t);
   if (!payload) {
     throw new Error('LLM returned empty JSON payload after extraction');
   }
   try {
     return JSON.parse(payload);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (first) {
+    const firstMsg = first instanceof Error ? first.message : String(first);
+    const braceSlice = (s: string): string | null => {
+      const start = s.indexOf('{');
+      const end = s.lastIndexOf('}');
+      if (start === -1 || end <= start) return null;
+      return s.slice(start, end + 1);
+    };
+    const fallback = braceSlice(payload);
+    if (fallback && fallback !== payload) {
+      try {
+        return JSON.parse(fallback);
+      } catch {
+        /* use outer error */
+      }
+    }
     const head = payload.slice(0, 120);
     const tail = payload.slice(-120);
     throw new Error(
-      `JSON parse failed (${msg}); response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}`,
+      `JSON parse failed (${firstMsg}); response length=${payload.length}, head=${JSON.stringify(head)} tail=${JSON.stringify(tail)}`,
     );
   }
 }
