@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.149`: **Discovery agent log — sticky scroll** — new lines keep the view pinned to the **newest** (top) until you scroll down; scrolling back to the **top** resumes follow mode. `@bladerunner/web 0.7.92`.
+
 - `0.10.148`: **Discovery agent log — LLM SENT / RECEIVED** — API emits **`detail.llm`** for every explore and final **`project_discovery`** call. Web: each LLM row expands to **collapsible SENT** (system prompt, user prompt, screenshot with modal) and **collapsible RECEIVED** (model message + optional thinking); each text field has a **modal** (expand icon) for full content. `@bladerunner/api 0.6.116`, `@bladerunner/web 0.7.91`.
 
 - `0.10.147`: **Run app discovery stuck spinner** — if agent knowledge still shows **queued/running** after an API restart while no job runs in-process, **`GET /projects/:id/agent-knowledge`** reconciles to **failed** with a clear error so the button is usable again. `@bladerunner/api 0.6.115`.

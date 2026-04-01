@@ -10,7 +10,7 @@ import {
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
-import { DiscoveryLogLineRow } from '@/components/DiscoveryLogLine';
+import { DiscoveryAgentLogPanel } from '@/components/DiscoveryAgentLogPanel';
 import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
 import {
   FolderKanban,
@@ -592,24 +592,17 @@ export default function ProjectsPage() {
                         Discovery agent log
                       </span>
                     </div>
-                    <div className="flex-1 min-h-0 overflow-y-auto px-2 py-1.5 text-[10px] leading-snug">
-                      {discoveryLogLines.length === 0 ? (
-                        <p className="text-gray-400 text-center py-4">
-                          {discoveryLiveEnabled
-                            ? 'Waiting for agent actions…'
-                            : 'Start discovery to see a timestamped log of each step.'}
-                        </p>
-                      ) : (
-                        [...discoveryLogLines].reverse().map((line, i) => (
-                          <DiscoveryLogLineRow
-                            key={`${line.at}-${i}`}
-                            line={line}
-                            formatTime={formatDiscoveryLogTime}
-                            variant="light"
-                          />
-                        ))
-                      )}
-                    </div>
+                    <DiscoveryAgentLogPanel
+                      lines={discoveryLogLines}
+                      formatTime={formatDiscoveryLogTime}
+                      variant="light"
+                      sessionKey={editingId ?? ''}
+                      emptyMessage={
+                        discoveryLiveEnabled
+                          ? 'Waiting for agent actions…'
+                          : 'Start discovery to see a timestamped log of each step.'
+                      }
+                    />
                   </div>
                   </div>
                   {showDiscoveryNavMap && (

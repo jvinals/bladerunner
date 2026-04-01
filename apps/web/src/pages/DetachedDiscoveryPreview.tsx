@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
-import { DiscoveryLogLineRow } from '@/components/DiscoveryLogLine';
+import { DiscoveryAgentLogPanel } from '@/components/DiscoveryAgentLogPanel';
 import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
 
 /**
@@ -45,20 +45,13 @@ export default function DetachedDiscoveryPreview() {
               Discovery agent log
             </span>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2 text-[10px] leading-snug text-gray-300">
-            {logLines.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No log lines yet.</p>
-            ) : (
-              [...logLines].reverse().map((line, i) => (
-                <DiscoveryLogLineRow
-                  key={`${line.at}-${i}`}
-                  line={line}
-                  formatTime={formatLogTime}
-                  variant="dark"
-                />
-              ))
-            )}
-          </div>
+          <DiscoveryAgentLogPanel
+            lines={logLines}
+            formatTime={formatLogTime}
+            variant="dark"
+            sessionKey={projectId ?? ''}
+            emptyMessage="No log lines yet."
+          />
         </div>
       </div>
       <div className="shrink-0 border-t border-gray-700 max-h-[min(40vh,300px)] min-h-[160px] overflow-hidden bg-gray-950 px-2 pb-2">
