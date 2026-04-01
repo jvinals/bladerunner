@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.132`: **Run app discovery** — **Live browser** inline preview + **Detach** (`/discovery-preview/:projectId`) via Socket.IO **`discovery-${projectId}`** frames (same gateway as evaluations). **Auto sign-in** runs when a **test email** is set (was incorrectly requiring email **and** password); **multi-iteration** assist + **2.5s** settle before capture. **`screensVisited`** (main-frame navigations) stored in structured JSON + LLM prompt. `@bladerunner/api 0.6.106`, `@bladerunner/web 0.7.80`.
+
 - `0.10.131`: **Edit project** — **Run app discovery** shows a **pipeline** (Ready → Queued → Discovering → Result), **timestamps**, status/errors, and **editable** discovery **summary (markdown)** and **structured JSON** with save/clear. Drafts stay stable while discovery **polls**; they refresh when a run **finishes** or you **save**. `@bladerunner/web 0.7.79`.
 
 - `0.10.130`: **Projects** page uses **`max-w-7xl`** for the form + table (was `max-w-4xl`); projects table wrapper uses **`overflow-x-auto`** instead of clipping (`overflow-hidden`), **`table-fixed`** + column widths + **`Actions`** header so Edit/Delete stay visible. `@bladerunner/web 0.7.78`.

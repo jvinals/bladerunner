@@ -12,6 +12,7 @@ import EvaluationsPage from './pages/Evaluations';
 import EvaluationDetailPage from './pages/EvaluationDetail';
 import DetachedPreview from './pages/DetachedPreview';
 import DetachedEvaluationPreview from './pages/DetachedEvaluationPreview';
+import DetachedDiscoveryPreview from './pages/DetachedDiscoveryPreview';
 import DetachedPlayback from './pages/DetachedPlayback';
 import NotFoundPage from './pages/NotFound';
 
@@ -41,6 +42,7 @@ export default function App() {
           </Route>
           <Route path="preview/:runId" element={<DetachedPreview />} />
           <Route path="evaluation-preview/:evaluationId" element={<DetachedEvaluationPreview />} />
+          <Route path="discovery-preview/:projectId" element={<DetachedDiscoveryPreview />} />
           <Route path="playback/:playbackSessionId" element={<DetachedPlayback />} />
         </Routes>
       </Show>

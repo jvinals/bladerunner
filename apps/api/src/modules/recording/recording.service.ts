@@ -323,6 +323,8 @@ type EvaluationLiveSession = {
 /** One-off project discovery browser — keyed by `discoverySessionId` (UUID per job). */
 type DiscoveryLiveSession = {
   discoverySessionId: string;
+  /** Stable id for live JPEG frames (`emit('frame', \`discovery-${projectId}\`, …)`). */
+  projectId: string;
   userId: string;
   browser: Browser;
   page: Page;
@@ -330,6 +332,8 @@ type DiscoveryLiveSession = {
   latestFrame: Buffer | null;
   screencastVideo: ScreencastVideoEncoder | null;
   screencastClosing?: boolean;
+  /** Main-frame navigations during this session (deduped by consecutive URL). */
+  visitedScreens: Array<{ url: string; title: string | null; navigatedAt: string }>;
 };
 
 @Injectable()
@@ -646,6 +650,23 @@ export class RecordingService extends EventEmitter {
     return this.evaluationSessions.get(evaluationId)?.latestFrame ?? null;
   }
 
+  getLatestDiscoveryFrame(projectId: string): Buffer | null {
+    for (const s of this.discoverySessions.values()) {
+      if (s.projectId === projectId) {
+        return s.latestFrame ?? null;
+      }
+    }
+    return null;
+  }
+
+  getDiscoveryVisitedScreens(discoverySessionId: string): Array<{
+    url: string;
+    title: string | null;
+    navigatedAt: string;
+  }> {
+    return this.discoverySessions.get(discoverySessionId)?.visitedScreens ?? [];
+  }
+
   /**
    * Full-page Set-of-Marks JPEG + manifest + CDP accessibility for evaluation codegen / analyzer.
    * Same pipeline as AI prompt steps ({@link captureLlmPageContext}).
@@ -802,9 +823,9 @@ export class RecordingService extends EventEmitter {
   }
 
   /**
-   * Temporary browser for project discovery (no live stream room).
+   * Temporary browser for project discovery. Live JPEG frames emit as `frame` with id `discovery-${projectId}` (join `run:discovery-${projectId}`).
    */
-  async startDiscoverySession(discoverySessionId: string, userId: string): Promise<void> {
+  async startDiscoverySession(discoverySessionId: string, userId: string, projectId: string): Promise<void> {
     if (this.discoverySessions.has(discoverySessionId)) {
       throw new ConflictException('Discovery browser session already active');
     }
@@ -830,15 +851,47 @@ export class RecordingService extends EventEmitter {
       const cdpSession = await context.newCDPSession(page);
       const session: DiscoveryLiveSession = {
         discoverySessionId,
+        projectId,
         userId,
         browser,
         page,
         cdpSession,
         latestFrame: null,
         screencastVideo,
+        visitedScreens: [],
       };
       this.discoverySessions.set(discoverySessionId, session);
-      await this.attachScreencast(session.cdpSession, session, discoverySessionId, captureSettings, {
+
+      const frameChannelId = `discovery-${projectId}`;
+      let lastNavUrl = '';
+      page.on('framenavigated', async (frame) => {
+        if (frame !== page.mainFrame()) {
+          return;
+        }
+        let url = '';
+        try {
+          url = frame.url();
+        } catch {
+          return;
+        }
+        if (!url || url === 'about:blank') {
+          return;
+        }
+        if (url === lastNavUrl) {
+          return;
+        }
+        lastNavUrl = url;
+        const navigatedAt = new Date().toISOString();
+        let title: string | null = null;
+        try {
+          title = await page.title().catch(() => null);
+        } catch {
+          /* ignore */
+        }
+        session.visitedScreens.push({ url, title, navigatedAt });
+      });
+
+      await this.attachScreencast(session.cdpSession, session, frameChannelId, captureSettings, {
         onJpegFrame: (jpeg) => screencastVideo?.pushFrame(jpeg),
       });
     } catch (err) {

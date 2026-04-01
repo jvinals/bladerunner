@@ -1263,6 +1263,8 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       somManifest: string;
       accessibilitySnapshot: string;
       screenshotBase64: string;
+      /** Main-frame navigations observed during the discovery session (URLs may include redirects and client-side routing). */
+      screensVisited?: Array<{ url: string; title: string | null; navigatedAt: string }>;
     },
     opts?: { userId?: string; signal?: AbortSignal },
   ): Promise<{ markdown: string; structured: Record<string, unknown> }> {
@@ -1270,11 +1272,18 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       input.somManifest,
       input.accessibilitySnapshot,
     );
+    const visitedBlock =
+      input.screensVisited && input.screensVisited.length > 0
+        ? `Screens visited during this session (main-frame navigations, in order):
+${input.screensVisited.map((v, i) => `${i + 1}. ${v.url}${v.title ? ` — "${v.title}"` : ''}`).join('\n')}
+
+`
+        : '';
     const user = `Project name: ${input.projectName}
 Start URL: ${input.startUrl}
 Current page URL: ${input.pageUrl}
 
-You are performing a first-pass discovery of a web app. This capture covers the initial page after load (and optional sign-in). Infer the product, navigation, and practical advice for automation.
+${visitedBlock}You are performing a first-pass discovery of a web app. This capture covers the initial page after load (and optional sign-in). Infer the product, navigation, and practical advice for automation. Use the visited list above to describe routing and entry points; the screenshot is the final state after capture.
 
 Interactive manifest (Set-of-Marks [n]):
 ${somT || '(empty)'}

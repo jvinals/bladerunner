@@ -71,8 +71,20 @@ export class RecordingGateway implements OnGatewayInit {
     /** Catch-up: frames/steps may have been broadcast before this socket joined the room. */
     const recFrame = this.recordingService.getLatestFrame(data.runId);
     const evalFrame = this.recordingService.getLatestEvaluationFrame(data.runId);
+    const discoveryPrefix = 'discovery-';
+    const discoveryProjectId =
+      data.runId.startsWith(discoveryPrefix) ? data.runId.slice(discoveryPrefix.length) : null;
+    const discoveryFrame = discoveryProjectId
+      ? this.recordingService.getLatestDiscoveryFrame(discoveryProjectId)
+      : null;
     const latest =
-      recFrame && recFrame.length > 0 ? recFrame : evalFrame && evalFrame.length > 0 ? evalFrame : null;
+      recFrame && recFrame.length > 0
+        ? recFrame
+        : evalFrame && evalFrame.length > 0
+          ? evalFrame
+          : discoveryFrame && discoveryFrame.length > 0
+            ? discoveryFrame
+            : null;
     if (latest && latest.length > 0) {
       client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
     }

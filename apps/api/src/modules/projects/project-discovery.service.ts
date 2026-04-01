@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { LlmService } from '../llm/llm.service';
 import { randomUUID } from 'node:crypto';
+import { sleepMs } from '@bladerunner/clerk-agentmail-signin';
 
 /**
  * MVP: single-page capture + LLM synthesis into project discovery fields.
@@ -61,7 +62,7 @@ export class ProjectDiscoveryService {
         },
       });
 
-      await this.recording.startDiscoverySession(discoverySessionId, userId);
+      await this.recording.startDiscoverySession(discoverySessionId, userId, projectId);
 
       const project = await this.prisma.project.findFirst({
         where: { id: projectId, userId },
@@ -73,21 +74,33 @@ export class ProjectDiscoveryService {
       await this.recording.discoveryGoto(discoverySessionId, userId, project.url.trim());
 
       const authState = { clerkFullSignInDone: false };
-      const wantAuto = !!(project.testUserEmail?.trim() && project.testUserPassword);
-      await this.recording.maybeDiscoveryAutoSignInAssist(discoverySessionId, userId, {
-        runUrl: project.url.trim(),
-        projectForAuth: {
-          testUserEmail: project.testUserEmail,
-          testUserPassword: project.testUserPassword,
-          testEmailProvider: project.testEmailProvider,
-        },
-        wantAuto,
-        clerkOtpMode: this.recording.resolveClerkOtpModeForEvaluation(project.testEmailProvider),
-        state: authState,
-      });
+      /** Match evaluations: attempt assist whenever a test email is set (Clerk can use env credentials; generic still needs password in project). */
+      const wantAuto = !!project.testUserEmail?.trim();
+      const signInMaxIters = 15;
+      for (let i = 0; i < signInMaxIters; i++) {
+        await this.recording.maybeDiscoveryAutoSignInAssist(discoverySessionId, userId, {
+          runUrl: project.url.trim(),
+          projectForAuth: {
+            testUserEmail: project.testUserEmail,
+            testUserPassword: project.testUserPassword,
+            testEmailProvider: project.testEmailProvider,
+          },
+          wantAuto,
+          clerkOtpMode: this.recording.resolveClerkOtpModeForEvaluation(project.testEmailProvider),
+          state: authState,
+        });
+        await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
+        if (authState.clerkFullSignInDone) {
+          break;
+        }
+        await sleepMs(1200);
+      }
       await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
+      /** Let SPAs hydrate after auth before SOM capture. */
+      await sleepMs(2500);
 
       const ctx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
+      const visitedScreens = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
       const shot = ctx.screenshotBase64?.trim();
       if (!shot) {
         throw new Error('Discovery capture produced no screenshot');
@@ -101,9 +114,15 @@ export class ProjectDiscoveryService {
           somManifest: ctx.somManifest,
           accessibilitySnapshot: ctx.accessibilitySnapshot,
           screenshotBase64: shot,
+          screensVisited: visitedScreens,
         },
         { userId },
       );
+
+      const structuredMerged = {
+        ...synthesized.structured,
+        screensVisited: visitedScreens,
+      };
 
       await this.prisma.projectAgentKnowledge.update({
         where: { projectId },
@@ -111,7 +130,7 @@ export class ProjectDiscoveryService {
           discoveryStatus: 'completed',
           discoveryCompletedAt: new Date(),
           discoverySummaryMarkdown: synthesized.markdown,
-          discoveryStructured: synthesized.structured as object,
+          discoveryStructured: structuredMerged as object,
           discoveryError: null,
         },
       });

@@ -9,6 +9,7 @@ import {
   TEST_EMAIL_PROVIDERS,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
+import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
 import {
   FolderKanban,
   Plus,
@@ -63,6 +64,25 @@ function formatDiscoveryTimestamp(iso: string | null): string {
   } catch {
     return iso;
   }
+}
+
+function screensVisitedFromStructured(structured: unknown): Array<{ url: string; title: string | null; navigatedAt: string }> {
+  if (!structured || typeof structured !== 'object' || Array.isArray(structured)) return [];
+  const raw = (structured as { screensVisited?: unknown }).screensVisited;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null;
+      const o = row as { url?: unknown; title?: unknown; navigatedAt?: unknown };
+      const url = typeof o.url === 'string' ? o.url : '';
+      if (!url) return null;
+      return {
+        url,
+        title: typeof o.title === 'string' ? o.title : null,
+        navigatedAt: typeof o.navigatedAt === 'string' ? o.navigatedAt : '',
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
 }
 
 const KINDS: CreateProjectBody['kind'][] = ['WEB', 'IOS', 'ANDROID'];
@@ -121,6 +141,15 @@ export default function ProjectsPage() {
       return s === 'queued' || s === 'running' ? 3000 : false;
     },
   });
+
+  const discoveryLiveEnabled =
+    !!editingId &&
+    (agentKnowledge?.discoveryStatus === 'queued' || agentKnowledge?.discoveryStatus === 'running');
+  const { frameDataUrl: discoveryFrameUrl, connected: discoverySocketConnected } = useDiscoveryLive(
+    editingId ?? undefined,
+    { enabled: discoveryLiveEnabled },
+  );
+  const discoveryScreensVisited = screensVisitedFromStructured(agentKnowledge?.discoveryStructured);
 
   useEffect(() => {
     if (agentKnowledge?.manualInstructions != null) {
@@ -473,7 +502,9 @@ export default function ProjectsPage() {
                 <div>
                   <p className="text-xs font-semibold text-gray-700">Run app discovery</p>
                   <p className="text-[11px] text-gray-500 mt-0.5">
-                    Crawls the project URL and fills the summary and structured map below. You can edit them after a run.
+                    Opens the project URL in a remote browser, attempts automatic sign-in when a test email is set (same
+                    assist as evaluations), records each main-frame navigation, then captures a summary below. Use{' '}
+                    <strong className="font-medium text-gray-600">Detach</strong> for a full-window live view.
                   </p>
                 </div>
                 <button
@@ -496,6 +527,44 @@ export default function ProjectsPage() {
                   Run app discovery
                 </button>
               </div>
+
+              {editingId && (
+                <div className="rounded-md border border-gray-200 bg-white overflow-hidden">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border-b border-gray-200">
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Live browser</span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${discoverySocketConnected ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                        title={discoverySocketConnected ? 'Preview socket connected' : 'Preview socket disconnected'}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.open(`/discovery-preview/${editingId}`, '_blank', 'noopener,noreferrer')
+                        }
+                        className="text-[11px] text-[#4B90FF] hover:underline font-medium"
+                      >
+                        Detach
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative w-full aspect-video max-h-[220px] bg-gray-950 flex items-center justify-center">
+                    {discoveryFrameUrl ? (
+                      <img
+                        src={discoveryFrameUrl}
+                        alt=""
+                        className="w-full h-full max-h-[220px] object-contain"
+                      />
+                    ) : (
+                      <p className="text-[11px] text-gray-500 px-3 text-center">
+                        {discoveryLiveEnabled
+                          ? 'Connecting to stream…'
+                          : 'Start discovery to watch the remote browser (JPEG frames from the browser worker).'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-md border border-gray-200 bg-white p-3">
                 <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Pipeline</p>
@@ -565,6 +634,22 @@ export default function ProjectsPage() {
               )}
               {agentKnowledge?.discoveryError && (
                 <p className="text-xs text-red-600">{agentKnowledge.discoveryError}</p>
+              )}
+
+              {discoveryScreensVisited.length > 0 && (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Screens visited (main-frame navigations)
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-gray-700 break-all max-h-40 overflow-y-auto">
+                    {discoveryScreensVisited.map((row, i) => (
+                      <li key={`${row.url}-${row.navigatedAt}-${i}`}>
+                        <span className="font-mono text-[10px]">{row.url}</span>
+                        {row.title ? <span className="text-gray-500"> — {row.title}</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               )}
 
               <div>
