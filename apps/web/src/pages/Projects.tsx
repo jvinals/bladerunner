@@ -145,10 +145,13 @@ export default function ProjectsPage() {
   const discoveryLiveEnabled =
     !!editingId &&
     (agentKnowledge?.discoveryStatus === 'queued' || agentKnowledge?.discoveryStatus === 'running');
-  const { frameDataUrl: discoveryFrameUrl, connected: discoverySocketConnected } = useDiscoveryLive(
-    editingId ?? undefined,
-    { enabled: discoveryLiveEnabled },
-  );
+  const {
+    frameDataUrl: discoveryFrameUrl,
+    connected: discoverySocketConnected,
+    logLines: discoveryLogLines,
+    formatLogTime: formatDiscoveryLogTime,
+    logEndRef: discoveryLogEndRef,
+  } = useDiscoveryLive(editingId ?? undefined, { enabled: discoveryLiveEnabled });
   const discoveryScreensVisited = screensVisitedFromStructured(agentKnowledge?.discoveryStructured);
 
   useEffect(() => {
@@ -531,39 +534,75 @@ export default function ProjectsPage() {
               </div>
 
               {editingId && (
-                <div className="rounded-md border border-gray-200 bg-white overflow-hidden max-w-xs w-full mx-auto">
-                  <div className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border-b border-gray-200">
-                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Live browser</span>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${discoverySocketConnected ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                        title={discoverySocketConnected ? 'Preview socket connected' : 'Preview socket disconnected'}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          window.open(`/discovery-preview/${editingId}`, '_blank', 'noopener,noreferrer')
-                        }
-                        className="text-[11px] text-[#4B90FF] hover:underline font-medium"
-                      >
-                        Detach
-                      </button>
+                <div className="flex flex-col md:flex-row gap-2 w-full max-w-4xl mx-auto">
+                  <div className="rounded-md border border-gray-200 bg-white overflow-hidden flex-1 min-w-0 max-w-md md:max-w-none">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 border-b border-gray-200">
+                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Live browser
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${discoverySocketConnected ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                          title={discoverySocketConnected ? 'Preview socket connected' : 'Preview socket disconnected'}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.open(`/discovery-preview/${editingId}`, '_blank', 'noopener,noreferrer')
+                          }
+                          className="text-[11px] text-[#4B90FF] hover:underline font-medium"
+                        >
+                          Detach
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative w-full aspect-video max-h-[220px] bg-gray-950 flex items-center justify-center">
+                      {discoveryFrameUrl ? (
+                        <img
+                          src={discoveryFrameUrl}
+                          alt=""
+                          className="w-full h-full max-h-[220px] object-contain"
+                        />
+                      ) : (
+                        <p className="text-[11px] text-gray-500 px-3 text-center">
+                          {discoveryLiveEnabled
+                            ? 'Connecting to stream…'
+                            : 'Start discovery to watch the remote browser (JPEG frames from the browser worker).'}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="relative w-full aspect-video max-h-[220px] bg-gray-950 flex items-center justify-center">
-                    {discoveryFrameUrl ? (
-                      <img
-                        src={discoveryFrameUrl}
-                        alt=""
-                        className="w-full h-full max-h-[220px] object-contain"
-                      />
-                    ) : (
-                      <p className="text-[11px] text-gray-500 px-3 text-center">
-                        {discoveryLiveEnabled
-                          ? 'Connecting to stream…'
-                          : 'Start discovery to watch the remote browser (JPEG frames from the browser worker).'}
-                      </p>
-                    )}
+                  <div className="rounded-md border border-gray-200 bg-white overflow-hidden flex flex-col flex-1 min-w-0 min-h-[180px] md:min-h-0 md:h-[220px] md:max-w-[min(50%,22rem)]">
+                    <div className="px-2.5 py-1.5 bg-gray-50 border-b border-gray-200 shrink-0">
+                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Discovery agent log
+                      </span>
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-y-auto px-2 py-1.5 text-[10px] leading-snug">
+                      {discoveryLogLines.length === 0 ? (
+                        <p className="text-gray-400 text-center py-4">
+                          {discoveryLiveEnabled
+                            ? 'Waiting for agent actions…'
+                            : 'Start discovery to see a timestamped log of each step.'}
+                        </p>
+                      ) : (
+                        discoveryLogLines.map((line, i) => (
+                          <div
+                            key={`${line.at}-${i}`}
+                            className="border-b border-gray-100 pb-1.5 mb-1.5 last:border-0 last:mb-0"
+                          >
+                            <div className="text-gray-500 tabular-nums">{formatDiscoveryLogTime(line.at)}</div>
+                            <div className="text-gray-800 whitespace-pre-wrap break-words">{line.message}</div>
+                            {line.detail != null && Object.keys(line.detail).length > 0 && (
+                              <pre className="text-[9px] text-gray-500 mt-0.5 whitespace-pre-wrap break-all max-h-24 overflow-y-auto">
+                                {JSON.stringify(line.detail)}
+                              </pre>
+                            )}
+                          </div>
+                        ))
+                      )}
+                      <div ref={discoveryLogEndRef} />
+                    </div>
                   </div>
                 </div>
               )}

@@ -7,18 +7,43 @@ export function discoveryLiveRunId(projectId: string): string {
   return `discovery-${projectId}`;
 }
 
+export type DiscoveryLogLine = {
+  at: string;
+  message: string;
+  detail?: Record<string, unknown>;
+};
+
 type UseDiscoveryLiveOptions = {
   enabled: boolean;
 };
 
+function formatLogTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 /**
- * Live browser preview during Run app discovery (same recording gateway as evaluations; join `run:discovery-${projectId}`).
+ * Live browser preview + discovery agent log during Run app discovery (join `run:discovery-${projectId}`).
  */
 export function useDiscoveryLive(projectId: string | undefined, options: UseDiscoveryLiveOptions) {
   const { enabled } = options;
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  const [logLines, setLogLines] = useState<DiscoveryLogLine[]>([]);
   const socketRef = useRef<Socket | null>(null);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
 
   const clearFrame = useCallback(() => setFrameDataUrl(null), []);
 
@@ -26,8 +51,11 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
     if (!projectId || !enabled) {
       setFrameDataUrl(null);
       setConnected(false);
+      setLogLines([]);
       return;
     }
+
+    setLogLines([]);
 
     const runId = discoveryLiveRunId(projectId);
     const socket = createRecordingSocket();
@@ -43,8 +71,21 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
       setFrameDataUrl(`data:image/jpeg;base64,${payload.data}`);
     };
 
+    const onDiscoveryLog = (payload: DiscoveryLogLine & { projectId: string }) => {
+      if (payload.projectId !== projectId) return;
+      const { projectId: _p, ...line } = payload;
+      setLogLines((prev) => [...prev, line]);
+    };
+
+    const onDiscoveryLogBatch = (payload: { projectId: string; lines: DiscoveryLogLine[] }) => {
+      if (payload.projectId !== projectId) return;
+      setLogLines(payload.lines ?? []);
+    };
+
     socket.on('connect', onConnect);
     socket.on('frame', onFrame);
+    socket.on('discoveryDebugLog', onDiscoveryLog);
+    socket.on('discoveryDebugLogBatch', onDiscoveryLogBatch);
     socket.on('disconnect', () => setConnected(false));
 
     if (socket.connected) onConnect();
@@ -59,8 +100,13 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
       socketRef.current = null;
       setFrameDataUrl(null);
       setConnected(false);
+      setLogLines([]);
     };
   }, [projectId, enabled]);
 
-  return { frameDataUrl, connected, clearFrame };
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logLines.length]);
+
+  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime, logEndRef };
 }
