@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.141`: **Discovery agent log** — **newest first** (reversed list); **hidden horizontal scrollbars** on each line (still scrollable). `@bladerunner/web 0.7.89`.
+
 - `0.10.140`: **Run app discovery** — **DFS-style** navigation tree (max depth **5**), **`subsectionComplete`** in explore LLM JSON, **live Mermaid** map (`discoveryNavigationMermaid` column + WebSocket **`discoveryNavigationMermaid`**); **Projects** panel below live preview + log; **agent context** includes truncated Mermaid. Caps: **200** steps, **45 min** exploration wall clock. `@bladerunner/api 0.6.109`, `@bladerunner/web 0.7.88`.
 
 - `0.10.139`: **Discovery agent log** — **one entry = one line** (timestamp — message + optional JSON detail); horizontal scroll per row; **`formatDiscoveryLogSingleLine`** in `useDiscoveryLive`. `@bladerunner/web 0.7.87`.

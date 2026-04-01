@@ -599,12 +599,12 @@ export default function ProjectsPage() {
                             : 'Start discovery to see a timestamped log of each step.'}
                         </p>
                       ) : (
-                        discoveryLogLines.map((line, i) => {
+                        [...discoveryLogLines].reverse().map((line, i) => {
                           const oneLine = formatDiscoveryLogSingleLine(line, formatDiscoveryLogTime);
                           return (
                             <div
                               key={`${line.at}-${i}`}
-                              className="font-mono text-[10px] leading-tight border-b border-gray-100 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-800"
+                              className="font-mono text-[10px] leading-tight border-b border-gray-100 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-800 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                               title={oneLine}
                             >
                               {oneLine}

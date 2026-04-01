@@ -48,12 +48,12 @@ export default function DetachedDiscoveryPreview() {
             {logLines.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No log lines yet.</p>
             ) : (
-              logLines.map((line, i) => {
+              [...logLines].reverse().map((line, i) => {
                 const oneLine = formatDiscoveryLogSingleLine(line, formatLogTime);
                 return (
                   <div
                     key={`${line.at}-${i}`}
-                    className="font-mono text-[10px] leading-tight border-b border-gray-700/80 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-200"
+                    className="font-mono text-[10px] leading-tight border-b border-gray-700/80 py-0.5 last:border-0 whitespace-nowrap overflow-x-auto text-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     title={oneLine}
                   >
                     {oneLine}
