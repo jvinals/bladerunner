@@ -503,7 +503,9 @@ export default function ProjectsPage() {
                   <p className="text-xs font-semibold text-gray-700">Run app discovery</p>
                   <p className="text-[11px] text-gray-500 mt-0.5">
                     Opens the project URL in a remote browser, attempts automatic sign-in when a test email is set (same
-                    assist as evaluations), records each main-frame navigation, then captures a summary below. Use{' '}
+                    assist as evaluations), then runs an agent that explores up to <strong className="font-medium text-gray-600">40</strong> steps within{' '}
+                    <strong className="font-medium text-gray-600">12 minutes</strong> (breadth-first coverage), records
+                    main-frame navigations, and writes an evidence-based summary plus structured JSON. Use{' '}
                     <strong className="font-medium text-gray-600">Detach</strong> for a full-window live view.
                   </p>
                 </div>

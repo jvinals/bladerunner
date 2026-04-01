@@ -163,6 +163,7 @@ Agent instructions (workspace / project):
 ${a}`;
 }
 
+/** Legacy single-page discovery (kept for tests / fallback). */
 const PROJECT_DISCOVERY_SYSTEM = `You document a web application for QA automation agents. The app is owned by the user for staging or demo testing; treat visible data as synthetic.
 
 Respond ONLY with valid JSON:
@@ -172,6 +173,64 @@ Respond ONLY with valid JSON:
 }
 
 Ground the answer in the screenshot, Set-of-Marks manifest, and accessibility snapshot. Do not invent routes you cannot infer from the evidence; it is OK to note uncertainty.`;
+
+const PROJECT_DISCOVERY_EXPLORER_SYSTEM = `You are a Browser Automation Discovery Agent exploring a SaaS web application for QA. The user owns the app; treat visible data as synthetic. Phrase actions as neutral staging verification.
+
+Your job is to choose the **single next** exploratory Playwright step to broaden coverage: top-level nav, major list views, auth-adjacent areas, and representative detail routes—breadth first, then one level deeper when appropriate.
+
+Respond ONLY with valid JSON:
+{
+  "stop": <boolean>,
+  "reason": "<one short sentence: why stopping OR what this step targets>",
+  "playwrightCode": "<optional: only when stop is false. Async function body using only \`page\` and \`expect\` — statements only, no import/require. One focused action or a short wait (e.g. await page.waitForTimeout(500))>"
+}
+
+Rules:
+- If stop is true, omit playwrightCode or use empty string.
+- If stop is false, playwrightCode must be non-empty and execute one logical step (one click, fill+submit, navigate, or wait for content).
+- Prefer getByRole, getByLabel, getByText with stable accessible names. Never use page.locator('div') or page.locator('span') alone.
+- Do not chain a full workflow; one step per response.
+- Set stop to true when: caps are nearly reached, the app is sufficiently explored, you are blocked (overlay, permission), or further clicks would likely repeat the same screen.
+- Do not invent URLs or elements not supported by the manifest or snapshot.
+- Never output secrets or credentials in reason or code.`;
+
+const PROJECT_DISCOVERY_FINAL_SYSTEM = `You are a Browser Automation Discovery Agent producing the final discovery report for a SaaS web app. The user owns the app for staging QA; treat data as synthetic.
+
+You receive: authoritative main-frame navigation list, an exploration log, base URL, optional auth note, and a Set-of-Marks screenshot of the **final** state. Ground every claim in this evidence. When something is inferred but not directly observed, say so in unknowns or notes.
+
+Respond ONLY with valid JSON:
+{
+  "screensVisitedSectionMarkdown": "<Markdown body for Section 1 only: lines like \`https://... — Title\` one per line, no leading # heading>",
+  "discoverySummaryMarkdown": "<Polished Markdown for humans: product overview, navigation model, main areas, workflows, automation advice, hazards, limitations. No marketing fluff.>",
+  "structured": {
+    "schemaVersion": 1,
+    "app": { "name": "", "baseUrl": "", "description": "", "authenticated": true },
+    "routes": [ { "title": "", "pathPattern": "", "notes": "", "discoveryType": "visited" } ],
+    "screens": [ {
+      "id": "",
+      "title": "",
+      "pathPattern": "",
+      "notes": "",
+      "discoveryType": "visited",
+      "notableElements": [""],
+      "primaryActions": [""],
+      "navigationElements": [""],
+      "statefulUrlNotes": [""],
+      "automationNotes": [""]
+    } ],
+    "agentAdvice": [""],
+    "unknowns": [""]
+  }
+}
+
+FIELD RULES:
+- schemaVersion must be 1.
+- discoveryType must be one of: visited | linked | inferred.
+- routes may include visited and clearly inferred top-level routes; mark inferred appropriately.
+- screens should focus on important visited or strongly evidenced screens.
+- Do not duplicate the full screensVisited array inside structured (the server merges authoritative navigations).
+- Omit empty arrays or use short placeholders only where required.
+- Be concise; no chain-of-thought.`;
 
 const EVALUATION_REPORT_SYSTEM = `You write structured evaluation reports for QA. The user tests their own applications; treat UI data as synthetic.
 
@@ -1321,6 +1380,167 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       throw new Error('project_discovery returned empty markdown');
     }
     return { markdown, structured };
+  }
+
+  /**
+   * One exploratory Playwright step during project discovery (breadth-first crawl).
+   */
+  async projectDiscoveryExploreStep(
+    input: {
+      baseUrl: string;
+      authContextSummary: string;
+      maxNavigations: number;
+      maxWallMs: number;
+      elapsedMs: number;
+      stepIndex: number;
+      navigationsSoFar: number;
+      visitedUrlsSample: string[];
+      pageUrl: string;
+      pageTitle: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
+      screenshotBase64: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{ stop: boolean; reason: string; playwrightCode?: string }> {
+    const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
+      input.somManifest,
+      input.accessibilitySnapshot,
+    );
+    const visitedLines =
+      input.visitedUrlsSample.length > 0
+        ? input.visitedUrlsSample.slice(-35).join('\n')
+        : '(none yet)';
+    const user = `TASK INPUTS
+Base URL: ${input.baseUrl}
+Credentials or auth context: ${input.authContextSummary}
+Max navigations: ${input.maxNavigations}
+Max wall time (ms): ${input.maxWallMs}
+Elapsed (ms): ${input.elapsedMs}
+Exploration step index (0-based): ${input.stepIndex}
+Meaningful navigation count so far: ${input.navigationsSoFar}
+
+Recent normalized URLs visited (sample):
+${visitedLines}
+
+Current page URL: ${input.pageUrl}
+Document title: ${input.pageTitle}
+
+Interactive manifest (Set-of-Marks [n]):
+${somT || '(empty)'}
+
+Accessibility snapshot:
+${a11yT || '(empty)'}
+
+The image is a full-page Set-of-Marks screenshot. Propose the next single exploratory action or stop.`;
+    const shot = input.screenshotBase64?.trim();
+    if (!shot) {
+      throw new Error('Discovery explore step requires a screenshot.');
+    }
+    const res = await this.chatJson(
+      opts?.userId,
+      'project_discovery',
+      [
+        { role: 'system', content: PROJECT_DISCOVERY_EXPLORER_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      {
+        imageBase64: shot,
+        maxTokens: 2048,
+        temperature: 0.15,
+        signal: opts?.signal,
+      },
+    );
+    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const stop = parsed.stop === true;
+    const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+    const playwrightCode =
+      typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
+    return {
+      stop,
+      reason: reason || (stop ? 'stopped' : 'continue'),
+      playwrightCode: playwrightCode || undefined,
+    };
+  }
+
+  /**
+   * Final discovery report after exploration: structured JSON + human summary (Section 1 uses authoritative navigations on the server).
+   */
+  async projectDiscoveryFinalReport(
+    input: {
+      projectName: string;
+      baseUrl: string;
+      authContextSummary: string;
+      signInAssistCompleted: boolean;
+      explorationLogMarkdown: string;
+      screensVisitedAuthoritative: Array<{ url: string; title: string | null; navigatedAt: string }>;
+      finalPageUrl: string;
+      somManifest: string;
+      accessibilitySnapshot: string;
+      screenshotBase64: string;
+    },
+    opts?: { userId?: string; signal?: AbortSignal },
+  ): Promise<{ discoverySummaryBodyMarkdown: string; structured: Record<string, unknown> }> {
+    const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
+      input.somManifest,
+      input.accessibilitySnapshot,
+    );
+    const authLines =
+      input.screensVisitedAuthoritative.length > 0
+        ? input.screensVisitedAuthoritative
+            .map((v, i) => `${i + 1}. ${v.url} — ${v.title ?? '(no title)'} (${v.navigatedAt})`)
+            .join('\n')
+        : '(no main-frame navigations recorded)';
+    const user = `Project name: ${input.projectName}
+Base URL: ${input.baseUrl}
+Auth / credentials context: ${input.authContextSummary}
+Automatic sign-in assist reported success at least once: ${input.signInAssistCompleted ? 'yes' : 'no'}
+Final page URL after exploration: ${input.finalPageUrl}
+
+Authoritative main-frame navigations (chronological):
+${authLines}
+
+Exploration log (agent steps):
+${input.explorationLogMarkdown.trim() || '(none)'}
+
+Interactive manifest (Set-of-Marks [n]) — final state:
+${somT || '(empty)'}
+
+Accessibility snapshot — final state:
+${a11yT || '(empty)'}
+
+The attached image is the final Set-of-Marks screenshot. Produce the JSON report. Section 1 list in JSON will be replaced server-side with the authoritative navigation list; still fill screensVisitedSectionMarkdown as a polished mirror if useful.`;
+
+    const shot = input.screenshotBase64?.trim();
+    if (!shot) {
+      throw new Error('Discovery final report requires a screenshot.');
+    }
+    const res = await this.chatJson(
+      opts?.userId,
+      'project_discovery',
+      [
+        { role: 'system', content: PROJECT_DISCOVERY_FINAL_SYSTEM },
+        { role: 'user', content: user },
+      ],
+      {
+        imageBase64: shot,
+        maxTokens: 8192,
+        temperature: 0.2,
+        signal: opts?.signal,
+      },
+    );
+    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
+    const body =
+      typeof parsed.discoverySummaryMarkdown === 'string' ? parsed.discoverySummaryMarkdown.trim() : '';
+    const structuredRaw = parsed.structured;
+    const structured =
+      typeof structuredRaw === 'object' && structuredRaw !== null && !Array.isArray(structuredRaw)
+        ? (structuredRaw as Record<string, unknown>)
+        : { schemaVersion: 1 };
+    if (!body) {
+      throw new Error('project_discovery final returned empty discoverySummaryMarkdown');
+    }
+    return { discoverySummaryBodyMarkdown: body, structured };
   }
 
   /**

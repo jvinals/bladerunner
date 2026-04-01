@@ -5,8 +5,29 @@ import { LlmService } from '../llm/llm.service';
 import { randomUUID } from 'node:crypto';
 import { sleepMs } from '@bladerunner/clerk-agentmail-signin';
 
+/** Max LLM-driven exploration steps (each may execute one Playwright snippet). */
+const DISCOVERY_MAX_EXPLORATION_STEPS = 40;
+/** Wall-clock cap for exploration + synthesis. */
+const DISCOVERY_MAX_WALL_MS = 12 * 60 * 1000;
+
+function normalizeDiscoveryUrlForDedup(url: string): string {
+  try {
+    const u = new URL(url);
+    const drop = new Set(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid']);
+    for (const k of [...u.searchParams.keys()]) {
+      if (k.startsWith('utm_') || drop.has(k)) {
+        u.searchParams.delete(k);
+      }
+    }
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 /**
- * MVP: single-page capture + LLM synthesis into project discovery fields.
+ * LLM-driven breadth-first exploration + final evidence-based report.
  */
 @Injectable()
 export class ProjectDiscoveryService {
@@ -96,31 +117,117 @@ export class ProjectDiscoveryService {
         await sleepMs(1200);
       }
       await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
-      /** Let SPAs hydrate after auth before SOM capture. */
+      /** Let SPAs hydrate after auth before exploration. */
       await sleepMs(2500);
 
-      const ctx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
-      const visitedScreens = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
-      const shot = ctx.screenshotBase64?.trim();
-      if (!shot) {
-        throw new Error('Discovery capture produced no screenshot');
+      /** Exploration-only wall clock (auth + settle do not count toward the 12 min crawl cap). */
+      const explorationStartedAt = Date.now();
+      const authContextSummary = project.testUserEmail?.trim()
+        ? `Test email configured (automatic sign-in attempted). Email provider: ${project.testEmailProvider ?? 'default'}. Password ${project.testUserPassword?.trim() ? 'configured' : 'not set'}.`
+        : 'No test email configured; only public/unauthenticated flows were available.';
+
+      const explorationLogLines: string[] = [];
+      let stepIndex = 0;
+      let consecutiveFailures = 0;
+
+      while (stepIndex < DISCOVERY_MAX_EXPLORATION_STEPS && Date.now() - explorationStartedAt < DISCOVERY_MAX_WALL_MS) {
+        const elapsedMs = Date.now() - explorationStartedAt;
+        const ctx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
+        const shot = ctx.screenshotBase64?.trim();
+        if (!shot) {
+          throw new Error('Discovery capture produced no screenshot');
+        }
+        const visitedScreensSoFar = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
+        const uniqNorm = new Set(visitedScreensSoFar.map((v) => normalizeDiscoveryUrlForDedup(v.url)));
+
+        const plan = await this.llm.projectDiscoveryExploreStep(
+          {
+            baseUrl: project.url.trim(),
+            authContextSummary,
+            maxNavigations: DISCOVERY_MAX_EXPLORATION_STEPS,
+            maxWallMs: DISCOVERY_MAX_WALL_MS,
+            elapsedMs,
+            stepIndex,
+            navigationsSoFar: uniqNorm.size,
+            visitedUrlsSample: [...uniqNorm],
+            pageUrl: ctx.pageUrl,
+            pageTitle: ctx.pageTitle,
+            somManifest: ctx.somManifest,
+            accessibilitySnapshot: ctx.accessibilitySnapshot,
+            screenshotBase64: shot,
+          },
+          { userId },
+        );
+
+        if (plan.stop || !plan.playwrightCode?.trim()) {
+          explorationLogLines.push(`Explore stop at step ${stepIndex + 1}: ${plan.reason}`);
+          break;
+        }
+
+        try {
+          await this.recording.discoveryRunPlaywrightSnippet(
+            discoverySessionId,
+            userId,
+            plan.playwrightCode,
+          );
+          const codePreview =
+            plan.playwrightCode.length > 500 ? `${plan.playwrightCode.slice(0, 500)}…` : plan.playwrightCode;
+          explorationLogLines.push(
+            `Step ${stepIndex + 1}: ${plan.reason}\n\`\`\`js\n${codePreview}\n\`\`\``,
+          );
+          consecutiveFailures = 0;
+        } catch (err) {
+          consecutiveFailures += 1;
+          const msg = err instanceof Error ? err.message : String(err);
+          explorationLogLines.push(`Step ${stepIndex + 1} FAILED: ${msg}`);
+          if (consecutiveFailures >= 3) {
+            explorationLogLines.push('Aborted exploration after 3 consecutive failures.');
+            break;
+          }
+        }
+
+        await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
+        await sleepMs(600);
+        stepIndex += 1;
       }
 
-      const synthesized = await this.llm.projectDiscoverySynthesize(
+      if (Date.now() - explorationStartedAt >= DISCOVERY_MAX_WALL_MS) {
+        explorationLogLines.push('Exploration stopped: wall clock cap reached.');
+      } else if (stepIndex >= DISCOVERY_MAX_EXPLORATION_STEPS) {
+        explorationLogLines.push('Exploration stopped: max exploration steps reached.');
+      }
+
+      const finalCtx = await this.recording.captureDiscoveryLlmPageContext(discoverySessionId, userId);
+      const visitedScreens = this.recording.getDiscoveryVisitedScreens(discoverySessionId);
+      const finalShot = finalCtx.screenshotBase64?.trim();
+      if (!finalShot) {
+        throw new Error('Discovery final capture produced no screenshot');
+      }
+
+      const finalReport = await this.llm.projectDiscoveryFinalReport(
         {
           projectName: project.name,
-          startUrl: project.url.trim(),
-          pageUrl: ctx.pageUrl,
-          somManifest: ctx.somManifest,
-          accessibilitySnapshot: ctx.accessibilitySnapshot,
-          screenshotBase64: shot,
-          screensVisited: visitedScreens,
+          baseUrl: project.url.trim(),
+          authContextSummary,
+          signInAssistCompleted: authState.clerkFullSignInDone,
+          explorationLogMarkdown: explorationLogLines.join('\n\n'),
+          screensVisitedAuthoritative: visitedScreens,
+          finalPageUrl: finalCtx.pageUrl,
+          somManifest: finalCtx.somManifest,
+          accessibilitySnapshot: finalCtx.accessibilitySnapshot,
+          screenshotBase64: finalShot,
         },
         { userId },
       );
 
+      const section1Lines = visitedScreens
+        .map((v) => `${v.url} — ${v.title?.trim() ? v.title : '(no title)'}`)
+        .join('\n');
+      const discoverySummaryMarkdown = `# Screens Visited\n\n${section1Lines || '(none)'}\n\n# Discovery Summary\n\n${finalReport.discoverySummaryBodyMarkdown}`;
+
       const structuredMerged = {
-        ...synthesized.structured,
+        ...finalReport.structured,
+        schemaVersion: 1,
         screensVisited: visitedScreens,
       };
 
@@ -129,7 +236,7 @@ export class ProjectDiscoveryService {
         data: {
           discoveryStatus: 'completed',
           discoveryCompletedAt: new Date(),
-          discoverySummaryMarkdown: synthesized.markdown,
+          discoverySummaryMarkdown,
           discoveryStructured: structuredMerged as object,
           discoveryError: null,
         },

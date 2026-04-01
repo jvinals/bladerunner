@@ -939,6 +939,7 @@ export class RecordingService extends EventEmitter {
     userId: string,
   ): Promise<{
     pageUrl: string;
+    pageTitle: string;
     somManifest: string;
     accessibilitySnapshot: string;
     screenshotBase64: string | undefined;
@@ -948,12 +949,32 @@ export class RecordingService extends EventEmitter {
       throw new BadRequestException('Discovery browser session not found');
     }
     const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
+    let pageTitle = '';
+    try {
+      pageTitle = await session.page.title();
+    } catch {
+      pageTitle = '';
+    }
     return {
       pageUrl: ctx.pageUrl,
+      pageTitle,
       somManifest: ctx.somManifest,
       accessibilitySnapshot: ctx.accessibilitySnapshot,
       screenshotBase64: ctx.screenshotBase64,
     };
+  }
+
+  /** Run one Playwright snippet during project discovery (same codegen constraints as evaluation). */
+  async discoveryRunPlaywrightSnippet(
+    discoverySessionId: string,
+    userId: string,
+    code: string,
+  ): Promise<void> {
+    const session = this.discoverySessions.get(discoverySessionId);
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('Discovery browser session not found');
+    }
+    await this.executePwCode(session.page, code, {});
   }
 
   async discoveryGoto(discoverySessionId: string, userId: string, url: string): Promise<void> {

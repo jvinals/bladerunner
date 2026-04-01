@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.133`: **Run app discovery** — **LLM exploration loop** (up to **40** Playwright steps, **12 min** wall clock for the crawl after auth) plus **final report** with evidence-based **Discovery Summary** and **structured JSON** (`app`, `routes`, `screens`, `agentAdvice`, `unknowns`, etc.); stored markdown leads with **`# Screens Visited`** (authoritative navigations) then **`# Discovery Summary`**. **Explore** and **final** prompts align with the Browser Automation Discovery Agent design (QA staging framing). `@bladerunner/api 0.6.107`, `@bladerunner/web 0.7.81`.
+
 - `0.10.132`: **Run app discovery** — **Live browser** inline preview + **Detach** (`/discovery-preview/:projectId`) via Socket.IO **`discovery-${projectId}`** frames (same gateway as evaluations). **Auto sign-in** runs when a **test email** is set (was incorrectly requiring email **and** password); **multi-iteration** assist + **2.5s** settle before capture. **`screensVisited`** (main-frame navigations) stored in structured JSON + LLM prompt. `@bladerunner/api 0.6.106`, `@bladerunner/web 0.7.80`.
 
 - `0.10.131`: **Edit project** — **Run app discovery** shows a **pipeline** (Ready → Queued → Discovering → Result), **timestamps**, status/errors, and **editable** discovery **summary (markdown)** and **structured JSON** with save/clear. Drafts stay stable while discovery **polls**; they refresh when a run **finishes** or you **save**. `@bladerunner/web 0.7.79`.
