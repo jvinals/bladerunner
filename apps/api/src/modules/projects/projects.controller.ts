@@ -72,6 +72,12 @@ export class ProjectsController {
     return this.projectDiscovery.trigger(id, req.user.sub);
   }
 
+  @Get(':id/discovery/agent-log')
+  @ApiOperation({ summary: 'Last persisted discovery agent log (NDJSON from docs/logs on the API host)' })
+  async getDiscoveryAgentLog(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    return this.projectsService.getDiscoveryAgentLog(id, req.user.sub);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a project by ID' })
   @ApiResponse({ status: 200, description: 'Project details' })

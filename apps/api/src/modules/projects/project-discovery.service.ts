@@ -124,7 +124,15 @@ export class ProjectDiscoveryService {
     let finalMermaid: string | null = null;
     try {
       throwIfAborted(signal);
+      const project = await this.prisma.project.findFirst({
+        where: { id: projectId, userId },
+      });
+      if (!project?.url?.trim()) {
+        throw new Error('Project URL missing');
+      }
+
       this.recording.clearDiscoveryDebugLog(projectId);
+      this.recording.beginDiscoveryLogFile(projectId, project.name);
       log('Discovery run started', { discoverySessionId });
       await this.prisma.projectAgentKnowledge.update({
         where: { projectId },
@@ -140,12 +148,6 @@ export class ProjectDiscoveryService {
       await this.recording.startDiscoverySession(discoverySessionId, userId, projectId);
       log('Remote browser connected (browser-worker); screencast attached');
 
-      const project = await this.prisma.project.findFirst({
-        where: { id: projectId, userId },
-      });
-      if (!project?.url?.trim()) {
-        throw new Error('Project URL missing');
-      }
       log('Loaded project record', { name: project.name, url: project.url?.trim() });
 
       log('Navigating to base URL (domcontentloaded)', { url: project.url.trim() });
@@ -437,6 +439,15 @@ export class ProjectDiscoveryService {
     } finally {
       this.recording.emitDiscoveryDebugLog(projectId, 'Closing remote browser session');
       await this.recording.stopDiscoverySession(discoverySessionId, userId).catch(() => {});
+      const logBasename = await this.recording.finalizeDiscoveryLogFile(projectId);
+      if (logBasename) {
+        await this.prisma.projectAgentKnowledge
+          .update({
+            where: { projectId },
+            data: { discoveryAgentLogFile: logBasename },
+          })
+          .catch(() => {});
+      }
     }
   }
 }

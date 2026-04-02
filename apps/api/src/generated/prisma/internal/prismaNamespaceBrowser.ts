@@ -120,6 +120,7 @@ export const ProjectAgentKnowledgeScalarFieldEnum = {
   discoverySummaryMarkdown: 'discoverySummaryMarkdown',
   discoveryStructured: 'discoveryStructured',
   discoveryNavigationMermaid: 'discoveryNavigationMermaid',
+  discoveryAgentLogFile: 'discoveryAgentLogFile',
   updatedAt: 'updatedAt'
 } as const
 

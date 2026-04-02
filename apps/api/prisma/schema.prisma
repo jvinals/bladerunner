@@ -113,6 +113,8 @@ model ProjectAgentKnowledge {
   discoveryStructured      Json?                  @map("discovery_structured")
   /// Live-built navigation map (Mermaid) for agent prompts; updated when discovery completes.
   discoveryNavigationMermaid String?              @db.Text @map("discovery_navigation_mermaid")
+  /// Basename of the last discovery agent log file under repo `docs/logs/` (NDJSON lines).
+  discoveryAgentLogFile      String?               @map("discovery_agent_log_file")
   updatedAt                DateTime               @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

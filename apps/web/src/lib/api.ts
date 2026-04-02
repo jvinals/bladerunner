@@ -444,6 +444,8 @@ export type ProjectDto = {
   testEmailProvider: TestEmailProvider | null;
   createdAt: string;
   updatedAt: string;
+  /** Basename under repo `docs/logs/` after the last discovery run (API host). */
+  discoveryAgentLogFile?: string | null;
 };
 
 export type CreateProjectBody = {
@@ -469,7 +471,13 @@ export type ProjectAgentKnowledgeDto = {
   discoverySummaryMarkdown: string | null;
   discoveryStructured: unknown;
   discoveryNavigationMermaid: string | null;
+  discoveryAgentLogFile: string | null;
   updatedAt: string | null;
+};
+
+export type DiscoveryAgentLogDto = {
+  filename: string;
+  lines: Array<{ at: string; message: string; detail?: Record<string, unknown> }>;
 };
 
 export const projectsApi = {
@@ -501,6 +509,8 @@ export const projectsApi = {
     apiFetch<{ accepted: boolean; reason?: string }>(`/projects/${id}/discovery`, { method: 'POST' }),
   cancelDiscovery: (id: string) =>
     apiFetch<{ cancelled: boolean; reason?: string }>(`/projects/${id}/discovery/cancel`, { method: 'POST' }),
+  getDiscoveryAgentLog: (id: string) =>
+    apiFetch<DiscoveryAgentLogDto>(`/projects/${id}/discovery/agent-log`),
 };
 
 // ─── Evaluations (autonomous browser + LLM) ────────────────────────────────────

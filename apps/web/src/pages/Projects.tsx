@@ -22,6 +22,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  ScrollText,
 } from 'lucide-react';
 
 const DISCOVERY_STEPS = [
@@ -828,12 +829,25 @@ export default function ProjectsPage() {
               projects.map((p) => (
                 <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-gray-800">
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 min-w-0">
                       <span
                         className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: p.color }}
                       />
-                      {p.name}
+                      <span className="truncate">{p.name}</span>
+                      {p.discoveryAgentLogFile ? (
+                        <button
+                          type="button"
+                          title={`Discovery agent log: ${p.discoveryAgentLogFile}`}
+                          onClick={() =>
+                            window.open(`/discovery-agent-log/${p.id}`, '_blank', 'noopener,noreferrer')
+                          }
+                          className="p-1 rounded-md text-gray-400 hover:text-[#4B90FF] hover:bg-gray-100 shrink-0"
+                        >
+                          <ScrollText size={15} aria-hidden />
+                          <span className="sr-only">Open discovery agent log</span>
+                        </button>
+                      ) : null}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{p.kind}</td>

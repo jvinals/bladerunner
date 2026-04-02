@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.158`: **Discovery agent log files** — Each discovery run appends NDJSON to `docs/logs/{slug}-discovery-DDMMYY-HHmm.log` (repo root resolved from `pnpm-workspace.yaml`; override with **`DISCOVERY_LOGS_DIR`**). DB field `discovery_agent_log_file` stores the basename; **`GET /projects/:id/discovery/agent-log`** returns parsed lines. Projects table: **scroll** button next to the project name opens **`/discovery-agent-log/:projectId`** (same `DiscoveryAgentLogPanel` as live discovery). Migration **`20260403130000_discovery_agent_log_file`**. `@bladerunner/api 0.6.122`, `@bladerunner/web 0.7.96`.
+
 - `0.10.157`: **Discovery explore JSON truncation** — `projectDiscoveryExploreStep` used `maxTokens: 2048`; OpenAI GPT-5 counts **reasoning** inside `max_completion_tokens`, so the visible JSON could be cut off mid-`playwrightCode` (~few hundred chars) and `parseJsonFromLlmText` failed. Raised to **8192** and set **`reasoningEffort: 'low'`** (aligned with other vision+JSON routes). Clearer parse error when extraction finds no balanced `{...}` (likely truncation). `@bladerunner/api 0.6.121`.
 
 - `0.10.156`: **AGENTS.md (continual learning)** — merged **AI Prompt** / **AI Visual ID** workspace facts into one bullet (12-bullet guideline); clarified **LLM JSON** fence wording. Refreshed `.cursor/hooks/state/continual-learning-index.json` with current mtimes for all **35** `agent-transcripts` `*.jsonl` files.

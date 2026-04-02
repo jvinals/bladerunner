@@ -17,6 +17,7 @@ import { expect } from '@playwright/test';
 /** Return type of `BrowserContext.storageState()` (cookies + origins / localStorage). */
 type SnapshotStorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 import * as fs from 'node:fs/promises';
+import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { Prisma, type RunStep } from '../../generated/prisma/client';
@@ -355,6 +356,9 @@ export class RecordingService extends EventEmitter {
     Array<{ at: string; message: string; detail?: Record<string, unknown> }>
   >();
   private static readonly DISCOVERY_DEBUG_LOG_MAX_LINES = 3000;
+  /** NDJSON file stream for the current discovery run (`docs/logs/{slug}-discovery-DDMMYY-HHmm.log`). */
+  private discoveryLogStreamByProjectId = new Map<string, WriteStream>();
+  private discoveryLogBasenameByProjectId = new Map<string, string>();
   /** Latest Mermaid navigation diagram per project (discovery live UI + join catch-up). */
   private discoveryNavigationMermaidByProjectId = new Map<string, string>();
   /** In-flight `testAiPromptStep` work (key `runId:stepId`); `stopRecording` awaits before closing browser. */
@@ -678,8 +682,144 @@ export class RecordingService extends EventEmitter {
 
   /** Clears buffered discovery log lines when a new run starts for the same project. */
   clearDiscoveryDebugLog(projectId: string): void {
+    const prev = this.discoveryLogStreamByProjectId.get(projectId);
+    if (prev) {
+      try {
+        prev.destroy();
+      } catch {
+        /* ignore */
+      }
+      this.discoveryLogStreamByProjectId.delete(projectId);
+      this.discoveryLogBasenameByProjectId.delete(projectId);
+    }
     this.discoveryDebugLogByProjectId.delete(projectId);
     this.discoveryNavigationMermaidByProjectId.delete(projectId);
+  }
+
+  /** Resolves `docs/logs` at the repo root (works when `cwd` is repo root or `apps/api`). Override with `DISCOVERY_LOGS_DIR`. */
+  private discoveryLogsDir(): string {
+    const env = this.configService.get<string>('DISCOVERY_LOGS_DIR')?.trim();
+    if (env) {
+      return path.isAbsolute(env) ? env : path.join(process.cwd(), env);
+    }
+    let dir = path.resolve(process.cwd());
+    for (let i = 0; i < 12; i++) {
+      if (existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
+        return path.join(dir, 'docs', 'logs');
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return path.join(process.cwd(), 'docs', 'logs');
+  }
+
+  /**
+   * Opens a new NDJSON log file for this discovery run. Filename: `{slug}-discovery-DDMMYY-HHmm.log` (24h clock in local time).
+   */
+  beginDiscoveryLogFile(projectId: string, projectName: string): void {
+    const prev = this.discoveryLogStreamByProjectId.get(projectId);
+    if (prev) {
+      try {
+        prev.destroy();
+      } catch {
+        /* ignore */
+      }
+      this.discoveryLogStreamByProjectId.delete(projectId);
+      this.discoveryLogBasenameByProjectId.delete(projectId);
+    }
+    const slug = RecordingService.slugifyForDiscoveryLogFile(projectName);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ddmmyy = `${pad(now.getDate())}${pad(now.getMonth() + 1)}${String(now.getFullYear()).slice(-2)}`;
+    const hhmm = `${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const basename = `${slug}-discovery-${ddmmyy}-${hhmm}.log`;
+    const dir = this.discoveryLogsDir();
+    mkdirSync(dir, { recursive: true });
+    const fullPath = path.join(dir, basename);
+    const stream = createWriteStream(fullPath, { flags: 'w' });
+    this.discoveryLogStreamByProjectId.set(projectId, stream);
+    this.discoveryLogBasenameByProjectId.set(projectId, basename);
+    const header = {
+      kind: 'discovery-log-header' as const,
+      projectId,
+      projectName: projectName.trim().slice(0, 200),
+      file: basename,
+      startedAt: new Date().toISOString(),
+    };
+    stream.write(`${JSON.stringify(header)}\n`);
+  }
+
+  /** Flush and close the NDJSON log stream; returns the basename written to `docs/logs/`, if any. */
+  async finalizeDiscoveryLogFile(projectId: string): Promise<string | null> {
+    const stream = this.discoveryLogStreamByProjectId.get(projectId);
+    const basename = this.discoveryLogBasenameByProjectId.get(projectId) ?? null;
+    this.discoveryLogStreamByProjectId.delete(projectId);
+    this.discoveryLogBasenameByProjectId.delete(projectId);
+    if (!stream) {
+      return basename;
+    }
+    await new Promise<void>((resolve, reject) => {
+      stream.end((err: NodeJS.ErrnoException | undefined) => (err ? reject(err) : resolve()));
+    });
+    return basename;
+  }
+
+  private static slugifyForDiscoveryLogFile(name: string): string {
+    const s = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+    return s || 'project';
+  }
+
+  /** Only basenames produced by {@link beginDiscoveryLogFile} (path traversal safe). */
+  static isSafeDiscoveryLogBasename(basename: string): boolean {
+    return /^[a-z0-9-]+-discovery-\d{6}-\d{4}\.log$/i.test(basename.trim());
+  }
+
+  /**
+   * Reads NDJSON written during discovery (skips header line). Used by GET `/projects/:id/discovery/agent-log`.
+   */
+  async readDiscoveryAgentLogFile(
+    basename: string,
+  ): Promise<Array<{ at: string; message: string; detail?: Record<string, unknown> }>> {
+    const name = basename.trim();
+    if (!RecordingService.isSafeDiscoveryLogBasename(name)) {
+      throw new BadRequestException('Invalid discovery log filename');
+    }
+    const full = path.join(this.discoveryLogsDir(), name);
+    let raw: string;
+    try {
+      raw = await fs.readFile(full, 'utf8');
+    } catch {
+      throw new NotFoundException('Discovery log file not found on disk');
+    }
+    const out: Array<{ at: string; message: string; detail?: Record<string, unknown> }> = [];
+    for (const line of raw.split('\n')) {
+      const t = line.trim();
+      if (!t) continue;
+      let o: Record<string, unknown>;
+      try {
+        o = JSON.parse(t) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      if (o.kind === 'discovery-log-header') {
+        continue;
+      }
+      if (typeof o.at !== 'string' || typeof o.message !== 'string') {
+        continue;
+      }
+      const detail =
+        typeof o.detail === 'object' && o.detail !== null && !Array.isArray(o.detail)
+          ? (o.detail as Record<string, unknown>)
+          : undefined;
+      out.push({ at: o.at, message: o.message, detail });
+    }
+    return out;
   }
 
   getDiscoveryNavigationMermaid(projectId: string): string | null {
@@ -712,6 +852,14 @@ export class RecordingService extends EventEmitter {
     buf.push(line);
     if (buf.length > RecordingService.DISCOVERY_DEBUG_LOG_MAX_LINES) {
       buf.splice(0, buf.length - RecordingService.DISCOVERY_DEBUG_LOG_MAX_LINES);
+    }
+    const logStream = this.discoveryLogStreamByProjectId.get(projectId);
+    if (logStream) {
+      try {
+        logStream.write(`${JSON.stringify(line)}\n`);
+      } catch (err) {
+        this.logger.warn(`discovery NDJSON log write failed for project ${projectId}`, err);
+      }
     }
     this.emit('discoveryDebugLog', projectId, line);
   }

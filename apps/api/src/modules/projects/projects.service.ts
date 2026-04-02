@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RecordingService } from '../recording/recording.service';
 import { CreateProjectDto, PatchAgentKnowledgeDto, UpdateProjectDto } from './projects.dto';
 import { ProjectDiscoveryService } from './project-discovery.service';
 
@@ -15,13 +16,22 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectDiscovery: ProjectDiscoveryService,
+    private readonly recording: RecordingService,
   ) {}
 
   findAll(userId: string) {
-    return this.prisma.project.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.project
+      .findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        include: { agentKnowledge: { select: { discoveryAgentLogFile: true } } },
+      })
+      .then((rows) =>
+        rows.map(({ agentKnowledge, ...p }) => ({
+          ...p,
+          discoveryAgentLogFile: agentKnowledge?.discoveryAgentLogFile ?? null,
+        })),
+      );
   }
 
   async findOne(id: string, userId: string) {
@@ -84,20 +94,6 @@ export class ProjectsService {
     const looksActive = st === 'queued' || st === 'running';
     const busyHere = this.projectDiscovery.isDiscoveryBusy(id);
     if (looksActive && !busyHere) {
-      // #region agent log
-      fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-        body: JSON.stringify({
-          sessionId: 'ba63e6',
-          location: 'projects.service.ts:getAgentKnowledge',
-          message: 'reconcile stale discovery (db active, not busy in-process)',
-          data: { projectId: id, dbStatus: st },
-          timestamp: Date.now(),
-          hypothesisId: 'H-stale',
-        }),
-      }).catch(() => {});
-      // #endregion
       const errMsg =
         'Discovery was interrupted (server restart or process ended). Run app discovery again.';
       k = await this.prisma.projectAgentKnowledge.update({
@@ -119,8 +115,25 @@ export class ProjectsService {
       discoverySummaryMarkdown: k?.discoverySummaryMarkdown ?? null,
       discoveryStructured: k?.discoveryStructured ?? null,
       discoveryNavigationMermaid: k?.discoveryNavigationMermaid ?? null,
+      discoveryAgentLogFile: k?.discoveryAgentLogFile ?? null,
       updatedAt: k?.updatedAt?.toISOString() ?? null,
     };
+  }
+
+  /** NDJSON discovery agent log from `docs/logs/` (last completed or failed run). */
+  async getDiscoveryAgentLog(projectId: string, userId: string) {
+    const existing = await this.findOne(projectId, userId);
+    if (!existing) throw new NotFoundException(`Project ${projectId} not found`);
+    const k = await this.prisma.projectAgentKnowledge.findUnique({
+      where: { projectId },
+      select: { discoveryAgentLogFile: true },
+    });
+    const basename = k?.discoveryAgentLogFile?.trim();
+    if (!basename) {
+      throw new NotFoundException('No discovery agent log file recorded yet for this project');
+    }
+    const lines = await this.recording.readDiscoveryAgentLogFile(basename);
+    return { filename: basename, lines };
   }
 
   async patchAgentKnowledge(id: string, userId: string, dto: PatchAgentKnowledgeDto) {

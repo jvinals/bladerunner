@@ -39,7 +39,8 @@ type UseDiscoveryLiveOptions = {
   enabled: boolean;
 };
 
-function formatLogTime(iso: string): string {
+/** Shared with persisted discovery log viewer (`/discovery-agent-log/:projectId`). */
+export function formatDiscoveryLogTime(iso: string): string {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
@@ -152,5 +153,5 @@ export function useDiscoveryLive(projectId: string | undefined, options: UseDisc
     };
   }, [projectId, enabled]);
 
-  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime, navigationMermaid };
+  return { frameDataUrl, connected, clearFrame, logLines, formatLogTime: formatDiscoveryLogTime, navigationMermaid };
 }
