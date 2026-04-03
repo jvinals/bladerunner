@@ -108,7 +108,7 @@ Rules:
 - Prefer getByRole, getByLabel, getByText with stable accessible names. For Shadcn **Select** rows, the trigger is often **button**, not combobox — follow the snapshot/manifest; avoid \`getByRole('combobox')\` when the tree shows \`button\`.
 - For custom selects/listboxes, prefer getByRole('option', { name: /…/i }) (case-insensitive regex) scoped to the open listbox, dialog, or popover so strict mode does not match multiple options; avoid exact: true on option text when labels may include invisible spans or formatting.
 - One focused step per response: for Shadcn/Radix comboboxes, emit only one logical browser action per snippet (e.g. open the trigger, then in a later evaluation step type in the portaled filter input, then in another step pick the option — not all in one playwrightCode block). Avoid multi-page tours in one snippet.
-- If the goal appears complete from the screenshot, use a no-op or wait: e.g. await page.waitForTimeout(500); and explain in expectedOutcome that you are confirming completion.
+- **Prior steps:** The "Prior steps" block lists each **step title**, whether Playwright **OK** or **FAIL**, the analyzer **decision**, a **code excerpt**, and **err** when execution failed. If several lines show the same goal (e.g. patient selection) with repeated FAIL or copy-paste titles, you MUST change locator strategy (different role, listbox scope, button trigger, placeholder, row/cell) — do not repeat the same approach.
 
 ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES}`;
 
@@ -129,7 +129,8 @@ Rules:
 - Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
 - Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions. If the user message includes a "Run configuration (automatic sign-in)" section, follow it for when credential screens should not trigger ask_human.
 - Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
-- Use "advance" when the step succeeded and exploration should continue.`;
+- Use "advance" when the step succeeded and exploration should continue.
+- When execution failed and the **Progress summary** shows repeated **retry** cycles or similar failures for the same sub-goal (e.g. dropdown/patient selection), still use **"retry"** if the goal is reachable, but make **rationale** actionable: name which **different** interaction to try next (e.g. listbox-scoped option, button trigger vs combobox, row click, placeholder) so the next codegen step is not a blind repeat. If the same UI is impossible to interpret from the evidence, choose **"ask_human"** with one focused question.`;
 
 function appendEvaluationCodegenAutoSignInUserBlock(
   baseUser: string,
@@ -1308,7 +1309,7 @@ ${input.desiredOutput}
 Progress summary (rolling):
 ${input.progressSummary?.trim() || '(none yet)'}
 
-Prior steps (brief):
+Prior steps (chronological; each line: seq, title, OK/FAIL, analyzer decision, code excerpt, optional err):
 ${input.priorStepsBrief.trim() || '(none)'}
 
 Interactive manifest (Set-of-Marks [n] lines; aligned with badges on the attached full-page image):

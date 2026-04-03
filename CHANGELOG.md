@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.162`: **Evaluations — richer prior-steps context + search/pick guidelines** — Codegen user prompt now lists last **10** steps **chronologically** with **step title**, **OK/FAIL**, analyzer **decision**, **code excerpt**, and **error** when Playwright failed (so the model can see repeated patient-selection failures and switch locators). **EVALUATION_CODEGEN_SYSTEM** + **EVALUATION_ANALYZER_SYSTEM** nudge actionable retries. [`playwright-ui-guidelines.ts`](apps/api/src/modules/llm/playwright-ui-guidelines.ts) §6–7: wait for **listbox/option** (or table **row**) after filter; do not repeat the same failed **getByRole** pattern. `@bladerunner/api 0.6.126`.
+
 - `0.10.161`: **LLM — Shadcn Select vs combobox** — Extended [`playwright-ui-guidelines.ts`](apps/api/src/modules/llm/playwright-ui-guidelines.ts) with rule §5: Radix **Select** triggers are often **`role="button"`**, not `combobox`; avoid `getByRole('combobox', { name: /Name/i })` timeouts; use snapshot/manifest, dialog scope, `getByPlaceholder` / `getByLabel` / `button`. **Evaluation codegen** + **Gemini** implementation line updated. `@bladerunner/api 0.6.125`.
 
 - `0.10.160`: **LLM — Playwright UI guidelines** — Shared [`playwright-ui-guidelines.ts`](apps/api/src/modules/llm/playwright-ui-guidelines.ts) (`PLAYWRIGHT_UI_INTERACTION_GUIDELINES` + condensed variant) injected into **evaluation codegen**, **Gemini instruction + verify** templates, **action→instruction** recorder prompt, and **discovery explorer** system prompt. Rules: atomic steps for combobox flows, click trigger before portaled filter input, soft regex for options, portal/auto-wait. Reconciled prior `exact: true` option nudges with regex guidance. `@bladerunner/api 0.6.124`.

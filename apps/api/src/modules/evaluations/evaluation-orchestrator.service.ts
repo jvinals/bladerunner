@@ -299,16 +299,22 @@ export class EvaluationOrchestratorService {
         accessibilitySnapshotChars: codegenCtx.accessibilitySnapshot?.length ?? 0,
       });
 
-      const priorSteps = await this.prisma.evaluationStep.findMany({
+      const priorStepsDesc = await this.prisma.evaluationStep.findMany({
         where: { evaluationId },
         orderBy: { sequence: 'desc' },
-        take: 8,
+        take: 10,
       });
+      /** Chronological (oldest first) so the model reads a clear failure story; last lines are most recent. */
+      const priorSteps = [...priorStepsDesc].reverse();
       const priorBrief = priorSteps
-        .map(
-          (st) =>
-            `seq ${st.sequence}: ${st.decision ?? '?'} — ${(st.analyzerRationale ?? st.thinkingText ?? '').slice(0, 200)}`,
-        )
+        .map((st) => {
+          const title = (st.stepTitle ?? '').trim().slice(0, 80) || '(no title)';
+          const code = (st.proposedCode ?? '').replace(/\s+/g, ' ').trim().slice(0, 180);
+          const err = st.errorMessage?.replace(/\s+/g, ' ').trim().slice(0, 140);
+          const run = st.errorMessage ? `FAIL` : `OK`;
+          const tail = err ? ` | err: ${err}` : '';
+          return `seq ${st.sequence}: "${title}" | ${run} | ${st.decision ?? '?'} | code: ${code}${tail}`;
+        })
         .join('\n');
 
       const codegenInputJson = {
