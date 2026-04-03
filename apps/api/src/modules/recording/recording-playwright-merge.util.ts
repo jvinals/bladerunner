@@ -1,4 +1,18 @@
 /**
+ * Playback `getByText(..., { exact: true })` requires one element whose text equals the string exactly.
+ * EHR-style rows (name + DOB + bullet + age) are often split across nodes or use different Unicode
+ * bullets — exact match times out. Short nav labels (e.g. "Patients") still use exact to avoid
+ * substring false positives ("Total Patients").
+ */
+export function shouldUseExactGetByTextForPlayback(text: string): boolean {
+  const t = text.trim();
+  if (t.length > 32) return false;
+  if (/[•·∙]/.test(t)) return false;
+  if (/\d{1,2}\/\d{1,2}\/\d{4}/.test(t)) return false;
+  return true;
+}
+
+/**
  * LLM `actionToInstruction` often returns `page.locator('span')` while the injected `getSelector(target)`
  * is a concrete CSS path (e.g. `span.ml-2.text-sm`). Playback relaxes bare tags to `.first()`, which
  * clicks the wrong node and leaves the wrong URL — later steps (e.g. `td...`) then time out.
@@ -49,7 +63,8 @@ export function preferGetByTextForBareTagLocator(
   const tag = sel.toLowerCase();
   if (!['span', 'div', 'a', 'button', 'i', 'svg', 'label', 'p'].includes(tag)) return playwrightCode;
 
-  const byText = `page.getByText(${JSON.stringify(text)}, { exact: true }).first().click()`;
+  const exact = shouldUseExactGetByTextForPlayback(text);
+  const byText = `page.getByText(${JSON.stringify(text)}, { exact: ${exact} }).first().click()`;
   for (const q of ["'", '"', '`'] as const) {
     const needle = `page.locator(${q}${tag}${q}).first().click()`;
     if (playwrightCode.includes(needle)) {
@@ -61,18 +76,24 @@ export function preferGetByTextForBareTagLocator(
 
 /**
  * Playback: `getByText('Patients', { exact: false })` matches "Total Patients" and other substrings.
- * Prefer exact full-string match; ensure `.first()` before `.click()` when multiple exact matches exist.
+ * Prefer exact full-string match for **short** labels; use `exact: false` for long/composite rows so
+ * substring matching survives split DOM / Unicode bullets (see {@link shouldUseExactGetByTextForPlayback}).
  */
 export function tightenGetByTextLocatorsForPlayback(playwrightCode: string): string {
   let s = playwrightCode;
   s = s.replace(
-    /\.getByText\(([^,]+),\s*\{\s*exact:\s*false\s*\}\)/g,
-    '.getByText($1, { exact: true })',
+    /\.getByText\(\s*(['"`])([^'"`]*)\1\s*,\s*\{\s*exact:\s*false\s*\}\)/g,
+    (_m, q: string, text: string) => {
+      const exact = shouldUseExactGetByTextForPlayback(text);
+      return `.getByText(${q}${text}${q}, { exact: ${exact} })`;
+    },
   );
   s = s.replace(
     /\.getByText\(\s*(['"`])([^'"`]*)\1\s*(?:,\s*\{\s*exact:\s*true\s*\})?\s*\)(?!\s*\.first\(\))(\s*\.click\(\))/g,
-    (_m, q: string, text: string, clickPart: string) =>
-      `.getByText(${q}${text}${q}, { exact: true }).first()${clickPart}`,
+    (_m, q: string, text: string, clickPart: string) => {
+      const exact = shouldUseExactGetByTextForPlayback(text);
+      return `.getByText(${q}${text}${q}, { exact: ${exact} }).first()${clickPart}`;
+    },
   );
   return s;
 }
@@ -189,7 +210,8 @@ export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): 
       const qName = JSON.stringify(name);
       const first = firstPart ?? '';
       const click = clickPart ?? '.click()';
-      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: true }).first()${click}; })();`;
+      const exactFallback = shouldUseExactGetByTextForPlayback(name);
+      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
     },
   );
 }

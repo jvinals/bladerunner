@@ -6,6 +6,7 @@ import {
   preferSearchConditionsPlaceholderOverFollowingInputLabel,
   relaxClickForceForPlayback,
   relaxPageLocatorFirstForPlayback,
+  shouldUseExactGetByTextForPlayback,
   stripTypeScriptNonNullAssertionsForPlayback,
   tightenGetByTextLocatorsForPlayback,
 } from './recording-playwright-merge.util';
@@ -61,6 +62,25 @@ assertEq(
   'playback tighten: bare getByText click',
   tightenGetByTextLocatorsForPlayback(`await page.getByText('Patients').click();`),
   `await page.getByText('Patients', { exact: true }).first().click();`,
+);
+
+assertEq(
+  'playback tighten: EHR composite row uses exact false (split DOM / bullet)',
+  tightenGetByTextLocatorsForPlayback(
+    `await page.getByText('Alina Wren 08/28/1985 • 40yo').click();`,
+  ),
+  `await page.getByText('Alina Wren 08/28/1985 • 40yo', { exact: false }).first().click();`,
+);
+
+assertEq(
+  'shouldUseExact: short nav label',
+  shouldUseExactGetByTextForPlayback('Patients'),
+  true,
+);
+assertEq(
+  'shouldUseExact: composite patient row',
+  shouldUseExactGetByTextForPlayback('Alina Wren 08/28/1985 • 40yo'),
+  false,
 );
 
 assertEq(
