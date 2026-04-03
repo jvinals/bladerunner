@@ -110,6 +110,12 @@ import { buildAiVisualIdTree, type AiVisualIdContextArtifact, type AiVisualIdTag
 const AI_PROMPT_PW_TIMEOUT_MS = 120_000;
 const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Max wait for locator actions / navigation in autonomous evaluation runs (below Playwright 30s default). */
+function evaluationPlaywrightTimeoutMs(): number {
+  const n = Number(process.env.EVALUATION_PLAYWRIGHT_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 20_000;
+}
+
 type RecordingViewportPreset = 'hd' | 'wxga' | 'fhd';
 type RecordingStreamQualityPreset = 'low' | 'medium' | 'high';
 type RecordingStreamSmoothnessPreset = 'low' | 'medium' | 'high';
@@ -917,6 +923,9 @@ export class RecordingService extends EventEmitter {
         deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
       });
       const page = await context.newPage();
+      const pwTimeoutMs = evaluationPlaywrightTimeoutMs();
+      page.setDefaultTimeout(pwTimeoutMs);
+      page.setDefaultNavigationTimeout(pwTimeoutMs);
       const cdpSession = await context.newCDPSession(page);
       const session: EvaluationLiveSession = {
         evaluationId,

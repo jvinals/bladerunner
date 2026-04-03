@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.164`: **Evaluations — shorter Playwright timeouts** — Evaluation browser pages now use **20s** default action/navigation timeout (Playwright’s implicit **30s**). Override with **`EVALUATION_PLAYWRIGHT_TIMEOUT_MS`**. Set in [`startEvaluationSession`](apps/api/src/modules/recording/recording.service.ts) via `setDefaultTimeout` / `setDefaultNavigationTimeout`. `@bladerunner/api 0.6.128`.
+
 - `0.10.163`: **Playback — `getByText` exact match** — [`tightenGetByTextLocatorsForPlayback`](apps/api/src/modules/recording/recording-playwright-merge.util.ts) and related helpers no longer force `{ exact: true }` for long/composite labels (length > 32, Unicode bullets, or `MM/DD/YYYY` dates). Substring matching avoids timeouts on EHR rows like `Alina Wren 08/28/1985 • 40yo` where DOM text is split or punctuation differs. New [`shouldUseExactGetByTextForPlayback`](apps/api/src/modules/recording/recording-playwright-merge.util.ts). `@bladerunner/api 0.6.127`.
 
 - `0.10.162`: **Evaluations — richer prior-steps context + search/pick guidelines** — Codegen user prompt now lists last **10** steps **chronologically** with **step title**, **OK/FAIL**, analyzer **decision**, **code excerpt**, and **error** when Playwright failed (so the model can see repeated patient-selection failures and switch locators). **EVALUATION_CODEGEN_SYSTEM** + **EVALUATION_ANALYZER_SYSTEM** nudge actionable retries. [`playwright-ui-guidelines.ts`](apps/api/src/modules/llm/playwright-ui-guidelines.ts) §6–7: wait for **listbox/option** (or table **row**) after filter; do not repeat the same failed **getByRole** pattern. `@bladerunner/api 0.6.126`.
