@@ -28,10 +28,12 @@ export type AggregateEvaluationStep = {
 
 export type EvaluationStepAvgAggregateOutputType = {
   sequence: number | null
+  stepDurationMs: number | null
 }
 
 export type EvaluationStepSumAggregateOutputType = {
   sequence: number | null
+  stepDurationMs: number | null
 }
 
 export type EvaluationStepMinAggregateOutputType = {
@@ -49,6 +51,7 @@ export type EvaluationStepMinAggregateOutputType = {
   errorMessage: string | null
   decision: $Enums.EvaluationStepDecision | null
   analyzerRationale: string | null
+  stepDurationMs: number | null
   createdAt: Date | null
 }
 
@@ -67,6 +70,7 @@ export type EvaluationStepMaxAggregateOutputType = {
   errorMessage: string | null
   decision: $Enums.EvaluationStepDecision | null
   analyzerRationale: string | null
+  stepDurationMs: number | null
   createdAt: Date | null
 }
 
@@ -89,6 +93,7 @@ export type EvaluationStepCountAggregateOutputType = {
   errorMessage: number
   decision: number
   analyzerRationale: number
+  stepDurationMs: number
   createdAt: number
   _all: number
 }
@@ -96,10 +101,12 @@ export type EvaluationStepCountAggregateOutputType = {
 
 export type EvaluationStepAvgAggregateInputType = {
   sequence?: true
+  stepDurationMs?: true
 }
 
 export type EvaluationStepSumAggregateInputType = {
   sequence?: true
+  stepDurationMs?: true
 }
 
 export type EvaluationStepMinAggregateInputType = {
@@ -117,6 +124,7 @@ export type EvaluationStepMinAggregateInputType = {
   errorMessage?: true
   decision?: true
   analyzerRationale?: true
+  stepDurationMs?: true
   createdAt?: true
 }
 
@@ -135,6 +143,7 @@ export type EvaluationStepMaxAggregateInputType = {
   errorMessage?: true
   decision?: true
   analyzerRationale?: true
+  stepDurationMs?: true
   createdAt?: true
 }
 
@@ -157,6 +166,7 @@ export type EvaluationStepCountAggregateInputType = {
   errorMessage?: true
   decision?: true
   analyzerRationale?: true
+  stepDurationMs?: true
   createdAt?: true
   _all?: true
 }
@@ -266,6 +276,7 @@ export type EvaluationStepGroupByOutputType = {
   errorMessage: string | null
   decision: $Enums.EvaluationStepDecision | null
   analyzerRationale: string | null
+  stepDurationMs: number | null
   createdAt: Date
   _count: EvaluationStepCountAggregateOutputType | null
   _avg: EvaluationStepAvgAggregateOutputType | null
@@ -311,6 +322,7 @@ export type EvaluationStepWhereInput = {
   errorMessage?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   decision?: Prisma.EnumEvaluationStepDecisionNullableFilter<"EvaluationStep"> | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  stepDurationMs?: Prisma.IntNullableFilter<"EvaluationStep"> | number | null
   createdAt?: Prisma.DateTimeFilter<"EvaluationStep"> | Date | string
   evaluation?: Prisma.XOR<Prisma.EvaluationScalarRelationFilter, Prisma.EvaluationWhereInput>
 }
@@ -334,6 +346,7 @@ export type EvaluationStepOrderByWithRelationInput = {
   errorMessage?: Prisma.SortOrderInput | Prisma.SortOrder
   decision?: Prisma.SortOrderInput | Prisma.SortOrder
   analyzerRationale?: Prisma.SortOrderInput | Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   evaluation?: Prisma.EvaluationOrderByWithRelationInput
 }
@@ -360,6 +373,7 @@ export type EvaluationStepWhereUniqueInput = Prisma.AtLeast<{
   errorMessage?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   decision?: Prisma.EnumEvaluationStepDecisionNullableFilter<"EvaluationStep"> | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  stepDurationMs?: Prisma.IntNullableFilter<"EvaluationStep"> | number | null
   createdAt?: Prisma.DateTimeFilter<"EvaluationStep"> | Date | string
   evaluation?: Prisma.XOR<Prisma.EvaluationScalarRelationFilter, Prisma.EvaluationWhereInput>
 }, "id">
@@ -383,6 +397,7 @@ export type EvaluationStepOrderByWithAggregationInput = {
   errorMessage?: Prisma.SortOrderInput | Prisma.SortOrder
   decision?: Prisma.SortOrderInput | Prisma.SortOrder
   analyzerRationale?: Prisma.SortOrderInput | Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.EvaluationStepCountOrderByAggregateInput
   _avg?: Prisma.EvaluationStepAvgOrderByAggregateInput
@@ -413,6 +428,7 @@ export type EvaluationStepScalarWhereWithAggregatesInput = {
   errorMessage?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
   decision?: Prisma.EnumEvaluationStepDecisionNullableWithAggregatesFilter<"EvaluationStep"> | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
+  stepDurationMs?: Prisma.IntNullableWithAggregatesFilter<"EvaluationStep"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"EvaluationStep"> | Date | string
 }
 
@@ -434,6 +450,7 @@ export type EvaluationStepCreateInput = {
   errorMessage?: string | null
   decision?: $Enums.EvaluationStepDecision | null
   analyzerRationale?: string | null
+  stepDurationMs?: number | null
   createdAt?: Date | string
   evaluation: Prisma.EvaluationCreateNestedOneWithoutStepsInput
 }
@@ -457,6 +474,7 @@ export type EvaluationStepUncheckedCreateInput = {
   errorMessage?: string | null
   decision?: $Enums.EvaluationStepDecision | null
   analyzerRationale?: string | null
+  stepDurationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -478,6 +496,7 @@ export type EvaluationStepUpdateInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   evaluation?: Prisma.EvaluationUpdateOneRequiredWithoutStepsNestedInput
 }
@@ -501,6 +520,7 @@ export type EvaluationStepUncheckedUpdateInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -523,6 +543,7 @@ export type EvaluationStepCreateManyInput = {
   errorMessage?: string | null
   decision?: $Enums.EvaluationStepDecision | null
   analyzerRationale?: string | null
+  stepDurationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -544,6 +565,7 @@ export type EvaluationStepUpdateManyMutationInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -566,6 +588,7 @@ export type EvaluationStepUncheckedUpdateManyInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -598,11 +621,13 @@ export type EvaluationStepCountOrderByAggregateInput = {
   errorMessage?: Prisma.SortOrder
   decision?: Prisma.SortOrder
   analyzerRationale?: Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
 export type EvaluationStepAvgOrderByAggregateInput = {
   sequence?: Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrder
 }
 
 export type EvaluationStepMaxOrderByAggregateInput = {
@@ -620,6 +645,7 @@ export type EvaluationStepMaxOrderByAggregateInput = {
   errorMessage?: Prisma.SortOrder
   decision?: Prisma.SortOrder
   analyzerRationale?: Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -638,11 +664,13 @@ export type EvaluationStepMinOrderByAggregateInput = {
   errorMessage?: Prisma.SortOrder
   decision?: Prisma.SortOrder
   analyzerRationale?: Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
 export type EvaluationStepSumOrderByAggregateInput = {
   sequence?: Prisma.SortOrder
+  stepDurationMs?: Prisma.SortOrder
 }
 
 export type EvaluationStepCreateNestedManyWithoutEvaluationInput = {
@@ -709,6 +737,7 @@ export type EvaluationStepCreateWithoutEvaluationInput = {
   errorMessage?: string | null
   decision?: $Enums.EvaluationStepDecision | null
   analyzerRationale?: string | null
+  stepDurationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -730,6 +759,7 @@ export type EvaluationStepUncheckedCreateWithoutEvaluationInput = {
   errorMessage?: string | null
   decision?: $Enums.EvaluationStepDecision | null
   analyzerRationale?: string | null
+  stepDurationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -781,6 +811,7 @@ export type EvaluationStepScalarWhereInput = {
   errorMessage?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   decision?: Prisma.EnumEvaluationStepDecisionNullableFilter<"EvaluationStep"> | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
+  stepDurationMs?: Prisma.IntNullableFilter<"EvaluationStep"> | number | null
   createdAt?: Prisma.DateTimeFilter<"EvaluationStep"> | Date | string
 }
 
@@ -802,6 +833,7 @@ export type EvaluationStepCreateManyEvaluationInput = {
   errorMessage?: string | null
   decision?: $Enums.EvaluationStepDecision | null
   analyzerRationale?: string | null
+  stepDurationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -823,6 +855,7 @@ export type EvaluationStepUpdateWithoutEvaluationInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -844,6 +877,7 @@ export type EvaluationStepUncheckedUpdateWithoutEvaluationInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -865,6 +899,7 @@ export type EvaluationStepUncheckedUpdateManyWithoutEvaluationInput = {
   errorMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   decision?: Prisma.NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput | $Enums.EvaluationStepDecision | null
   analyzerRationale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  stepDurationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -889,6 +924,7 @@ export type EvaluationStepSelect<ExtArgs extends runtime.Types.Extensions.Intern
   errorMessage?: boolean
   decision?: boolean
   analyzerRationale?: boolean
+  stepDurationMs?: boolean
   createdAt?: boolean
   evaluation?: boolean | Prisma.EvaluationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["evaluationStep"]>
@@ -912,6 +948,7 @@ export type EvaluationStepSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   errorMessage?: boolean
   decision?: boolean
   analyzerRationale?: boolean
+  stepDurationMs?: boolean
   createdAt?: boolean
   evaluation?: boolean | Prisma.EvaluationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["evaluationStep"]>
@@ -935,6 +972,7 @@ export type EvaluationStepSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   errorMessage?: boolean
   decision?: boolean
   analyzerRationale?: boolean
+  stepDurationMs?: boolean
   createdAt?: boolean
   evaluation?: boolean | Prisma.EvaluationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["evaluationStep"]>
@@ -958,10 +996,11 @@ export type EvaluationStepSelectScalar = {
   errorMessage?: boolean
   decision?: boolean
   analyzerRationale?: boolean
+  stepDurationMs?: boolean
   createdAt?: boolean
 }
 
-export type EvaluationStepOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "evaluationId" | "userId" | "sequence" | "pageUrl" | "stepTitle" | "progressSummaryBefore" | "codegenInputJson" | "codegenOutputJson" | "analyzerInputJson" | "analyzerOutputJson" | "thinkingText" | "proposedCode" | "expectedOutcome" | "actualOutcome" | "errorMessage" | "decision" | "analyzerRationale" | "createdAt", ExtArgs["result"]["evaluationStep"]>
+export type EvaluationStepOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "evaluationId" | "userId" | "sequence" | "pageUrl" | "stepTitle" | "progressSummaryBefore" | "codegenInputJson" | "codegenOutputJson" | "analyzerInputJson" | "analyzerOutputJson" | "thinkingText" | "proposedCode" | "expectedOutcome" | "actualOutcome" | "errorMessage" | "decision" | "analyzerRationale" | "stepDurationMs" | "createdAt", ExtArgs["result"]["evaluationStep"]>
 export type EvaluationStepInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   evaluation?: boolean | Prisma.EvaluationDefaultArgs<ExtArgs>
 }
@@ -999,6 +1038,10 @@ export type $EvaluationStepPayload<ExtArgs extends runtime.Types.Extensions.Inte
     errorMessage: string | null
     decision: $Enums.EvaluationStepDecision | null
     analyzerRationale: string | null
+    /**
+     * Wall time for the step (codegen through analyzer LLM), ms; set when analyzer completes.
+     */
+    stepDurationMs: number | null
     createdAt: Date
   }, ExtArgs["result"]["evaluationStep"]>
   composites: {}
@@ -1442,6 +1485,7 @@ export interface EvaluationStepFieldRefs {
   readonly errorMessage: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly decision: Prisma.FieldRef<"EvaluationStep", 'EvaluationStepDecision'>
   readonly analyzerRationale: Prisma.FieldRef<"EvaluationStep", 'String'>
+  readonly stepDurationMs: Prisma.FieldRef<"EvaluationStep", 'Int'>
   readonly createdAt: Prisma.FieldRef<"EvaluationStep", 'DateTime'>
 }
     

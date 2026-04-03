@@ -333,6 +333,8 @@ model EvaluationStep {
   errorMessage      String?                 @map("error_message") @db.Text
   decision          EvaluationStepDecision?
   analyzerRationale String?                 @map("analyzer_rationale") @db.Text
+  /// Wall time for the step (codegen through analyzer LLM), ms; set when analyzer completes.
+  stepDurationMs    Int?                    @map("step_duration_ms")
   createdAt         DateTime                @default(now()) @map("created_at")
 
   evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)

@@ -37,6 +37,7 @@ import {
   getCodegenViewportJpegBase64,
   omitBinaryPreviewKeys,
 } from '@/components/ui/ViewportJpegPreviewIconButton';
+import { ThinkingProcessPanel } from '@/components/evaluation/ThinkingProcessPanel';
 
 function JsonBlock({ value }: { value: unknown }) {
   if (value == null || (typeof value === 'object' && value !== null && Object.keys(value as object).length === 0)) {
@@ -79,6 +80,7 @@ function mergeStepsWithLivePlaceholder(
     errorMessage: null,
     decision: null,
     analyzerRationale: null,
+    stepDurationMs: null,
     createdAt: new Date(0).toISOString(),
   };
   return [...steps, placeholder].sort((a, b) => a.sequence - b.sequence);
@@ -941,6 +943,19 @@ export default function EvaluationDetailPage() {
               </p>
             ) : null}
           </div>
+
+          <section
+            className="w-full rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+            aria-labelledby="thinking-process-heading"
+          >
+            <h2
+              id="thinking-process-heading"
+              className="text-sm font-semibold text-gray-800 px-4 pt-4 pb-2 border-b border-gray-100"
+            >
+              Thinking process
+            </h2>
+            <ThinkingProcessPanel steps={displaySteps} lastProgress={lastProgress} />
+          </section>
 
           <section
             className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"

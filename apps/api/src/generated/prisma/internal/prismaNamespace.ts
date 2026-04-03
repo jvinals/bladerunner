@@ -1689,6 +1689,7 @@ export const EvaluationStepScalarFieldEnum = {
   errorMessage: 'errorMessage',
   decision: 'decision',
   analyzerRationale: 'analyzerRationale',
+  stepDurationMs: 'stepDurationMs',
   createdAt: 'createdAt'
 } as const
 

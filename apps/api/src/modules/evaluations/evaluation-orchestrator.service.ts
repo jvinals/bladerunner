@@ -537,6 +537,7 @@ export class EvaluationOrchestratorService {
         errorMessage: executionOk ? null : errorMessage ?? 'error',
         decision: analysis.decision,
         analyzerRationale: analysis.rationale,
+        stepDurationMs: Date.now() - stepWallStart,
       });
 
       await this.evaluations.appendProgressSummary(

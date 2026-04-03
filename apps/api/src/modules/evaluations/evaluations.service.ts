@@ -189,6 +189,7 @@ export class EvaluationsService {
       errorMessage: string | null;
       decision: EvaluationStepDecision;
       analyzerRationale: string;
+      stepDurationMs?: number | null;
     },
   ) {
     return this.prisma.evaluationStep.updateMany({
@@ -200,6 +201,7 @@ export class EvaluationsService {
         errorMessage: data.errorMessage,
         decision: data.decision,
         analyzerRationale: data.analyzerRationale,
+        ...(data.stepDurationMs !== undefined ? { stepDurationMs: data.stepDurationMs } : {}),
       },
     });
   }

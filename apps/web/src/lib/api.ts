@@ -566,6 +566,8 @@ export type EvaluationStepDto = {
   errorMessage: string | null;
   decision: string | null;
   analyzerRationale: string | null;
+  /** Wall time for the full step (ms); absent/null for older steps or incomplete. */
+  stepDurationMs?: number | null;
   createdAt: string;
 };
 

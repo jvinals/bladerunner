@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.159`: **Evaluation — Thinking process panel** — Full-width section on evaluation detail (above Full progress log / Step timeline): collapsible rows per step with codegen **stepTitle**, blue spinner while the step is in flight, green check / red X from **Playwright** `executionOk` in analyzer inputs when done, **`(Xs)`** duration from **`step_duration_ms`** (wall time for the step). Expanded: one-line **playwrightCode**, red **error** when execution failed. Migration **`20260404120000_evaluation_step_duration_ms`**. `@bladerunner/api 0.6.123`, `@bladerunner/web 0.7.97`.
+
 - `0.10.158`: **Discovery agent log files** — Each discovery run appends NDJSON to `docs/logs/{slug}-discovery-DDMMYY-HHmm.log` (repo root resolved from `pnpm-workspace.yaml`; override with **`DISCOVERY_LOGS_DIR`**). DB field `discovery_agent_log_file` stores the basename; **`GET /projects/:id/discovery/agent-log`** returns parsed lines. Projects table: **scroll** button next to the project name opens **`/discovery-agent-log/:projectId`** (same `DiscoveryAgentLogPanel` as live discovery). Migration **`20260403130000_discovery_agent_log_file`**. `@bladerunner/api 0.6.122`, `@bladerunner/web 0.7.96`.
 
 - `0.10.157`: **Discovery explore JSON truncation** — `projectDiscoveryExploreStep` used `maxTokens: 2048`; OpenAI GPT-5 counts **reasoning** inside `max_completion_tokens`, so the visible JSON could be cut off mid-`playwrightCode` (~few hundred chars) and `parseJsonFromLlmText` failed. Raised to **8192** and set **`reasoningEffort: 'low'`** (aligned with other vision+JSON routes). Clearer parse error when extraction finds no balanced `{...}` (likely truncation). `@bladerunner/api 0.6.121`.
