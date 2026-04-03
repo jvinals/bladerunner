@@ -34,6 +34,10 @@ import {
   verifyPlaywrightAgainstDomNonGemini,
 } from './vision-playwright-codegen';
 import { parseOptimizedPromptSpec, type OptimizedPromptSpec } from '../recording/optimized-prompt-metadata';
+import {
+  PLAYWRIGHT_UI_INTERACTION_GUIDELINES,
+  PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED,
+} from './playwright-ui-guidelines';
 
 const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
 1. A concise human-readable instruction describing what the user did
@@ -49,10 +53,11 @@ Guidelines:
 - The "Selector" field is the clicked element's CSS selector from the browser (tag + #id, classes, or [data-testid]). When it contains a class, id, or attribute (not just a bare tag name), prefer await page.locator(<that exact selector as a single-quoted or JSON string>) for clicks/fills so replay targets the same node.
 - Playwright code should use modern locator APIs (getByRole, getByText, getByLabel) when possible
 - For modal/dialog close buttons, never emit a bare page.locator with only a path[d="..."] Lucide X shape or other SVG path alone — the same path repeats on row actions vs the dialog chrome. Prefer getByRole('dialog') combined with getByRole('button', { name: /close|dismiss/i }), getByLabel, or a locator scoped to the open dialog.
-- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. When Visible text is available for a click, prefer getByText(visibleText, { exact: true }) (without chaining .first() on a broad container) or getByRole with name from Visible text / aria (exact: false on getByText matches substrings like "Total Patients"). Do not use page.locator('div', { hasText: '...' }).first() for options in a listbox — target getByRole('option', { name: '...' }) or getByText(..., { exact: true }) on the leaf control. Otherwise use getByRole('link', { name: '...' }), page.locator(<Selector field>) when specific, or a narrowly scoped locator.
-- Playwright coding guidelines for modern SPAs: do not use locator.fill() on comboboxes or async search fields — use pressSequentially(text, { delay: 50 }). Wait for data rows or list items before reading table/list text. Prefer keyboard navigation (ArrowDown + Enter) for dynamic custom dropdowns when clicks would target detached nodes. Prefer expect(locator) web-first assertions when verifying text.
+- NEVER use page.locator('span'), page.locator('div'), page.locator('a'), page.locator('button'), or page.locator('input') alone — they match many elements and Playwright throws a strict mode violation. When Visible text is available for a click, prefer getByText(visibleText, { exact: true }) (without chaining .first() on a broad container) or getByRole with name from Visible text / aria (exact: false on getByText matches substrings like "Total Patients"). Do not use page.locator('div', { hasText: '...' }).first() for options in a listbox — target getByRole('option', { name: /…/i }) scoped to the open listbox when possible, or getByText on the leaf control. Otherwise use getByRole('link', { name: '...' }), page.locator(<Selector field>) when specific, or a narrowly scoped locator.
+- Playwright coding guidelines for modern SPAs: do not use locator.fill() on combobox triggers or async search fields — click the combobox trigger first if the filter input is separate; use pressSequentially(text, { delay: 50 }) on the real input inside the popover/listbox. Wait for data rows or list items before reading table/list text. Prefer keyboard navigation (ArrowDown + Enter) for dynamic custom dropdowns when clicks would target detached nodes. Prefer expect(locator) web-first assertions when verifying text.
 - Context: the user records **authorized QA automation** against **their own** staging or demo app; page context may include **synthetic** names and data. Phrase the JSON **instruction** as neutral UI test actions (e.g. "Click Save", "Type email into the login field")—not as requests to harm systems, steal data, or bypass security in production.
-- Keep instructions concise but specific enough to identify the target element`;
+- Keep instructions concise but specific enough to identify the target element
+- Additional UI interaction rules (Shadcn/Radix): ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED}`;
 
 const EXPLAIN_AI_PROMPT_TEST_FAILURE_SYSTEM = `You help QA engineers understand why an AI-driven Playwright test step failed and how to fix the **natural-language instruction** (not the Playwright code).
 
@@ -100,10 +105,12 @@ Respond ONLY with valid JSON:
 
 Rules:
 - Output executable Playwright snippets only; no TypeScript types; no require/import.
-- Prefer getByRole, getByLabel, getByText with stable accessible names.
-- For custom selects/listboxes, use getByRole('option', { name: '…', exact: true }) or scope to the open listbox so strict mode does not match multiple options.
-- One focused step per response; avoid multi-page tours in one snippet.
-- If the goal appears complete from the screenshot, use a no-op or wait: e.g. await page.waitForTimeout(500); and explain in expectedOutcome that you are confirming completion.`;
+- Prefer getByRole, getByLabel, getByText with stable accessible names. For Shadcn **Select** rows, the trigger is often **button**, not combobox — follow the snapshot/manifest; avoid \`getByRole('combobox')\` when the tree shows \`button\`.
+- For custom selects/listboxes, prefer getByRole('option', { name: /…/i }) (case-insensitive regex) scoped to the open listbox, dialog, or popover so strict mode does not match multiple options; avoid exact: true on option text when labels may include invisible spans or formatting.
+- One focused step per response: for Shadcn/Radix comboboxes, emit only one logical browser action per snippet (e.g. open the trigger, then in a later evaluation step type in the portaled filter input, then in another step pick the option — not all in one playwrightCode block). Avoid multi-page tours in one snippet.
+- If the goal appears complete from the screenshot, use a no-op or wait: e.g. await page.waitForTimeout(500); and explain in expectedOutcome that you are confirming completion.
+
+${PLAYWRIGHT_UI_INTERACTION_GUIDELINES}`;
 
 const EVALUATION_ANALYZER_SYSTEM = `You judge progress of an autonomous web evaluation. The app under test is owned by the user for QA.
 
@@ -292,6 +299,7 @@ Action constraints
 5. Do not output secrets or credentials.
 6. Do not stop early just because the app "seems explored."
 7. True blockers are limited to cases such as CAPTCHA, hard 403, unclosable modal, or no actionable targets in the evidence.
+8. ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED}
 
 Output format
 

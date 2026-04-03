@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { GenerateContentResponse } from '@google/generative-ai';
+import { PLAYWRIGHT_UI_INTERACTION_GUIDELINES } from './playwright-ui-guidelines';
 
 /** Placeholder replaced with the user’s natural-language task for the AI prompt step. */
 export const GEMINI_INSTRUCTION_ACTION_PLACEHOLDER = '[DESCRIBE THE TASK HERE]';
@@ -75,9 +76,11 @@ ${GEMINI_ACCESSIBILITY_PLACEHOLDER}
 Previous Playwright context (optional, may be absent):
 ${GEMINI_REPAIR_CONTEXT_PLACEHOLDER}
 
+${PLAYWRIGHT_UI_INTERACTION_GUIDELINES}
+
 Playwright coding guidelines for modern SPAs (avoid flakiness):
-- No locator.fill() on search inputs, comboboxes, or async dropdowns — use locator.pressSequentially(text, { delay: 50 }) so React/Vue input handlers and network requests fire.
-- Do not chain .first() immediately after a generic container filtered only by hasText on a div/listbox — clicks can hit dead space. Prefer getByText('Exact', { exact: true }), getByRole('option', { name: 'Exact' }), or another leaf-level locator.
+- No locator.fill() on combobox *triggers* or non-input controls — click the combobox trigger to open first when the filter input is in a portal; use locator.pressSequentially(text, { delay: 50 }) on the real search input inside the popover/listbox so React/Vue input handlers and network requests fire. For plain text inputs that are already focused textboxes, fill/pressSequentially is fine.
+- Do not chain .first() immediately after a generic container filtered only by hasText on a div/listbox — clicks can hit dead space. Prefer getByText with stable text, getByRole('option', { name: /…/i }) scoped to the open listbox/dialog, or another leaf-level locator.
 - Do not read table or list text immediately on navigation; await the target row/cell or use web-first assertions so content is loaded first.
 - For dynamic custom listboxes, after the list is visible prefer ArrowDown + Enter rather than clicking a possibly detached node.
 - If the matching dropdown result row is already visible in the screenshot or interactive manifest, do not add a preparatory click on a different nearby field-selector combobox just because it exists. Prefer the visible search textbox/input and the matching result row.
@@ -93,8 +96,8 @@ Do not output pseudocode.
 Do not output anything before or after the Playwright code.
 
 Execution requirements:
-The code may contain one or multiple sequential Playwright actions, depending on what is necessary to complete the task correctly.
-Do not artificially limit the solution to a single instruction if multiple steps are needed.
+The code may contain one or multiple sequential Playwright actions when they are independent (e.g. several simple clicks). For Shadcn/Radix-style comboboxes (open trigger → type in portaled filter → pick option), prefer emitting only the **next single logical action** in this response so the host can re-capture the DOM and accessibility tree between steps; do not bundle open+type+select in one snippet unless the UI uses a single native input.
+Do not artificially limit the solution to a single instruction when multiple steps are needed for simple flows.
 Generate only the minimum necessary sequence of actions required to achieve the task reliably.
 
 Implementation requirements:
@@ -104,8 +107,8 @@ Make it resilient to different content, dynamic values, user data, themes, setti
 Avoid brittle selectors such as exact text matches when text may vary, screen coordinates, absolute positions, and fragile nth child chains.
 Prefer stable locators such as role, label, placeholder, test id, aria attributes, stable attributes, and layered fallback locators.
 When reading or acting on a single HTML table, use page.locator('table').first() (or a more specific selector) so strict mode does not fail if multiple tables exist.
-For combobox or search-as-you-type dropdowns, prefer getByRole('option', { name: ... }) or options under the listbox/dialog over very broad tag unions (e.g. mixing div and li) that can match the wrong node.
-For search fields and comboboxes, use getByPlaceholder when the UI shows placeholder text (e.g. "Search conditions..." for disease/condition search), or getByRole('combobox') / getByRole('textbox'). Do not use locator('xpath=following::input') after a section heading or label: the first following input in DOM order is often a hidden type=file upload, not the search field. If you must use XPath, use following::input[not(@type="file")] or scope under a stable container.
+For combobox or search-as-you-type dropdowns, prefer getByRole('option', { name: /…/i }) or options under the listbox/dialog (scope the locator) over very broad tag unions (e.g. mixing div and li) that can match the wrong node.
+For search fields and comboboxes, use getByPlaceholder when the UI shows placeholder text (e.g. "Search conditions..." for disease/condition search), or getByRole('combobox') / getByRole('textbox'). Shadcn **Select** row triggers are often **getByRole('button', …)**, not combobox — do not assume combobox for every dropdown row (see UI Interaction Guidelines §5). Do not use locator('xpath=following::input') after a section heading or label: the first following input in DOM order is often a hidden type=file upload, not the search field. If you must use XPath, use following::input[not(@type="file")] or scope under a stable container.
 If the snippet picks the next item from a list by scanning existing page text, handle the case when no item remains so the code does not silently skip work.
 Handle likely UI variations when relevant, including dialogs, menus, tabs, loading states, collapsed sections, empty or prefilled fields, and controls already in the desired state.
 Use only the minimum waits needed and follow Playwright best practices.
@@ -159,7 +162,9 @@ const GEMINI_VERIFY_AGENT_CONTEXT = '[AGENT_CONTEXT]';
 
 const GEMINI_VERIFY_TEMPLATE = `You are an expert Playwright automation engineer performing a verification pass (no image).
 
-You are given the same page URL, task, interactive manifest, and accessibility snapshot that were used to generate draft Playwright code. Your job is to check whether the draft code only uses controls, roles, names, placeholders, labels, and test ids that are consistent with those DOM sections, and whether it avoids strict-mode pitfalls (multiple matches, overly broad locators) described in the codegen guidelines.
+You are given the same page URL, task, interactive manifest, and accessibility snapshot that were used to generate draft Playwright code. Your job is to check whether the draft code only uses controls, roles, names, placeholders, labels, and test ids that are consistent with those DOM sections, and whether it avoids strict-mode pitfalls (multiple matches, overly broad locators) described in the codegen guidelines. Corrected output must satisfy the same UI interaction rules as primary codegen (below).
+
+${PLAYWRIGHT_UI_INTERACTION_GUIDELINES}
 
 Rules:
 - If the draft is already correct and consistent with the DOM text, output it **unchanged** (verbatim).
