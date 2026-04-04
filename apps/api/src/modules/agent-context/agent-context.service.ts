@@ -4,7 +4,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export type AgentContextBundle = {
   general: string;
   projectManual: string;
-  /** Truncated markdown + structured excerpt + optional Mermaid map for prompt injection. */
+  /**
+   * Screens visited (from stored markdown), structured map excerpt, optional Mermaid.
+   * Does not include the `# Discovery Summary` narrative section — that is never sent to LLMs.
+   */
   discoveryInjection: string;
 };
 
@@ -30,16 +33,17 @@ export class AgentContextService {
 
   /**
    * Structured fields for optimized-prompt `appContext` JSON.
+   * `discoveryContext` excludes the long `# Discovery Summary` markdown narrative.
    */
   async getAppContextKnowledgeFields(
     userId: string,
     projectId: string | null | undefined,
-  ): Promise<{ general: string; projectManual: string; discoverySummary: string }> {
+  ): Promise<{ general: string; projectManual: string; discoveryContext: string }> {
     const b = await this.loadBundle(userId, projectId);
     return {
       general: b.general,
       projectManual: b.projectManual,
-      discoverySummary: b.discoveryInjection,
+      discoveryContext: b.discoveryInjection,
     };
   }
 
@@ -52,7 +56,9 @@ export class AgentContextService {
       parts.push(`Project manual notes:\n${bundle.projectManual.trim()}`);
     }
     if (bundle.discoveryInjection.trim()) {
-      parts.push(`Project discovery (app map / advice):\n${bundle.discoveryInjection.trim()}`);
+      parts.push(
+        `Project discovery (screens visited + structured map; narrative summary omitted):\n${bundle.discoveryInjection.trim()}`,
+      );
     }
     return parts.join('\n\n---\n\n');
   }
@@ -84,8 +90,9 @@ export class AgentContextService {
     }
 
     const rawDisc = k?.discoverySummaryMarkdown ?? '';
-    const discMd = truncate(rawDisc, MAX_DISCOVERY_MARKDOWN);
-    if (discMd.length < rawDisc.length) {
+    const discWithoutSummaryNarrative = stripDiscoverySummarySection(rawDisc);
+    const discMd = truncate(discWithoutSummaryNarrative, MAX_DISCOVERY_MARKDOWN);
+    if (discMd.length < discWithoutSummaryNarrative.length) {
       this.logger.log(`Agent context: truncated discovery markdown for project ${projectId} (chars=${MAX_DISCOVERY_MARKDOWN})`);
     }
 
@@ -125,4 +132,11 @@ function truncate(s: string, max: number): string {
   const t = s.trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max)}\n… [truncated]`;
+}
+
+/** Drop the `# Discovery Summary` H1 section and everything after it (never injected into LLM prompts). */
+function stripDiscoverySummarySection(markdown: string): string {
+  const m = /^#\s+Discovery Summary\s*$/im.exec(markdown);
+  if (!m || m.index === undefined) return markdown;
+  return markdown.slice(0, m.index).trimEnd();
 }

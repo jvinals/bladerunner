@@ -3123,7 +3123,7 @@ export class RecordingService extends EventEmitter {
         agentKnowledge: {
           general: agentFields.general,
           projectManual: agentFields.projectManual,
-          discoverySummary: agentFields.discoverySummary,
+          discoveryContext: agentFields.discoveryContext,
         },
       },
       null,
