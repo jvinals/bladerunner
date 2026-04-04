@@ -3716,6 +3716,31 @@ export class RecordingService extends EventEmitter {
     }
   }
 
+  /**
+   * SPAs often paint after `domcontentloaded`. Wait for `load` and at least one interactive node
+   * before SOM + a11y + screenshot; otherwise Set-of-Marks lists only the header and a11y is a shell.
+   */
+  private async settlePageForLlmVisionCapture(page: Page, signal?: AbortSignal): Promise<void> {
+    this.throwIfAborted(signal);
+    await page.waitForLoadState('load', { timeout: 15_000 }).catch(() => {});
+    this.throwIfAborted(signal);
+    try {
+      await page.waitForFunction(
+        () => {
+          const q = document.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([type="hidden"]), [role="button"], [role="link"], [role="tab"], [role="combobox"]',
+          );
+          return q.length >= 1;
+        },
+        { timeout: 20_000, polling: 300 },
+      );
+    } catch {
+      this.logger.warn(
+        'settlePageForLlmVisionCapture: no interactive element within timeout; capturing anyway (may be blank shell)',
+      );
+    }
+  }
+
   private async captureLlmPageContext(
     page: Page,
     signal?: AbortSignal,
