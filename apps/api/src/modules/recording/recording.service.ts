@@ -889,6 +889,7 @@ export class RecordingService extends EventEmitter {
     if (!session || session.userId !== userId) {
       throw new BadRequestException('Evaluation browser session not found');
     }
+    await this.settlePageForLlmVisionCapture(session.page);
     const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
     return {
       pageUrl: ctx.pageUrl,
