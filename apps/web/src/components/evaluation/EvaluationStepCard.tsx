@@ -1,6 +1,7 @@
 import { Cog, Loader2, Image, ScanSearch, Sparkles } from 'lucide-react';
 import type { EvaluationStepDto } from '@/lib/api';
 import {
+  buildCodegenOutputJsonForDisplay,
   hasCodegenThinkingDisplay,
   normalizeEvaluationStepKind,
   ThinkingStructuredBlock,
@@ -181,7 +182,7 @@ export function EvaluationStepCard({
                 Raw codegen metadata
               </summary>
               <div className="border-t border-gray-100 p-2">
-                <JsonBlock value={st.codegenOutputJson} />
+                <JsonBlock value={buildCodegenOutputJsonForDisplay(st.codegenOutputJson)} />
               </div>
             </details>
           ) : null}
@@ -262,11 +263,11 @@ export function EvaluationStepCard({
           {load.codegenOutputs ? (
             showCodegenFromLive ? (
               <JsonBlock
-                value={{
+                value={buildCodegenOutputJsonForDisplay({
                   thinking: lastProgress.thinking,
                   playwrightCode: lastProgress.playwrightCode,
                   expectedOutcome: lastProgress.expectedOutcome,
-                }}
+                })}
               />
             ) : lastProgress?.phase === 'proposing' ? (
               <PendingPanel label="Queued: codegen runs after page capture (SOM, accessibility)…" />
@@ -277,7 +278,7 @@ export function EvaluationStepCard({
             <>
               <ThinkingStructuredBlock codegenOutputJson={st.codegenOutputJson} showSectionTitle />
               {!hasCodegenThinkingDisplay(st.codegenOutputJson) ? (
-                <JsonBlock value={st.codegenOutputJson} />
+                <JsonBlock value={buildCodegenOutputJsonForDisplay(st.codegenOutputJson)} />
               ) : null}
             </>
           )}
@@ -287,7 +288,7 @@ export function EvaluationStepCard({
           {load.codegenOutputs ? (
             <PendingPanel label="Waiting for codegen JSON…" />
           ) : (
-            <JsonBlock value={st.codegenOutputJson} />
+            <JsonBlock value={buildCodegenOutputJsonForDisplay(st.codegenOutputJson)} />
           )}
         </div>
         <div>

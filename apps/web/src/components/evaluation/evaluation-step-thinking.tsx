@@ -20,15 +20,81 @@ export function normalizeEvaluationStepKind(st: EvaluationStepDto): EvaluationSt
   return st.stepKind ?? 'llm';
 }
 
-export function parseThinkingStructured(
-  codegenOutputJson: unknown,
-): {
+export type ThinkingStructuredFields = {
   observation: string;
   needsToDoAndWhy: string;
   priorFailuresIfAny: string;
   actionNowAndWhy: string;
   playwrightWhy: string;
-} | null {
+};
+
+function thinkingFieldsHaveContent(f: ThinkingStructuredFields): boolean {
+  return Object.values(f).some((v) => v.trim().length > 0);
+}
+
+/** Parse legacy single-string `thinking` with "Observation:" / "What to do and why:" / … prose blocks. */
+export function parseLegacyThinkingProseToStructured(thinking: string): ThinkingStructuredFields | null {
+  const t = thinking.trim();
+  if (!t) return null;
+  const headers: { key: keyof ThinkingStructuredFields; needle: string }[] = [
+    { key: 'observation', needle: 'Observation:' },
+    { key: 'needsToDoAndWhy', needle: 'What to do and why:' },
+    { key: 'priorFailuresIfAny', needle: 'Prior failures:' },
+    { key: 'actionNowAndWhy', needle: 'Action now:' },
+    { key: 'playwrightWhy', needle: 'Playwright rationale:' },
+  ];
+  const hits: { key: keyof ThinkingStructuredFields; index: number; headerLen: number }[] = [];
+  for (const { key, needle } of headers) {
+    const i = t.indexOf(needle);
+    if (i >= 0) hits.push({ key, index: i, headerLen: needle.length });
+  }
+  if (hits.length === 0) return null;
+  hits.sort((a, b) => a.index - b.index);
+  const out: ThinkingStructuredFields = {
+    observation: '',
+    needsToDoAndWhy: '',
+    priorFailuresIfAny: '',
+    actionNowAndWhy: '',
+    playwrightWhy: '',
+  };
+  for (let i = 0; i < hits.length; i++) {
+    const { key, index, headerLen } = hits[i];
+    const start = index + headerLen;
+    const end = i + 1 < hits.length ? hits[i + 1].index : t.length;
+    out[key] = t.slice(start, end).trim();
+  }
+  if (!thinkingFieldsHaveContent(out)) return null;
+  return out;
+}
+
+/**
+ * Shape for **Codegen outputs (JSON)** display: `thinking` as a structured object (not one long string).
+ * Prefers `thinkingStructured`; otherwise parses legacy `thinking` prose.
+ */
+export function buildCodegenOutputJsonForDisplay(codegenOutputJson: unknown): unknown {
+  if (!codegenOutputJson || typeof codegenOutputJson !== 'object' || Array.isArray(codegenOutputJson)) {
+    return codegenOutputJson;
+  }
+  const o = { ...(codegenOutputJson as Record<string, unknown>) };
+  const ts = parseThinkingStructured(o);
+  if (ts && thinkingFieldsHaveContent(ts)) {
+    o.thinking = { ...ts };
+    delete o.thinkingStructured;
+    return o;
+  }
+  if (typeof o.thinking === 'string') {
+    const parsed = parseLegacyThinkingProseToStructured(o.thinking);
+    if (parsed && thinkingFieldsHaveContent(parsed)) {
+      o.thinking = parsed;
+      return o;
+    }
+  }
+  return o;
+}
+
+export function parseThinkingStructured(
+  codegenOutputJson: unknown,
+): ThinkingStructuredFields | null {
   if (!codegenOutputJson || typeof codegenOutputJson !== 'object' || Array.isArray(codegenOutputJson)) {
     return null;
   }
