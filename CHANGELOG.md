@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.176`: **Evaluations — viewport JPEG preview** — Codegen/analyzer JPEG modal uses **Blob URLs**, **object-fit contain** + max height so **full-page** screenshots scale into view (avoids a “blank” strip from only seeing the top white margin). Neutral background + short note that the model also reads **SOM manifest** and **accessibility** text. `@bladerunner/web 0.7.103`.
+
 - `0.10.175`: **Evaluations — codegen JSON thinking as structured object** — **Codegen outputs (JSON)** (and related raw blocks) show `thinking` as nested JSON (`observation`, `needsToDoAndWhy`, …) when `thinkingStructured` exists or when legacy prose uses `Observation:` / `What to do and why:` / … labels; duplicate `thinkingStructured` is omitted from the display object. `@bladerunner/web 0.7.102`.
 
 - `0.10.174`: **Agent context — no discovery in LLM prompts** — Workspace/project prompt injection and optimized `appContext` **`agentKnowledge`** include only **`general`** and **`projectManual`**; discovery summary, structured map, and Mermaid are not sent to any model. `@bladerunner/api 0.6.135`.
