@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.172`: **Tooling — continual-learning hook state** — Refreshed `.cursor/hooks/state/continual-learning.json` (transcript index metadata).
+
 - `0.10.171`: **Evaluations — LLM prompts + codegen JSON** — Persists **`llmPrompts`** (`system` / `user`) on codegen and analyzer step JSON; orchestrator merges prompts into persisted inputs. **Codegen output** JSON orders **`thinkingStructured` → `thinking` → `stepTitle`** (then code/outcome). Step cards: **prompt** icon left of **JPEG** preview; both use **`z-[220]` / `z-[221]`** when embedded in the full-step modal. **Codegen outputs (JSON)** shows full persisted output (no stripping of thinking fields). `@bladerunner/api 0.6.133`, `@bladerunner/web 0.7.101`.
 
 - `0.10.170`: **Evaluations / discovery — thinking sub-items** — **Codegen output — thinking** shows five labeled sub-items (what the model sees, what it plans and why, prior failures, intended action, Playwright rationale). **Thinking Process** uses a stacked layout with placeholders for empty fields; step timeline and discovery steps use the same labels. `@bladerunner/web 0.7.100`.
