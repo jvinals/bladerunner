@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
@@ -28,17 +29,20 @@ function isAbortOrTimeoutError(e: unknown): boolean {
 }
 
 // #region agent log
+const DEBUG_INGEST = 'http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43';
+const DEBUG_SESSION = 'ba63e6';
+
 function dbgEvalStep(
   location: string,
   message: string,
   data: Record<string, unknown>,
   hypothesisId: string,
 ): void {
-  fetch('http://127.0.0.1:7686/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+  fetch(DEBUG_INGEST, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3619df' },
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': DEBUG_SESSION },
     body: JSON.stringify({
-      sessionId: '3619df',
+      sessionId: DEBUG_SESSION,
       hypothesisId,
       location,
       message,
@@ -46,6 +50,38 @@ function dbgEvalStep(
       timestamp: Date.now(),
     }),
   }).catch(() => {});
+}
+
+/** Decode diagnostics for persisted / LLM viewport JPEG (no raw base64 in logs). */
+function dbgJpegDiagnosticsFromBase64(b64: string): Record<string, unknown> {
+  const s = b64.trim();
+  const startsWithDataUrl = /^data:image\/[^;]+;base64,/i.test(s);
+  let raw = s;
+  if (startsWithDataUrl) {
+    const comma = s.indexOf(',');
+    raw = comma >= 0 ? s.slice(comma + 1) : s;
+  }
+  const normalized = raw.replace(/\s/g, '');
+  let jpegMagicHex = 'n/a';
+  let decodeErr = false;
+  let bufLen = 0;
+  try {
+    const buf = Buffer.from(normalized, 'base64');
+    bufLen = buf.length;
+    jpegMagicHex = buf.subarray(0, Math.min(3, buf.length)).toString('hex');
+  } catch {
+    decodeErr = true;
+  }
+  return {
+    base64OuterLen: s.length,
+    base64PayloadLen: normalized.length,
+    startsWithDataUrl,
+    jpegMagicHex,
+    jpegLooksValid: jpegMagicHex === 'ffd8ff',
+    decodedByteLen: bufLen,
+    decodeErr,
+    hasNewlinesInPayload: /\r|\n/.test(raw),
+  };
 }
 // #endregion
 
@@ -377,6 +413,19 @@ export class EvaluationOrchestratorService {
         somManifestChars: codegenCtx.somManifest?.length ?? 0,
         accessibilitySnapshotChars: codegenCtx.accessibilitySnapshot?.length ?? 0,
       });
+      // #region agent log
+      dbgEvalStep(
+        'evaluation-orchestrator.service.ts:codegen_viewport_jpeg_diagnostics',
+        'same screenshotB64 -> codegenInputJson.viewportJpegBase64 + LLM image',
+        {
+          evaluationId,
+          sequence,
+          pageUrl,
+          ...dbgJpegDiagnosticsFromBase64(screenshotB64),
+        },
+        'H1',
+      );
+      // #endregion
 
       const priorStepsDesc = await this.prisma.evaluationStep.findMany({
         where: { evaluationId, stepKind: 'LLM' },
@@ -485,6 +534,29 @@ export class EvaluationOrchestratorService {
         expectedOutcome: proposed.expectedOutcome,
       });
       trace('Persisted evaluation step row (codegen inputs + outputs)', { stepTitle: proposed.stepTitle });
+      // #region agent log
+      try {
+        const row = await this.prisma.evaluationStep.findFirst({
+          where: { evaluationId, sequence },
+          select: { codegenInputJson: true },
+        });
+        const ci = row?.codegenInputJson as Record<string, unknown> | null | undefined;
+        const vp = typeof ci?.viewportJpegBase64 === 'string' ? ci.viewportJpegBase64 : '';
+        dbgEvalStep(
+          'evaluation-orchestrator.service.ts:after_persist_codegen_input',
+          'read-back viewportJpegBase64 from DB',
+          {
+            evaluationId,
+            sequence,
+            ...dbgJpegDiagnosticsFromBase64(vp),
+            lengthMatchPersistVsCapture: vp.length === screenshotB64.length,
+          },
+          'H3',
+        );
+      } catch {
+        /* ignore */
+      }
+      // #endregion
 
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'executing',

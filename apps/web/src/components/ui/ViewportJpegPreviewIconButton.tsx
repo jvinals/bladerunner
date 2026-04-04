@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback, type ComponentType } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Copy, X } from 'lucide-react';
 
+/** Strip optional data-URL prefix and whitespace so we always feed raw base64 to atob / Blob. */
+export function normalizeJpegBase64Payload(s: string): string {
+  const t = s.trim();
+  const m = /^data:image\/[^;]+;base64,(.*)$/is.exec(t);
+  return (m ? m[1] : t).replace(/\s/g, '');
+}
+
 export type ViewportJpegPreviewIconButtonProps = {
   base64: string | undefined | null;
   modalTitle: string;
@@ -27,24 +34,98 @@ export function ViewportJpegPreviewIconButton({
 }: ViewportJpegPreviewIconButtonProps) {
   const [open, setOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'copiedText' | 'error'>('idle');
+  /** Blob URL for preview — avoids huge data: URLs and scales reliably in the modal. */
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
   const has = typeof base64 === 'string' && base64.length > 0;
 
   useEffect(() => {
     if (!open) setCopyStatus('idle');
   }, [open]);
 
-  const copyImage = useCallback(async () => {
-    if (!has) return;
-    setCopyStatus('idle');
+  useEffect(() => {
+    if (!open || !has || !base64) {
+      setPreviewObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    const normalized = normalizeJpegBase64Payload(base64);
     try {
-      const res = await fetch(`data:image/jpeg;base64,${base64}`);
+      const bin = atob(normalized);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const blob = new Blob([u8], { type: 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      setPreviewObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } catch {
+      setPreviewObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    }
+    return () => {
+      setPreviewObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [open, has, base64]);
+
+  // #region agent log
+  useEffect(() => {
+    if (!open || !has || !base64) return;
+    const s = base64.trim();
+    const startsWithDataUrl = /^data:image\/[^;]+;base64,/i.test(s);
+    const normalized = normalizeJpegBase64Payload(base64);
+    let jpegMagicHex = 'n/a';
+    let decodeErr = false;
+    try {
+      const bin = atob(normalized);
+      jpegMagicHex = [...bin.slice(0, 3)]
+        .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('');
+    } catch {
+      decodeErr = true;
+    }
+    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+      body: JSON.stringify({
+        sessionId: 'ba63e6',
+        hypothesisId: 'H4',
+        location: 'ViewportJpegPreviewIconButton.tsx:modal_open',
+        message: 'client viewport JPEG before img render',
+        data: {
+          base64OuterLen: s.length,
+          startsWithDataUrl,
+          jpegMagicHex,
+          jpegLooksValid: jpegMagicHex === 'ffd8ff',
+          decodeErr,
+          hasNewlinesInPayload: /\r|\n/.test(base64),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [open, has, base64]);
+  // #endregion
+
+  const copyImage = useCallback(async () => {
+    if (!has || !base64) return;
+    setCopyStatus('idle');
+    const payload = normalizeJpegBase64Payload(base64);
+    try {
+      const res = await fetch(`data:image/jpeg;base64,${payload}`);
       const blob = await res.blob();
       await navigator.clipboard.write([new ClipboardItem({ 'image/jpeg': blob })]);
       setCopyStatus('copied');
       window.setTimeout(() => setCopyStatus('idle'), 2500);
     } catch {
       try {
-        await navigator.clipboard.writeText(base64);
+        await navigator.clipboard.writeText(payload);
         setCopyStatus('copiedText');
         window.setTimeout(() => setCopyStatus('idle'), 3500);
       } catch {
@@ -53,6 +134,8 @@ export function ViewportJpegPreviewIconButton({
       }
     }
   }, [base64, has]);
+
+  const imgSrc = previewObjectUrl ?? (has && base64 ? `data:image/jpeg;base64,${normalizeJpegBase64Payload(base64)}` : '');
 
   return (
     <>
@@ -102,15 +185,42 @@ export function ViewportJpegPreviewIconButton({
                 </div>
               </div>
               <Dialog.Description className="sr-only">
-                Full JPEG at native pixel dimensions. Scroll to see the entire image.
+                Full-page JPEG scaled to fit; scroll if needed. The model also receives SOM manifest and accessibility text.
               </Dialog.Description>
-              <div className="min-h-0 flex-1 overflow-auto p-3">
-                <img
-                  src={`data:image/jpeg;base64,${base64}`}
-                  alt=""
-                  className="block h-auto w-max max-w-none"
-                  draggable={false}
-                />
+              <p className="border-b border-gray-800 px-4 py-2 text-[11px] leading-snug text-gray-400">
+                Full-page capture (often very tall). Scaled to fit; scroll to pan. The codegen model also reads the Set-of-Marks
+                manifest and accessibility tree in text — reasoning may cite those even if this JPEG looks sparse or light.
+              </p>
+              <div className="min-h-[min(70vh,720px)] min-w-0 flex-1 overflow-auto bg-[#262626] p-3">
+                {imgSrc ? (
+                  <img
+                    src={imgSrc}
+                    alt=""
+                    className="mx-auto block h-auto max-h-[min(85vh,920px)] w-full max-w-full object-contain"
+                    draggable={false}
+                    onLoad={(e) => {
+                      // #region agent log
+                      const el = e.currentTarget;
+                      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+                        body: JSON.stringify({
+                          sessionId: 'ba63e6',
+                          hypothesisId: 'H5-postfix',
+                          location: 'ViewportJpegPreviewIconButton.tsx:img_onLoad',
+                          message: 'JPEG rendered in modal',
+                          data: {
+                            naturalWidth: el.naturalWidth,
+                            naturalHeight: el.naturalHeight,
+                            usesBlobUrl: el.src.startsWith('blob:'),
+                          },
+                          timestamp: Date.now(),
+                        }),
+                      }).catch(() => {});
+                      // #endregion
+                    }}
+                  />
+                ) : null}
               </div>
             </Dialog.Content>
           </Dialog.Portal>
