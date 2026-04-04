@@ -78,13 +78,15 @@ export function DiscoveryStepsPanel({
                   {outcomeBadge(st.outcome)}
                 </summary>
                 <div className="border-t border-gray-50 bg-gray-50/50 px-3 py-2 pl-11 space-y-2 text-[11px]">
-                  {st.kind === 'llm_explore' && st.thinkingStructured && Object.keys(st.thinkingStructured).length > 0 ? (
-                    <div>
-                      <span className="text-gray-500 font-medium block mb-1">Reasoning</span>
-                      <ThinkingStructuredBlock
-                        codegenOutputJson={{ thinkingStructured: st.thinkingStructured }}
-                      />
-                    </div>
+                  {st.kind === 'llm_explore' ? (
+                    <ThinkingStructuredBlock
+                      codegenOutputJson={{
+                        thinkingStructured: st.thinkingStructured ?? {},
+                      }}
+                      layout="stacked"
+                      emptyFieldMode="placeholder"
+                      showSectionTitle
+                    />
                   ) : null}
                   {st.playwrightCode?.trim() ? (
                     <div>
@@ -144,16 +146,14 @@ export function DiscoveryStepsPanel({
                   <p className="font-medium text-gray-900">{modalStep.title}</p>
                   {outcomeBadge(modalStep.outcome)}
                   {modalStep.kind === 'llm_explore' ? (
-                    <div>
-                      <span className="text-gray-500 font-medium block mb-1">Reasoning</span>
-                      <ThinkingStructuredBlock
-                        codegenOutputJson={
-                          modalStep.thinkingStructured
-                            ? { thinkingStructured: modalStep.thinkingStructured }
-                            : null
-                        }
-                      />
-                    </div>
+                    <ThinkingStructuredBlock
+                      codegenOutputJson={{
+                        thinkingStructured: modalStep.thinkingStructured ?? {},
+                      }}
+                      layout="stacked"
+                      emptyFieldMode="placeholder"
+                      showSectionTitle
+                    />
                   ) : null}
                   {modalStep.playwrightCode?.trim() ? (
                     <div>

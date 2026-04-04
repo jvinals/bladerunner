@@ -1350,6 +1350,8 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
     thinkingStructured?: EvaluationCodegenThinkingStructured;
     playwrightCode: string;
     expectedOutcome: string;
+    /** Exact system + user text sent to chatJson (vision image is attached separately). */
+    llmPrompts: { system: string; user: string };
   }> {
     const dbg = opts?.onDebugLog;
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
@@ -1397,6 +1399,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       autoSignInCompleted,
     );
     const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
+    const llmPrompts = { system: EVALUATION_CODEGEN_SYSTEM, user: userWithAgent };
     dbg?.('evaluation_codegen: user prompt assembled', {
       userPromptChars: userWithAgent.length,
       systemPromptChars: EVALUATION_CODEGEN_SYSTEM.length,
@@ -1442,6 +1445,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       ...(thinkingStructured ? { thinkingStructured } : {}),
       playwrightCode,
       expectedOutcome,
+      llmPrompts,
     };
   }
 
@@ -1471,6 +1475,8 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     rationale: string;
     humanQuestion?: string;
     humanOptions?: string[];
+    /** Exact system + user text sent to chatJson (vision image is attached separately). */
+    llmPrompts?: { system: string; user: string };
   }> {
     const dbg = opts?.onDebugLog;
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
@@ -1517,6 +1523,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       autoSignInCompleted,
     );
     const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
+    const llmPrompts = { system: EVALUATION_ANALYZER_SYSTEM, user: userWithAgent };
     dbg?.('evaluation_analyzer: invoking chatJson', {
       userPromptChars: userWithAgent.length,
       usageKey: 'evaluation_analyzer',
@@ -1561,6 +1568,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
           goalProgress,
           decision: 'advance',
           rationale: `${rationale} (fallback: invalid human question payload)`,
+          llmPrompts,
         };
       }
     }
@@ -1569,6 +1577,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
       goalProgress,
       decision,
       rationale,
+      llmPrompts,
       ...(humanQuestion ? { humanQuestion } : {}),
       ...(humanOptions?.length ? { humanOptions } : {}),
     };

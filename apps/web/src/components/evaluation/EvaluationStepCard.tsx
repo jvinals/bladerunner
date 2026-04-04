@@ -5,6 +5,7 @@ import {
   normalizeEvaluationStepKind,
   ThinkingStructuredBlock,
 } from '@/components/evaluation/evaluation-step-thinking';
+import { LlmPromptPreviewIconButton, getLlmPromptsFromStepJson } from '@/components/evaluation/LlmPromptPreviewIconButton';
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
 import {
   ViewportJpegPreviewIconButton,
@@ -15,13 +16,7 @@ import {
 
 export type TimelineViewMode = 'stacked' | 'parallel';
 
-function stripThinkingFieldsFromCodegen(codegen: unknown): unknown {
-  if (!codegen || typeof codegen !== 'object' || Array.isArray(codegen)) return codegen;
-  const o = { ...(codegen as Record<string, unknown>) };
-  delete o.thinking;
-  delete o.thinkingStructured;
-  return o;
-}
+const NESTED_MODAL_Z = { overlayClassName: 'z-[220]', contentClassName: 'z-[221]' } as const;
 
 function JsonBlock({ value }: { value: unknown }) {
   if (value == null || (typeof value === 'object' && value !== null && Object.keys(value as object).length === 0)) {
@@ -122,8 +117,11 @@ export function EvaluationStepCard({
   layout,
   embedMode = 'timeline',
 }: EvaluationStepCardProps) {
+  const nestedZ = embedMode === 'modal' ? NESTED_MODAL_Z : {};
   const stepKind = normalizeEvaluationStepKind(st);
   const load = getLiveLoadingFlags(st, lastProgress);
+  const codegenPrompts = getLlmPromptsFromStepJson(st.codegenInputJson);
+  const analyzerPrompts = getLlmPromptsFromStepJson(st.analyzerInputJson);
   const showCodegenFromLive =
     load.codegenOutputs &&
     lastProgress?.sequence === st.sequence &&
@@ -223,13 +221,22 @@ export function EvaluationStepCard({
         <div>
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-gray-500 font-medium">Codegen inputs (LLM)</span>
-            <ViewportJpegPreviewIconButton
-              base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
-              icon={Image}
-              modalTitle="Codegen — full-page Set-of-Marks JPEG sent to the model"
-              openLabel="Preview JPEG sent to the codegen model"
-              emptyLabel="No stored viewport JPEG (older runs did not persist it)"
-            />
+            <div className="flex shrink-0 items-center gap-0.5">
+              <LlmPromptPreviewIconButton
+                system={codegenPrompts?.system}
+                user={codegenPrompts?.user}
+                modalTitle="Codegen — exact LLM prompt"
+                {...nestedZ}
+              />
+              <ViewportJpegPreviewIconButton
+                base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
+                icon={Image}
+                modalTitle="Codegen — full-page Set-of-Marks JPEG sent to the model"
+                openLabel="Preview JPEG sent to the codegen model"
+                emptyLabel="No stored viewport JPEG (older runs did not persist it)"
+                {...nestedZ}
+              />
+            </div>
           </div>
           {load.codegenInputs ? (
             <PendingPanel
@@ -240,15 +247,18 @@ export function EvaluationStepCard({
           ) : (
             <JsonBlock
               value={omitBinaryPreviewKeys(
-                omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64']),
-                ['somManifest', 'accessibilitySnapshot'],
-                '[omitted — long text; see LLM inputs]',
+                omitBinaryPreviewKeys(
+                  omitBinaryPreviewKeys(st.codegenInputJson, ['viewportJpegBase64']),
+                  ['somManifest', 'accessibilitySnapshot'],
+                  '[omitted — long text; see LLM inputs]',
+                ),
+                ['llmPrompts'],
+                '[omitted — use prompt icon]',
               )}
             />
           )}
         </div>
         <div>
-          <span className="text-gray-500 font-medium block mb-1">Model reasoning</span>
           {load.codegenOutputs ? (
             showCodegenFromLive ? (
               <JsonBlock
@@ -265,7 +275,7 @@ export function EvaluationStepCard({
             )
           ) : (
             <>
-              <ThinkingStructuredBlock codegenOutputJson={st.codegenOutputJson} />
+              <ThinkingStructuredBlock codegenOutputJson={st.codegenOutputJson} showSectionTitle />
               {!hasCodegenThinkingDisplay(st.codegenOutputJson) ? (
                 <JsonBlock value={st.codegenOutputJson} />
               ) : null}
@@ -277,28 +287,41 @@ export function EvaluationStepCard({
           {load.codegenOutputs ? (
             <PendingPanel label="Waiting for codegen JSON…" />
           ) : (
-            <JsonBlock value={stripThinkingFieldsFromCodegen(st.codegenOutputJson)} />
+            <JsonBlock value={st.codegenOutputJson} />
           )}
         </div>
         <div>
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-gray-500 font-medium">Analyzer inputs</span>
-            <ViewportJpegPreviewIconButton
-              base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
-              icon={ScanSearch}
-              modalTitle="Analyzer — after-step full-page Set-of-Marks JPEG"
-              openLabel="Preview after-step JPEG sent to the analyzer"
-              emptyLabel="No stored after-step JPEG (step not analyzed yet or older runs)"
-            />
+            <div className="flex shrink-0 items-center gap-0.5">
+              <LlmPromptPreviewIconButton
+                system={analyzerPrompts?.system}
+                user={analyzerPrompts?.user}
+                modalTitle="Analyzer — exact LLM prompt"
+                {...nestedZ}
+              />
+              <ViewportJpegPreviewIconButton
+                base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
+                icon={ScanSearch}
+                modalTitle="Analyzer — after-step full-page Set-of-Marks JPEG"
+                openLabel="Preview after-step JPEG sent to the analyzer"
+                emptyLabel="No stored after-step JPEG (step not analyzed yet or older runs)"
+                {...nestedZ}
+              />
+            </div>
           </div>
           {load.analyzerInputs ? (
             <PendingPanel label={analyzerSectionPendingLabel(lastProgress?.phase)} />
           ) : (
             <JsonBlock
               value={omitBinaryPreviewKeys(
-                omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64']),
-                ['somManifest', 'accessibilitySnapshot'],
-                '[omitted — long text; see LLM inputs]',
+                omitBinaryPreviewKeys(
+                  omitBinaryPreviewKeys(st.analyzerInputJson, ['afterStepViewportJpegBase64']),
+                  ['somManifest', 'accessibilitySnapshot'],
+                  '[omitted — long text; see LLM inputs]',
+                ),
+                ['llmPrompts'],
+                '[omitted — use prompt icon]',
               )}
             />
           )}

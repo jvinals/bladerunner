@@ -459,11 +459,16 @@ export class EvaluationOrchestratorService {
       // #endregion
 
       const codegenOutputJson = {
-        stepTitle: proposed.stepTitle,
-        thinking: proposed.thinking,
         ...(proposed.thinkingStructured ? { thinkingStructured: proposed.thinkingStructured } : {}),
+        thinking: proposed.thinking,
+        stepTitle: proposed.stepTitle,
         playwrightCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
+      };
+
+      const codegenInputJsonWithPrompts = {
+        ...codegenInputJson,
+        llmPrompts: proposed.llmPrompts,
       };
 
       await this.evaluations.createStep(userId, {
@@ -473,7 +478,7 @@ export class EvaluationOrchestratorService {
         pageUrl,
         stepTitle: proposed.stepTitle,
         progressSummaryBefore,
-        codegenInputJson,
+        codegenInputJson: codegenInputJsonWithPrompts,
         codegenOutputJson,
         thinkingText: proposed.thinking,
         proposedCode: proposed.playwrightCode,
@@ -618,7 +623,10 @@ export class EvaluationOrchestratorService {
       };
 
       await this.evaluations.updateStepAfterAnalyzer(evaluationId, sequence, {
-        analyzerInputJson,
+        analyzerInputJson: {
+          ...analyzerInputJson,
+          ...(analysis.llmPrompts ? { llmPrompts: analysis.llmPrompts } : {}),
+        },
         analyzerOutputJson,
         actualOutcome: executionOk ? `OK at ${afterUrl}` : errorMessage ?? 'failed',
         errorMessage: executionOk ? null : errorMessage ?? 'error',

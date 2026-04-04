@@ -2,6 +2,10 @@
 
 ## 2026-04-01
 
+- `0.10.171`: **Evaluations — LLM prompts + codegen JSON** — Persists **`llmPrompts`** (`system` / `user`) on codegen and analyzer step JSON; orchestrator merges prompts into persisted inputs. **Codegen output** JSON orders **`thinkingStructured` → `thinking` → `stepTitle`** (then code/outcome). Step cards: **prompt** icon left of **JPEG** preview; both use **`z-[220]` / `z-[221]`** when embedded in the full-step modal. **Codegen outputs (JSON)** shows full persisted output (no stripping of thinking fields). `@bladerunner/api 0.6.133`, `@bladerunner/web 0.7.101`.
+
+- `0.10.170`: **Evaluations / discovery — thinking sub-items** — **Codegen output — thinking** shows five labeled sub-items (what the model sees, what it plans and why, prior failures, intended action, Playwright rationale). **Thinking Process** uses a stacked layout with placeholders for empty fields; step timeline and discovery steps use the same labels. `@bladerunner/web 0.7.100`.
+
 - `0.10.169`: **Evaluations + discovery — full timeline + structured thinking** — Evaluations persist **orchestrator** steps (`step_kind`: load URL, optional auto sign-in) with **LLM** steps; API returns **`stepKind`** in camelCase. Codegen JSON supports **`thinkingStructured`** (five fields); UI shows nested reasoning on **Thinking process** and step cards (orchestrator rows use a compact layout + cog icon). **Discovery** appends **`discovery_steps_json`** (goto, auth, explore success/fail/blocked) and **`GET /projects/:id/agent-knowledge`** includes **`discoverySteps`**. Projects page: **Discovery steps** panel with expand + **Full step** modal. Migration **`20260405120000_evaluation_step_kind_discovery_steps_json`**. `@bladerunner/api 0.6.132`, `@bladerunner/web 0.7.99`.
 
 - `0.10.168`: **Evaluations — full step from Thinking process** — Each row in **Thinking process** has a **Full step** control that opens a modal with the same **EvaluationStepCard** content as the step timeline (codegen/analyzer panels, JPEG previews). [`EvaluationStepCard`](apps/web/src/components/evaluation/EvaluationStepCard.tsx) extracted for reuse. `@bladerunner/web 0.7.98`.

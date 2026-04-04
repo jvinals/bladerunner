@@ -149,8 +149,12 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
               <div className="border-t border-gray-50 bg-gray-50/50 px-4 py-2 pl-11 space-y-2">
                 {kind === 'llm' ? (
                   <div className="text-[11px]">
-                    <span className="text-gray-500 font-medium block mb-1">Reasoning</span>
-                    <ThinkingStructuredBlock codegenOutputJson={st.codegenOutputJson} />
+                    <ThinkingStructuredBlock
+                      codegenOutputJson={st.codegenOutputJson}
+                      layout="stacked"
+                      emptyFieldMode="placeholder"
+                      showSectionTitle
+                    />
                   </div>
                 ) : null}
                 <p
