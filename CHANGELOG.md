@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.174`: **Agent context — no discovery in LLM prompts** — Workspace/project prompt injection and optimized `appContext` **`agentKnowledge`** include only **`general`** and **`projectManual`**; discovery summary, structured map, and Mermaid are not sent to any model. `@bladerunner/api 0.6.135`.
+
 - `0.10.173`: **Agent context — no Discovery Summary in LLM prompts** — Prompt injection and optimized `appContext` JSON no longer include the `# Discovery Summary` narrative from stored project knowledge (screens visited + structured excerpt + Mermaid still pass). Renamed optimized field **`discoverySummary` → `discoveryContext`**. `@bladerunner/api 0.6.134`.
 
 - `0.10.172`: **Tooling — continual-learning hook state** — Refreshed `.cursor/hooks/state/continual-learning.json` (transcript index metadata).
