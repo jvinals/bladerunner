@@ -104,6 +104,7 @@ Respond ONLY with valid JSON:
 }
 
 Rules:
+- **Efficiency:** Take the shortest path toward the intent—avoid redundant actions, duplicate checks, or exploratory clicks when the goal is narrow; one atomic action per step is enough when the UI is ready.
 - Output executable Playwright snippets only; no TypeScript types; no require/import.
 - Prefer getByRole, getByLabel, getByText with stable accessible names. For Shadcn **Select** rows, the trigger is often **button**, not combobox — follow the snapshot/manifest; avoid \`getByRole('combobox')\` when the tree shows \`button\`.
 - For custom selects/listboxes, prefer getByRole('option', { name: /…/i }) (case-insensitive regex) scoped to the open listbox, dialog, or popover so strict mode does not match multiple options; avoid exact: true on option text when labels may include invisible spans or formatting.
@@ -126,6 +127,7 @@ Respond ONLY with valid JSON:
 }
 
 Rules:
+- Prefer **"finish"** as soon as the intent and desired output are visibly satisfied—do not keep choosing **"advance"** for extra exploration unless the intent clearly requires broader coverage.
 - Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
 - Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions. If the user message includes a "Run configuration (automatic sign-in)" section, follow it for when credential screens should not trigger ask_human.
 - Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
@@ -301,6 +303,8 @@ Action constraints
 6. Do not stop early just because the app "seems explored."
 7. True blockers are limited to cases such as CAPTCHA, hard 403, unclosable modal, or no actionable targets in the evidence.
 8. ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED}
+9. **Modals:** When a dialog is open (e.g. scheduling, forms), scope controls: \`page.getByRole('dialog', { name: /…/i }).getByRole('combobox', { name: /provider/i })\` or \`page.getByRole('dialog').last().…\` if only one modal matters. Do not rely on a global \`getByRole('button', …)\` if the snapshot shows the control inside a named dialog.
+10. **After a failed step:** If the user message includes **LAST STEP FAILED**, you MUST use a different locator or scope — never emit the same \`playwrightCode\` again. Prefer combobox vs button per the accessibility snapshot, regex names, or \`getByLabel\` / visible placeholder text.
 
 Output format
 
@@ -1597,6 +1601,8 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       currentNavDepth?: number;
       /** Appended when retrying after a premature stop. */
       continuationHint?: string;
+      /** Previous explore Playwright failed; model must change strategy. */
+      lastExecutionFailure?: { code: string; error: string };
     },
     opts?: {
       userId?: string;
@@ -1653,7 +1659,11 @@ Accessibility snapshot:
 ${a11yT || '(empty)'}
 
 The image is a full-page Set-of-Marks screenshot. Propose the next single exploratory action or stop.
-${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\n` : ''}`;
+${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\n` : ''}${
+      input.lastExecutionFailure?.error
+        ? `\nLAST STEP FAILED — you must not repeat the same playwrightCode; try a different role, dialog scope, or regex name:\nFailed code:\n${input.lastExecutionFailure.code.slice(0, 4000)}\n\nError:\n${input.lastExecutionFailure.error.slice(0, 2000)}\n`
+        : ''
+    }`;
     const shot = input.screenshotBase64?.trim();
     if (!shot) {
       throw new Error('Discovery explore step requires a screenshot.');

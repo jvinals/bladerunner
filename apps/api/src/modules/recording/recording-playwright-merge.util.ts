@@ -215,3 +215,22 @@ export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): 
     },
   );
 }
+
+/**
+ * Playback: LLM may emit `getByRole('button', { name: 'Select Provider' })` for Radix/Shadcn triggers; the
+ * real node may be `combobox` or a different button. Try button, then combobox, then text filters (same idea as {@link fallbackNamedComboboxClicksForPlayback}).
+ */
+export function fallbackNamedButtonSelectTriggerClicksForPlayback(playwrightCode: string): string {
+  return playwrightCode.replace(
+    /\bawait\s+page\.getByRole\(\s*(['"`])button\1\s*,\s*\{\s*name:\s*(['"`])([^'"`\n\r]+)\2\s*\}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?/g,
+    (_full, _roleQuote: string, _nameQuote: string, rawName: string, firstPart: string, clickPart: string) => {
+      const name = String(rawName).trim();
+      if (!name || name.length > 160) return _full;
+      const qName = JSON.stringify(name);
+      const first = firstPart ?? '';
+      const click = clickPart ?? '.click()';
+      const exactFallback = shouldUseExactGetByTextForPlayback(name);
+      return `await (async () => { const primary = page.getByRole('button', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const combo = page.getByRole('combobox', { name: ${qName} }); if (await combo.count()) { await combo${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
+    },
+  );
+}

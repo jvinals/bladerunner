@@ -68,6 +68,7 @@ import { buildGeminiInstructionPrompt } from '../llm/gemini-instruction.client';
 import { discoveryScreenKey, normalizeDiscoveryUrlForDedup } from '../projects/discovery-url.util';
 import { injectSetOfMarkOverlay, removeSetOfMarkOverlay } from './set-of-mark-capture';
 import {
+  fallbackNamedButtonSelectTriggerClicksForPlayback,
   fallbackNamedComboboxClicksForPlayback,
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
@@ -113,7 +114,8 @@ const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 30_000;
 /** Max wait for locator actions / navigation in autonomous evaluation runs (below Playwright 30s default). */
 function evaluationPlaywrightTimeoutMs(): number {
   const n = Number(process.env.EVALUATION_PLAYWRIGHT_TIMEOUT_MS);
-  return Number.isFinite(n) && n > 0 ? n : 20_000;
+  /** Default 15s so stuck locators fail faster (override for slow SPAs). */
+  return Number.isFinite(n) && n > 0 ? n : 15_000;
 }
 
 type RecordingViewportPreset = 'hd' | 'wxga' | 'fhd';
@@ -1054,6 +1056,9 @@ export class RecordingService extends EventEmitter {
         deviceScaleFactor: REMOTE_BROWSER_DEVICE_SCALE_FACTOR,
       });
       const page = await context.newPage();
+      const pwTimeoutMs = evaluationPlaywrightTimeoutMs();
+      page.setDefaultTimeout(pwTimeoutMs);
+      page.setDefaultNavigationTimeout(pwTimeoutMs);
       const cdpSession = await context.newCDPSession(page);
       const session: DiscoveryLiveSession = {
         discoverySessionId,
@@ -6061,8 +6066,9 @@ export class RecordingService extends EventEmitter {
     const tableTdFixed = fixAmbiguousTableLastRowTdLocator(followingInputFixed);
     const tightened = tightenGetByTextLocatorsForPlayback(tableTdFixed);
     const comboboxFallback = fallbackNamedComboboxClicksForPlayback(tightened);
+    const buttonTriggerFallback = fallbackNamedButtonSelectTriggerClicksForPlayback(comboboxFallback);
     const applyForce = this.wantPlaybackClickForce() && !opts?.skipClickForce;
-    const withForce = applyForce ? relaxClickForceForPlayback(comboboxFallback) : comboboxFallback;
+    const withForce = applyForce ? relaxClickForceForPlayback(buttonTriggerFallback) : buttonTriggerFallback;
     const escaped = escapeLocatorCssInPlaywrightSnippet(withForce);
     const safeCode = stripTypeScriptNonNullAssertionsForPlayback(escaped);
     const parsedScroll = this.parseStoredScrollCode(safeCode);

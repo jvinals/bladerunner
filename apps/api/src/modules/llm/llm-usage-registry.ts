@@ -125,17 +125,23 @@ function legacyGeneralModel(config: ConfigService): string {
 export function getDefaultPreferenceForUsage(config: ConfigService, usage: LlmUsageKey): LlmPreferenceEntry {
   const geminiModel =
     config.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
+  /** Autonomous eval loop (codegen + analyzer): default to a fast vision model; override with EVALUATION_VISION_MODEL. */
+  const evaluationVisionModel =
+    config.get<string>('EVALUATION_VISION_MODEL')?.trim() ||
+    config.get<string>('GEMINI_EVALUATION_MODEL')?.trim() ||
+    'gemini-2.0-flash';
   const general: LlmPreferenceEntry = {
     provider: legacyGeneralProvider(config),
     model: legacyGeneralModel(config),
   };
 
   switch (usage) {
+    case 'evaluation_codegen':
+    case 'evaluation_analyzer':
+      return { provider: 'gemini', model: evaluationVisionModel };
     case 'playwright_codegen':
     case 'playwright_verify':
     case 'evaluation_planner':
-    case 'evaluation_codegen':
-    case 'evaluation_analyzer':
     case 'evaluation_report':
     case 'project_discovery':
       return { provider: 'gemini', model: geminiModel };

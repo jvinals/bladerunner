@@ -10,12 +10,13 @@ const MAX_EVALUATION_STEPS = 80;
 /** Vision + JSON calls can stall indefinitely without an AbortSignal; Gemini honors `signal`. */
 function evaluationCodegenTimeoutMs(): number {
   const n = Number(process.env.EVALUATION_CODEGEN_TIMEOUT_MS);
-  return Number.isFinite(n) && n > 0 ? n : 180_000;
+  /** Default 120s so hung vision calls fail faster; override for slow models. */
+  return Number.isFinite(n) && n > 0 ? n : 120_000;
 }
 
 function evaluationAnalyzerTimeoutMs(): number {
   const n = Number(process.env.EVALUATION_ANALYZER_TIMEOUT_MS);
-  return Number.isFinite(n) && n > 0 ? n : 180_000;
+  return Number.isFinite(n) && n > 0 ? n : 120_000;
 }
 
 function isAbortOrTimeoutError(e: unknown): boolean {

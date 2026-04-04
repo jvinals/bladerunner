@@ -203,6 +203,8 @@ export class ProjectDiscoveryService {
       const explorationLogLines: string[] = [];
       let stepIndex = 0;
       let consecutiveFailures = 0;
+      /** Feed Playwright failure back to the next LLM explore call so it does not repeat the same locator. */
+      let lastExecutionFailure: { code: string; error: string } | undefined;
       const navTree = new DiscoveryNavigationTree(DISCOVERY_MAX_NAV_DEPTH);
       navTree.syncFromVisitedScreens(this.recording.getDiscoveryVisitedScreens(discoverySessionId));
       finalMermaid = navTree.toMermaid();
@@ -258,6 +260,7 @@ export class ProjectDiscoveryService {
           navigationTreeSummary: navTree.formatSummaryForLlm(),
           maxNavDepth: DISCOVERY_MAX_NAV_DEPTH,
           currentNavDepth: navTree.depthOf(navTree.focusId),
+          lastExecutionFailure,
         };
 
         let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, {
@@ -324,9 +327,27 @@ export class ProjectDiscoveryService {
           );
           consecutiveFailures = 0;
           stepOk = true;
+          lastExecutionFailure = undefined;
         } catch (err) {
           consecutiveFailures += 1;
           const msg = err instanceof Error ? err.message : String(err);
+          lastExecutionFailure = {
+            code: plan.playwrightCode ?? '',
+            error: msg,
+          };
+          // #region agent log
+          fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+            body: JSON.stringify({
+              sessionId: 'ba63e6',
+              location: 'project-discovery.service.ts:discovery_pw_fail',
+              message: 'discovery explore snippet failed',
+              data: { hypothesisId: 'H1', errPreview: msg.slice(0, 300), codePreview: (plan.playwrightCode ?? '').slice(0, 200) },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           log('Playwright snippet failed', { error: msg.slice(0, 800), consecutiveFailures });
           explorationLogLines.push(`Step ${stepIndex + 1} FAILED: ${msg}`);
           if (consecutiveFailures >= 5) {

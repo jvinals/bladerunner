@@ -1,5 +1,6 @@
 import {
   excludeFileInputFromFollowingInputXPath,
+  fallbackNamedButtonSelectTriggerClicksForPlayback,
   fallbackNamedComboboxClicksForPlayback,
   preferGetByTextForBareTagLocator,
   preferRecordedCssSelectorForBarePageLocator,
@@ -165,6 +166,14 @@ assertEq(
     `await page.getByRole('combobox', { name: 'Select Provider' }).click();`,
   ),
   `await (async () => { const primary = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); if (await primary.count()) { await primary.click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
+);
+
+assertEq(
+  'playback: button Select Provider gets combobox + filter fallbacks',
+  fallbackNamedButtonSelectTriggerClicksForPlayback(
+    `await page.getByRole('button', { name: 'Select Provider' }).click();`,
+  ),
+  `await (async () => { const primary = page.getByRole('button', { name: ${JSON.stringify('Select Provider')} }); if (await primary.count()) { await primary.click(); return; } const combo = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); if (await combo.count()) { await combo.click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

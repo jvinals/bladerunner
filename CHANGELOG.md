@@ -2,6 +2,10 @@
 
 ## 2026-04-01
 
+- `0.10.166`: **Discovery — provider dropdown loop** — Explore loop now passes **LAST STEP FAILED** (code + error) into the next `projectDiscoveryExploreStep` so the model must change locators. **Playback:** [`fallbackNamedButtonSelectTriggerClicksForPlayback`](apps/api/src/modules/recording/recording-playwright-merge.util.ts) wraps `getByRole('button', { name: '…' })` clicks with the same combobox/filter fallbacks as combobox triggers. **Prompts:** modal/dialog scoping rules. Discovery browser uses **`evaluationPlaywrightTimeoutMs`** defaults. `@bladerunner/api 0.6.130`.
+
+- `0.10.165`: **Evaluations — faster perceived steps** — Default **Gemini** model for **evaluation_codegen** / **evaluation_analyzer** is **`gemini-2.0-flash`** (override with **`EVALUATION_VISION_MODEL`** or **`GEMINI_EVALUATION_MODEL`**); other vision keys still use **`GEMINI_INSTRUCTION_MODEL`**. Defaults: **15s** Playwright (`EVALUATION_PLAYWRIGHT_TIMEOUT_MS`), **120s** LLM aborts (`EVALUATION_CODEGEN_TIMEOUT_MS` / `EVALUATION_ANALYZER_TIMEOUT_MS`). Prompt nudges: shorter path, **finish** when satisfied. [`.env.example`](.env.example) documents tuning + same-region deploy. `@bladerunner/api 0.6.129`.
+
 - `0.10.164`: **Evaluations — shorter Playwright timeouts** — Evaluation browser pages now use **20s** default action/navigation timeout (Playwright’s implicit **30s**). Override with **`EVALUATION_PLAYWRIGHT_TIMEOUT_MS`**. Set in [`startEvaluationSession`](apps/api/src/modules/recording/recording.service.ts) via `setDefaultTimeout` / `setDefaultNavigationTimeout`. `@bladerunner/api 0.6.128`.
 
 - `0.10.163`: **Playback — `getByText` exact match** — [`tightenGetByTextLocatorsForPlayback`](apps/api/src/modules/recording/recording-playwright-merge.util.ts) and related helpers no longer force `{ exact: true }` for long/composite labels (length > 32, Unicode bullets, or `MM/DD/YYYY` dates). Substring matching avoids timeouts on EHR rows like `Alina Wren 08/28/1985 • 40yo` where DOM text is split or punctuation differs. New [`shouldUseExactGetByTextForPlayback`](apps/api/src/modules/recording/recording-playwright-merge.util.ts). `@bladerunner/api 0.6.127`.
