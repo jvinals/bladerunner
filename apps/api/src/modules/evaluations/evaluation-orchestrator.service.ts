@@ -5,7 +5,7 @@ import { LlmService } from '../llm/llm.service';
 import { EvaluationsService } from './evaluations.service';
 import { AgentContextService } from '../agent-context/agent-context.service';
 
-const MAX_EVALUATION_STEPS = 12;
+const MAX_EVALUATION_STEPS = 80;
 
 /** Vision + JSON calls can stall indefinitely without an AbortSignal; Gemini honors `signal`. */
 function evaluationCodegenTimeoutMs(): number {
