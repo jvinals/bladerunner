@@ -461,6 +461,19 @@ export type CreateProjectBody = {
 
 export type ProjectDiscoveryStatus = 'idle' | 'queued' | 'running' | 'completed' | 'failed';
 
+/** Latest discovery run timeline (from `discovery_steps_json`). */
+export type DiscoveryStepDto = {
+  id: string;
+  sequence: number;
+  kind: 'orchestrator_goto' | 'orchestrator_auth' | 'llm_explore';
+  title: string;
+  playwrightCode?: string;
+  outcome?: 'success' | 'failed' | 'blocked';
+  error?: string;
+  thinkingStructured?: Record<string, unknown>;
+  createdAt: string;
+};
+
 export type ProjectAgentKnowledgeDto = {
   projectId: string;
   manualInstructions: string | null;
@@ -472,6 +485,8 @@ export type ProjectAgentKnowledgeDto = {
   discoveryStructured: unknown;
   discoveryNavigationMermaid: string | null;
   discoveryAgentLogFile: string | null;
+  /** Ordered steps for the latest discovery run; empty when none. */
+  discoverySteps?: DiscoveryStepDto[];
   updatedAt: string | null;
 };
 
@@ -549,9 +564,16 @@ export type EvaluationRow = {
   completedAt: string | null;
 };
 
+export type EvaluationStepKindApi =
+  | 'llm'
+  | 'orchestrator_navigate'
+  | 'orchestrator_auto_sign_in';
+
 export type EvaluationStepDto = {
   id: string;
   sequence: number;
+  /** LLM codegen vs orchestrator preamble rows (navigate / auto sign-in). Omitted on older API responses. */
+  stepKind?: EvaluationStepKindApi;
   pageUrl: string | null;
   stepTitle: string | null;
   progressSummaryBefore: string | null;

@@ -112,3 +112,12 @@ export const EvaluationStepDecision = {
 } as const
 
 export type EvaluationStepDecision = (typeof EvaluationStepDecision)[keyof typeof EvaluationStepDecision]
+
+
+export const EvaluationStepKind = {
+  LLM: 'LLM',
+  ORCHESTRATOR_NAVIGATE: 'ORCHESTRATOR_NAVIGATE',
+  ORCHESTRATOR_AUTO_SIGN_IN: 'ORCHESTRATOR_AUTO_SIGN_IN'
+} as const
+
+export type EvaluationStepKind = (typeof EvaluationStepKind)[keyof typeof EvaluationStepKind]

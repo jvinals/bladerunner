@@ -121,6 +121,7 @@ export const ProjectAgentKnowledgeScalarFieldEnum = {
   discoveryStructured: 'discoveryStructured',
   discoveryNavigationMermaid: 'discoveryNavigationMermaid',
   discoveryAgentLogFile: 'discoveryAgentLogFile',
+  discoveryStepsJson: 'discoveryStepsJson',
   updatedAt: 'updatedAt'
 } as const
 
@@ -266,6 +267,7 @@ export const EvaluationStepScalarFieldEnum = {
   evaluationId: 'evaluationId',
   userId: 'userId',
   sequence: 'sequence',
+  stepKind: 'stepKind',
   pageUrl: 'pageUrl',
   stepTitle: 'stepTitle',
   progressSummaryBefore: 'progressSummaryBefore',

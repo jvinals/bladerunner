@@ -157,8 +157,49 @@ export class EvaluationOrchestratorService {
     if (!evalSession) throw new Error('Evaluation session missing');
     const authState = { clerkFullSignInDone: evalSession.autoSignInCompleted ?? false };
 
-    let stepCount = await this.prisma.evaluationStep.count({ where: { evaluationId } });
-    while (stepCount < MAX_EVALUATION_STEPS) {
+    const resumeOpts = Boolean(opts.resumeAfterHuman || opts.resumeAfterReview);
+    const preambleRows = await this.prisma.evaluationStep.count({ where: { evaluationId } });
+    if (!resumeOpts && preambleRows === 0) {
+      const navUrl = ev.url.trim();
+      const navCode = `await page.goto(${JSON.stringify(navUrl)}, { waitUntil: 'domcontentloaded', timeout: 120_000 });`;
+      await this.evaluations.createStep(userId, {
+        evaluationId,
+        sequence: 1,
+        stepKind: 'ORCHESTRATOR_NAVIGATE',
+        stepTitle: 'Load evaluation URL',
+        pageUrl: navUrl,
+        proposedCode: navCode,
+        codegenOutputJson: {
+          orchestrator: true,
+          note: 'Host navigated the evaluation browser to the start URL before the first LLM step.',
+        },
+        analyzerOutputJson: {
+          orchestrator: true,
+          goalProgress: 'partial',
+          decision: 'advance',
+          rationale: 'Navigation completed; LLM-driven steps follow.',
+        },
+        decision: 'advance',
+        analyzerRationale: 'Navigation completed; LLM-driven steps follow.',
+        actualOutcome: `Loaded ${navUrl}`,
+        stepDurationMs: 0,
+      });
+      if (ev.autoSignIn) {
+        await this.evaluations.createStep(userId, {
+          evaluationId,
+          sequence: 2,
+          stepKind: 'ORCHESTRATOR_AUTO_SIGN_IN',
+          stepTitle: 'Automatic sign-in',
+          pageUrl: evalSession.page.url(),
+          proposedCode:
+            '// Host runs automated Clerk / project test-user sign-in when a login screen is detected (orchestrator, not codegen).',
+          codegenOutputJson: { orchestrator: true, pending: true },
+        });
+      }
+    }
+
+    let llmStepCount = 0;
+    while (llmStepCount < MAX_EVALUATION_STEPS) {
       const fresh = await this.prisma.evaluation.findFirst({
         where: { id: evaluationId, userId },
         include: {
@@ -233,6 +274,7 @@ export class EvaluationOrchestratorService {
       // #endregion
 
       /** Until `authState.clerkFullSignInDone`, each step may land on login (step 1, 2, …); the recording layer only acts when the page looks like sign-in. After any successful assist, never call again. */
+      let lastSignInDurationMs = 0;
       const autoSignInPending = fresh.autoSignIn && !authState.clerkFullSignInDone;
       if (autoSignInPending) {
         trace('Auto sign-in: attempting (until first success; Clerk/generic assist may run; external OTP/email polling can take time)', {
@@ -248,9 +290,10 @@ export class EvaluationOrchestratorService {
           clerkOtpMode: signInOtpMode,
           state: authState,
         });
+        lastSignInDurationMs = Date.now() - tSign;
         await page.waitForLoadState('domcontentloaded').catch(() => {});
         trace('Auto sign-in: block finished', {
-          ms: Date.now() - tSign,
+          ms: lastSignInDurationMs,
           pageUrl: page.url(),
           completedThisRun: authState.clerkFullSignInDone,
         });
@@ -273,6 +316,41 @@ export class EvaluationOrchestratorService {
         'H1',
       );
       // #endregion
+
+      if (llmStepCount === 0 && fresh.autoSignIn) {
+        const signInRow = await this.prisma.evaluationStep.findFirst({
+          where: { evaluationId, stepKind: 'ORCHESTRATOR_AUTO_SIGN_IN' },
+          orderBy: { sequence: 'asc' },
+        });
+        if (signInRow) {
+          const rationale = authState.clerkFullSignInDone
+            ? 'Automatic sign-in reported success for this run.'
+            : 'Automatic sign-in not yet complete; assist may run again on later steps until login succeeds.';
+          await this.prisma.evaluationStep.update({
+            where: { id: signInRow.id },
+            data: {
+              pageUrl: page.url(),
+              codegenOutputJson: {
+                orchestrator: true,
+                clerkFullSignInDone: authState.clerkFullSignInDone,
+                durationMs: lastSignInDurationMs,
+              },
+              analyzerOutputJson: {
+                orchestrator: true,
+                goalProgress: 'partial',
+                decision: 'advance',
+                rationale,
+              },
+              decision: 'advance',
+              analyzerRationale: rationale,
+              actualOutcome: authState.clerkFullSignInDone
+                ? 'Sign-in assist completed'
+                : 'Sign-in still in progress or not detected',
+              stepDurationMs: lastSignInDurationMs,
+            },
+          });
+        }
+      }
 
       trace('Codegen capture: starting captureEvaluationLlmPageContext (SOM overlay + screenshot + CDP a11y)', {
         msSinceStepStart: Date.now() - stepWallStart,
@@ -301,7 +379,7 @@ export class EvaluationOrchestratorService {
       });
 
       const priorStepsDesc = await this.prisma.evaluationStep.findMany({
-        where: { evaluationId },
+        where: { evaluationId, stepKind: 'LLM' },
         orderBy: { sequence: 'desc' },
         take: 10,
       });
@@ -383,6 +461,7 @@ export class EvaluationOrchestratorService {
       const codegenOutputJson = {
         stepTitle: proposed.stepTitle,
         thinking: proposed.thinking,
+        ...(proposed.thinkingStructured ? { thinkingStructured: proposed.thinkingStructured } : {}),
         playwrightCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
       };
@@ -390,6 +469,7 @@ export class EvaluationOrchestratorService {
       await this.evaluations.createStep(userId, {
         evaluationId,
         sequence,
+        stepKind: 'LLM',
         pageUrl,
         stepTitle: proposed.stepTitle,
         progressSummaryBefore,
@@ -591,7 +671,7 @@ export class EvaluationOrchestratorService {
         return;
       }
 
-      stepCount += 1;
+      llmStepCount += 1;
 
       if (fresh.runMode === 'step_review') {
         await this.prisma.evaluation.update({
@@ -629,10 +709,15 @@ export class EvaluationOrchestratorService {
       orderBy: { sequence: 'asc' },
     });
     const stepsMd = steps
-      .map(
-        (s) =>
-          `### Step ${s.sequence}${s.stepTitle ? `: ${s.stepTitle}` : ''}\n- Thinking: ${s.thinkingText ?? ''}\n- Code: \`${(s.proposedCode ?? '').slice(0, 800)}\`\n- Decision: ${s.decision ?? ''}\n- Rationale: ${s.analyzerRationale ?? ''}\n`,
-      )
+      .map((s) => {
+        const kind =
+          s.stepKind === 'ORCHESTRATOR_NAVIGATE'
+            ? 'orchestrator (navigation)'
+            : s.stepKind === 'ORCHESTRATOR_AUTO_SIGN_IN'
+              ? 'orchestrator (automatic sign-in)'
+              : 'LLM';
+        return `### Step ${s.sequence}${s.stepTitle ? `: ${s.stepTitle}` : ''} [${kind}]\n- Thinking: ${s.thinkingText ?? ''}\n- Code: \`${(s.proposedCode ?? '').slice(0, 800)}\`\n- Decision: ${s.decision ?? ''}\n- Rationale: ${s.analyzerRationale ?? ''}\n`;
+      })
       .join('\n');
 
     this.recording.emitEvaluationDebugLog(

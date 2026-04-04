@@ -12,6 +12,7 @@ import { LoadingState, ErrorState } from '@/components/ui/States';
 import { useDiscoveryLive } from '@/hooks/useDiscoveryLive';
 import { DiscoveryAgentLogPanel } from '@/components/DiscoveryAgentLogPanel';
 import { DiscoveryMermaidPanel } from '@/components/DiscoveryMermaidPanel';
+import { DiscoveryStepsPanel } from '@/components/discovery/DiscoveryStepsPanel';
 import {
   FolderKanban,
   Plus,
@@ -697,6 +698,11 @@ export default function ProjectsPage() {
                   </span>
                 </div>
               </div>
+
+              <DiscoveryStepsPanel
+                steps={agentKnowledge?.discoverySteps ?? []}
+                discoveryStatus={agentKnowledge?.discoveryStatus}
+              />
 
               {discoveryMutation.data && !discoveryMutation.data.accepted && discoveryMutation.data.reason && (
                 <p className="text-xs text-amber-700">{discoveryMutation.data.reason}</p>

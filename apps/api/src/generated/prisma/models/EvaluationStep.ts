@@ -41,6 +41,7 @@ export type EvaluationStepMinAggregateOutputType = {
   evaluationId: string | null
   userId: string | null
   sequence: number | null
+  stepKind: $Enums.EvaluationStepKind | null
   pageUrl: string | null
   stepTitle: string | null
   progressSummaryBefore: string | null
@@ -60,6 +61,7 @@ export type EvaluationStepMaxAggregateOutputType = {
   evaluationId: string | null
   userId: string | null
   sequence: number | null
+  stepKind: $Enums.EvaluationStepKind | null
   pageUrl: string | null
   stepTitle: string | null
   progressSummaryBefore: string | null
@@ -79,6 +81,7 @@ export type EvaluationStepCountAggregateOutputType = {
   evaluationId: number
   userId: number
   sequence: number
+  stepKind: number
   pageUrl: number
   stepTitle: number
   progressSummaryBefore: number
@@ -114,6 +117,7 @@ export type EvaluationStepMinAggregateInputType = {
   evaluationId?: true
   userId?: true
   sequence?: true
+  stepKind?: true
   pageUrl?: true
   stepTitle?: true
   progressSummaryBefore?: true
@@ -133,6 +137,7 @@ export type EvaluationStepMaxAggregateInputType = {
   evaluationId?: true
   userId?: true
   sequence?: true
+  stepKind?: true
   pageUrl?: true
   stepTitle?: true
   progressSummaryBefore?: true
@@ -152,6 +157,7 @@ export type EvaluationStepCountAggregateInputType = {
   evaluationId?: true
   userId?: true
   sequence?: true
+  stepKind?: true
   pageUrl?: true
   stepTitle?: true
   progressSummaryBefore?: true
@@ -262,6 +268,7 @@ export type EvaluationStepGroupByOutputType = {
   evaluationId: string
   userId: string
   sequence: number
+  stepKind: $Enums.EvaluationStepKind
   pageUrl: string | null
   stepTitle: string | null
   progressSummaryBefore: string | null
@@ -308,6 +315,7 @@ export type EvaluationStepWhereInput = {
   evaluationId?: Prisma.StringFilter<"EvaluationStep"> | string
   userId?: Prisma.StringFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntFilter<"EvaluationStep"> | number
+  stepKind?: Prisma.EnumEvaluationStepKindFilter<"EvaluationStep"> | $Enums.EvaluationStepKind
   pageUrl?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   stepTitle?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   progressSummaryBefore?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
@@ -332,6 +340,7 @@ export type EvaluationStepOrderByWithRelationInput = {
   evaluationId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
+  stepKind?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrderInput | Prisma.SortOrder
   stepTitle?: Prisma.SortOrderInput | Prisma.SortOrder
   progressSummaryBefore?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -359,6 +368,7 @@ export type EvaluationStepWhereUniqueInput = Prisma.AtLeast<{
   evaluationId?: Prisma.StringFilter<"EvaluationStep"> | string
   userId?: Prisma.StringFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntFilter<"EvaluationStep"> | number
+  stepKind?: Prisma.EnumEvaluationStepKindFilter<"EvaluationStep"> | $Enums.EvaluationStepKind
   pageUrl?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   stepTitle?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   progressSummaryBefore?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
@@ -383,6 +393,7 @@ export type EvaluationStepOrderByWithAggregationInput = {
   evaluationId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
+  stepKind?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrderInput | Prisma.SortOrder
   stepTitle?: Prisma.SortOrderInput | Prisma.SortOrder
   progressSummaryBefore?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -414,6 +425,7 @@ export type EvaluationStepScalarWhereWithAggregatesInput = {
   evaluationId?: Prisma.StringWithAggregatesFilter<"EvaluationStep"> | string
   userId?: Prisma.StringWithAggregatesFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntWithAggregatesFilter<"EvaluationStep"> | number
+  stepKind?: Prisma.EnumEvaluationStepKindWithAggregatesFilter<"EvaluationStep"> | $Enums.EvaluationStepKind
   pageUrl?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
   stepTitle?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
   progressSummaryBefore?: Prisma.StringNullableWithAggregatesFilter<"EvaluationStep"> | string | null
@@ -436,6 +448,7 @@ export type EvaluationStepCreateInput = {
   id?: string
   userId: string
   sequence: number
+  stepKind?: $Enums.EvaluationStepKind
   pageUrl?: string | null
   stepTitle?: string | null
   progressSummaryBefore?: string | null
@@ -460,6 +473,7 @@ export type EvaluationStepUncheckedCreateInput = {
   evaluationId: string
   userId: string
   sequence: number
+  stepKind?: $Enums.EvaluationStepKind
   pageUrl?: string | null
   stepTitle?: string | null
   progressSummaryBefore?: string | null
@@ -482,6 +496,7 @@ export type EvaluationStepUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -506,6 +521,7 @@ export type EvaluationStepUncheckedUpdateInput = {
   evaluationId?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -529,6 +545,7 @@ export type EvaluationStepCreateManyInput = {
   evaluationId: string
   userId: string
   sequence: number
+  stepKind?: $Enums.EvaluationStepKind
   pageUrl?: string | null
   stepTitle?: string | null
   progressSummaryBefore?: string | null
@@ -551,6 +568,7 @@ export type EvaluationStepUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -574,6 +592,7 @@ export type EvaluationStepUncheckedUpdateManyInput = {
   evaluationId?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -607,6 +626,7 @@ export type EvaluationStepCountOrderByAggregateInput = {
   evaluationId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
+  stepKind?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
   stepTitle?: Prisma.SortOrder
   progressSummaryBefore?: Prisma.SortOrder
@@ -635,6 +655,7 @@ export type EvaluationStepMaxOrderByAggregateInput = {
   evaluationId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
+  stepKind?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
   stepTitle?: Prisma.SortOrder
   progressSummaryBefore?: Prisma.SortOrder
@@ -654,6 +675,7 @@ export type EvaluationStepMinOrderByAggregateInput = {
   evaluationId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   sequence?: Prisma.SortOrder
+  stepKind?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
   stepTitle?: Prisma.SortOrder
   progressSummaryBefore?: Prisma.SortOrder
@@ -715,6 +737,10 @@ export type EvaluationStepUncheckedUpdateManyWithoutEvaluationNestedInput = {
   deleteMany?: Prisma.EvaluationStepScalarWhereInput | Prisma.EvaluationStepScalarWhereInput[]
 }
 
+export type EnumEvaluationStepKindFieldUpdateOperationsInput = {
+  set?: $Enums.EvaluationStepKind
+}
+
 export type NullableEnumEvaluationStepDecisionFieldUpdateOperationsInput = {
   set?: $Enums.EvaluationStepDecision | null
 }
@@ -723,6 +749,7 @@ export type EvaluationStepCreateWithoutEvaluationInput = {
   id?: string
   userId: string
   sequence: number
+  stepKind?: $Enums.EvaluationStepKind
   pageUrl?: string | null
   stepTitle?: string | null
   progressSummaryBefore?: string | null
@@ -745,6 +772,7 @@ export type EvaluationStepUncheckedCreateWithoutEvaluationInput = {
   id?: string
   userId: string
   sequence: number
+  stepKind?: $Enums.EvaluationStepKind
   pageUrl?: string | null
   stepTitle?: string | null
   progressSummaryBefore?: string | null
@@ -797,6 +825,7 @@ export type EvaluationStepScalarWhereInput = {
   evaluationId?: Prisma.StringFilter<"EvaluationStep"> | string
   userId?: Prisma.StringFilter<"EvaluationStep"> | string
   sequence?: Prisma.IntFilter<"EvaluationStep"> | number
+  stepKind?: Prisma.EnumEvaluationStepKindFilter<"EvaluationStep"> | $Enums.EvaluationStepKind
   pageUrl?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   stepTitle?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
   progressSummaryBefore?: Prisma.StringNullableFilter<"EvaluationStep"> | string | null
@@ -819,6 +848,7 @@ export type EvaluationStepCreateManyEvaluationInput = {
   id?: string
   userId: string
   sequence: number
+  stepKind?: $Enums.EvaluationStepKind
   pageUrl?: string | null
   stepTitle?: string | null
   progressSummaryBefore?: string | null
@@ -841,6 +871,7 @@ export type EvaluationStepUpdateWithoutEvaluationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -863,6 +894,7 @@ export type EvaluationStepUncheckedUpdateWithoutEvaluationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -885,6 +917,7 @@ export type EvaluationStepUncheckedUpdateManyWithoutEvaluationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   sequence?: Prisma.IntFieldUpdateOperationsInput | number
+  stepKind?: Prisma.EnumEvaluationStepKindFieldUpdateOperationsInput | $Enums.EvaluationStepKind
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stepTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   progressSummaryBefore?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -910,6 +943,7 @@ export type EvaluationStepSelect<ExtArgs extends runtime.Types.Extensions.Intern
   evaluationId?: boolean
   userId?: boolean
   sequence?: boolean
+  stepKind?: boolean
   pageUrl?: boolean
   stepTitle?: boolean
   progressSummaryBefore?: boolean
@@ -934,6 +968,7 @@ export type EvaluationStepSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   evaluationId?: boolean
   userId?: boolean
   sequence?: boolean
+  stepKind?: boolean
   pageUrl?: boolean
   stepTitle?: boolean
   progressSummaryBefore?: boolean
@@ -958,6 +993,7 @@ export type EvaluationStepSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   evaluationId?: boolean
   userId?: boolean
   sequence?: boolean
+  stepKind?: boolean
   pageUrl?: boolean
   stepTitle?: boolean
   progressSummaryBefore?: boolean
@@ -982,6 +1018,7 @@ export type EvaluationStepSelectScalar = {
   evaluationId?: boolean
   userId?: boolean
   sequence?: boolean
+  stepKind?: boolean
   pageUrl?: boolean
   stepTitle?: boolean
   progressSummaryBefore?: boolean
@@ -1000,7 +1037,7 @@ export type EvaluationStepSelectScalar = {
   createdAt?: boolean
 }
 
-export type EvaluationStepOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "evaluationId" | "userId" | "sequence" | "pageUrl" | "stepTitle" | "progressSummaryBefore" | "codegenInputJson" | "codegenOutputJson" | "analyzerInputJson" | "analyzerOutputJson" | "thinkingText" | "proposedCode" | "expectedOutcome" | "actualOutcome" | "errorMessage" | "decision" | "analyzerRationale" | "stepDurationMs" | "createdAt", ExtArgs["result"]["evaluationStep"]>
+export type EvaluationStepOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "evaluationId" | "userId" | "sequence" | "stepKind" | "pageUrl" | "stepTitle" | "progressSummaryBefore" | "codegenInputJson" | "codegenOutputJson" | "analyzerInputJson" | "analyzerOutputJson" | "thinkingText" | "proposedCode" | "expectedOutcome" | "actualOutcome" | "errorMessage" | "decision" | "analyzerRationale" | "stepDurationMs" | "createdAt", ExtArgs["result"]["evaluationStep"]>
 export type EvaluationStepInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   evaluation?: boolean | Prisma.EvaluationDefaultArgs<ExtArgs>
 }
@@ -1021,6 +1058,7 @@ export type $EvaluationStepPayload<ExtArgs extends runtime.Types.Extensions.Inte
     evaluationId: string
     userId: string
     sequence: number
+    stepKind: $Enums.EvaluationStepKind
     pageUrl: string | null
     stepTitle: string | null
     /**
@@ -1471,6 +1509,7 @@ export interface EvaluationStepFieldRefs {
   readonly evaluationId: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly userId: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly sequence: Prisma.FieldRef<"EvaluationStep", 'Int'>
+  readonly stepKind: Prisma.FieldRef<"EvaluationStep", 'EvaluationStepKind'>
   readonly pageUrl: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly stepTitle: Prisma.FieldRef<"EvaluationStep", 'String'>
   readonly progressSummaryBefore: Prisma.FieldRef<"EvaluationStep", 'String'>

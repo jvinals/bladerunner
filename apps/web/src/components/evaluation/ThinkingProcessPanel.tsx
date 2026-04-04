@@ -1,7 +1,11 @@
 import type { ReactNode } from 'react';
-import { ChevronRight, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { ChevronRight, Cog, Expand, Loader2, Sparkles, XCircle } from 'lucide-react';
 import type { EvaluationStepDto } from '@/lib/api';
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
+import {
+  normalizeEvaluationStepKind,
+  ThinkingStructuredBlock,
+} from '@/components/evaluation/evaluation-step-thinking';
 
 const PLACEHOLDER_PREFIX = '__pending__';
 
@@ -28,8 +32,9 @@ function parseAnalyzerInput(st: EvaluationStepDto): {
   return { executionOk, errorMessage };
 }
 
-/** Step finished when analyzer output persisted (orchestrator writes last). */
+/** Step finished when analyzer output persisted; orchestrator rows have no LLM analyzer pipeline. */
 function isStepThinkingComplete(st: EvaluationStepDto): boolean {
+  if (normalizeEvaluationStepKind(st) !== 'llm') return true;
   return st.analyzerOutputJson != null;
 }
 
@@ -37,6 +42,7 @@ function isStepThinkingComplete(st: EvaluationStepDto): boolean {
  * Spinner while codegen/analyzer pipeline still running for this step (aligns with step card loading rules).
  */
 function isThinkingRowInProgress(st: EvaluationStepDto, lastProgress: EvaluationProgressPayload | null): boolean {
+  if (normalizeEvaluationStepKind(st) !== 'llm') return false;
   if (st.id.startsWith(PLACEHOLDER_PREFIX)) return true;
   if (isStepThinkingComplete(st)) return false;
   if (lastProgress == null || lastProgress.sequence == null || lastProgress.sequence !== st.sequence) {
@@ -77,9 +83,11 @@ function formatDuration(stepDurationMs: number | null | undefined): string | nul
 type Props = {
   steps: EvaluationStepDto[];
   lastProgress: EvaluationProgressPayload | null;
+  /** Opens the same step card as the timeline (full codegen / analyzer panels). */
+  onOpenFullStep?: (stepIndex: number) => void;
 };
 
-export function ThinkingProcessPanel({ steps, lastProgress }: Props) {
+export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Props) {
   if (steps.length === 0) {
     return (
       <p className="text-xs text-gray-500 px-4 py-3 border-t border-gray-100">
@@ -89,8 +97,8 @@ export function ThinkingProcessPanel({ steps, lastProgress }: Props) {
   }
 
   return (
-    <div className="divide-y divide-gray-100">
-      {steps.map((st) => {
+    <div className="flex flex-col">
+      {steps.map((st, rowIdx) => {
         const complete = isStepThinkingComplete(st);
         const inProgress = isThinkingRowInProgress(st, lastProgress);
         const title = displayTitle(st);
@@ -99,49 +107,75 @@ export function ThinkingProcessPanel({ steps, lastProgress }: Props) {
         const err = displayError(st);
         const dur = formatDuration(st.stepDurationMs);
 
+        const kind = normalizeEvaluationStepKind(st);
         let leftIcon: ReactNode;
-        if (!complete && inProgress) {
+        if (kind !== 'llm') {
+          leftIcon = <Cog className="h-4 w-4 shrink-0 text-amber-800" aria-hidden />;
+        } else if (!complete && inProgress) {
           leftIcon = <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#4B90FF]" aria-hidden />;
         } else if (complete) {
           if (executionOk === true) {
-            leftIcon = <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />;
+            leftIcon = <Sparkles className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />;
           } else if (executionOk === false) {
             leftIcon = <XCircle className="h-4 w-4 shrink-0 text-red-600" aria-hidden />;
           } else {
-            leftIcon = <CheckCircle2 className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />;
+            leftIcon = <Sparkles className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />;
           }
         } else {
           leftIcon = <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#4B90FF]" aria-hidden />;
         }
-
         return (
-          <details key={st.id} className="group">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden hover:bg-gray-50/80">
-              <span className="flex min-w-0 flex-1 items-center gap-2">
-                {leftIcon}
-                <span className="min-w-0 flex-1 truncate text-gray-900" title={title}>
-                  {title}
+          <div
+            key={st.id}
+            className="flex items-stretch border-b border-gray-100 last:border-b-0"
+          >
+            <details className="group min-w-0 flex-1">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden hover:bg-gray-50/80">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  {leftIcon}
+                  <span className="min-w-0 flex-1 truncate text-gray-900" title={title}>
+                    {title}
+                  </span>
                 </span>
-              </span>
-              {complete && dur ? (
-                <span className="shrink-0 text-xs tabular-nums text-gray-500">{dur}</span>
-              ) : null}
-              <ChevronRight
-                size={16}
-                className="shrink-0 text-gray-400 transition-transform group-open:rotate-90"
-                aria-hidden
-              />
-            </summary>
-            <div className="border-t border-gray-50 bg-gray-50/50 px-4 py-2 pl-11">
-              <p
-                className="truncate font-mono text-[11px] leading-relaxed text-gray-700"
-                title={code || '(no code)'}
-              >
-                {code || '—'}
-              </p>
-              {err ? <p className="mt-1.5 text-xs leading-snug text-red-600">{err}</p> : null}
-            </div>
-          </details>
+                {complete && dur ? (
+                  <span className="shrink-0 text-xs tabular-nums text-gray-500">{dur}</span>
+                ) : null}
+                <ChevronRight
+                  size={16}
+                  className="shrink-0 text-gray-400 transition-transform group-open:rotate-90"
+                  aria-hidden
+                />
+              </summary>
+              <div className="border-t border-gray-50 bg-gray-50/50 px-4 py-2 pl-11 space-y-2">
+                {kind === 'llm' ? (
+                  <div className="text-[11px]">
+                    <span className="text-gray-500 font-medium block mb-1">Reasoning</span>
+                    <ThinkingStructuredBlock codegenOutputJson={st.codegenOutputJson} />
+                  </div>
+                ) : null}
+                <p
+                  className="truncate font-mono text-[11px] leading-relaxed text-gray-700"
+                  title={code || '(no code)'}
+                >
+                  {code || '—'}
+                </p>
+                {err ? <p className="mt-1.5 text-xs leading-snug text-red-600">{err}</p> : null}
+              </div>
+            </details>
+            {onOpenFullStep ? (
+              <div className="flex shrink-0 items-center border-l border-gray-100 bg-gray-50/30 px-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[10px] font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={() => onOpenFullStep(rowIdx)}
+                  aria-label={`Open full step ${st.sequence} in a dialog — same layout as the step timeline`}
+                >
+                  <Expand size={14} className="shrink-0 text-gray-600" aria-hidden />
+                  Full step
+                </button>
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>

@@ -1,8 +1,28 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { EvaluationStatus, EvaluationStepDecision, Prisma } from '../../generated/prisma/client';
+import type {
+  EvaluationStatus,
+  EvaluationStepDecision,
+  EvaluationStepKind,
+  Prisma,
+} from '../../generated/prisma/client';
 
 type JsonValue = Prisma.InputJsonValue;
+
+/** JSON API uses lowercase snake_case values; Prisma stores enum names. */
+function evaluationStepKindToApi(
+  k: EvaluationStepKind,
+): 'llm' | 'orchestrator_navigate' | 'orchestrator_auto_sign_in' {
+  switch (k) {
+    case 'ORCHESTRATOR_NAVIGATE':
+      return 'orchestrator_navigate';
+    case 'ORCHESTRATOR_AUTO_SIGN_IN':
+      return 'orchestrator_auto_sign_in';
+    case 'LLM':
+    default:
+      return 'llm';
+  }
+}
 
 @Injectable()
 export class EvaluationsService {
@@ -76,7 +96,13 @@ export class EvaluationsService {
       },
     });
     if (!ev) throw new NotFoundException(`Evaluation ${id} not found`);
-    return ev;
+    return {
+      ...ev,
+      steps: ev.steps.map((s) => ({
+        ...s,
+        stepKind: evaluationStepKindToApi(s.stepKind),
+      })),
+    };
   }
 
   async updateStatus(id: string, userId: string, status: EvaluationStatus, extra?: Prisma.EvaluationUpdateInput) {
@@ -132,11 +158,14 @@ export class EvaluationsService {
     data: {
       evaluationId: string;
       sequence: number;
+      stepKind?: EvaluationStepKind;
       pageUrl?: string | null;
       stepTitle?: string | null;
       progressSummaryBefore?: string | null;
       codegenInputJson?: JsonValue | null;
       codegenOutputJson?: JsonValue | null;
+      analyzerInputJson?: JsonValue | null;
+      analyzerOutputJson?: JsonValue | null;
       thinkingText?: string | null;
       proposedCode?: string | null;
       expectedOutcome?: string | null;
@@ -144,6 +173,7 @@ export class EvaluationsService {
       errorMessage?: string | null;
       decision?: EvaluationStepDecision | null;
       analyzerRationale?: string | null;
+      stepDurationMs?: number | null;
     },
   ) {
     return this.prisma.evaluationStep.create({
@@ -151,11 +181,14 @@ export class EvaluationsService {
         userId,
         evaluationId: data.evaluationId,
         sequence: data.sequence,
+        stepKind: data.stepKind ?? 'LLM',
         pageUrl: data.pageUrl ?? null,
         stepTitle: data.stepTitle ?? null,
         progressSummaryBefore: data.progressSummaryBefore ?? null,
         codegenInputJson: data.codegenInputJson ?? undefined,
         codegenOutputJson: data.codegenOutputJson ?? undefined,
+        analyzerInputJson: data.analyzerInputJson ?? undefined,
+        analyzerOutputJson: data.analyzerOutputJson ?? undefined,
         thinkingText: data.thinkingText ?? null,
         proposedCode: data.proposedCode ?? null,
         expectedOutcome: data.expectedOutcome ?? null,
@@ -163,6 +196,7 @@ export class EvaluationsService {
         errorMessage: data.errorMessage ?? null,
         decision: data.decision ?? null,
         analyzerRationale: data.analyzerRationale ?? null,
+        stepDurationMs: data.stepDurationMs ?? undefined,
       },
     });
   }

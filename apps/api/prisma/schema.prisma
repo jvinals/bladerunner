@@ -115,6 +115,8 @@ model ProjectAgentKnowledge {
   discoveryNavigationMermaid String?              @db.Text @map("discovery_navigation_mermaid")
   /// Basename of the last discovery agent log file under repo `docs/logs/` (NDJSON lines).
   discoveryAgentLogFile      String?               @map("discovery_agent_log_file")
+  /// Latest discovery run: ordered step records (orchestrator + LLM explore); cleared when a new run starts.
+  discoveryStepsJson         Json?                 @map("discovery_steps_json")
   updatedAt                DateTime               @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -281,6 +283,13 @@ enum EvaluationStepDecision {
   finish
 }
 
+/// LLM codegen step vs orchestrator-only (navigation, auto sign-in).
+enum EvaluationStepKind {
+  LLM
+  ORCHESTRATOR_NAVIGATE
+  ORCHESTRATOR_AUTO_SIGN_IN
+}
+
 model Evaluation {
   id               String            @id @default(uuid())
   userId           String            @map("user_id")
@@ -318,6 +327,7 @@ model EvaluationStep {
   evaluationId      String                  @map("evaluation_id")
   userId            String                  @map("user_id")
   sequence          Int
+  stepKind          EvaluationStepKind      @default(LLM) @map("step_kind")
   pageUrl           String?                 @map("page_url")
   stepTitle         String?                 @map("step_title")
   /// Rolling progress summary text before this step began (for review UI).

@@ -39,6 +39,50 @@ import {
   PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED,
 } from './playwright-ui-guidelines';
 
+/** Structured reasoning from evaluation_codegen JSON (also nested under codegenOutputJson). */
+export type EvaluationCodegenThinkingStructured = {
+  observation: string;
+  needsToDoAndWhy: string;
+  priorFailuresIfAny: string;
+  actionNowAndWhy: string;
+  playwrightWhy: string;
+};
+
+function parseEvaluationCodegenThinking(
+  parsed: Record<string, unknown>,
+): { thinking: string; thinkingStructured?: EvaluationCodegenThinkingStructured } {
+  const rawTs = parsed.thinkingStructured;
+  if (rawTs && typeof rawTs === 'object' && !Array.isArray(rawTs)) {
+    const o = rawTs as Record<string, unknown>;
+    const observation = typeof o.observation === 'string' ? o.observation.trim() : '';
+    const needsToDoAndWhy = typeof o.needsToDoAndWhy === 'string' ? o.needsToDoAndWhy.trim() : '';
+    const priorFailuresIfAny = typeof o.priorFailuresIfAny === 'string' ? o.priorFailuresIfAny.trim() : '';
+    const actionNowAndWhy = typeof o.actionNowAndWhy === 'string' ? o.actionNowAndWhy.trim() : '';
+    const playwrightWhy = typeof o.playwrightWhy === 'string' ? o.playwrightWhy.trim() : '';
+    const thinking = [
+      observation && `Observation: ${observation}`,
+      needsToDoAndWhy && `What to do and why: ${needsToDoAndWhy}`,
+      priorFailuresIfAny && `Prior failures: ${priorFailuresIfAny}`,
+      actionNowAndWhy && `Action now: ${actionNowAndWhy}`,
+      playwrightWhy && `Playwright rationale: ${playwrightWhy}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    return {
+      thinkingStructured: {
+        observation,
+        needsToDoAndWhy,
+        priorFailuresIfAny,
+        actionNowAndWhy,
+        playwrightWhy,
+      },
+      thinking: thinking || '(no structured thinking parsed)',
+    };
+  }
+  const legacy = typeof parsed.thinking === 'string' ? parsed.thinking.trim() : '';
+  return { thinking: legacy };
+}
+
 const ACTION_TO_INSTRUCTION_SYSTEM = `You are a Playwright test recorder assistant. Given a browser action and page context, produce:
 1. A concise human-readable instruction describing what the user did
 2. Clean Playwright code that reproduces the action
@@ -98,10 +142,18 @@ You receive a full-page Set-of-Marks screenshot (numeric badges on interactives)
 Respond ONLY with valid JSON:
 {
   "stepTitle": "<short human-readable name for this step (e.g. Open login form) — under 80 chars>",
-  "thinking": "<what you observe and why you propose the next action toward the intent>",
+  "thinkingStructured": {
+    "observation": "<what you see on the page from screenshot + manifest + snapshot>",
+    "needsToDoAndWhy": "<what you think needs to happen next toward the intent and why>",
+    "priorFailuresIfAny": "<if prior steps failed for a similar sub-goal, summarize why; otherwise say none>",
+    "actionNowAndWhy": "<the single browser action you will take in this step and why>",
+    "playwrightWhy": "<why this exact playwrightCode (locators, scope) addresses prior failures or avoids repeating them>"
+  },
   "playwrightCode": "<single async IIFE body using only \`page\` and \`expect\` from Playwright test — valid JavaScript statements, no imports; e.g. await page.getByRole('button', { name: 'Next' }).click();>",
   "expectedOutcome": "<what should change in the UI after this code runs>"
 }
+
+Legacy (only if the model cannot emit thinkingStructured): you may instead include a single string field "thinking" with a short combined rationale — prefer thinkingStructured.
 
 Rules:
 - **Efficiency:** Take the shortest path toward the intent—avoid redundant actions, duplicate checks, or exploratory clicks when the goal is narrow; one atomic action per step is enough when the UI is ready.
@@ -304,7 +356,8 @@ Action constraints
 7. True blockers are limited to cases such as CAPTCHA, hard 403, unclosable modal, or no actionable targets in the evidence.
 8. ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED}
 9. **Modals:** When a dialog is open (e.g. scheduling, forms), scope controls: \`page.getByRole('dialog', { name: /…/i }).getByRole('combobox', { name: /provider/i })\` or \`page.getByRole('dialog').last().…\` if only one modal matters. Do not rely on a global \`getByRole('button', …)\` if the snapshot shows the control inside a named dialog.
-10. **After a failed step:** If the user message includes **LAST STEP FAILED**, you MUST use a different locator or scope — never emit the same \`playwrightCode\` again. Prefer combobox vs button per the accessibility snapshot, regex names, or \`getByLabel\` / visible placeholder text.
+10. **PREVIOUS STEP:** When the user message includes **PREVIOUS STEP**, it is the last snippet that actually ran and whether it **succeeded or failed**. Use it every time: after **SUCCESS**, advance the flow; after **FAILED** or a **Blocked** note, change locator, dialog scope, combobox vs button, or interaction pattern — do not blindly repeat.
+11. **Duplicate code limit:** Never emit the **exact same** \`playwrightCode\` string more than **twice** across the run for the same control. The host **blocks** a third identical attempt. After two failures with the same code, you must switch strategy (role, placeholder, \`getByPlaceholder\`, scoped dialog, filter + option, etc.).
 
 Output format
 
@@ -314,8 +367,17 @@ Respond with valid JSON only:
   "stop": <boolean>,
   "subsectionComplete": <boolean>,
   "reason": "<one short sentence explaining the next target or why exploration must stop>",
+  "thinkingStructured": {
+    "observation": "<what you see on the page>",
+    "needsToDoAndWhy": "<what to explore next and why>",
+    "priorFailuresIfAny": "<if PREVIOUS STEP failed, why; else none>",
+    "actionNowAndWhy": "<the single exploratory action for playwrightCode and why>",
+    "playwrightWhy": "<why this playwrightCode (locators, scope) given prior failures>"
+  },
   "playwrightCode": "<empty string when stop is true; otherwise an async function body using only page and expect, with statements only>"
-}`;
+}
+
+You may omit thinkingStructured only if JSON size is constrained; prefer including it.`;
 
 const PROJECT_DISCOVERY_FINAL_SYSTEM = `You are a Browser Automation Discovery Agent producing the final discovery report for a SaaS web app. The user owns the app for staging QA; treat data as synthetic.
 
@@ -1282,7 +1344,13 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       agentContextAppendix?: string;
     },
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
-  ): Promise<{ stepTitle: string; thinking: string; playwrightCode: string; expectedOutcome: string }> {
+  ): Promise<{
+    stepTitle: string;
+    thinking: string;
+    thinkingStructured?: EvaluationCodegenThinkingStructured;
+    playwrightCode: string;
+    expectedOutcome: string;
+  }> {
     const dbg = opts?.onDebugLog;
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
@@ -1355,12 +1423,13 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     });
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const stepTitleRaw = typeof parsed.stepTitle === 'string' ? parsed.stepTitle.trim() : '';
-    const thinking = typeof parsed.thinking === 'string' ? parsed.thinking.trim() : '';
+    const { thinking, thinkingStructured } = parseEvaluationCodegenThinking(parsed);
     const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
     dbg?.('evaluation_codegen: parsed structured output', {
       stepTitlePreview: stepTitleRaw.slice(0, 120),
       thinkingChars: thinking.length,
+      hasThinkingStructured: Boolean(thinkingStructured),
       playwrightCodeChars: playwrightCode.length,
       expectedOutcomeChars: expectedOutcome.length,
     });
@@ -1370,6 +1439,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     return {
       stepTitle: stepTitleRaw.slice(0, 200) || 'Untitled step',
       thinking,
+      ...(thinkingStructured ? { thinkingStructured } : {}),
       playwrightCode,
       expectedOutcome,
     };
@@ -1601,15 +1671,21 @@ The attached image is a full-page Set-of-Marks screenshot.`;
       currentNavDepth?: number;
       /** Appended when retrying after a premature stop. */
       continuationHint?: string;
-      /** Previous explore Playwright failed; model must change strategy. */
-      lastExecutionFailure?: { code: string; error: string };
+      /** Last executed snippet and whether it succeeded (always passed when set). */
+      lastStepOutcome?: { code: string; ok: boolean; error?: string };
     },
     opts?: {
       userId?: string;
       signal?: AbortSignal;
       onLlmExchange?: (payload: DiscoveryLlmExchangePayload) => void;
     },
-  ): Promise<{ stop: boolean; reason: string; playwrightCode?: string; subsectionComplete?: boolean }> {
+  ): Promise<{
+    stop: boolean;
+    reason: string;
+    playwrightCode?: string;
+    subsectionComplete?: boolean;
+    thinkingStructured?: EvaluationCodegenThinkingStructured;
+  }> {
     const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
       input.somManifest,
       input.accessibilitySnapshot,
@@ -1660,8 +1736,8 @@ ${a11yT || '(empty)'}
 
 The image is a full-page Set-of-Marks screenshot. Propose the next single exploratory action or stop.
 ${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\n` : ''}${
-      input.lastExecutionFailure?.error
-        ? `\nLAST STEP FAILED — you must not repeat the same playwrightCode; try a different role, dialog scope, or regex name:\nFailed code:\n${input.lastExecutionFailure.code.slice(0, 4000)}\n\nError:\n${input.lastExecutionFailure.error.slice(0, 2000)}\n`
+      input.lastStepOutcome
+        ? `\nPREVIOUS STEP (last executed Playwright on the prior iteration — use this to pick a different strategy when it failed, or build on success):\nCode:\n${input.lastStepOutcome.code.slice(0, 4000)}\nResult: ${input.lastStepOutcome.ok ? 'SUCCESS' : 'FAILED'}\n${input.lastStepOutcome.error ? `Error or note:\n${input.lastStepOutcome.error.slice(0, 2000)}\n` : ''}`
         : ''
     }`;
     const shot = input.screenshotBase64?.trim();
@@ -1715,11 +1791,13 @@ ${cont ? `\nCONTINUATION (previous stop was rejected — follow this):\n${cont}\
     const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
     const playwrightCode =
       typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
+    const { thinkingStructured } = parseEvaluationCodegenThinking(parsed);
     return {
       stop,
       subsectionComplete,
       reason: reason || (stop ? 'stopped' : 'continue'),
       playwrightCode: playwrightCode || undefined,
+      ...(thinkingStructured ? { thinkingStructured } : {}),
     };
   }
 

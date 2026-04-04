@@ -1530,6 +1530,7 @@ export const ProjectAgentKnowledgeScalarFieldEnum = {
   discoveryStructured: 'discoveryStructured',
   discoveryNavigationMermaid: 'discoveryNavigationMermaid',
   discoveryAgentLogFile: 'discoveryAgentLogFile',
+  discoveryStepsJson: 'discoveryStepsJson',
   updatedAt: 'updatedAt'
 } as const
 
@@ -1675,6 +1676,7 @@ export const EvaluationStepScalarFieldEnum = {
   evaluationId: 'evaluationId',
   userId: 'userId',
   sequence: 'sequence',
+  stepKind: 'stepKind',
   pageUrl: 'pageUrl',
   stepTitle: 'stepTitle',
   progressSummaryBefore: 'progressSummaryBefore',
@@ -1979,6 +1981,20 @@ export type EnumEvaluationRunModeFieldRefInput<$PrismaModel> = FieldRefInputType
  * Reference to a field of type 'EvaluationRunMode[]'
  */
 export type ListEnumEvaluationRunModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationRunMode[]'>
+    
+
+
+/**
+ * Reference to a field of type 'EvaluationStepKind'
+ */
+export type EnumEvaluationStepKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationStepKind'>
+    
+
+
+/**
+ * Reference to a field of type 'EvaluationStepKind[]'
+ */
+export type ListEnumEvaluationStepKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationStepKind[]'>
     
 
 

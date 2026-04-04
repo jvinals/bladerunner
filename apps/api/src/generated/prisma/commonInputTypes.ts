@@ -474,11 +474,28 @@ export type EnumEvaluationRunModeWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
 }
 
+export type EnumEvaluationStepKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationStepKind | Prisma.EnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationStepKindFilter<$PrismaModel> | $Enums.EvaluationStepKind
+}
+
 export type EnumEvaluationStepDecisionNullableFilter<$PrismaModel = never> = {
   equals?: $Enums.EvaluationStepDecision | Prisma.EnumEvaluationStepDecisionFieldRefInput<$PrismaModel> | null
   in?: $Enums.EvaluationStepDecision[] | Prisma.ListEnumEvaluationStepDecisionFieldRefInput<$PrismaModel> | null
   notIn?: $Enums.EvaluationStepDecision[] | Prisma.ListEnumEvaluationStepDecisionFieldRefInput<$PrismaModel> | null
   not?: Prisma.NestedEnumEvaluationStepDecisionNullableFilter<$PrismaModel> | $Enums.EvaluationStepDecision | null
+}
+
+export type EnumEvaluationStepKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationStepKind | Prisma.EnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationStepKindWithAggregatesFilter<$PrismaModel> | $Enums.EvaluationStepKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEvaluationStepKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEvaluationStepKindFilter<$PrismaModel>
 }
 
 export type EnumEvaluationStepDecisionNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -910,11 +927,28 @@ export type NestedEnumEvaluationRunModeWithAggregatesFilter<$PrismaModel = never
   _max?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
 }
 
+export type NestedEnumEvaluationStepKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationStepKind | Prisma.EnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationStepKindFilter<$PrismaModel> | $Enums.EvaluationStepKind
+}
+
 export type NestedEnumEvaluationStepDecisionNullableFilter<$PrismaModel = never> = {
   equals?: $Enums.EvaluationStepDecision | Prisma.EnumEvaluationStepDecisionFieldRefInput<$PrismaModel> | null
   in?: $Enums.EvaluationStepDecision[] | Prisma.ListEnumEvaluationStepDecisionFieldRefInput<$PrismaModel> | null
   notIn?: $Enums.EvaluationStepDecision[] | Prisma.ListEnumEvaluationStepDecisionFieldRefInput<$PrismaModel> | null
   not?: Prisma.NestedEnumEvaluationStepDecisionNullableFilter<$PrismaModel> | $Enums.EvaluationStepDecision | null
+}
+
+export type NestedEnumEvaluationStepKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.EvaluationStepKind | Prisma.EnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  in?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.EvaluationStepKind[] | Prisma.ListEnumEvaluationStepKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumEvaluationStepKindWithAggregatesFilter<$PrismaModel> | $Enums.EvaluationStepKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumEvaluationStepKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumEvaluationStepKindFilter<$PrismaModel>
 }
 
 export type NestedEnumEvaluationStepDecisionNullableWithAggregatesFilter<$PrismaModel = never> = {

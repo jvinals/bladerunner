@@ -11,6 +11,18 @@ const PROJECT_COLORS = [
   '#8B5CF6', '#14B8A6', '#84CC16', '#6366F1',
 ];
 
+function parseDiscoveryStepsJson(raw: Prisma.JsonValue | null | undefined): Record<string, unknown>[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const x of raw) {
+    if (x !== null && typeof x === 'object' && !Array.isArray(x)) {
+      out.push(x as Record<string, unknown>);
+    }
+  }
+  return out;
+}
+
 @Injectable()
 export class ProjectsService {
   constructor(
@@ -116,6 +128,7 @@ export class ProjectsService {
       discoveryStructured: k?.discoveryStructured ?? null,
       discoveryNavigationMermaid: k?.discoveryNavigationMermaid ?? null,
       discoveryAgentLogFile: k?.discoveryAgentLogFile ?? null,
+      discoverySteps: parseDiscoveryStepsJson(k?.discoveryStepsJson),
       updatedAt: k?.updatedAt?.toISOString() ?? null,
     };
   }

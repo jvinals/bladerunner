@@ -61,6 +61,7 @@ export type ProjectAgentKnowledgeCountAggregateOutputType = {
   discoveryStructured: number
   discoveryNavigationMermaid: number
   discoveryAgentLogFile: number
+  discoveryStepsJson: number
   updatedAt: number
   _all: number
 }
@@ -103,6 +104,7 @@ export type ProjectAgentKnowledgeCountAggregateInputType = {
   discoveryStructured?: true
   discoveryNavigationMermaid?: true
   discoveryAgentLogFile?: true
+  discoveryStepsJson?: true
   updatedAt?: true
   _all?: true
 }
@@ -190,6 +192,7 @@ export type ProjectAgentKnowledgeGroupByOutputType = {
   discoveryStructured: runtime.JsonValue | null
   discoveryNavigationMermaid: string | null
   discoveryAgentLogFile: string | null
+  discoveryStepsJson: runtime.JsonValue | null
   updatedAt: Date
   _count: ProjectAgentKnowledgeCountAggregateOutputType | null
   _min: ProjectAgentKnowledgeMinAggregateOutputType | null
@@ -225,6 +228,7 @@ export type ProjectAgentKnowledgeWhereInput = {
   discoveryStructured?: Prisma.JsonNullableFilter<"ProjectAgentKnowledge">
   discoveryNavigationMermaid?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   discoveryAgentLogFile?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
+  discoveryStepsJson?: Prisma.JsonNullableFilter<"ProjectAgentKnowledge">
   updatedAt?: Prisma.DateTimeFilter<"ProjectAgentKnowledge"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
 }
@@ -240,6 +244,7 @@ export type ProjectAgentKnowledgeOrderByWithRelationInput = {
   discoveryStructured?: Prisma.SortOrderInput | Prisma.SortOrder
   discoveryNavigationMermaid?: Prisma.SortOrderInput | Prisma.SortOrder
   discoveryAgentLogFile?: Prisma.SortOrderInput | Prisma.SortOrder
+  discoveryStepsJson?: Prisma.SortOrderInput | Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
 }
@@ -258,6 +263,7 @@ export type ProjectAgentKnowledgeWhereUniqueInput = Prisma.AtLeast<{
   discoveryStructured?: Prisma.JsonNullableFilter<"ProjectAgentKnowledge">
   discoveryNavigationMermaid?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
   discoveryAgentLogFile?: Prisma.StringNullableFilter<"ProjectAgentKnowledge"> | string | null
+  discoveryStepsJson?: Prisma.JsonNullableFilter<"ProjectAgentKnowledge">
   updatedAt?: Prisma.DateTimeFilter<"ProjectAgentKnowledge"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
 }, "projectId">
@@ -273,6 +279,7 @@ export type ProjectAgentKnowledgeOrderByWithAggregationInput = {
   discoveryStructured?: Prisma.SortOrderInput | Prisma.SortOrder
   discoveryNavigationMermaid?: Prisma.SortOrderInput | Prisma.SortOrder
   discoveryAgentLogFile?: Prisma.SortOrderInput | Prisma.SortOrder
+  discoveryStepsJson?: Prisma.SortOrderInput | Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.ProjectAgentKnowledgeCountOrderByAggregateInput
   _max?: Prisma.ProjectAgentKnowledgeMaxOrderByAggregateInput
@@ -293,6 +300,7 @@ export type ProjectAgentKnowledgeScalarWhereWithAggregatesInput = {
   discoveryStructured?: Prisma.JsonNullableWithAggregatesFilter<"ProjectAgentKnowledge">
   discoveryNavigationMermaid?: Prisma.StringNullableWithAggregatesFilter<"ProjectAgentKnowledge"> | string | null
   discoveryAgentLogFile?: Prisma.StringNullableWithAggregatesFilter<"ProjectAgentKnowledge"> | string | null
+  discoveryStepsJson?: Prisma.JsonNullableWithAggregatesFilter<"ProjectAgentKnowledge">
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"ProjectAgentKnowledge"> | Date | string
 }
 
@@ -306,6 +314,7 @@ export type ProjectAgentKnowledgeCreateInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: string | null
   discoveryAgentLogFile?: string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutAgentKnowledgeInput
 }
@@ -321,6 +330,7 @@ export type ProjectAgentKnowledgeUncheckedCreateInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: string | null
   discoveryAgentLogFile?: string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Date | string
 }
 
@@ -334,6 +344,7 @@ export type ProjectAgentKnowledgeUpdateInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryAgentLogFile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutAgentKnowledgeNestedInput
 }
@@ -349,6 +360,7 @@ export type ProjectAgentKnowledgeUncheckedUpdateInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryAgentLogFile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -363,6 +375,7 @@ export type ProjectAgentKnowledgeCreateManyInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: string | null
   discoveryAgentLogFile?: string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Date | string
 }
 
@@ -376,6 +389,7 @@ export type ProjectAgentKnowledgeUpdateManyMutationInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryAgentLogFile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -390,6 +404,7 @@ export type ProjectAgentKnowledgeUncheckedUpdateManyInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryAgentLogFile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -409,6 +424,7 @@ export type ProjectAgentKnowledgeCountOrderByAggregateInput = {
   discoveryStructured?: Prisma.SortOrder
   discoveryNavigationMermaid?: Prisma.SortOrder
   discoveryAgentLogFile?: Prisma.SortOrder
+  discoveryStepsJson?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -488,6 +504,7 @@ export type ProjectAgentKnowledgeCreateWithoutProjectInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: string | null
   discoveryAgentLogFile?: string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Date | string
 }
 
@@ -501,6 +518,7 @@ export type ProjectAgentKnowledgeUncheckedCreateWithoutProjectInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: string | null
   discoveryAgentLogFile?: string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Date | string
 }
 
@@ -530,6 +548,7 @@ export type ProjectAgentKnowledgeUpdateWithoutProjectInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryAgentLogFile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -543,6 +562,7 @@ export type ProjectAgentKnowledgeUncheckedUpdateWithoutProjectInput = {
   discoveryStructured?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   discoveryNavigationMermaid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   discoveryAgentLogFile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  discoveryStepsJson?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -559,6 +579,7 @@ export type ProjectAgentKnowledgeSelect<ExtArgs extends runtime.Types.Extensions
   discoveryStructured?: boolean
   discoveryNavigationMermaid?: boolean
   discoveryAgentLogFile?: boolean
+  discoveryStepsJson?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectAgentKnowledge"]>
@@ -574,6 +595,7 @@ export type ProjectAgentKnowledgeSelectCreateManyAndReturn<ExtArgs extends runti
   discoveryStructured?: boolean
   discoveryNavigationMermaid?: boolean
   discoveryAgentLogFile?: boolean
+  discoveryStepsJson?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectAgentKnowledge"]>
@@ -589,6 +611,7 @@ export type ProjectAgentKnowledgeSelectUpdateManyAndReturn<ExtArgs extends runti
   discoveryStructured?: boolean
   discoveryNavigationMermaid?: boolean
   discoveryAgentLogFile?: boolean
+  discoveryStepsJson?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectAgentKnowledge"]>
@@ -604,10 +627,11 @@ export type ProjectAgentKnowledgeSelectScalar = {
   discoveryStructured?: boolean
   discoveryNavigationMermaid?: boolean
   discoveryAgentLogFile?: boolean
+  discoveryStepsJson?: boolean
   updatedAt?: boolean
 }
 
-export type ProjectAgentKnowledgeOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"projectId" | "manualInstructions" | "discoveryStatus" | "discoveryStartedAt" | "discoveryCompletedAt" | "discoveryError" | "discoverySummaryMarkdown" | "discoveryStructured" | "discoveryNavigationMermaid" | "discoveryAgentLogFile" | "updatedAt", ExtArgs["result"]["projectAgentKnowledge"]>
+export type ProjectAgentKnowledgeOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"projectId" | "manualInstructions" | "discoveryStatus" | "discoveryStartedAt" | "discoveryCompletedAt" | "discoveryError" | "discoverySummaryMarkdown" | "discoveryStructured" | "discoveryNavigationMermaid" | "discoveryAgentLogFile" | "discoveryStepsJson" | "updatedAt", ExtArgs["result"]["projectAgentKnowledge"]>
 export type ProjectAgentKnowledgeInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }
@@ -640,6 +664,10 @@ export type $ProjectAgentKnowledgePayload<ExtArgs extends runtime.Types.Extensio
      * Basename of the last discovery agent log file under repo `docs/logs/` (NDJSON lines).
      */
     discoveryAgentLogFile: string | null
+    /**
+     * Latest discovery run: ordered step records (orchestrator + LLM explore); cleared when a new run starts.
+     */
+    discoveryStepsJson: runtime.JsonValue | null
     updatedAt: Date
   }, ExtArgs["result"]["projectAgentKnowledge"]>
   composites: {}
@@ -1075,6 +1103,7 @@ export interface ProjectAgentKnowledgeFieldRefs {
   readonly discoveryStructured: Prisma.FieldRef<"ProjectAgentKnowledge", 'Json'>
   readonly discoveryNavigationMermaid: Prisma.FieldRef<"ProjectAgentKnowledge", 'String'>
   readonly discoveryAgentLogFile: Prisma.FieldRef<"ProjectAgentKnowledge", 'String'>
+  readonly discoveryStepsJson: Prisma.FieldRef<"ProjectAgentKnowledge", 'Json'>
   readonly updatedAt: Prisma.FieldRef<"ProjectAgentKnowledge", 'DateTime'>
 }
     

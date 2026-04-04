@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { LlmService } from '../llm/llm.service';
@@ -41,6 +42,24 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new DOMException('Discovery cancelled', 'AbortError');
 }
 
+/** Collapse whitespace so near-identical snippets dedupe for attempt limits. */
+function normalizeDiscoveryPlaywrightCode(code: string): string {
+  return code.replace(/\s+/g, ' ').trim();
+}
+
+/** Persisted in `project_agent_knowledge.discovery_steps_json` for the latest run. */
+export type DiscoveryRunStepJson = {
+  id: string;
+  sequence: number;
+  kind: 'orchestrator_goto' | 'orchestrator_auth' | 'llm_explore';
+  title: string;
+  playwrightCode?: string;
+  outcome?: 'success' | 'failed' | 'blocked';
+  error?: string;
+  thinkingStructured?: Record<string, unknown>;
+  createdAt: string;
+};
+
 /**
  * LLM-driven breadth-first exploration + final evidence-based report.
  */
@@ -55,6 +74,25 @@ export class ProjectDiscoveryService {
     private readonly recording: RecordingService,
     private readonly llm: LlmService,
   ) {}
+
+  private async appendDiscoveryStep(
+    projectId: string,
+    steps: DiscoveryRunStepJson[],
+    row: Omit<DiscoveryRunStepJson, 'id' | 'sequence' | 'createdAt'>,
+  ): Promise<void> {
+    const sequence = steps.length + 1;
+    const full: DiscoveryRunStepJson = {
+      id: randomUUID(),
+      sequence,
+      createdAt: new Date().toISOString(),
+      ...row,
+    };
+    steps.push(full);
+    await this.prisma.projectAgentKnowledge.update({
+      where: { projectId },
+      data: { discoveryStepsJson: steps as unknown as Prisma.InputJsonValue },
+    });
+  }
 
   /** True when this Node process has an in-flight discovery job (lost on restart; DB may still say queued/running). */
   isDiscoveryBusy(projectId: string): boolean {
@@ -97,11 +135,12 @@ export class ProjectDiscoveryService {
 
     await this.prisma.projectAgentKnowledge.upsert({
       where: { projectId },
-      create: { projectId, discoveryStatus: 'queued', discoveryNavigationMermaid: null },
+      create: { projectId, discoveryStatus: 'queued', discoveryNavigationMermaid: null, discoveryStepsJson: [] },
       update: {
         discoveryStatus: 'queued',
         discoveryError: null,
         discoveryNavigationMermaid: null,
+        discoveryStepsJson: [],
       },
     });
 
@@ -122,6 +161,7 @@ export class ProjectDiscoveryService {
     const emitLlmExchange = (message: string, payload: DiscoveryLlmExchangePayload) =>
       this.recording.emitDiscoveryDebugLog(projectId, message, { llm: payload });
     let finalMermaid: string | null = null;
+    const discoverySteps: DiscoveryRunStepJson[] = [];
     try {
       throwIfAborted(signal);
       const project = await this.prisma.project.findFirst({
@@ -141,6 +181,7 @@ export class ProjectDiscoveryService {
           discoveryStartedAt: new Date(),
           discoveryError: null,
           discoveryNavigationMermaid: null,
+          discoveryStepsJson: [],
         },
       });
       log('Status set to running; persisting discoveryStartedAt');
@@ -153,6 +194,12 @@ export class ProjectDiscoveryService {
       log('Navigating to base URL (domcontentloaded)', { url: project.url.trim() });
       await this.recording.discoveryGoto(discoverySessionId, userId, project.url.trim());
       log('Initial navigation finished');
+      await this.appendDiscoveryStep(projectId, discoverySteps, {
+        kind: 'orchestrator_goto',
+        title: 'Load project URL',
+        playwrightCode: `await page.goto(${JSON.stringify(project.url.trim())}, { waitUntil: 'domcontentloaded', timeout: 120_000 });`,
+        outcome: 'success',
+      });
 
       const authState = { clerkFullSignInDone: false };
       /** Match evaluations: attempt assist whenever a test email is set (Clerk can use env credentials; generic still needs password in project). */
@@ -184,6 +231,14 @@ export class ProjectDiscoveryService {
         await sleepMsOrAbort(1200, signal);
       }
       await this.recording.discoveryWaitForDomContentLoaded(discoverySessionId, userId);
+      await this.appendDiscoveryStep(projectId, discoverySteps, {
+        kind: 'orchestrator_auth',
+        title: 'Automatic sign-in',
+        outcome: authState.clerkFullSignInDone ? 'success' : 'failed',
+        error: authState.clerkFullSignInDone
+          ? undefined
+          : 'Sign-in assist did not complete within iteration budget',
+      });
       /** Let SPAs hydrate after auth before exploration. */
       log('Waiting 2.5s for SPA to settle after auth');
       await sleepMsOrAbort(2500, signal);
@@ -203,14 +258,23 @@ export class ProjectDiscoveryService {
       const explorationLogLines: string[] = [];
       let stepIndex = 0;
       let consecutiveFailures = 0;
-      /** Feed Playwright failure back to the next LLM explore call so it does not repeat the same locator. */
-      let lastExecutionFailure: { code: string; error: string } | undefined;
+      /** Last executed snippet + outcome for the next explore call (success or failure). */
+      let lastStepOutcome: { code: string; ok: boolean; error?: string } | undefined;
+      /** Count executions per normalized playwrightCode (max 2 runs; 3rd identical is blocked). */
+      const codeAttemptCounts = new Map<string, number>();
       const navTree = new DiscoveryNavigationTree(DISCOVERY_MAX_NAV_DEPTH);
       navTree.syncFromVisitedScreens(this.recording.getDiscoveryVisitedScreens(discoverySessionId));
       finalMermaid = navTree.toMermaid();
       this.recording.emitDiscoveryNavigationMermaid(projectId, finalMermaid);
 
+      let explorationLoopIterations = 0;
       while (stepIndex < DISCOVERY_MAX_EXPLORATION_STEPS && Date.now() - explorationStartedAt < DISCOVERY_MAX_WALL_MS) {
+        explorationLoopIterations += 1;
+        if (explorationLoopIterations > DISCOVERY_MAX_EXPLORATION_STEPS * 4) {
+          log('Exploration ended: loop guard (too many iterations without advancing steps)');
+          explorationLogLines.push('Exploration stopped: internal loop guard (duplicate-code retries).');
+          break;
+        }
         throwIfAborted(signal);
         const elapsedMs = Date.now() - explorationStartedAt;
         log(`Exploration loop iteration (completed steps: ${stepIndex})`, {
@@ -260,7 +324,7 @@ export class ProjectDiscoveryService {
           navigationTreeSummary: navTree.formatSummaryForLlm(),
           maxNavDepth: DISCOVERY_MAX_NAV_DEPTH,
           currentNavDepth: navTree.depthOf(navTree.focusId),
-          lastExecutionFailure,
+          lastStepOutcome,
         };
 
         let plan = await this.llm.projectDiscoveryExploreStep(exploreBase, {
@@ -311,6 +375,45 @@ export class ProjectDiscoveryService {
           break;
         }
 
+        const rawPw = plan.playwrightCode.trim();
+        const pwKey = normalizeDiscoveryPlaywrightCode(rawPw);
+        const priorAttempts = codeAttemptCounts.get(pwKey) ?? 0;
+        if (priorAttempts >= 2) {
+          const blockedMsg =
+            'Blocked: identical playwrightCode was already executed twice; use a different locator, scope, or interaction.';
+          lastStepOutcome = { code: plan.playwrightCode, ok: false, error: blockedMsg };
+          explorationLogLines.push(
+            `Step ${stepIndex + 1} BLOCKED (same normalized code would be 3rd attempt): ${rawPw.slice(0, 400)}`,
+          );
+          log('Discovery explore blocked duplicate playwrightCode', {
+            priorAttempts,
+            keyPreview: pwKey.slice(0, 240),
+          });
+          await this.appendDiscoveryStep(projectId, discoverySteps, {
+            kind: 'llm_explore',
+            title: (plan.reason?.slice(0, 200) || 'Explore step').trim(),
+            playwrightCode: plan.playwrightCode,
+            thinkingStructured: plan.thinkingStructured as unknown as Record<string, unknown> | undefined,
+            outcome: 'blocked',
+            error: blockedMsg,
+          });
+          // #region agent log
+          fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+            body: JSON.stringify({
+              sessionId: 'ba63e6',
+              location: 'project-discovery.service.ts:discovery_duplicate_blocked',
+              message: 'discovery duplicate playwright blocked',
+              data: { hypothesisId: 'H2', priorAttempts, keyPreview: pwKey.slice(0, 200) },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+          await sleepMsOrAbort(500, signal);
+          continue;
+        }
+
         let stepOk = false;
         try {
           log('Executing Playwright snippet from explore step');
@@ -320,6 +423,8 @@ export class ProjectDiscoveryService {
             plan.playwrightCode,
           );
           log('Playwright snippet completed');
+          codeAttemptCounts.set(pwKey, (codeAttemptCounts.get(pwKey) ?? 0) + 1);
+          lastStepOutcome = { code: plan.playwrightCode, ok: true };
           const codePreview =
             plan.playwrightCode.length > 500 ? `${plan.playwrightCode.slice(0, 500)}…` : plan.playwrightCode;
           explorationLogLines.push(
@@ -327,14 +432,18 @@ export class ProjectDiscoveryService {
           );
           consecutiveFailures = 0;
           stepOk = true;
-          lastExecutionFailure = undefined;
+          await this.appendDiscoveryStep(projectId, discoverySteps, {
+            kind: 'llm_explore',
+            title: (plan.reason?.slice(0, 200) || 'Explore step').trim(),
+            playwrightCode: plan.playwrightCode,
+            thinkingStructured: plan.thinkingStructured as unknown as Record<string, unknown> | undefined,
+            outcome: 'success',
+          });
         } catch (err) {
           consecutiveFailures += 1;
           const msg = err instanceof Error ? err.message : String(err);
-          lastExecutionFailure = {
-            code: plan.playwrightCode ?? '',
-            error: msg,
-          };
+          codeAttemptCounts.set(pwKey, (codeAttemptCounts.get(pwKey) ?? 0) + 1);
+          lastStepOutcome = { code: plan.playwrightCode ?? '', ok: false, error: msg };
           // #region agent log
           fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
             method: 'POST',
@@ -350,6 +459,14 @@ export class ProjectDiscoveryService {
           // #endregion
           log('Playwright snippet failed', { error: msg.slice(0, 800), consecutiveFailures });
           explorationLogLines.push(`Step ${stepIndex + 1} FAILED: ${msg}`);
+          await this.appendDiscoveryStep(projectId, discoverySteps, {
+            kind: 'llm_explore',
+            title: (plan.reason?.slice(0, 200) || 'Explore step').trim(),
+            playwrightCode: plan.playwrightCode,
+            thinkingStructured: plan.thinkingStructured as unknown as Record<string, unknown> | undefined,
+            outcome: 'failed',
+            error: msg,
+          });
           if (consecutiveFailures >= 5) {
             log('Aborting exploration after 5 consecutive Playwright failures');
             explorationLogLines.push('Aborted exploration after 5 consecutive failures.');
@@ -428,6 +545,7 @@ export class ProjectDiscoveryService {
           discoveryStructured: structuredMerged as object,
           discoveryNavigationMermaid: finalMermaid,
           discoveryError: null,
+          discoveryStepsJson: discoverySteps as unknown as Prisma.InputJsonValue,
         },
       });
       log('Discovery run completed successfully');
@@ -453,6 +571,7 @@ export class ProjectDiscoveryService {
             discoveryStatus: 'failed',
             discoveryCompletedAt: new Date(),
             discoveryError: msg.slice(0, 8000),
+            discoveryStepsJson: discoverySteps as unknown as Prisma.InputJsonValue,
             ...(partialMermaid ? { discoveryNavigationMermaid: partialMermaid } : {}),
           },
         })
