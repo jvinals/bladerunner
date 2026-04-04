@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.177`: **Evaluations — JPEG preview shows LLM text context** — Codegen/analyzer JPEG modal now includes **expandable** Set-of-Marks manifest + accessibility snapshot (same fields as in the multimodal user prompt), with copy explaining the model names controls from **text** as well as pixels. Removed temporary evaluation-orchestrator debug ingest hooks. `@bladerunner/api 0.6.136`, `@bladerunner/web 0.7.104`.
+
 - `0.10.176`: **Evaluations — viewport JPEG preview** — Codegen/analyzer JPEG modal uses **Blob URLs**, **object-fit contain** + max height so **full-page** screenshots scale into view (avoids a “blank” strip from only seeing the top white margin). Neutral background + short note that the model also reads **SOM manifest** and **accessibility** text. `@bladerunner/web 0.7.103`.
 
 - `0.10.175`: **Evaluations — codegen JSON thinking as structured object** — **Codegen outputs (JSON)** (and related raw blocks) show `thinking` as nested JSON (`observation`, `needsToDoAndWhy`, …) when `thinkingStructured` exists or when legacy prose uses `Observation:` / `What to do and why:` / … labels; duplicate `thinkingStructured` is omitted from the display object. `@bladerunner/web 0.7.102`.

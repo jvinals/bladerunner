@@ -10,7 +10,11 @@ import { LlmPromptPreviewIconButton, getLlmPromptsFromStepJson } from '@/compone
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
 import {
   ViewportJpegPreviewIconButton,
+  getAnalyzerAccessibilitySnapshotFromAnalyzerInput,
+  getAnalyzerSomFromAnalyzerInput,
   getAnalyzerViewportJpegBase64,
+  getCodegenAccessibilitySnapshotFromCodegenInput,
+  getCodegenSomManifestFromCodegenInput,
   getCodegenViewportJpegBase64,
   omitBinaryPreviewKeys,
 } from '@/components/ui/ViewportJpegPreviewIconButton';
@@ -231,6 +235,8 @@ export function EvaluationStepCard({
               />
               <ViewportJpegPreviewIconButton
                 base64={getCodegenViewportJpegBase64(st.codegenInputJson)}
+                somManifestText={getCodegenSomManifestFromCodegenInput(st.codegenInputJson)}
+                accessibilitySnapshotText={getCodegenAccessibilitySnapshotFromCodegenInput(st.codegenInputJson)}
                 icon={Image}
                 modalTitle="Codegen — full-page Set-of-Marks JPEG sent to the model"
                 openLabel="Preview JPEG sent to the codegen model"
@@ -303,6 +309,8 @@ export function EvaluationStepCard({
               />
               <ViewportJpegPreviewIconButton
                 base64={getAnalyzerViewportJpegBase64(st.analyzerInputJson)}
+                somManifestText={getAnalyzerSomFromAnalyzerInput(st.analyzerInputJson)}
+                accessibilitySnapshotText={getAnalyzerAccessibilitySnapshotFromAnalyzerInput(st.analyzerInputJson)}
                 icon={ScanSearch}
                 modalTitle="Analyzer — after-step full-page Set-of-Marks JPEG"
                 openLabel="Preview after-step JPEG sent to the analyzer"

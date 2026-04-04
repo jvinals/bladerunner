@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
@@ -27,63 +26,6 @@ function isAbortOrTimeoutError(e: unknown): boolean {
   }
   return false;
 }
-
-// #region agent log
-const DEBUG_INGEST = 'http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43';
-const DEBUG_SESSION = 'ba63e6';
-
-function dbgEvalStep(
-  location: string,
-  message: string,
-  data: Record<string, unknown>,
-  hypothesisId: string,
-): void {
-  fetch(DEBUG_INGEST, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': DEBUG_SESSION },
-    body: JSON.stringify({
-      sessionId: DEBUG_SESSION,
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-}
-
-/** Decode diagnostics for persisted / LLM viewport JPEG (no raw base64 in logs). */
-function dbgJpegDiagnosticsFromBase64(b64: string): Record<string, unknown> {
-  const s = b64.trim();
-  const startsWithDataUrl = /^data:image\/[^;]+;base64,/i.test(s);
-  let raw = s;
-  if (startsWithDataUrl) {
-    const comma = s.indexOf(',');
-    raw = comma >= 0 ? s.slice(comma + 1) : s;
-  }
-  const normalized = raw.replace(/\s/g, '');
-  let jpegMagicHex = 'n/a';
-  let decodeErr = false;
-  let bufLen = 0;
-  try {
-    const buf = Buffer.from(normalized, 'base64');
-    bufLen = buf.length;
-    jpegMagicHex = buf.subarray(0, Math.min(3, buf.length)).toString('hex');
-  } catch {
-    decodeErr = true;
-  }
-  return {
-    base64OuterLen: s.length,
-    base64PayloadLen: normalized.length,
-    startsWithDataUrl,
-    jpegMagicHex,
-    jpegLooksValid: jpegMagicHex === 'ffd8ff',
-    decodedByteLen: bufLen,
-    decodeErr,
-    hasNewlinesInPayload: /\r|\n/.test(raw),
-  };
-}
-// #endregion
 
 export type EvaluationScheduleOpts = {
   resumeAfterHuman?: boolean;
@@ -280,15 +222,7 @@ export class EvaluationOrchestratorService {
           sequence,
           ...detail,
         });
-      // #region agent log
       const stepWallStart = Date.now();
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:step_start',
-        'step iteration start',
-        { evaluationId, sequence, autoSignIn: fresh.autoSignIn },
-        'H0',
-      );
-      // #endregion
       trace('Iteration started', {
         autoSignIn: fresh.autoSignIn,
         pageUrl: page.url(),
@@ -300,14 +234,6 @@ export class EvaluationOrchestratorService {
         progressSummaryBefore,
         pageUrl: page.url(),
       });
-      // #region agent log
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:after_proposing_emit',
-        'emitted proposing',
-        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
-        'H1',
-      );
-      // #endregion
 
       /** Until `authState.clerkFullSignInDone`, each step may land on login (step 1, 2, …); the recording layer only acts when the page looks like sign-in. After any successful assist, never call again. */
       let lastSignInDurationMs = 0;
@@ -338,20 +264,6 @@ export class EvaluationOrchestratorService {
       } else {
         trace('Auto sign-in: skipped (evaluation.autoSignIn is false)');
       }
-      // #region agent log
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:after_auto_sign_in',
-        'after auto sign-in block',
-        {
-          evaluationId,
-          sequence,
-          elapsedMs: Date.now() - stepWallStart,
-          autoSignInAttempted: autoSignInPending,
-          clerkFullSignInDoneAfter: authState.clerkFullSignInDone,
-        },
-        'H1',
-      );
-      // #endregion
 
       if (llmStepCount === 0 && fresh.autoSignIn) {
         const signInRow = await this.prisma.evaluationStep.findFirst({
@@ -398,14 +310,6 @@ export class EvaluationOrchestratorService {
         throw new Error('Evaluation codegen capture produced no screenshot');
       }
       const pageUrl = codegenCtx.pageUrl;
-      // #region agent log
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:after_codegen_capture',
-        'after captureEvaluationLlmPageContext',
-        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
-        'H2',
-      );
-      // #endregion
       trace('Codegen capture: finished', {
         ms: Date.now() - tCap,
         pageUrl,
@@ -413,19 +317,6 @@ export class EvaluationOrchestratorService {
         somManifestChars: codegenCtx.somManifest?.length ?? 0,
         accessibilitySnapshotChars: codegenCtx.accessibilitySnapshot?.length ?? 0,
       });
-      // #region agent log
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:codegen_viewport_jpeg_diagnostics',
-        'same screenshotB64 -> codegenInputJson.viewportJpegBase64 + LLM image',
-        {
-          evaluationId,
-          sequence,
-          pageUrl,
-          ...dbgJpegDiagnosticsFromBase64(screenshotB64),
-        },
-        'H1',
-      );
-      // #endregion
 
       const priorStepsDesc = await this.prisma.evaluationStep.findMany({
         where: { evaluationId, stepKind: 'LLM' },
@@ -461,14 +352,6 @@ export class EvaluationOrchestratorService {
           'Full-page Set-of-Marks JPEG + SOM manifest + CDP accessibility sent to codegen (viewportJpegBase64 for UI preview).',
       };
 
-      // #region agent log
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:before_codegen_llm',
-        'before evaluationProposePlaywrightStep',
-        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
-        'H3',
-      );
-      // #endregion
       trace('Codegen LLM: calling evaluationProposePlaywrightStep', {
         timeoutMs: evaluationCodegenTimeoutMs(),
         msSinceStepStart: Date.now() - stepWallStart,
@@ -498,14 +381,6 @@ export class EvaluationOrchestratorService {
           onDebugLog: (m, d) => trace(m, d),
         },
       );
-      // #region agent log
-      dbgEvalStep(
-        'evaluation-orchestrator.service.ts:after_codegen_llm',
-        'after evaluationProposePlaywrightStep',
-        { evaluationId, sequence, elapsedMs: Date.now() - stepWallStart },
-        'H3',
-      );
-      // #endregion
 
       const codegenOutputJson = {
         ...(proposed.thinkingStructured ? { thinkingStructured: proposed.thinkingStructured } : {}),
@@ -534,29 +409,6 @@ export class EvaluationOrchestratorService {
         expectedOutcome: proposed.expectedOutcome,
       });
       trace('Persisted evaluation step row (codegen inputs + outputs)', { stepTitle: proposed.stepTitle });
-      // #region agent log
-      try {
-        const row = await this.prisma.evaluationStep.findFirst({
-          where: { evaluationId, sequence },
-          select: { codegenInputJson: true },
-        });
-        const ci = row?.codegenInputJson as Record<string, unknown> | null | undefined;
-        const vp = typeof ci?.viewportJpegBase64 === 'string' ? ci.viewportJpegBase64 : '';
-        dbgEvalStep(
-          'evaluation-orchestrator.service.ts:after_persist_codegen_input',
-          'read-back viewportJpegBase64 from DB',
-          {
-            evaluationId,
-            sequence,
-            ...dbgJpegDiagnosticsFromBase64(vp),
-            lengthMatchPersistVsCapture: vp.length === screenshotB64.length,
-          },
-          'H3',
-        );
-      } catch {
-        /* ignore */
-      }
-      // #endregion
 
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'executing',

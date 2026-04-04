@@ -9,6 +9,13 @@ export function normalizeJpegBase64Payload(s: string): string {
   return (m ? m[1] : t).replace(/\s/g, '');
 }
 
+const MAX_TEXT_PREVIEW_CHARS = 48_000;
+
+function truncatePreviewText(s: string): string {
+  if (s.length <= MAX_TEXT_PREVIEW_CHARS) return s;
+  return `${s.slice(0, MAX_TEXT_PREVIEW_CHARS)}\n\n… [truncated for UI; full text is in Codegen inputs JSON]`;
+}
+
 export type ViewportJpegPreviewIconButtonProps = {
   base64: string | undefined | null;
   modalTitle: string;
@@ -18,6 +25,13 @@ export type ViewportJpegPreviewIconButtonProps = {
   emptyLabel?: string;
   overlayClassName?: string;
   contentClassName?: string;
+  /**
+   * Same strings the codegen/analyzer model receives **in the user prompt** next to the JPEG
+   * (Set-of-Marks manifest + CDP accessibility). The model often names controls from this text
+   * even when the screenshot looks white or sparse.
+   */
+  somManifestText?: string | null;
+  accessibilitySnapshotText?: string | null;
 };
 
 /**
@@ -31,6 +45,8 @@ export function ViewportJpegPreviewIconButton({
   emptyLabel = 'No viewport JPEG stored for this step',
   overlayClassName = 'z-[130]',
   contentClassName = 'z-[131]',
+  somManifestText,
+  accessibilitySnapshotText,
 }: ViewportJpegPreviewIconButtonProps) {
   const [open, setOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'copiedText' | 'error'>('idle');
@@ -74,44 +90,6 @@ export function ViewportJpegPreviewIconButton({
       });
     };
   }, [open, has, base64]);
-
-  // #region agent log
-  useEffect(() => {
-    if (!open || !has || !base64) return;
-    const s = base64.trim();
-    const startsWithDataUrl = /^data:image\/[^;]+;base64,/i.test(s);
-    const normalized = normalizeJpegBase64Payload(base64);
-    let jpegMagicHex = 'n/a';
-    let decodeErr = false;
-    try {
-      const bin = atob(normalized);
-      jpegMagicHex = [...bin.slice(0, 3)]
-        .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
-        .join('');
-    } catch {
-      decodeErr = true;
-    }
-    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-      body: JSON.stringify({
-        sessionId: 'ba63e6',
-        hypothesisId: 'H4',
-        location: 'ViewportJpegPreviewIconButton.tsx:modal_open',
-        message: 'client viewport JPEG before img render',
-        data: {
-          base64OuterLen: s.length,
-          startsWithDataUrl,
-          jpegMagicHex,
-          jpegLooksValid: jpegMagicHex === 'ffd8ff',
-          decodeErr,
-          hasNewlinesInPayload: /\r|\n/.test(base64),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }, [open, has, base64]);
-  // #endregion
 
   const copyImage = useCallback(async () => {
     if (!has || !base64) return;
@@ -185,40 +163,46 @@ export function ViewportJpegPreviewIconButton({
                 </div>
               </div>
               <Dialog.Description className="sr-only">
-                Full-page JPEG scaled to fit; scroll if needed. The model also receives SOM manifest and accessibility text.
+                JPEG plus optional Set-of-Marks and accessibility text from the same request sent to the model.
               </Dialog.Description>
-              <p className="border-b border-gray-800 px-4 py-2 text-[11px] leading-snug text-gray-400">
-                Full-page capture (often very tall). Scaled to fit; scroll to pan. The codegen model also reads the Set-of-Marks
-                manifest and accessibility tree in text — reasoning may cite those even if this JPEG looks sparse or light.
+              <p className="border-b border-gray-800 px-4 py-2 text-[11px] leading-snug text-gray-300">
+                The model gets <span className="font-medium text-gray-100">one multimodal request</span>: this JPEG{' '}
+                <span className="font-medium text-gray-100">and</span> the numbered Set-of-Marks lines plus the CDP accessibility
+                tree (see below). It often names buttons and roles from that <span className="font-medium text-gray-100">text</span>{' '}
+                — not only from pixels — so thinking can mention &quot;Schedule Appointment&quot; even when the screenshot looks
+                blank or mostly white.
               </p>
-              <div className="min-h-[min(70vh,720px)] min-w-0 flex-1 overflow-auto bg-[#262626] p-3">
+              {somManifestText?.trim() || accessibilitySnapshotText?.trim() ? (
+                <div className="max-h-[40vh] min-h-0 shrink-0 overflow-y-auto border-b border-gray-800 bg-gray-900/80 px-4 py-2 space-y-2">
+                  {somManifestText?.trim() ? (
+                    <details className="group rounded border border-gray-700 bg-gray-950/80">
+                      <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-medium text-gray-200 marker:content-none [&::-webkit-details-marker]:hidden">
+                        Set-of-Marks manifest (same text as in the LLM user prompt)
+                      </summary>
+                      <pre className="max-h-32 overflow-auto border-t border-gray-800 px-2 py-2 text-[10px] leading-relaxed text-gray-300 whitespace-pre-wrap break-words">
+                        {truncatePreviewText(somManifestText.trim())}
+                      </pre>
+                    </details>
+                  ) : null}
+                  {accessibilitySnapshotText?.trim() ? (
+                    <details className="group rounded border border-gray-700 bg-gray-950/80">
+                      <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-medium text-gray-200 marker:content-none [&::-webkit-details-marker]:hidden">
+                        Accessibility snapshot (same text as in the LLM user prompt)
+                      </summary>
+                      <pre className="max-h-32 overflow-auto border-t border-gray-800 px-2 py-2 text-[10px] leading-relaxed text-gray-300 whitespace-pre-wrap break-words">
+                        {truncatePreviewText(accessibilitySnapshotText.trim())}
+                      </pre>
+                    </details>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="min-h-[min(50vh,560px)] min-w-0 flex-1 overflow-auto bg-[#262626] p-3">
                 {imgSrc ? (
                   <img
                     src={imgSrc}
                     alt=""
                     className="mx-auto block h-auto max-h-[min(85vh,920px)] w-full max-w-full object-contain"
                     draggable={false}
-                    onLoad={(e) => {
-                      // #region agent log
-                      const el = e.currentTarget;
-                      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-                        body: JSON.stringify({
-                          sessionId: 'ba63e6',
-                          hypothesisId: 'H5-postfix',
-                          location: 'ViewportJpegPreviewIconButton.tsx:img_onLoad',
-                          message: 'JPEG rendered in modal',
-                          data: {
-                            naturalWidth: el.naturalWidth,
-                            naturalHeight: el.naturalHeight,
-                            usesBlobUrl: el.src.startsWith('blob:'),
-                          },
-                          timestamp: Date.now(),
-                        }),
-                      }).catch(() => {});
-                      // #endregion
-                    }}
                   />
                 ) : null}
               </div>
@@ -237,10 +221,34 @@ export function getCodegenViewportJpegBase64(codegenInputJson: unknown): string 
   return typeof v === 'string' && v.length > 0 ? v : undefined;
 }
 
+export function getCodegenSomManifestFromCodegenInput(codegenInputJson: unknown): string | undefined {
+  if (codegenInputJson == null || typeof codegenInputJson !== 'object') return undefined;
+  const v = (codegenInputJson as Record<string, unknown>).somManifest;
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
+export function getCodegenAccessibilitySnapshotFromCodegenInput(codegenInputJson: unknown): string | undefined {
+  if (codegenInputJson == null || typeof codegenInputJson !== 'object') return undefined;
+  const v = (codegenInputJson as Record<string, unknown>).accessibilitySnapshot;
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
 /** Read persisted after-step viewport base64 from analyzer input JSON. */
 export function getAnalyzerViewportJpegBase64(analyzerInputJson: unknown): string | undefined {
   if (analyzerInputJson == null || typeof analyzerInputJson !== 'object') return undefined;
   const v = (analyzerInputJson as Record<string, unknown>).afterStepViewportJpegBase64;
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
+export function getAnalyzerSomFromAnalyzerInput(analyzerInputJson: unknown): string | undefined {
+  if (analyzerInputJson == null || typeof analyzerInputJson !== 'object') return undefined;
+  const v = (analyzerInputJson as Record<string, unknown>).somManifest;
+  return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+
+export function getAnalyzerAccessibilitySnapshotFromAnalyzerInput(analyzerInputJson: unknown): string | undefined {
+  if (analyzerInputJson == null || typeof analyzerInputJson !== 'object') return undefined;
+  const v = (analyzerInputJson as Record<string, unknown>).accessibilitySnapshot;
   return typeof v === 'string' && v.length > 0 ? v : undefined;
 }
 
