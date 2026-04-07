@@ -3716,29 +3716,223 @@ export class RecordingService extends EventEmitter {
     }
   }
 
+  private async applyFontsAndDoubleRaf(page: Page): Promise<void> {
+    try {
+      await page.evaluate(async () => {
+        try {
+          await document.fonts.ready;
+        } catch {
+          /* ignore */
+        }
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Visible interactive controls (main doc, shadow roots, same-origin iframes). Used for vision settle metrics. */
+  private async evaluateVisibleInteractiveCountForLlmSettle(page: Page): Promise<number> {
+    return page
+      .evaluate(() => {
+        const SELECTORS =
+          'button:not([disabled]), a[href], input:not([type="hidden"]), [role="button"], [role="link"], [role="tab"], [role="combobox"]';
+        const visibleIn = (root: Document | ShadowRoot): number => {
+          let n = 0;
+          for (const el of Array.from(root.querySelectorAll(SELECTORS))) {
+            if (!(el instanceof HTMLElement)) continue;
+            const st = window.getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 1 || r.height < 1) continue;
+            n++;
+          }
+          return n;
+        };
+        const countDoc = (doc: Document): number => {
+          let n = visibleIn(doc);
+          Array.from(doc.querySelectorAll('*')).forEach((host) => {
+            if (!(host instanceof HTMLElement)) return;
+            const sr = host.shadowRoot;
+            if (sr) n += visibleIn(sr);
+          });
+          return n;
+        };
+        let t = countDoc(document);
+        for (const fr of Array.from(document.querySelectorAll('iframe'))) {
+          try {
+            const d = (fr as HTMLIFrameElement).contentDocument;
+            if (d) t += countDoc(d);
+          } catch {
+            /* ignore */
+          }
+        }
+        return t;
+      })
+      .catch(() => 0);
+  }
+
   /**
-   * SPAs often paint after `domcontentloaded`. Wait for `load` and at least one interactive node
-   * before SOM + a11y + screenshot; otherwise Set-of-Marks lists only the header and a11y is a shell.
+   * SPAs often paint after `domcontentloaded`. Wait for `load` and at least one **visible** interactive
+   * node (main document + same-origin iframes) before SOM + a11y + screenshot; otherwise Set-of-Marks lists
+   * only the header and a11y is a shell. Also waits for network quiet, fonts, and a paint frame.
+   *
+   * When **≤2** visible interactives remain (common “shell” state), runs a **scroll nudge** and waits for more
+   * controls or body text — reduces near-white JPEGs where one tiny control sits in an empty canvas.
    */
   private async settlePageForLlmVisionCapture(page: Page, signal?: AbortSignal): Promise<void> {
     this.throwIfAborted(signal);
     await page.waitForLoadState('load', { timeout: 15_000 }).catch(() => {});
     this.throwIfAborted(signal);
+    await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
+    this.throwIfAborted(signal);
+    let settleTimedOut = false;
     try {
       await page.waitForFunction(
         () => {
-          const q = document.querySelectorAll(
-            'button:not([disabled]), a[href], input:not([type="hidden"]), [role="button"], [role="link"], [role="tab"], [role="combobox"]',
-          );
-          return q.length >= 1;
+          const SELECTORS =
+            'button:not([disabled]), a[href], input:not([type="hidden"]), [role="button"], [role="link"], [role="tab"], [role="combobox"]';
+          const visibleIn = (root: Document | ShadowRoot): number => {
+            let n = 0;
+            for (const el of Array.from(root.querySelectorAll(SELECTORS))) {
+              if (!(el instanceof HTMLElement)) continue;
+              const st = window.getComputedStyle(el);
+              if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') continue;
+              const r = el.getBoundingClientRect();
+              if (r.width < 1 || r.height < 1) continue;
+              n++;
+            }
+            return n;
+          };
+          const countDoc = (doc: Document): number => {
+            let n = visibleIn(doc);
+            Array.from(doc.querySelectorAll('*')).forEach((host) => {
+              if (!(host instanceof HTMLElement)) return;
+              const sr = host.shadowRoot;
+              if (sr) n += visibleIn(sr);
+            });
+            return n;
+          };
+          if (countDoc(document) >= 1) return true;
+          for (const fr of Array.from(document.querySelectorAll('iframe'))) {
+            try {
+              const d = (fr as HTMLIFrameElement).contentDocument;
+              if (d && countDoc(d) >= 1) return true;
+            } catch {
+              /* cross-origin */
+            }
+          }
+          return false;
         },
         { timeout: 20_000, polling: 300 },
       );
     } catch {
+      settleTimedOut = true;
       this.logger.warn(
         'settlePageForLlmVisionCapture: no interactive element within timeout; capturing anyway (may be blank shell)',
       );
     }
+    await this.applyFontsAndDoubleRaf(page);
+    this.throwIfAborted(signal);
+
+    let interactiveCountAfter = await this.evaluateVisibleInteractiveCountForLlmSettle(page);
+    let sparseShellRecovery = false;
+    let sparseShellRecoveryTimedOut = false;
+    if (interactiveCountAfter <= 2) {
+      sparseShellRecovery = true;
+      try {
+        await page.evaluate(async () => {
+          const h = Math.max(
+            document.documentElement?.scrollHeight ?? 0,
+            document.body?.scrollHeight ?? 0,
+            1,
+          );
+          window.scrollTo(0, 0);
+          await new Promise<void>((r) => requestAnimationFrame(() => r()));
+          const y = Math.min(Math.floor(h * 0.22), 1200);
+          window.scrollTo(0, y);
+          await new Promise<void>((r) => requestAnimationFrame(() => r()));
+          window.scrollTo(0, 0);
+          await new Promise<void>((r) => requestAnimationFrame(() => r()));
+        });
+      } catch {
+        /* ignore */
+      }
+      await this.applyFontsAndDoubleRaf(page);
+      this.throwIfAborted(signal);
+      try {
+        await page.waitForFunction(
+          () => {
+            const SELECTORS =
+              'button:not([disabled]), a[href], input:not([type="hidden"]), [role="button"], [role="link"], [role="tab"], [role="combobox"]';
+            const visibleIn = (root: Document | ShadowRoot): number => {
+              let n = 0;
+              for (const el of Array.from(root.querySelectorAll(SELECTORS))) {
+                if (!(el instanceof HTMLElement)) continue;
+                const st = window.getComputedStyle(el);
+                if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') continue;
+                const r = el.getBoundingClientRect();
+                if (r.width < 1 || r.height < 1) continue;
+                n++;
+              }
+              return n;
+            };
+            const countDoc = (doc: Document): number => {
+              let n = visibleIn(doc);
+              Array.from(doc.querySelectorAll('*')).forEach((host) => {
+                if (!(host instanceof HTMLElement)) return;
+                const sr = host.shadowRoot;
+                if (sr) n += visibleIn(sr);
+              });
+              return n;
+            };
+            let t = countDoc(document);
+            for (const fr of Array.from(document.querySelectorAll('iframe'))) {
+              try {
+                const d = (fr as HTMLIFrameElement).contentDocument;
+                if (d) t += countDoc(d);
+              } catch {
+                /* cross-origin */
+              }
+            }
+            const bodyText = (document.body?.innerText ?? '').trim();
+            return t >= 3 || bodyText.length >= 280;
+          },
+          { timeout: 12_000, polling: 400 },
+        );
+      } catch {
+        sparseShellRecoveryTimedOut = true;
+        this.logger.warn(
+          'settlePageForLlmVisionCapture: sparse-shell recovery did not reach richer content in time; capturing anyway',
+        );
+      }
+      await this.applyFontsAndDoubleRaf(page);
+      interactiveCountAfter = await this.evaluateVisibleInteractiveCountForLlmSettle(page);
+    }
+
+    this.throwIfAborted(signal);
+    // #region agent log
+    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+      body: JSON.stringify({
+        sessionId: 'ba63e6',
+        location: 'recording.service.ts:settlePageForLlmVisionCapture',
+        message: 'llm vision settle',
+        data: {
+          pageUrl: page.url(),
+          settleTimedOut,
+          interactiveCountAfter,
+          sparseShellRecovery,
+          sparseShellRecoveryTimedOut,
+          hypothesisId: 'H1',
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
   }
 
   private async captureLlmPageContext(
@@ -3796,6 +3990,39 @@ export class RecordingService extends EventEmitter {
         }));
       }
       screenshotBase64 = buf.toString('base64');
+      // #region agent log
+      {
+        let meanLuma = 0;
+        try {
+          const st = await sharp(buf).stats();
+          const r = st.channels[0]?.mean ?? 0;
+          const g = st.channels[1]?.mean ?? r;
+          const b = st.channels[2]?.mean ?? r;
+          meanLuma = 0.299 * r + 0.587 * g + 0.114 * b;
+        } catch {
+          /* ignore */
+        }
+        fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+          body: JSON.stringify({
+            sessionId: 'ba63e6',
+            location: 'recording.service.ts:captureLlmPageContext',
+            message: 'llm vision jpeg stats',
+            data: {
+              pageUrl,
+              bufLen: buf.length,
+              w: screenshotWidth,
+              h: screenshotHeight,
+              meanLuma: Math.round(meanLuma * 100) / 100,
+              somManifestChars: somManifest.length,
+              hypothesisId: 'H2',
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
     } catch (err) {
       /** Tagged screenshot is best-effort when overlay/screenshot fails; a11y snapshot was already captured. */
       this.logger.warn(`captureLlmPageContext: Set-of-Marks or screenshot failed (${err})`);
@@ -3811,6 +4038,39 @@ export class RecordingService extends EventEmitter {
         screenshotWidth = meta.width ?? undefined;
         screenshotHeight = meta.height ?? undefined;
         screenshotBase64 = buf.toString('base64');
+        // #region agent log
+        {
+          let meanLuma = 0;
+          try {
+            const st = await sharp(buf).stats();
+            const r = st.channels[0]?.mean ?? 0;
+            const g = st.channels[1]?.mean ?? r;
+            const b = st.channels[2]?.mean ?? r;
+            meanLuma = 0.299 * r + 0.587 * g + 0.114 * b;
+          } catch {
+            /* ignore */
+          }
+          fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+            body: JSON.stringify({
+              sessionId: 'ba63e6',
+              location: 'recording.service.ts:captureLlmPageContext:fallback',
+              message: 'llm vision jpeg stats (fallback screenshot)',
+              data: {
+                pageUrl,
+                bufLen: buf.length,
+                w: screenshotWidth,
+                h: screenshotHeight,
+                meanLuma: Math.round(meanLuma * 100) / 100,
+                somManifestChars: somManifest.length,
+                hypothesisId: 'H2',
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
       } catch {
         /* optional */
       }

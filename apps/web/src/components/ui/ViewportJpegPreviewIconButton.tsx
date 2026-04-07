@@ -170,7 +170,9 @@ export function ViewportJpegPreviewIconButton({
                 <span className="font-medium text-gray-100">and</span> the numbered Set-of-Marks lines plus the CDP accessibility
                 tree (see below). It often names buttons and roles from that <span className="font-medium text-gray-100">text</span>{' '}
                 — not only from pixels — so thinking can mention &quot;Schedule Appointment&quot; even when the screenshot looks
-                blank or mostly white.
+                blank or mostly white. <span className="font-medium text-gray-100">Step thinking</span> also uses{' '}
+                <span className="font-medium text-gray-100">prior steps and Playwright errors</span> (e.g. strict mode), so it may
+                discuss controls from an earlier screen than this frame.
               </p>
               {somManifestText?.trim() || accessibilitySnapshotText?.trim() ? (
                 <div className="max-h-[40vh] min-h-0 shrink-0 overflow-y-auto border-b border-gray-800 bg-gray-900/80 px-4 py-2 space-y-2">

@@ -2,6 +2,10 @@
 
 ## 2026-04-01
 
+- `0.10.180`: **Evaluations — sparse-shell vision recovery + preview copy** — When **≤2** visible interactives remain after initial settle, run a **scroll nudge** (lazy-mount friendly), wait for **≥3** controls or **longer body text**, then paint again before SOM + JPEG (logs: `sparseShellRecovery`, `sparseShellRecoveryTimedOut`). **JPEG preview** modal notes that **step thinking** also uses **prior steps and Playwright errors**, not only this frame. `@bladerunner/api 0.6.139`, `@bladerunner/web 0.7.105`.
+
+- `0.10.179`: **Evaluations — stronger vision settle (blank JPEG vs LLM text)** — `settlePageForLlmVisionCapture` now waits **`networkidle`** (best-effort), requires at least one **visible** interactive (not `opacity:0` / 0×0), counts **same-origin iframes** and **open shadow roots**, then **`document.fonts.ready`** + double **`requestAnimationFrame`** before SOM + JPEG. Ingest logs (debug session) record settle outcome + mean JPEG luma for verification. `@bladerunner/api 0.6.138`.
+
 - `0.10.178`: **Evaluations — wait for interactive DOM before vision capture** — `captureEvaluationLlmPageContext` now runs **`load`** + **`waitForFunction`** until at least one interactive element exists (up to ~20s) before SOM + a11y + JPEG, so empty SOM headers and blank screenshots from pre-hydration shells are much less likely. `@bladerunner/api 0.6.137`.
 
 - `0.10.177`: **Evaluations — JPEG preview shows LLM text context** — Codegen/analyzer JPEG modal now includes **expandable** Set-of-Marks manifest + accessibility snapshot (same fields as in the multimodal user prompt), with copy explaining the model names controls from **text** as well as pixels. Removed temporary evaluation-orchestrator debug ingest hooks. `@bladerunner/api 0.6.136`, `@bladerunner/web 0.7.104`.
