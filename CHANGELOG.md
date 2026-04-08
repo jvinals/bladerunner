@@ -2,6 +2,28 @@
 
 ## 2026-04-01
 
+- `0.10.191`: **Docs — LLM encryption env format** — `.env.example` notes that `LLM_CREDENTIALS_ENCRYPTION_KEY` must use **`KEY=value`** (a missing `=` merges name + value so the variable is never set).
+
+- `0.10.190`: **Settings — Save credentials not gated on encryption flag** — **Save** / **Save LLM settings** stay enabled while saving (typing a provider API key does not change server `LLM_CREDENTIALS_ENCRYPTION_KEY`). Amber copy clarifies **server encryption** vs **OpenRouter key**. `@bladerunner/web 0.7.112`.
+
+- `0.10.189`: **LLM credentials encryption env** — Clearer **503** when `LLM_CREDENTIALS_ENCRYPTION_KEY` is unset; **Settings** disables **Save** until encryption is configured and shows **openssl** instructions; **`.env.example`** documents the variable. `@bladerunner/api 0.6.147`, `@bladerunner/web 0.7.111`.
+
+- `0.10.188`: **Settings — LLM provider credentials blocked by task routing** — `PATCH /settings` applied **`usage` before `providerCredentials`**; any row with an **empty model** (e.g. provider switched before the catalog loaded) caused **400** and **skipped saving API keys** (often OpenRouter). **Provider credentials are persisted first**; invalid `usage` rows are **skipped** (warn log) instead of failing the whole patch. `@bladerunner/api 0.6.146`.
+
+- `0.10.187`: **Dev — "Failed to fetch" to API** — Vite proxy now targets **`127.0.0.1:3001`** (avoids `localhost` → `::1` vs IPv4 listen mismatches). `apiFetch` / `buildApiUrl` support optional **`VITE_API_URL`** with clearer network errors; API **CORS** allows **`http://127.0.0.1:5173`**. `.env.example` no longer implies you must set `VITE_API_URL` in dev (prefer omitting it so `/api` uses the proxy). `@bladerunner/web 0.7.110`, `@bladerunner/api 0.6.145`.
+
+- `0.10.186`: **Settings — AI/LLM empty provider list** — Removed temporary debug ingest / extra DB read from `getCapabilities`. When `GET /settings` returns no `providerDefinitions`, the AI tab now shows a clear message instead of blank task models and a missing credentials panel (`selectedProvider` was null). `@bladerunner/api 0.6.144`, `@bladerunner/web 0.7.109`.
+
+- `0.10.185`: **Debug — OpenRouter LLM settings persistence** — Runtime ingest logs for OpenRouter `capabilities` / masked-credentials (`H1`–`H3`) while investigating configured-state persistence. `@bladerunner/api 0.6.143`, `@bladerunner/web 0.7.108`.
+
+- `0.10.184`: **Settings — AI/LLM provider header layout** — **Save credentials** / Test / Refresh no longer sit in a tight two-column grid beside the title (which caused overlap on mid-width layouts). Title, help copy, and actions are **stacked** with normal flow. `@bladerunner/web 0.7.107`.
+
+- `0.10.183`: **Settings — LLM test uses in-form API key** — `POST /settings/llm/test-connection` accepts optional **`apiKey`** / **`baseUrl`** so **Test connection** validates what you typed before **Save** (merged with DB/env when a field is left blank). AI/LLM provider card: **Save credentials** button + short note that the top **Save LLM settings** also persists secrets. `@bladerunner/api 0.6.142`, `@bladerunner/web 0.7.106`.
+
+- `0.10.182`: **Evaluations — main crop luma vs screencast** — Stricter **DOM** gate (no more passing on ~72 chars + nav-only widgets); then **`waitUntilMainScreenshotNotMostlyWhite`** takes **`main`/`[role="main"]` JPEG crops** and repeats until **mean luma ≤232** or **10** rounds, with **`networkidle`** between tries (aligns capture closer to what the streamed video shows once ink lands). Ingest: **`main landmark crop luma`** per round (`hypothesisId` **H7**). `@bladerunner/api 0.6.141`.
+
+- `0.10.181`: **Evaluations — wait for hydrated `main` before vision capture** — After shell settle, **`waitForMainContentLandmarkHydrated`** waits (up to ~18s) until a visible **`main` / `[role="main"]`** region has **text**, **several widgets**, or a **sized iframe**, so dashboard chrome alone does not end capture with an empty center panel. Debug ingest logs **`main landmark probe`** (`mainRegions`, `maxText`, `maxWidgets`, `mainHydrationTimedOut`). `@bladerunner/api 0.6.140`.
+
 - `0.10.180`: **Evaluations — sparse-shell vision recovery + preview copy** — When **≤2** visible interactives remain after initial settle, run a **scroll nudge** (lazy-mount friendly), wait for **≥3** controls or **longer body text**, then paint again before SOM + JPEG (logs: `sparseShellRecovery`, `sparseShellRecoveryTimedOut`). **JPEG preview** modal notes that **step thinking** also uses **prior steps and Playwright errors**, not only this frame. `@bladerunner/api 0.6.139`, `@bladerunner/web 0.7.105`.
 
 - `0.10.179`: **Evaluations — stronger vision settle (blank JPEG vs LLM text)** — `settlePageForLlmVisionCapture` now waits **`networkidle`** (best-effort), requires at least one **visible** interactive (not `opacity:0` / 0×0), counts **same-origin iframes** and **open shadow roots**, then **`document.fonts.ready`** + double **`requestAnimationFrame`** before SOM + JPEG. Ingest logs (debug session) record settle outcome + mean JPEG luma for verification. `@bladerunner/api 0.6.138`.

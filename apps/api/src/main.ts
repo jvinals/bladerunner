@@ -29,9 +29,15 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
+  // CORS — allow both localhost and 127.0.0.1 (Vite dev) when using `VITE_API_URL` to hit the API directly
+  const corsFromEnv = process.env.CORS_ORIGIN?.trim();
+  const corsOrigin = corsFromEnv
+    ? corsFromEnv.includes(',')
+      ? corsFromEnv.split(',').map((s) => s.trim())
+      : corsFromEnv
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'];
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: corsOrigin,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });

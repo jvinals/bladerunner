@@ -190,7 +190,7 @@ export class LlmConfigService {
   ): Promise<void> {
     if (!this.crypto.isConfigured()) {
       throw new ServiceUnavailableException(
-        'LLM_CREDENTIALS_ENCRYPTION_KEY is not configured on the API server.',
+        'LLM_CREDENTIALS_ENCRYPTION_KEY is not set on the API. Add a base64-encoded 32-byte key to apps/api/.env or the repo root .env (API loads both), then restart: openssl rand -base64 32',
       );
     }
     const existing = await this.readUserLlmCredentialsJson(userId);

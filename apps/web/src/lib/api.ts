@@ -1,4 +1,27 @@
-const API_BASE = '/api';
+/**
+ * Resolved API URL for browser `fetch`. Default: `/api/...` (Vite dev proxy → API). Set `VITE_API_URL`
+ * (e.g. `http://127.0.0.1:3001`) to bypass the proxy — same pattern as `recordingSocket.ts`.
+ */
+export function buildApiUrl(path: string): string {
+  const root = import.meta.env.VITE_API_URL?.trim();
+  const p = path.startsWith('/') ? path : `/${path}`;
+  if (root) {
+    return `${root.replace(/\/$/, '')}${p}`;
+  }
+  return `/api${p}`;
+}
+
+function mapFetchNetworkError(path: string, err: unknown): Error {
+  if (err instanceof TypeError) {
+    const m = err.message || '';
+    if (m === 'Failed to fetch' || m === 'Load failed' || /^networkerror /i.test(m)) {
+      return new Error(
+        `Network error (${m}). Ensure the API is running (port 3001), open the app from the Vite dev URL, or set VITE_API_URL=http://127.0.0.1:3001. Request: ${buildApiUrl(path)}`,
+      );
+    }
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
 
 /** Clerk email OTP automation during auto sign-in (playback + recording). */
 export type ClerkOtpMode = 'clerk_test_email' | 'mailslurp';
@@ -153,10 +176,15 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const auth = await authHeaders();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
-  });
+  let res: Response;
+  try {
+    res = await fetch(buildApiUrl(path), {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
+    });
+  } catch (e) {
+    throw mapFetchNetworkError(path, e);
+  }
   if (!res.ok) {
     let detail = '';
     try {
@@ -181,10 +209,15 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 /** DELETE/204 responses with no JSON body */
 export async function apiFetchVoid(path: string, options?: RequestInit): Promise<void> {
   const auth = await authHeaders();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
-  });
+  let res: Response;
+  try {
+    res = await fetch(buildApiUrl(path), {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...auth, ...options?.headers },
+    });
+  } catch (e) {
+    throw mapFetchNetworkError(path, e);
+  }
   if (!res.ok) {
     let detail = '';
     try {
@@ -207,10 +240,14 @@ export async function apiFetchVoid(path: string, options?: RequestInit): Promise
 
 export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
   const auth = await authHeaders();
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { ...auth, ...options?.headers },
-  });
+  try {
+    return await fetch(buildApiUrl(path), {
+      ...options,
+      headers: { ...auth, ...options?.headers },
+    });
+  } catch (e) {
+    throw mapFetchNetworkError(path, e);
+  }
 }
 
 // ─── Runs ────────────────────────────────────────────────────────────────────
@@ -411,7 +448,7 @@ export const runsApi = {
   /** Authenticated JPEG thumbnail for a checkpoint (returns blob URL). */
   getCheckpointThumbnailUrl: async (runId: string, checkpointId: string): Promise<string | null> => {
     try {
-      const res = await fetch(`${API_BASE}/runs/${runId}/checkpoints/${checkpointId}/thumbnail`, {
+      const res = await fetch(buildApiUrl(`/runs/${runId}/checkpoints/${checkpointId}/thumbnail`), {
         headers: await authHeaders(),
       });
       if (!res.ok) return null;
@@ -697,12 +734,20 @@ export const settingsApi = {
     apiFetch<unknown>(
       `/settings/llm/model-detail?providerId=${encodeURIComponent(providerId)}&modelId=${encodeURIComponent(modelId)}`,
     ),
-  testProviderConnection: (providerId: string, model?: string) =>
+  testProviderConnection: (
+    providerId: string,
+    opts?: { model?: string; apiKey?: string; baseUrl?: string },
+  ) =>
     apiFetch<{ ok: boolean; latencyMs: number; source: string; error?: string }>(
       '/settings/llm/test-connection',
       {
         method: 'POST',
-        body: JSON.stringify({ providerId, ...(model ? { model } : {}) }),
+        body: JSON.stringify({
+          providerId,
+          ...(opts?.model ? { model: opts.model } : {}),
+          ...(opts?.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
+          ...(opts?.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+        }),
       },
     ),
 };

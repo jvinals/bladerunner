@@ -39,7 +39,10 @@ export class SettingsController {
 
   @Post('llm/test-connection')
   @ApiOperation({ summary: 'Test provider credentials / connectivity' })
-  testProviderConnection(@Req() req: any, @Body() data: { providerId?: unknown; model?: unknown }) {
+  testProviderConnection(
+    @Req() req: any,
+    @Body() data: { providerId?: unknown; model?: unknown; apiKey?: unknown; baseUrl?: unknown },
+  ) {
     return this.settingsService.testProviderConnection(req.user.sub, data);
   }
 

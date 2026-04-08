@@ -890,6 +890,7 @@ export class RecordingService extends EventEmitter {
       throw new BadRequestException('Evaluation browser session not found');
     }
     await this.settlePageForLlmVisionCapture(session.page);
+    await this.waitForMainContentLandmarkHydrated(session.page);
     const ctx = await this.captureLlmPageContext(session.page, undefined, session.cdpSession);
     return {
       pageUrl: ctx.pageUrl,
@@ -3772,6 +3773,171 @@ export class RecordingService extends EventEmitter {
         return t;
       })
       .catch(() => 0);
+  }
+
+  /**
+   * App chrome (sidebar, header) often hydrates before the primary canvas. Interactives there can satisfy
+   * {@link settlePageForLlmVisionCapture} while `[role="main"]` / `<main>` is still an empty shell — JPEG looks
+   * “partially formed” compared to the live screencast. We use (1) **stricter DOM** than “any text/widgets”
+   * (shells easily pass `text>=28` + nav links) and (2) **mean luminance of a `<main>` crop** — near-white
+   * center panels stay above ~232 until data/charts mount.
+   */
+  private async waitForMainContentLandmarkHydrated(page: Page): Promise<void> {
+    let mainHydrationTimedOut = false;
+    try {
+      await page.waitForFunction(
+        () => {
+          const scopes: HTMLElement[] = [];
+          for (const sel of ['main', '[role="main"]']) {
+            for (const el of Array.from(document.querySelectorAll(sel))) {
+              if (el instanceof HTMLElement) scopes.push(el);
+            }
+          }
+          const visible = scopes.filter((m) => {
+            const st = window.getComputedStyle(m);
+            if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') return false;
+            const r = m.getBoundingClientRect();
+            return r.width >= 72 && r.height >= 72;
+          });
+          if (visible.length === 0) return true;
+
+          const meaningfulDom = (m: HTMLElement): boolean => {
+            const text = (m.innerText ?? '').replace(/\s+/g, ' ').trim();
+            const tableRows = m.querySelectorAll('table tbody tr').length;
+            const ariaRows = m.querySelectorAll('[role="row"]').length;
+            const listItems = m.querySelectorAll('[role="listitem"], li').length;
+            const widgets = m.querySelectorAll(
+              'button, a[href], input, select, textarea, table, canvas, svg, [role="grid"], [role="article"], [role="table"]',
+            ).length;
+            const htmlLen = (m.innerHTML ?? '').length;
+            for (const f of Array.from(m.querySelectorAll('iframe'))) {
+              if (!(f instanceof HTMLIFrameElement)) continue;
+              const r = f.getBoundingClientRect();
+              if (r.width >= 96 && r.height >= 64) return true;
+            }
+            if (tableRows >= 1 || ariaRows >= 3) return true;
+            if (htmlLen >= 16_000 && (widgets >= 8 || text.length >= 100)) return true;
+            if (text.length >= 200) return true;
+            if (text.length >= 110 && widgets >= 14) return true;
+            if (listItems >= 6 && text.length >= 60) return true;
+            return false;
+          };
+
+          return visible.some(meaningfulDom);
+        },
+        { timeout: 22_000, polling: 450 },
+      );
+    } catch {
+      mainHydrationTimedOut = true;
+      this.logger.warn(
+        'waitForMainContentLandmarkHydrated: main landmark still sparse after timeout; capturing anyway',
+      );
+    }
+    await this.applyFontsAndDoubleRaf(page);
+    await this.waitUntilMainScreenshotNotMostlyWhite(page);
+    // #region agent log
+    const probe = await page
+      .evaluate(() => {
+        let mainRegions = 0;
+        let maxText = 0;
+        let maxWidgets = 0;
+        for (const sel of ['main', '[role="main"]']) {
+          for (const el of Array.from(document.querySelectorAll(sel))) {
+            if (!(el instanceof HTMLElement)) continue;
+            const st = window.getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden') continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 72 || r.height < 72) continue;
+            mainRegions++;
+            maxText = Math.max(maxText, (el.innerText ?? '').trim().length);
+            maxWidgets = Math.max(
+              maxWidgets,
+              el.querySelectorAll(
+                'button, a[href], input, select, textarea, table, canvas, svg, [role="grid"], [role="article"], [role="table"]',
+              ).length,
+            );
+          }
+        }
+        return { mainRegions, maxText, maxWidgets };
+      })
+      .catch(() => ({ mainRegions: 0, maxText: 0, maxWidgets: 0 }));
+    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+      body: JSON.stringify({
+        sessionId: 'ba63e6',
+        location: 'recording.service.ts:waitForMainContentLandmarkHydrated',
+        message: 'main landmark probe',
+        data: { pageUrl: page.url(), ...probe, mainHydrationTimedOut, hypothesisId: 'H6' },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  }
+
+  /**
+   * Screencast can show ink while `<main>` is still a near-white box (async data). Sample the landmark JPEG
+   * and wait for mean luminance to drop, keyed off network idle between tries (no fixed sleeps).
+   */
+  private async waitUntilMainScreenshotNotMostlyWhite(page: Page): Promise<void> {
+    const main = page.locator('main, [role="main"]').first();
+    if ((await main.count()) === 0) return;
+
+    const LUMA_OK_MAX = 232;
+    const MAX_ROUNDS = 10;
+    let lastLuma = 255;
+
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      await this.applyFontsAndDoubleRaf(page);
+      const jpegBuf = await main
+        .screenshot({
+          type: 'jpeg',
+          quality: 72,
+          animations: 'disabled',
+          timeout: 20_000,
+        })
+        .catch(() => null);
+      if (!jpegBuf) return;
+
+      let meanLuma = 255;
+      try {
+        const st = await sharp(jpegBuf).stats();
+        const r = st.channels[0]?.mean ?? 0;
+        const g = st.channels[1]?.mean ?? r;
+        const b = st.channels[2]?.mean ?? r;
+        meanLuma = 0.299 * r + 0.587 * g + 0.114 * b;
+      } catch {
+        return;
+      }
+      lastLuma = meanLuma;
+
+      // #region agent log
+      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
+        body: JSON.stringify({
+          sessionId: 'ba63e6',
+          location: 'recording.service.ts:waitUntilMainScreenshotNotMostlyWhite',
+          message: 'main landmark crop luma',
+          data: {
+            pageUrl: page.url(),
+            round,
+            mainCropMeanLuma: Math.round(meanLuma * 100) / 100,
+            hypothesisId: 'H7',
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      if (meanLuma <= LUMA_OK_MAX) return;
+
+      await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+    }
+
+    this.logger.warn(
+      `waitUntilMainScreenshotNotMostlyWhite: main crop still near-white after ${MAX_ROUNDS} rounds (last mean luma ${lastLuma.toFixed(1)})`,
+    );
   }
 
   /**

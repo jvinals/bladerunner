@@ -383,10 +383,12 @@ function AiLlmSettings() {
   const testConnection = async (providerId: string) => {
     setTestState((prev) => ({ ...prev, [providerId]: { loading: true, message: 'Testing connection…' } }));
     try {
-      const out = await settingsApi.testProviderConnection(
-        providerId,
-        selectedReview?.providerId === providerId ? selectedReview.modelId : undefined,
-      );
+      const draft = providerDrafts[providerId];
+      const out = await settingsApi.testProviderConnection(providerId, {
+        model: selectedReview?.providerId === providerId ? selectedReview.modelId : undefined,
+        apiKey: draft?.apiKey ?? '',
+        baseUrl: draft?.baseUrl ?? '',
+      });
       setTestState((prev) => ({
         ...prev,
         [providerId]: {
@@ -459,6 +461,24 @@ function AiLlmSettings() {
   if (loading) {
     return (
       <div className="bg-white border border-gray-100 rounded-lg p-6 text-sm text-gray-500">Loading AI settings…</div>
+    );
+  }
+
+  if (providerDefs.length === 0) {
+    return (
+      <div className="space-y-3">
+        {error && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>
+        )}
+        <div className="bg-amber-50 border border-amber-100 rounded-lg p-6 text-sm text-gray-800">
+          <p className="font-medium text-gray-900">AI settings could not be loaded</p>
+          <p className="mt-2 text-gray-600">
+            The API returned no provider definitions (empty catalog). Usually the API is still starting, the request
+            failed, or you are not authenticated. Ensure the API is listening on port 3001, refresh after it finishes
+            booting, and stay signed in.
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -570,6 +590,15 @@ function AiLlmSettings() {
                 <p className={`mt-1 text-sm font-medium ${caps?.encryptionConfigured ? 'text-[#2a6a37]' : 'text-amber-700'}`}>
                   {caps?.encryptionConfigured ? 'Encrypted in DB' : 'Encryption key missing'}
                 </p>
+                {!caps?.encryptionConfigured && (
+                  <p className="mt-2 text-xs text-amber-800 leading-relaxed">
+                    To <span className="font-medium">persist</span> keys in the database, the API needs{' '}
+                    <span className="font-mono">LLM_CREDENTIALS_ENCRYPTION_KEY</span> (run{' '}
+                    <span className="font-mono">openssl rand -base64 32</span> in the repo or apps/api{' '}
+                    <span className="font-mono">.env</span>), then restart the API. The OpenRouter field above is your
+                    provider key — separate from this server secret.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -619,11 +648,11 @@ function AiLlmSettings() {
                 >
                   <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] xl:items-start">
                     <div className="space-y-5 min-w-0">
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                      <div className="space-y-4 min-w-0">
                         <div className="space-y-2 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="inline-flex items-center gap-2 text-base font-semibold text-gray-900">
-                              <PlugZap size={15} className="text-[#4B90FF]" />
+                              <PlugZap size={15} className="text-[#4B90FF] shrink-0" />
                               {selectedProvider.label}
                             </span>
                             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-gray-600">
@@ -633,7 +662,7 @@ function AiLlmSettings() {
                               {selectedProvider.protocol.replace('_', ' ')}
                             </span>
                           </div>
-                          <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                             <span
                               className={
                                 selectedProviderState?.configured
@@ -657,7 +686,22 @@ function AiLlmSettings() {
                             )}
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                        <p className="text-[10px] text-gray-500 leading-relaxed">
+                          Test uses the API key and Base URL in the fields below (including text you have not saved
+                          yet). Use <span className="font-medium text-gray-700">Save credentials</span> or{' '}
+                          <span className="font-medium text-gray-700">Save LLM settings</span> at the top to persist
+                          them.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void save()}
+                            disabled={saving}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[#4B90FF] bg-[#4B90FF] px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                          >
+                            <Check size={12} />
+                            {saving ? 'Saving…' : 'Save credentials'}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void testConnection(selectedProvider.id)}

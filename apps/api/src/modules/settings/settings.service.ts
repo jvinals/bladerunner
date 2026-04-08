@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmConfigService } from '../llm/llm-config.service';
@@ -12,6 +12,15 @@ import {
   type LlmUsageKey,
   type UserLlmPreferencesPayload,
 } from '../llm/llm-usage-registry';
+
+/** Non-empty Settings UI draft wins; empty string falls back to DB/env so “Test” works after typing a key before Save. */
+function pickTestCredentialString(override: unknown, resolved: string | undefined): string | undefined {
+  if (typeof override === 'string') {
+    const t = override.trim();
+    return t.length > 0 ? t : resolved?.trim();
+  }
+  return resolved?.trim();
+}
 
 const defaultWorkspace = {
   workspace: {
@@ -29,6 +38,8 @@ const defaultWorkspace = {
 
 @Injectable()
 export class SettingsService {
+  private readonly logger = new Logger(SettingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly llmConfig: LlmConfigService,
@@ -89,32 +100,8 @@ export class SettingsService {
     const existing = await this.llmConfig.readUserLlmPreferencesJson(userId);
     const next: UserLlmPreferencesPayload = { ...existing };
 
-    if (llm.usage != null && typeof llm.usage === 'object') {
-      const usage: Partial<Record<LlmUsageKey, LlmPreferenceEntry>> = { ...existing.usage };
-      for (const [k, v] of Object.entries(llm.usage as Record<string, unknown>)) {
-        if (!isValidUsageKey(k)) continue;
-        if (!v || typeof v !== 'object') continue;
-        const prov = (v as { provider?: unknown }).provider;
-        const model = (v as { model?: unknown }).model;
-        if (typeof prov !== 'string' || !isValidProviderId(prov)) {
-          throw new BadRequestException(`Invalid provider for ${k}`);
-        }
-        if (typeof model !== 'string' || !sanitizeModelId(model)) {
-          throw new BadRequestException(`Invalid model for ${k}`);
-        }
-        usage[k as LlmUsageKey] = { provider: prov as LlmProviderId, model: sanitizeModelId(model) };
-      }
-      next.usage = usage;
-    }
-
-    if (Array.isArray(llm.userModelPresets)) {
-      const presets: string[] = [];
-      for (const p of llm.userModelPresets) {
-        if (typeof p === 'string' && sanitizeModelId(p)) presets.push(sanitizeModelId(p));
-      }
-      next.userModelPresets = presets;
-    }
-
+    // Persist provider secrets first. Task routing (`usage`) validation used to run before this and could throw
+    // (e.g. empty model when a provider's catalog is still loading), blocking API key saves for OpenRouter, etc.
     if (llm.providerCredentials != null) {
       if (typeof llm.providerCredentials !== 'object') {
         throw new BadRequestException('Invalid providerCredentials payload');
@@ -142,6 +129,34 @@ export class SettingsService {
       if (Object.keys(patch).length > 0) {
         await this.llmConfig.updateUserLlmCredentials(userId, patch);
       }
+    }
+
+    if (Array.isArray(llm.userModelPresets)) {
+      const presets: string[] = [];
+      for (const p of llm.userModelPresets) {
+        if (typeof p === 'string' && sanitizeModelId(p)) presets.push(sanitizeModelId(p));
+      }
+      next.userModelPresets = presets;
+    }
+
+    if (llm.usage != null && typeof llm.usage === 'object') {
+      const usage: Partial<Record<LlmUsageKey, LlmPreferenceEntry>> = { ...existing.usage };
+      for (const [k, v] of Object.entries(llm.usage as Record<string, unknown>)) {
+        if (!isValidUsageKey(k)) continue;
+        if (!v || typeof v !== 'object') continue;
+        const prov = (v as { provider?: unknown }).provider;
+        const model = (v as { model?: unknown }).model;
+        if (typeof prov !== 'string' || !isValidProviderId(prov)) {
+          this.logger.warn(`Skipping LLM usage patch for ${k}: invalid provider`);
+          continue;
+        }
+        if (typeof model !== 'string' || !sanitizeModelId(model)) {
+          this.logger.warn(`Skipping LLM usage patch for ${k}: invalid or empty model`);
+          continue;
+        }
+        usage[k as LlmUsageKey] = { provider: prov as LlmProviderId, model: sanitizeModelId(model) };
+      }
+      next.usage = usage;
     }
 
     try {
@@ -186,7 +201,7 @@ export class SettingsService {
 
   async testProviderConnection(
     userId: string,
-    payload: { providerId?: unknown; model?: unknown },
+    payload: { providerId?: unknown; model?: unknown; apiKey?: unknown; baseUrl?: unknown },
   ): Promise<{ ok: boolean; latencyMs: number; source: string; error?: string }> {
     const providerId = typeof payload.providerId === 'string' ? payload.providerId : '';
     if (!isValidProviderId(providerId)) {
@@ -196,7 +211,7 @@ export class SettingsService {
     const started = Date.now();
     try {
       if (providerId === 'gemini') {
-        const key = resolved.apiKey?.trim();
+        const key = pickTestCredentialString(payload.apiKey, resolved.apiKey);
         if (!key) throw new Error('Gemini API key missing');
         const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
         url.searchParams.set('key', key);
@@ -204,7 +219,7 @@ export class SettingsService {
         const res = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
       } else if (providerId === 'anthropic') {
-        const key = resolved.apiKey?.trim();
+        const key = pickTestCredentialString(payload.apiKey, resolved.apiKey);
         if (!key) throw new Error('Anthropic API key missing');
         const model =
           typeof payload.model === 'string' && sanitizeModelId(payload.model)
@@ -225,8 +240,9 @@ export class SettingsService {
         });
         if (!res.ok) throw new Error(`Anthropic HTTP ${res.status}`);
       } else {
-        const apiKey = resolved.apiKey?.trim() || (providerId === 'ollama' ? 'ollama' : '');
-        const baseUrl = resolved.baseUrl?.trim();
+        const apiKey =
+          pickTestCredentialString(payload.apiKey, resolved.apiKey) || (providerId === 'ollama' ? 'ollama' : '');
+        const baseUrl = pickTestCredentialString(payload.baseUrl, resolved.baseUrl);
         if (!baseUrl) throw new Error('Provider base URL missing');
         if (!apiKey) throw new Error('Provider API key missing');
         const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
