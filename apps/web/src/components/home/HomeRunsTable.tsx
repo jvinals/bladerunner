@@ -10,12 +10,16 @@ import {
 } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  Filter,
+  Folder,
+  ListOrdered,
   Search,
   Trash2,
   Monitor,
@@ -86,24 +90,56 @@ function columnWidthClass(columnId: string): string {
     case 'thumb':
       return 'w-10 shrink-0 px-1';
     case 'name':
-      return 'min-w-0 max-w-none w-[36%]';
+      return 'min-w-0 max-w-none w-[36%] max-sm:w-[40%]';
     case 'project':
-      return 'min-w-0 w-[10%]';
+      return 'hidden min-w-0 w-[10%] sm:table-cell';
     case 'status':
       return 'min-w-0 w-[10%]';
     case 'platform':
       return 'min-w-0 w-[8%]';
     case 'steps':
-      return 'w-[5%] min-w-0';
+      return 'hidden w-[5%] min-w-0 sm:table-cell';
     case 'duration':
-      return 'min-w-0 w-[8%]';
+      return 'hidden min-w-0 w-[8%] sm:table-cell';
     case 'created':
-      return 'min-w-0 w-[10%]';
+      return 'min-w-0 w-[10%] max-sm:align-top';
     case 'actions':
       return 'w-16 shrink-0 text-right';
     default:
       return 'min-w-0';
   }
+}
+
+/** Native `<select>` with icon-only chrome (32×32) for narrow toolbars; invisible hit target over the icon. */
+function IconOverlaySelect({
+  icon: Icon,
+  'aria-label': ariaLabel,
+  className,
+  children,
+  ...props
+}: React.ComponentProps<'select'> & { icon: LucideIcon; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'relative inline-flex h-8 w-8 shrink-0 items-stretch justify-stretch rounded-md border border-input bg-background shadow-sm',
+        className,
+      )}
+    >
+      <span
+        className="pointer-events-none absolute inset-0 flex items-center justify-center sm:hidden"
+        aria-hidden
+      >
+        <Icon className="size-4 text-muted-foreground" />
+      </span>
+      <select
+        {...props}
+        aria-label={ariaLabel}
+        className="absolute inset-0 z-10 h-full min-h-8 w-full cursor-pointer appearance-none text-xs opacity-0"
+      >
+        {children}
+      </select>
+    </div>
+  );
 }
 
 function SortHeader({
@@ -233,19 +269,50 @@ export function HomeRunsTable() {
         accessorKey: 'name',
         id: 'name',
         header: ({ column }) => <SortHeader label="Run" column={column} />,
-        cell: ({ row }) => (
-          <div className="min-w-0 max-w-full">
-            <Link
-              to={`/runs/${row.original.id}`}
-              className="block font-medium text-foreground hover:text-[var(--ce-primary)] line-clamp-1 text-xs leading-tight"
-            >
-              {row.original.name}
-            </Link>
-            <p className="text-[10px] text-muted-foreground truncate" title={row.original.url}>
-              {row.original.url}
-            </p>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const r = row.original;
+          const proj = r.project;
+          const steps = r.stepsCount;
+          return (
+            <div className="min-w-0 max-w-full">
+              <Link
+                to={`/runs/${r.id}`}
+                title={r.url}
+                className="block font-medium text-foreground hover:text-[var(--ce-primary)] line-clamp-1 text-xs leading-tight"
+              >
+                {r.name}
+              </Link>
+              <p
+                className="hidden truncate text-[10px] text-muted-foreground sm:block"
+                title={r.url}
+              >
+                {r.url}
+              </p>
+              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 sm:hidden">
+                {proj ? (
+                  <span
+                    className="inline-flex min-w-0 max-w-[min(100%,12rem)] items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{
+                      backgroundColor: `${proj.color || '#6366F1'}18`,
+                      color: proj.color || '#6366F1',
+                    }}
+                  >
+                    <span
+                      className="inline-block size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: proj.color || '#6366F1' }}
+                    />
+                    <span className="truncate">{proj.name}</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">—</span>
+                )}
+                <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
+                  {steps} {steps === 1 ? 'step' : 'steps'}
+                </span>
+              </div>
+            </div>
+          );
+        },
       },
       {
         id: 'project',
@@ -273,7 +340,9 @@ export function HomeRunsTable() {
         accessorKey: 'status',
         id: 'status',
         header: ({ column }) => <SortHeader label="Status" column={column} />,
-        cell: ({ row }) => <StatusBadge status={row.original.status} size="sm" />,
+        cell: ({ row }) => (
+          <StatusBadge status={row.original.status} size="sm" narrowAsIcon />
+        ),
       },
       {
         id: 'platform',
@@ -282,10 +351,24 @@ export function HomeRunsTable() {
         cell: ({ row }) => {
           const pk = platformKey(row.original.platform);
           const Icon = PLATFORM_ICONS[pk] || Monitor;
+          const platformTitle =
+            pk === 'desktop'
+              ? 'Desktop'
+              : pk === 'mobile'
+                ? 'Mobile'
+                : pk === 'pwa'
+                  ? 'PWA'
+                  : pk
+                    ? pk.charAt(0).toUpperCase() + pk.slice(1)
+                    : '—';
           return (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-500/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-200 capitalize">
-              <Icon className="size-3 opacity-80" />
-              {pk || '—'}
+            <span
+              title={platformTitle}
+              aria-label={platformTitle}
+              className="inline-flex items-center justify-center gap-0.5 rounded-full bg-slate-500/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-200 max-sm:px-1 max-sm:py-1"
+            >
+              <Icon className="size-3.5 shrink-0 opacity-80 sm:size-3" aria-hidden />
+              <span className="hidden capitalize sm:inline">{pk || '—'}</span>
             </span>
           );
         },
@@ -313,11 +396,19 @@ export function HomeRunsTable() {
         accessorKey: 'createdAt',
         id: 'created',
         header: ({ column }) => <SortHeader label="Created" column={column} />,
-        cell: ({ row }) => (
-          <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-            {formatRelativeTime(row.original.createdAt)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const createdLabel = formatRelativeTime(row.original.createdAt);
+          const durationLabel =
+            row.original.durationMs != null ? formatDuration(row.original.durationMs) : '—';
+          return (
+            <div className="flex flex-col items-start gap-0.5 leading-tight">
+              <span className="whitespace-nowrap text-[11px] text-muted-foreground">{createdLabel}</span>
+              <span className="text-[11px] text-cyan-800/90 dark:text-cyan-200/90 tabular-nums sm:hidden">
+                {durationLabel}
+              </span>
+            </div>
+          );
+        },
       },
       {
         id: 'actions',
@@ -367,15 +458,79 @@ export function HomeRunsTable() {
 
   return (
     <div className="flex w-full min-w-0 flex-col min-h-0 rounded-xl border border-border/80 bg-card shadow-sm overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-border/60 bg-gradient-to-r from-slate-50/80 via-white to-sky-50/40 dark:from-slate-900/40 dark:via-card dark:to-sky-950/20 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border/60 bg-gradient-to-r from-slate-50/80 via-white to-sky-50/40 dark:from-slate-900/40 dark:via-card dark:to-sky-950/20 px-3 py-2.5 sm:px-4 sm:py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">Runs</p>
           <p className="text-[11px] text-muted-foreground">
             {total} total · filter, sort, paginate
           </p>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="relative min-w-0 max-w-full flex-1 sm:flex-initial sm:min-w-[180px]">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+          {/* Narrow: icon-only filters + compact search row */}
+          <div className="flex w-full flex-wrap items-center gap-1 sm:hidden">
+            <IconOverlaySelect
+              aria-label="Filter by status"
+              icon={Filter}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="">All statuses</option>
+              <option value="RECORDING">Recording</option>
+              <option value="PAUSED">Paused</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="FAILED">Failed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </IconOverlaySelect>
+            <IconOverlaySelect
+              aria-label="Filter by platform"
+              icon={Monitor}
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value)}
+            >
+              <option value="">All platforms</option>
+              <option value="DESKTOP">Desktop</option>
+              <option value="MOBILE">Mobile</option>
+              <option value="PWA">PWA</option>
+            </IconOverlaySelect>
+            <IconOverlaySelect
+              aria-label="Filter by project"
+              icon={Folder}
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+            >
+              <option value="">All projects</option>
+              {(projects as ProjectDto[]).map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </IconOverlaySelect>
+            <IconOverlaySelect
+              aria-label="Rows per page"
+              icon={ListOrdered}
+              value={pagination.pageSize}
+              onChange={(e) =>
+                setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })
+              }
+            >
+              {[10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n} / page
+                </option>
+              ))}
+            </IconOverlaySelect>
+          </div>
+          <div className="relative min-w-0 w-full sm:hidden">
+            <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search name or URL…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="h-7 w-full min-w-0 pl-7 text-xs"
+            />
+          </div>
+          {/* sm+: full search + text selects */}
+          <div className="relative hidden min-w-0 max-w-full flex-1 sm:flex sm:flex-initial sm:min-w-[180px]">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search name or URL…"
@@ -387,7 +542,7 @@ export function HomeRunsTable() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+            className="hidden h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm sm:block"
           >
             <option value="">All statuses</option>
             <option value="RECORDING">Recording</option>
@@ -399,7 +554,7 @@ export function HomeRunsTable() {
           <select
             value={platformFilter}
             onChange={(e) => setPlatformFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+            className="hidden h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm sm:block"
           >
             <option value="">All platforms</option>
             <option value="DESKTOP">Desktop</option>
@@ -409,7 +564,7 @@ export function HomeRunsTable() {
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
-            className="h-8 max-w-[180px] rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+            className="hidden h-8 max-w-[180px] rounded-md border border-input bg-background px-2 text-xs shadow-sm sm:block"
           >
             <option value="">All projects</option>
             {(projects as ProjectDto[]).map((project) => (
@@ -423,7 +578,7 @@ export function HomeRunsTable() {
             onChange={(e) =>
               setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })
             }
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+            className="hidden h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm sm:block"
           >
             {[10, 20, 50].map((n) => (
               <option key={n} value={n}>
@@ -471,7 +626,7 @@ export function HomeRunsTable() {
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className={cn('h-11', rowAccent(row.original.status))}
+                    className={cn('min-h-11', rowAccent(row.original.status))}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className={cn('py-1.5', columnWidthClass(cell.column.id))}>

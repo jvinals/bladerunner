@@ -91,11 +91,15 @@ export default function EvaluationsPage() {
         </div>
         <button
           type="button"
+          aria-label="New evaluation"
           onClick={() => setPanelOpen((o) => !o)}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#4B90FF] text-white text-sm font-medium px-4 py-2.5 hover:bg-[#3d7fe6] transition-colors"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#4B90FF] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3d7fe6] sm:px-4"
         >
-          <Plus size={18} />
-          New evaluation
+          <span className="text-xl font-medium leading-none sm:hidden">+</span>
+          <span className="hidden items-center gap-2 sm:inline-flex">
+            <Plus size={18} className="shrink-0" aria-hidden />
+            New evaluation
+          </span>
         </button>
       </div>
 
@@ -230,7 +234,7 @@ export default function EvaluationsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900 truncate">{row.name}</span>
-                    <StatusBadge status={row.status} size="sm" />
+                    <StatusBadge status={row.status} size="sm" narrowAsIcon />
                     {row.project && (
                       <span
                         className="inline-flex items-center gap-1 text-[10px] text-gray-500 max-w-[140px] truncate"
