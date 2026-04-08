@@ -2,6 +2,18 @@
 
 ## 2026-04-01
 
+- `0.10.200`: **Evaluations — compact New evaluation on narrow screens** — Below `sm`, the primary action shows **`+` only** (with **`aria-label="New evaluation"`**); from **`sm` up**, **Plus icon + label** unchanged. `@bladerunner/web 0.7.120`.
+
+- `0.10.199`: **Docs — AGENTS.md continual-learning sync** — Captured evaluation thinking-step UX (no strikethrough on completed substeps; expand active step only), automatic evaluation advance without per-step Continue, and Playwright guidance to avoid long utility-class CSS locators; refreshed transcript index (39 files).
+
+- `0.10.198`: **Home runs toolbar — compact filters on narrow screens** — Below `sm`, filter controls are **32×32 icon buttons** (native select overlay) with **`aria-label`s**; search is a **shorter second row** (`h-7`). From **`sm` up**, the previous **text dropdowns + search** layout is unchanged. `@bladerunner/web 0.7.119`.
+
+- `0.10.197`: **Home runs table — project + steps in Run row on narrow screens** — Below `sm`, the **URL** under the run name is replaced by **project** (same pill styling as the Project column) and **step count** beside it; **Project** and **Steps** columns are hidden. Run title keeps **`title={url}`** for the full URL. `@bladerunner/web 0.7.118`.
+
+- `0.10.196`: **Home runs table — time under date on narrow screens** — Below `sm`, the **Time** column is hidden and **duration** is stacked **under** the **Created** date in the same cell (teal, tabular). `@bladerunner/web 0.7.117`.
+
+- `0.10.195`: **Home runs table — narrow viewport density** — Below `sm`, **status** uses **icons** (with tooltip / `aria-label`) instead of “Recording” / “Completed”, and **platform** shows the **icon only** (full name on `title`). `@bladerunner/web 0.7.116`.
+
 - `0.10.194`: **Evaluations — Thinking process accordion** — While a step is **in progress**, that row **stays expanded** and **all other rows stay collapsed**; the active row cannot be collapsed until the step finishes. When nothing is active, rows can be toggled open one at a time. `@bladerunner/web 0.7.115`.
 
 - `0.10.193`: **Evaluations — Thinking process substeps** — Completed thinking substeps stay **grey** but **no strikethrough**. `@bladerunner/web 0.7.114`.

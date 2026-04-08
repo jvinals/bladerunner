@@ -1,0 +1,29 @@
+# Fly.io configuration for Bladerunner API
+# Public-facing NestJS + Socket.IO service.
+
+app = "bladerunner-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile.production"
+
+[env]
+  NODE_ENV = "production"
+  API_PORT = "3001"
+  API_HOST = "0.0.0.0"
+  BROWSER_WORKER_URL = "ws://bladerunner-browser-worker.flycast:3002"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 2
