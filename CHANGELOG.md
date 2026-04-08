@@ -2,6 +2,8 @@
 
 ## 2026-04-01
 
+- `0.10.194`: **Evaluations — Thinking process accordion** — While a step is **in progress**, that row **stays expanded** and **all other rows stay collapsed**; the active row cannot be collapsed until the step finishes. When nothing is active, rows can be toggled open one at a time. `@bladerunner/web 0.7.115`.
+
 - `0.10.193`: **Evaluations — Thinking process substeps** — Completed thinking substeps stay **grey** but **no strikethrough**. `@bladerunner/web 0.7.114`.
 
 - `0.10.192`: **Evaluations — Thinking process plan substeps** — Thinking process rows show **five sequential codegen thinking fields** (observation → … → Playwright rationale) with **per-row** blue spinner or green check, **grey strikethrough** when done and **black** when active; future rows stay hidden until reached. The collapsed header shows **green dot + connector** segments for each completed substep, left of the step spinner. `@bladerunner/web 0.7.113`.

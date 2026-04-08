@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronRight, Cog, Expand, Loader2, Sparkles, XCircle } from 'lucide-react';
 import type { EvaluationStepDto } from '@/lib/api';
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
@@ -82,6 +82,19 @@ function formatDuration(stepDurationMs: number | null | undefined): string | nul
   return `(${rounded}s)`;
 }
 
+/** Step row that currently has the thinking pipeline running (spinner / live progress). */
+function getActiveThinkingStepId(
+  steps: EvaluationStepDto[],
+  lastProgress: EvaluationProgressPayload | null,
+): string | null {
+  for (const st of steps) {
+    if (isThinkingRowInProgress(st, lastProgress)) {
+      return st.id;
+    }
+  }
+  return null;
+}
+
 type Props = {
   steps: EvaluationStepDto[];
   lastProgress: EvaluationProgressPayload | null;
@@ -90,6 +103,15 @@ type Props = {
 };
 
 export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Props) {
+  const activeStepId = useMemo(() => getActiveThinkingStepId(steps, lastProgress), [steps, lastProgress]);
+  const [idleOpenStepId, setIdleOpenStepId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeStepId != null) {
+      setIdleOpenStepId(null);
+    }
+  }, [activeStepId]);
+
   if (steps.length === 0) {
     return (
       <p className="text-xs text-gray-500 px-4 py-3 border-t border-gray-100">
@@ -97,6 +119,8 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
       </p>
     );
   }
+
+  const expandedStepId = activeStepId ?? idleOpenStepId;
 
   return (
     <div className="flex flex-col">
@@ -147,7 +171,22 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
             key={st.id}
             className="flex items-stretch border-b border-gray-100 last:border-b-0"
           >
-            <details className="group min-w-0 flex-1">
+            <details
+              className="group min-w-0 flex-1"
+              open={expandedStepId === st.id}
+              onToggle={(e) => {
+                const el = e.currentTarget;
+                if (activeStepId != null) {
+                  if (st.id === activeStepId && !el.open) {
+                    el.open = true;
+                  } else if (st.id !== activeStepId && el.open) {
+                    el.open = false;
+                  }
+                  return;
+                }
+                setIdleOpenStepId(el.open ? st.id : null);
+              }}
+            >
               <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden hover:bg-gray-50/80">
                 <span className="flex min-w-0 flex-1 items-center gap-2">
                   {kind === 'llm' ? <ThinkingHeaderSubstepProgress completedCount={headerDots} /> : null}
