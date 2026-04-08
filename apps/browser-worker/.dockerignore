@@ -1,0 +1,7 @@
+node_modules
+dist
+fly.toml
+Dockerfile
+Dockerfile.production
+.dockerignore
+*.md

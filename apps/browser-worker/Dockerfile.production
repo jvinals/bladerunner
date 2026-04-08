@@ -2,10 +2,10 @@ FROM mcr.microsoft.com/playwright:v1.58.2-noble
 
 WORKDIR /app
 
-COPY apps/browser-worker/package.json apps/browser-worker/package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm install --production
 
-COPY apps/browser-worker/ ./
+COPY . ./
 RUN npx tsc || true
 
 ENV WORKER_PORT=3002
