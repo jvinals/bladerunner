@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-08
+
+- `0.10.204`: **Clerk auto sign-in — duplicate "Sign in" buttons** — Password submit now prefers the button inside `form:has(input[type="password"])` so page-level header CTAs do not trigger Playwright strict mode; evaluation LLM guidelines note scoping when multiple "Sign in" buttons exist. `@bladerunner/clerk-agentmail-signin 0.5.3`, `@bladerunner/api 0.6.149`.
+
 ## 2026-04-01
 
 - `0.10.200`: **Evaluations — compact New evaluation on narrow screens** — Below `sm`, the primary action shows **`+` only** (with **`aria-label="New evaluation"`**); from **`sm` up**, **Plus icon + label** unchanged. `@bladerunner/web 0.7.120`.
