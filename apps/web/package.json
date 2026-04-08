@@ -1,11 +1,11 @@
 {
   "name": "@bladerunner/web",
-  "version": "0.7.121",
+  "version": "0.7.122",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 tsc -b && NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
