@@ -235,7 +235,7 @@ export function ThinkingStructuredPlanRows({
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#4B90FF]" aria-hidden />
       );
 
-      const textClass = muted ? 'text-[#9E9E9E] line-through' : 'text-[#212121]';
+      const textClass = muted ? 'text-[#9E9E9E]' : 'text-[#212121]';
       const displayBody = body || (mode === 'loading' ? '…' : '—');
 
       return (
@@ -254,7 +254,7 @@ export function ThinkingStructuredPlanRows({
 
   if (legacy) {
     const done = stepThinkingComplete || !thinkingPipelineInProgress;
-    const textClass = done ? 'text-[#9E9E9E] line-through' : 'text-[#212121]';
+    const textClass = done ? 'text-[#9E9E9E]' : 'text-[#212121]';
     return (
       <div className="space-y-1.5 pl-0.5">
         <div className="flex gap-2">
