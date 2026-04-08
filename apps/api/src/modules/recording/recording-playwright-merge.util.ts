@@ -211,7 +211,7 @@ export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): 
       const first = firstPart ?? '';
       const click = clickPart ?? '.click()';
       const exactFallback = shouldUseExactGetByTextForPlayback(name);
-      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
+      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; const n = await primary.count(); if (n === 1) { await primary${click}; return; } if (n > 1) { await primary.first()${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
     },
   );
 }
@@ -230,7 +230,7 @@ export function fallbackNamedButtonSelectTriggerClicksForPlayback(playwrightCode
       const first = firstPart ?? '';
       const click = clickPart ?? '.click()';
       const exactFallback = shouldUseExactGetByTextForPlayback(name);
-      return `await (async () => { const primary = page.getByRole('button', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const combo = page.getByRole('combobox', { name: ${qName} }); if (await combo.count()) { await combo${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
+      return `await (async () => { const primary = page.getByRole('button', { name: ${qName} })${first}; const n = await primary.count(); if (n === 1) { await primary${click}; return; } if (n > 1) { const inPwdForm = page.locator('form:has(input[type="password"])').first().getByRole('button', { name: ${qName} }); if (await inPwdForm.count()) { await inPwdForm.first()${click}; return; } await primary.first()${click}; return; } const combo = page.getByRole('combobox', { name: ${qName} }); const nc = await combo.count(); if (nc === 1) { await combo${click}; return; } if (nc > 1) { await combo.first()${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
     },
   );
 }
