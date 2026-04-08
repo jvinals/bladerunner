@@ -1,0 +1,31 @@
+# ── Stage 1: Build ───────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+RUN apk add --no-cache python3 make g++
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* .npmrc ./
+COPY packages/ ./packages/
+COPY apps/api/ ./apps/api/
+
+RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm --filter @bladerunner/clerk-agentmail-signin run build
+RUN pnpm --filter @bladerunner/api exec prisma generate
+RUN pnpm --filter @bladerunner/api run build
+
+# ── Stage 2: Production runtime ─────────────────────────────────────────────
+FROM node:20-alpine
+RUN apk add --no-cache ffmpeg
+WORKDIR /app
+
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/prisma ./prisma
+COPY --from=builder /app/apps/api/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/node_modules ./local_modules
+COPY --from=builder /app/packages ./packages
+
+ENV NODE_ENV=production
+EXPOSE 3001
+
+CMD ["node", "dist/main.js"]

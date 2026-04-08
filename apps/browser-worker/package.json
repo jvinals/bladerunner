@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/browser-worker",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "scripts": {
     "start": "node dist/server.js",
