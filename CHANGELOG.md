@@ -2,6 +2,8 @@
 
 ## 2026-04-08
 
+- `0.10.205`: **Evaluations / playback — strict mode on duplicate button names** — The button/combobox playback fallbacks used `if (count()) click()`, which still called `.click()` on ambiguous locators when count was **2+** (e.g. two "Sign in" buttons). Now: click only when count is **1**; when **>1**, prefer `form:has(input[type="password"])` for buttons, else `.first()`; combobox path uses the same count split. `@bladerunner/api 0.6.150`.
+
 - `0.10.204`: **Clerk auto sign-in — duplicate "Sign in" buttons** — Password submit now prefers the button inside `form:has(input[type="password"])` so page-level header CTAs do not trigger Playwright strict mode; evaluation LLM guidelines note scoping when multiple "Sign in" buttons exist. `@bladerunner/clerk-agentmail-signin 0.5.3`, `@bladerunner/api 0.6.149`.
 
 ## 2026-04-01
