@@ -3,8 +3,10 @@ import { ChevronRight, Cog, Expand, Loader2, Sparkles, XCircle } from 'lucide-re
 import type { EvaluationStepDto } from '@/lib/api';
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
 import {
+  countThinkingHeaderDots,
   normalizeEvaluationStepKind,
-  ThinkingStructuredBlock,
+  ThinkingHeaderSubstepProgress,
+  ThinkingStructuredPlanRows,
 } from '@/components/evaluation/evaluation-step-thinking';
 
 const PLACEHOLDER_PREFIX = '__pending__';
@@ -108,6 +110,22 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
         const dur = formatDuration(st.stepDurationMs);
 
         const kind = normalizeEvaluationStepKind(st);
+        const livePhase =
+          lastProgress?.sequence != null && lastProgress.sequence === st.sequence
+            ? String(lastProgress.phase ?? '')
+            : undefined;
+        const codegenPending = kind === 'llm' && st.codegenOutputJson == null;
+        const headerDots =
+          kind === 'llm'
+            ? countThinkingHeaderDots({
+                codegenOutputJson: st.codegenOutputJson,
+                codegenPending,
+                thinkingPipelineInProgress: inProgress,
+                stepThinkingComplete: complete,
+                livePhase,
+              })
+            : 0;
+
         let leftIcon: ReactNode;
         if (kind !== 'llm') {
           leftIcon = <Cog className="h-4 w-4 shrink-0 text-amber-800" aria-hidden />;
@@ -132,6 +150,7 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
             <details className="group min-w-0 flex-1">
               <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden hover:bg-gray-50/80">
                 <span className="flex min-w-0 flex-1 items-center gap-2">
+                  {kind === 'llm' ? <ThinkingHeaderSubstepProgress completedCount={headerDots} /> : null}
                   {leftIcon}
                   <span className="min-w-0 flex-1 truncate text-gray-900" title={title}>
                     {title}
@@ -149,11 +168,12 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
               <div className="border-t border-gray-50 bg-gray-50/50 px-4 py-2 pl-11 space-y-2">
                 {kind === 'llm' ? (
                   <div className="text-[11px]">
-                    <ThinkingStructuredBlock
+                    <ThinkingStructuredPlanRows
                       codegenOutputJson={st.codegenOutputJson}
-                      layout="stacked"
-                      emptyFieldMode="placeholder"
-                      showSectionTitle
+                      codegenPending={codegenPending}
+                      thinkingPipelineInProgress={inProgress}
+                      stepThinkingComplete={complete}
+                      livePhase={livePhase}
                     />
                   </div>
                 ) : null}
