@@ -213,6 +213,29 @@ function locatorAfterPasswordSubmit(page: Page) {
     .or(page.getByRole('button', { name: /^Continue$/i }));
 }
 
+/**
+ * Same labels as {@link locatorAfterPasswordSubmit} but scoped to the `<form>` that contains the
+ * password field. Many apps duplicate a header/marketing "Sign in" button with the real submit
+ * control — a page-level `getByRole('button', { name: 'Sign in' })` then hits strict mode.
+ */
+function locatorPasswordSubmitInPasswordForm(page: Page) {
+  /** `.first()` avoids strict mode when multiple password fields/forms exist (e.g. sign-in + reset). */
+  const passwordForm = page.locator('form:has(input[type="password"])').first();
+  return passwordForm
+    .getByRole('button', { name: /^Sign in$/i })
+    .or(passwordForm.getByRole('button', { name: /^Log in$/i }))
+    .or(passwordForm.getByRole('button', { name: /^Continue$/i }));
+}
+
+async function clickPasswordStepSubmit(page: Page): Promise<void> {
+  const scoped = locatorPasswordSubmitInPasswordForm(page);
+  try {
+    await scoped.first().click({ timeout: 8_000 });
+  } catch {
+    await locatorAfterPasswordSubmit(page).first().click();
+  }
+}
+
 function locatorAfterOtpSubmit(page: Page) {
   return page
     .getByRole('button', { name: /^Continue$/i })
@@ -560,7 +583,7 @@ export async function performClerkPasswordEmail2FA(
   await passwordField.waitFor({ state: 'visible', timeout: 60_000 });
   await passwordField.fill(opts.password);
 
-  await locatorAfterPasswordSubmit(page).first().click();
+  await clickPasswordStepSubmit(page);
 
   const mode: ClerkOtpMode = opts.otpMode ?? 'clerk_test_email';
 
