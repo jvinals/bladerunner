@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import mermaid from 'mermaid';
 
+// Lazy-load mermaid to keep it out of the initial JS bundle.
+// It is only needed when a discovery navigation map is actually rendered.
+type MermaidModule = typeof import('mermaid');
+let mermaidModule: MermaidModule | null = null;
 let mermaidInited = false;
 const renderSeq = { n: 0 };
+
+async function getMermaid(): Promise<MermaidModule> {
+  if (!mermaidModule) {
+    mermaidModule = (await import('mermaid')) as MermaidModule;
+  }
+  return mermaidModule;
+}
 
 type Props = {
   /** Mermaid source (e.g. flowchart TD …) */
@@ -12,21 +22,25 @@ type Props = {
 
 /**
  * Renders a Mermaid diagram; safe empty state when source is missing.
+ * Mermaid is loaded lazily to keep it out of the critical bundle path.
  */
 export function DiscoveryMermaidPanel({ source, className = '' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!mermaidInited) {
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: 'strict',
-        theme: 'neutral',
-      });
-      mermaidInited = true;
-    }
-  }, []);
+    if (!source?.trim()) return;
+    getMermaid().then((m) => {
+      if (!mermaidInited) {
+        m.default.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: 'neutral',
+        });
+        mermaidInited = true;
+      }
+    });
+  }, [source]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -41,8 +55,8 @@ export function DiscoveryMermaidPanel({ source, className = '' }: Props) {
     const id = `dm-${renderSeq.n}`;
     let cancelled = false;
     setError(null);
-    mermaid
-      .render(id, trimmed)
+    getMermaid()
+      .then((m) => m.default.render(id, trimmed))
       .then(({ svg }) => {
         if (cancelled || !containerRef.current) return;
         containerRef.current.innerHTML = svg;

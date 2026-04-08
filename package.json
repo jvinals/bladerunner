@@ -1,10 +1,9 @@
 {
   "name": "bladerunner",
   "private": true,
-  "version": "0.10.202",
+  "version": "0.10.203",
   "description": "Bladerunner by Edgehealth — Operational control surface for validating application experiences",
   "scripts": {
-    "postinstall": "playwright install chromium",
     "dev": "node scripts/dev.mjs",
     "dev:web:delayed": "wait-on tcp:127.0.0.1:3001 && pnpm run dev:web",
     "dev:web": "pnpm --filter @bladerunner/web dev",
