@@ -2,6 +2,8 @@
 
 ## 2026-04-08
 
+- `0.10.208`: **CI — Fly.io browser worker deploy on push to `main`** — GitHub Actions workflow deploys `bladerunner-browser-worker` from `apps/browser-worker` when worker paths change; uses `FLY_API_TOKEN` (same secret as API).
+
 - `0.10.207`: **CI — Fly.io API deploy on push to `main`** — GitHub Actions workflow runs `flyctl deploy` from the repo root with `apps/api/fly.toml` (correct Docker context for the monorepo). Requires `FLY_API_TOKEN` in repo secrets. Root `.dockerignore` trims upload size; `apps/api/fly.toml` `[build].dockerfile` set to `apps/api/Dockerfile.production` for root-context deploys.
 
 - `0.10.206`: **Evaluations / playback — getByRole with `exact: true`** — The button/combobox playback rewrites only matched `{ name: '…' }` with no other options, so codegen like `getByRole('button', { name: 'Sign in', exact: true })` was not transformed and strict mode could still fail. Regex now allows extra option properties. `@bladerunner/api 0.6.151`.
