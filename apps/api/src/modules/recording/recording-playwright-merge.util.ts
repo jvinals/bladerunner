@@ -200,10 +200,19 @@ export function fixAmbiguousTableLastRowTdLocator(playwrightCode: string): strin
  * Playback: some shadcn/Radix-style dropdown triggers visually show a label like "Select Provider" but
  * Playwright's accessible-role query resolves zero matches for `getByRole('combobox', { name })`.
  * Keep the original role/name lookup first, then fall back to visible-text combobox/button locators.
+ *
+ * Options must allow extra properties (e.g. `{ name: 'Sign in', exact: true }`) — LLMs often emit them;
+ * a regex that only matched `{ name: '…' }` skipped the rewrite and strict mode errors persisted.
  */
+/** Name capture: exclude quotes and newlines (backtick omitted — would break tagged templates). */
+const GET_BY_ROLE_NAME_OPTIONS = String.raw`\{\s*[^}]*\bname:\s*(['"])([^"'\n\r]+)\1[^}]*\}`;
+
 export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): string {
   return playwrightCode.replace(
-    /\bawait\s+page\.getByRole\(\s*(['"`])combobox\1\s*,\s*\{\s*name:\s*(['"`])([^'"`\n\r]+)\2\s*\}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?/g,
+    new RegExp(
+      String.raw`\bawait\s+page\.getByRole\(\s*(['"])combobox\1\s*,\s*${GET_BY_ROLE_NAME_OPTIONS}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?`,
+      'g',
+    ),
     (_full, _roleQuote: string, _nameQuote: string, rawName: string, firstPart: string, clickPart: string) => {
       const name = String(rawName).trim();
       if (!name || name.length > 160) return _full;
@@ -222,7 +231,10 @@ export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): 
  */
 export function fallbackNamedButtonSelectTriggerClicksForPlayback(playwrightCode: string): string {
   return playwrightCode.replace(
-    /\bawait\s+page\.getByRole\(\s*(['"`])button\1\s*,\s*\{\s*name:\s*(['"`])([^'"`\n\r]+)\2\s*\}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?/g,
+    new RegExp(
+      String.raw`\bawait\s+page\.getByRole\(\s*(['"])button\1\s*,\s*${GET_BY_ROLE_NAME_OPTIONS}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?`,
+      'g',
+    ),
     (_full, _roleQuote: string, _nameQuote: string, rawName: string, firstPart: string, clickPart: string) => {
       const name = String(rawName).trim();
       if (!name || name.length > 160) return _full;
