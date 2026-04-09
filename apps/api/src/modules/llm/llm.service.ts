@@ -810,6 +810,10 @@ export class LlmService {
     return { ...result, provider: resolved.provider, model: resolved.model };
   }
 
+  /**
+   * JSON-shaped answers via **prompting + {@link parseJsonFromLlmText}**, not OpenAI `response_format`,
+   * so the same path works for OpenRouter (Claude, etc.) and avoids a second request on 400.
+   */
   private async chatJson(
     userId: string | undefined,
     usage: LlmUsageKey,
@@ -818,7 +822,7 @@ export class LlmService {
   ): Promise<{ content: string; thinking?: string }> {
     const result = await this.chatWithUsage(userId, usage, messages, {
       ...options,
-      responseFormat: 'json_object',
+      responseFormat: 'text',
     });
     return { content: result.content, thinking: result.thinking };
   }
@@ -868,7 +872,7 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         ],
         { maxTokens: 4096, temperature: 0.2 },
       );
-      return JSON.parse(response.content);
+      return parseJsonFromLlmText(response.content) as ActionToInstructionOutput;
     } catch (err) {
       this.logger.error('actionToInstruction failed', err);
       const label = input.elementVisibleText?.trim() || input.ariaLabel?.trim();
@@ -1176,7 +1180,6 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
           temperature: 0.1,
           reasoningEffort: 'low',
           signal: opts?.signal,
-          responseFormat: 'json_object',
         },
       );
       return {
@@ -1203,7 +1206,6 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
         temperature: 0.1,
         reasoningEffort: 'low',
         signal: opts?.signal,
-        responseFormat: 'json_object',
       },
     );
 
@@ -1405,7 +1407,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       userPromptChars: userWithAgent.length,
       systemPromptChars: EVALUATION_CODEGEN_SYSTEM.length,
     });
-    dbg?.('evaluation_codegen: invoking chatJson (JSON mode + vision)', { usageKey: 'evaluation_codegen' });
+    dbg?.('evaluation_codegen: invoking chatJson (prompted JSON + vision)', { usageKey: 'evaluation_codegen' });
     const res = await this.chatJson(
       opts?.userId,
       'evaluation_codegen',

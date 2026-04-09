@@ -46,7 +46,7 @@ export class OpenRouterProvider implements LlmProvider {
     });
 
     const maxCompletionTokens = options?.maxTokens ?? 4096;
-    const responseFormat = options?.responseFormat ?? 'json_object';
+    const responseFormat = options?.responseFormat ?? 'text';
 
     const response = await this.client.chat.completions.create(
       {

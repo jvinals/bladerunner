@@ -14,8 +14,8 @@ export interface LlmChatOptions {
   /** Optional real-time trace for evaluation UI (never log secrets; prefer lengths and labels). */
   onDebugLog?: (message: string, detail?: Record<string, unknown>) => void;
   /**
-   * OpenAI-compatible only: `json_object` forces JSON output (default for legacy chat paths).
-   * Use `text` for Playwright vision codegen (plain JavaScript, not JSON).
+   * OpenAI-compatible only: `json_object` sets API-level JSON mode (OpenAI; many gateways reject it).
+   * Default in {@link OpenAiProvider} is `text`; structured routes use prompts + `parseJsonFromLlmText`.
    */
   responseFormat?: 'json_object' | 'text';
 }
