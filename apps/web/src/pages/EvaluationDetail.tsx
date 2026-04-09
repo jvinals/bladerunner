@@ -149,7 +149,17 @@ function EvaluationTracePanel({
                 >
                   <div className="min-w-0">
                     <span className="text-amber-800/90">{line.at}</span>{' '}
-                    <span className="text-gray-700 break-words">— {line.message}</span>
+                    <span
+                      className={`text-gray-700 break-words whitespace-pre-wrap ${
+                        line.detail != null &&
+                        typeof line.detail === 'object' &&
+                        (line.detail as { stepWallKind?: string }).stepWallKind
+                          ? 'text-emerald-900/90'
+                          : ''
+                      }`}
+                    >
+                      — {line.message}
+                    </span>
                     {hasDetail ? (
                       <>
                         {' '}

@@ -30,7 +30,6 @@ import { LlmConfigService } from './llm-config.service';
 import { createChatLlmProvider } from './llm-provider-factory';
 import type { LlmUsageKey } from './llm-usage-registry';
 import { supportsVisionByDefault } from './llm-provider-registry';
-import { formatTraceDurationSeconds } from '../evaluations/evaluation-trace-duration';
 import {
   generateNonGeminiVisionPlaywrightSnippet,
   verifyPlaywrightAgainstDomNonGemini,
@@ -771,10 +770,7 @@ export class LlmService {
       dbg?.('LLM route: using override provider', { usage });
       const t0 = Date.now();
       const result = await this.chatProviderOverride.chat(messages, options);
-      dbg?.(`LLM override: response ${formatTraceDurationSeconds(Date.now() - t0)}`, {
-        ms: Date.now() - t0,
-        contentChars: result.content.length,
-      });
+      dbg?.('LLM override: response', { ms: Date.now() - t0, contentChars: result.content.length });
       return { ...result, provider: 'override', model: 'override' };
     }
 
@@ -782,11 +778,12 @@ export class LlmService {
     const tResolve = Date.now();
     const resolved = await this.llmConfig.resolve(userId, usage);
     const credentials = await this.llmConfig.resolveProviderCredentials(userId, resolved.provider);
-    dbg?.(`LLM route: resolved ${formatTraceDurationSeconds(Date.now() - tResolve)}`, {
+    dbg?.('LLM route: resolved', {
       usage,
       provider: resolved.provider,
       model: resolved.model,
       credSource: credentials.source,
+      ms: Date.now() - tResolve,
     });
     if (!credentials.apiKey && resolved.provider !== 'ollama') {
       throw new Error(
@@ -796,10 +793,7 @@ export class LlmService {
     if (resolved.provider === 'gemini') {
       const tg = Date.now();
       const result = await geminiChat(credentials.apiKey!, resolved.model, messages, options);
-      dbg?.(`LLM Gemini: response ${formatTraceDurationSeconds(Date.now() - tg)}`, {
-        ms: Date.now() - tg,
-        contentChars: result.content.length,
-      });
+      dbg?.('LLM Gemini: response', { ms: Date.now() - tg, contentChars: result.content.length });
       return { ...result, provider: resolved.provider, model: resolved.model };
     }
 
@@ -817,7 +811,7 @@ export class LlmService {
     const t1 = Date.now();
     const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model, credentials);
     const result = await client.chat(messages, options);
-    dbg?.(`LLM non-Gemini: response ${formatTraceDurationSeconds(Date.now() - t1)}`, {
+    dbg?.('LLM non-Gemini: response', {
       provider: resolved.provider,
       ms: Date.now() - t1,
       contentChars: result.content.length,
@@ -1374,7 +1368,6 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
     llmPrompts: { system: string; user: string };
   }> {
     const dbg = opts?.onDebugLog;
-    const wallStart = Date.now();
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
     dbg?.('evaluation_codegen: start', {
@@ -1442,16 +1435,17 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
         onDebugLog: dbg,
       },
     );
-    dbg?.(`evaluation_codegen: raw JSON response received ${formatTraceDurationSeconds(Date.now() - tLlm)}`, {
+    dbg?.('evaluation_codegen: raw JSON response received', {
       contentChars: res.content.length,
       hasThinkingField: res.thinking != null && res.thinking !== '',
+      ms: Date.now() - tLlm,
     });
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const stepTitleRaw = typeof parsed.stepTitle === 'string' ? parsed.stepTitle.trim() : '';
     const { thinking, thinkingStructured } = parseEvaluationCodegenThinking(parsed);
     const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
-    dbg?.(`evaluation_codegen: parsed structured output ${formatTraceDurationSeconds(Date.now() - wallStart)}`, {
+    dbg?.('evaluation_codegen: parsed structured output', {
       stepTitlePreview: stepTitleRaw.slice(0, 120),
       thinkingChars: thinking.length,
       hasThinkingStructured: Boolean(thinkingStructured),
@@ -1501,7 +1495,6 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     llmPrompts?: { system: string; user: string };
   }> {
     const dbg = opts?.onDebugLog;
-    const wallStart = Date.now();
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
     dbg?.('evaluation_analyzer: start', {
@@ -1567,8 +1560,9 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         onDebugLog: dbg,
       },
     );
-    dbg?.(`evaluation_analyzer: response received ${formatTraceDurationSeconds(Date.now() - tLlm)}`, {
+    dbg?.('evaluation_analyzer: response received', {
       contentChars: res.content.length,
+      ms: Date.now() - tLlm,
     });
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const goalProgress = parsed.goalProgress === 'complete' || parsed.goalProgress === 'blocked' || parsed.goalProgress === 'partial' ? parsed.goalProgress : 'partial';
@@ -1598,7 +1592,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         };
       }
     }
-    dbg?.(`evaluation_analyzer: parsed decision ${formatTraceDurationSeconds(Date.now() - wallStart)}`, {
+    dbg?.('evaluation_analyzer: parsed decision', {
       goalProgress,
       decision,
       rationaleChars: rationale.length,
@@ -1962,7 +1956,6 @@ The attached image is the final Set-of-Marks screenshot. Produce the JSON report
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{ markdown: string; structured?: unknown }> {
     const dbg = opts?.onDebugLog;
-    const wallStart = Date.now();
     dbg?.('evaluation_report: start', { stepsMarkdownChars: input.stepsMarkdown.length });
     const user = `Overall intent:
 ${input.intent}
@@ -1991,7 +1984,7 @@ ${input.stepsMarkdown}`;
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
     const structured = parsed.structured;
-    dbg?.(`evaluation_report: parsed ${formatTraceDurationSeconds(Date.now() - wallStart)}`, {
+    dbg?.('evaluation_report: parsed', {
       markdownChars: markdown.length,
       hasStructured: structured !== undefined,
     });
