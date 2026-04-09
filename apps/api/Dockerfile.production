@@ -10,6 +10,8 @@ COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile || pnpm install
 RUN pnpm --filter @bladerunner/clerk-agentmail-signin run build
+# prisma.config.ts uses env('DATABASE_URL'); generate does not connect — placeholder only for CI/Docker build.
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build?schema=public"
 RUN pnpm --filter @bladerunner/api exec prisma generate
 RUN pnpm --filter @bladerunner/api run build
 
