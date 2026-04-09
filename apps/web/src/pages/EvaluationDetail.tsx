@@ -80,6 +80,54 @@ function parseOptions(q: { optionsJson: string }): string[] {
   }
 }
 
+/** True when this trace line reflects an LLM (or LLM routing) call. */
+function isEvaluationTraceLlmRelated(line: EvaluationDebugLogLine): boolean {
+  const detail = line.detail;
+  if (detail && typeof detail === 'object') {
+    const uk = detail.usageKey;
+    if (typeof uk === 'string' && /evaluation_|llm|codegen|analyzer|gemini|report/i.test(uk)) return true;
+  }
+  const lower = line.message.toLowerCase();
+  const needles = [
+    'llm',
+    'chatjson',
+    'gemini',
+    'openrouter',
+    'anthropic',
+    'evaluation_codegen',
+    'evaluation_analyzer',
+    'evaluation_report',
+    'codegen llm',
+    'analyzer llm',
+    'invoking chat',
+    'llm route',
+    'llm non-gemini',
+    'llm gemini',
+    'llm override',
+    'final report llm',
+    'raw json response',
+    'parsed decision',
+    'parsed structured output',
+    'response received',
+    'gpt-',
+    'claude',
+    '/openai',
+    'groq',
+    'cerebras',
+    'moonshot',
+    'kimi',
+    'minimax',
+  ];
+  if (needles.some((n) => lower.includes(n))) return true;
+  if (/\[report\].*llm/.test(lower)) return true;
+  return false;
+}
+
+function formatTraceDeltaSeconds(ms: number): string {
+  const s = Math.max(0, ms) / 1000;
+  return `${s.toFixed(2)} s`;
+}
+
 type EvaluationTracePanelProps = {
   evaluationTrace: EvaluationDebugLogLine[];
   connected: boolean;
@@ -104,6 +152,25 @@ function EvaluationTracePanel({
     if (el) el.scrollTop = el.scrollHeight;
   }, [evaluationTrace.length]);
 
+  const traceEntries = useMemo(() => {
+    return evaluationTrace.map((line, idx) => {
+      let deltaSincePrevLineMs: number | null = null;
+      if (idx > 0) {
+        const t = Date.parse(line.at);
+        const tPrev = Date.parse(evaluationTrace[idx - 1].at);
+        if (!Number.isNaN(t) && !Number.isNaN(tPrev)) {
+          deltaSincePrevLineMs = t - tPrev;
+        }
+      }
+      return {
+        line,
+        idx,
+        deltaSincePrevLineMs,
+        isLlm: isEvaluationTraceLlmRelated(line),
+      };
+    });
+  }, [evaluationTrace]);
+
   return (
     <div
       className={`flex flex-col min-h-0 min-w-0 border border-amber-200/80 bg-amber-50/40 rounded-lg overflow-hidden ${
@@ -117,9 +184,8 @@ function EvaluationTracePanel({
         </span>
       </div>
       <p className="text-[10px] text-gray-600 px-3 pb-2 leading-snug shrink-0">
-        Server-emitted timeline: auto sign-in, page capture (SOM + accessibility), LLM request/response milestones,
-        Playwright execution. Streaming model “thinking” is not available for JSON codegen (single round-trip);
-        Gemini request/response timings appear as separate lines.
+        Each entry includes Δ duration since the previous log line (chronological). LLM-related lines use bold blue
+        titles. Step wall summaries stay green.
       </p>
       <div className="px-2 pb-2 flex-1 min-h-0 flex flex-col font-mono text-[10px] leading-relaxed text-gray-900">
         <div
@@ -136,33 +202,43 @@ function EvaluationTracePanel({
                 : 'No trace in this session (start a run or reconnect while the evaluation is active).'}
             </span>
           ) : (
-            evaluationTrace.map((line, idx) => {
+            traceEntries.map(({ line, idx, deltaSincePrevLineMs, isLlm }) => {
               const keyCount =
                 line.detail != null && typeof line.detail === 'object'
                   ? Object.keys(line.detail as object).length
                   : 0;
               const hasDetail = keyCount > 0;
+              const isStepWall =
+                line.detail != null &&
+                typeof line.detail === 'object' &&
+                (line.detail as { stepWallKind?: string }).stepWallKind;
+              const titleClass = isLlm
+                ? 'font-bold text-blue-700 dark:text-blue-300'
+                : isStepWall
+                  ? 'text-emerald-900/90 font-medium'
+                  : '';
+              const stampClass = isLlm ? 'text-blue-700 dark:text-blue-300 font-bold' : 'text-amber-800/90';
+              const msgClass = isLlm
+                ? 'text-blue-700 dark:text-blue-300 font-bold break-words whitespace-pre-wrap'
+                : `text-gray-700 break-words whitespace-pre-wrap ${isStepWall ? 'text-emerald-900/90' : ''}`;
+
               return (
                 <div
                   key={`${line.at}-${idx}`}
                   className="border-b border-gray-50 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0 text-[10px] leading-snug"
                 >
                   <div className="min-w-0">
-                    <span className="text-amber-800/90">{line.at}</span>{' '}
-                    <span
-                      className={`text-gray-700 break-words whitespace-pre-wrap ${
-                        line.detail != null &&
-                        typeof line.detail === 'object' &&
-                        (line.detail as { stepWallKind?: string }).stepWallKind
-                          ? 'text-emerald-900/90'
-                          : ''
-                      }`}
-                    >
-                      — {line.message}
-                    </span>
+                    <div className={titleClass || undefined}>
+                      <span className={stampClass}>{line.at}</span>{' '}
+                      <span className={msgClass}>— {line.message}</span>
+                    </div>
+                    {idx > 0 && deltaSincePrevLineMs != null ? (
+                      <div className="mt-0.5 pl-1 text-[9px] text-gray-500 leading-tight">
+                        Δ {formatTraceDeltaSeconds(deltaSincePrevLineMs)} since previous log line
+                      </div>
+                    ) : null}
                     {hasDetail ? (
-                      <>
-                        {' '}
+                      <div className="mt-0.5">
                         <details className="inline min-w-0 max-w-full align-baseline open:block open:w-full">
                           <summary className="inline cursor-pointer text-[9px] text-gray-500 hover:text-gray-700 marker:text-gray-400">
                             ({keyCount} keys)
@@ -171,7 +247,7 @@ function EvaluationTracePanel({
                             {JSON.stringify(line.detail, null, 2)}
                           </pre>
                         </details>
-                      </>
+                      </div>
                     ) : null}
                   </div>
                 </div>
