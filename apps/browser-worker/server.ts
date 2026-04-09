@@ -5,18 +5,53 @@ const PORT = parseInt(process.env.WORKER_PORT || '3002', 10);
 const CDP_PORT = parseInt(process.env.CDP_PORT || '3003', 10);
 const EXTERNAL_HOST = process.env.WORKER_EXTERNAL_HOST || '';
 
+/** Host the API uses in wsEndpoint for chromium.connect (never use bare :: / 0.0.0.0 — invalid or wrong for clients). */
+const LOCAL_CONNECT_HOST = '127.0.0.1';
+
 let browserServer: BrowserServer | null = null;
 let launchInProgress: Promise<BrowserServer> | null = null;
 
+function shouldRewriteToLoopback(hostname: string): boolean {
+  if (!hostname) return true;
+  if (hostname === '0.0.0.0') return true;
+  if (hostname === '::' || hostname === '::1') return true;
+  return false;
+}
+
+/**
+ * Playwright may return CDP URLs with IPv6 / all-interfaces hosts that Node rejects
+ * (e.g. ws://:::3003/...) or that are not valid connect targets. Normalize for clients.
+ */
 function rewriteWsEndpoint(wsEndpoint: string): string {
-  if (!EXTERNAL_HOST) return wsEndpoint;
+  if (EXTERNAL_HOST) {
+    try {
+      const url = new URL(wsEndpoint);
+      url.hostname = EXTERNAL_HOST;
+      url.port = String(CDP_PORT);
+      return url.toString().replace(/\/$/, '');
+    } catch {
+      return wsEndpoint.replace(/ws:\/\/[^/]+/, `ws://${EXTERNAL_HOST}:${CDP_PORT}`);
+    }
+  }
+
   try {
     const url = new URL(wsEndpoint);
-    url.hostname = EXTERNAL_HOST;
-    url.port = String(CDP_PORT);
+    if (shouldRewriteToLoopback(url.hostname)) {
+      url.hostname = LOCAL_CONNECT_HOST;
+    }
+    if (!url.port) {
+      url.port = String(CDP_PORT);
+    }
     return url.toString().replace(/\/$/, '');
   } catch {
-    return wsEndpoint.replace(/ws:\/\/[^/]+/, `ws://${EXTERNAL_HOST}:${CDP_PORT}`);
+    // Malformed authority e.g. ws://:::3003/<token> from broken IPv6 serialization
+    const rest = wsEndpoint.replace(/^ws:\/\//, '');
+    const slash = rest.indexOf('/');
+    const authority = slash >= 0 ? rest.slice(0, slash) : rest;
+    const path = slash >= 0 ? rest.slice(slash) : '';
+    const portMatch = authority.match(/:(\d+)$/);
+    const port = portMatch ? portMatch[1] : String(CDP_PORT);
+    return `ws://${LOCAL_CONNECT_HOST}:${port}${path}`;
   }
 }
 
@@ -66,7 +101,8 @@ wss.on('connection', (ws) => {
             headless: true,
             channel: 'chromium',
             port: CDP_PORT,
-            host: '::',
+            // Bind IPv4 all-interfaces; `::` can yield invalid ws:// URLs on some hosts (e.g. ws://:::port/...).
+            host: '0.0.0.0',
             args: [
               '--no-sandbox',
               '--disable-setuid-sandbox',
