@@ -104,11 +104,13 @@ type Props = {
 
 export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Props) {
   const activeStepId = useMemo(() => getActiveThinkingStepId(steps, lastProgress), [steps, lastProgress]);
-  const [idleOpenStepId, setIdleOpenStepId] = useState<string | null>(null);
+  /** Last expanded step; kept when the run moves on so we never auto-collapse completed steps. */
+  const [openStepId, setOpenStepId] = useState<string | null>(null);
 
+  /** Auto-expand whichever step is actively running (codegen / analyzer). */
   useEffect(() => {
     if (activeStepId != null) {
-      setIdleOpenStepId(null);
+      setOpenStepId(activeStepId);
     }
   }, [activeStepId]);
 
@@ -120,7 +122,7 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
     );
   }
 
-  const expandedStepId = activeStepId ?? idleOpenStepId;
+  const expandedStepId = activeStepId ?? openStepId;
 
   return (
     <div className="flex flex-col">
@@ -184,7 +186,7 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
                   }
                   return;
                 }
-                setIdleOpenStepId(el.open ? st.id : null);
+                setOpenStepId(el.open ? st.id : null);
               }}
             >
               <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden hover:bg-gray-50/80">
