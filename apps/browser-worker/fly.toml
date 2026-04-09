@@ -23,7 +23,8 @@ primary_region = "iad"
   force_https = false
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  # Keep one Machine warm so Flycast → control WebSocket is not fighting cold-start **ECONNRESET** on every eval.
+  min_machines_running = 1
 
 # CDP/Playwright channel (port 3003) — TCP service; API reaches it via same app.flycast hostname on port 3003.
 [[services]]
