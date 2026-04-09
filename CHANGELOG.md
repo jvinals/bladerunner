@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.234`: **AGENTS.md (continual learning)** — Thinking process: **accordion** + auto-expand active step; deployment: standalone **browser-worker** `package-lock.json`, Fly **GitHub Actions** workflows, **Vercel** via dashboard Git. Refreshed **`continual-learning-index.json`** (47 transcripts).
+
 - `0.10.233`: **CI / browser-worker Docker — fix `npm install` in Fly build** — `package-lock.json` had pnpm workspace paths (`../../node_modules/.pnpm/...`), causing **`EMISSINGTARGET`** on **`RUN npm install`**. Regenerated a standalone npm lockfile (`npm install --no-workspaces`); added **`refresh-lockfile`** script + Dockerfile note. `@bladerunner/browser-worker 0.2.11`.
 
 - `0.10.232`: **Fly.io — browser worker DNS (`ENOTFOUND`)** — API **`BROWSER_WORKER_URL`** and worker **`WORKER_EXTERNAL_HOST`** default to **`bladerunner-browser-worker.flycast`** (Fly Proxy), not **`.internal`**. Stopped Machines do not resolve on **`.internal`**, which broke evaluations when the worker scaled to zero. Redeploy API + browser-worker; if **`BROWSER_WORKER_URL`** is set as a Fly **secret**, update or remove it so it does not override **`fly.toml`**. `@bladerunner/api 0.6.166`, `@bladerunner/browser-worker 0.2.10`.
