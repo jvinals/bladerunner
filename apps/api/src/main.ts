@@ -58,10 +58,12 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.API_PORT || 3001;
-  await app.listen(port);
+  const port = parseInt(process.env.API_PORT ?? '3001', 10);
+  const host = process.env.API_HOST?.trim() || '0.0.0.0';
+  // Fly deploy health checks connect to 0.0.0.0:<internal_port>; binding only IPv6/loopback fails PM05.
+  await app.listen(port, host);
 
-  console.log(`🚀 Bladerunner API running on http://localhost:${port}`);
-  console.log(`📄 Swagger docs at http://localhost:${port}/api/docs`);
+  console.log(`🚀 Bladerunner API listening on http://${host}:${port}`);
+  console.log(`📄 Swagger docs at http://${host}:${port}/api/docs`);
 }
 bootstrap();
