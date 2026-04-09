@@ -6545,7 +6545,7 @@ export class RecordingService extends EventEmitter {
       const timeout = setTimeout(() => {
         ws.close();
         reject(new Error('Browser worker connection timeout'));
-      }, 15000);
+      }, 60000);
 
       ws.on('open', () => {
         ws.send(JSON.stringify({ type: 'launch' }));

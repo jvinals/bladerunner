@@ -2,8 +2,23 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { chromium, BrowserServer } from 'playwright-core';
 
 const PORT = parseInt(process.env.WORKER_PORT || '3002', 10);
+const CDP_PORT = parseInt(process.env.CDP_PORT || '3003', 10);
+const EXTERNAL_HOST = process.env.WORKER_EXTERNAL_HOST || '';
 
 let browserServer: BrowserServer | null = null;
+let launchInProgress: Promise<BrowserServer> | null = null;
+
+function rewriteWsEndpoint(wsEndpoint: string): string {
+  if (!EXTERNAL_HOST) return wsEndpoint;
+  try {
+    const url = new URL(wsEndpoint);
+    url.hostname = EXTERNAL_HOST;
+    url.port = String(CDP_PORT);
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return wsEndpoint.replace(/ws:\/\/[^/]+/, `ws://${EXTERNAL_HOST}:${CDP_PORT}`);
+  }
+}
 
 const wss = new WebSocketServer({ port: PORT });
 
@@ -30,18 +45,28 @@ wss.on('connection', (ws) => {
         if (browserServer) {
           send(ws, {
             type: 'launch:result',
-            wsEndpoint: browserServer.wsEndpoint(),
+            wsEndpoint: rewriteWsEndpoint(browserServer.wsEndpoint()),
           });
           return;
         }
 
+        if (launchInProgress) {
+          try {
+            const existing = await launchInProgress;
+            send(ws, { type: 'launch:result', wsEndpoint: rewriteWsEndpoint(existing.wsEndpoint()) });
+          } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            send(ws, { type: 'error', error });
+          }
+          return;
+        }
+
         try {
-          // Default headless uses the separate "chromium-headless-shell" binary; if that cache entry is
-          // missing, launch fails. `channel: 'chromium'` uses the main bundled Chromium (same as
-          // `playwright install chromium`) — see playwright-core getExecutableName().
-          browserServer = await chromium.launchServer({
+          const launching = chromium.launchServer({
             headless: true,
             channel: 'chromium',
+            port: CDP_PORT,
+            host: '::',
             args: [
               '--no-sandbox',
               '--disable-setuid-sandbox',
@@ -49,15 +74,23 @@ wss.on('connection', (ws) => {
               '--disable-gpu',
             ],
           });
+          launchInProgress = launching;
+          browserServer = await launching;
+          launchInProgress = null;
+
           const wsEndpoint = browserServer.wsEndpoint();
+          const externalEndpoint = rewriteWsEndpoint(wsEndpoint);
           console.log(`[browser-worker] Browser launched: ${wsEndpoint}`);
+          if (externalEndpoint !== wsEndpoint) {
+            console.log(`[browser-worker] External endpoint: ${externalEndpoint}`);
+          }
 
           browserServer.on('close', () => {
             console.log('[browser-worker] Browser server closed');
             browserServer = null;
           });
 
-          send(ws, { type: 'launch:result', wsEndpoint });
+          send(ws, { type: 'launch:result', wsEndpoint: externalEndpoint });
         } catch (err) {
           const error = err instanceof Error ? err.message : String(err);
           console.error('[browser-worker] Launch failed:', error);

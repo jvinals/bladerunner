@@ -1,6 +1,6 @@
 # Fly.io configuration for Bladerunner Browser Worker
 # Internal-only service (Flycast) — no public IP. API reaches it via
-# bladerunner-browser-worker.flycast:3002 over Fly private networking.
+# bladerunner-browser-worker.flycast over Fly private networking.
 
 app = "bladerunner-browser-worker"
 primary_region = "iad"
@@ -10,14 +10,24 @@ primary_region = "iad"
 
 [env]
   WORKER_PORT = "3002"
+  CDP_PORT = "3003"
+  WORKER_EXTERNAL_HOST = "bladerunner-browser-worker.internal"
 
-# Flycast requires force_https = false; WireGuard encrypts private traffic.
+# Control channel (port 3002) — Flycast for auto-start/stop.
 [http_service]
   internal_port = 3002
   force_https = false
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
+
+# CDP/Playwright channel (port 3003) — direct TCP over .internal private network.
+# Exposed as a service so Fly Proxy is aware of it; API connects via .internal DNS.
+[[services]]
+  internal_port = 3003
+  protocol = "tcp"
+  [[services.ports]]
+    port = 3003
 
 [[vm]]
   memory = "2gb"

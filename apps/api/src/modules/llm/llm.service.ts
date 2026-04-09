@@ -776,13 +776,14 @@ export class LlmService {
     dbg?.('LLM route: resolving config', { usage });
     const resolved = await this.llmConfig.resolve(userId, usage);
     const credentials = await this.llmConfig.resolveProviderCredentials(userId, resolved.provider);
-    dbg?.('LLM route: resolved', { usage, provider: resolved.provider, model: resolved.model });
+    dbg?.('LLM route: resolved', { usage, provider: resolved.provider, model: resolved.model, credSource: credentials.source });
+    if (!credentials.apiKey && resolved.provider !== 'ollama') {
+      throw new Error(
+        `No API key for provider "${resolved.provider}" (usage: ${usage}). Add the key in Settings → AI/LLM or set the env variable.`,
+      );
+    }
     if (resolved.provider === 'gemini') {
-      const key = credentials.apiKey;
-      if (!key) {
-        throw new Error(`No API key for provider ${resolved.provider}`);
-      }
-      const result = await geminiChat(key, resolved.model, messages, options);
+      const result = await geminiChat(credentials.apiKey!, resolved.model, messages, options);
       return { ...result, provider: resolved.provider, model: resolved.model };
     }
 
