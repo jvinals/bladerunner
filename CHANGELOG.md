@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.239`: **Flycast browser-worker control WS** — Flycast uses Fly Proxy (port **80**). API now uses `**ws://bladerunner-browser-worker.flycast**` (no `:3002`), and rewrites legacy `**.internal:3002**` → `**.flycast**` (drops port) to avoid persistent `ECONNRESET`. `@bladerunner/api 0.6.170`.
+
 - `0.10.238`: **browser-worker WebSocket — retries on transient Fly errors** — `requestBrowserFromWorker` retries up to **6** times with exponential backoff on **`ECONNRESET`**, **`ECONNREFUSED`**, **`ETIMEDOUT`**, **`EAI_AGAIN`**, socket hang-up, and abnormal close before launch (cold worker / Fly Proxy). `@bladerunner/api 0.6.169`.
 
 - `0.10.237`: **Fly — rewrite legacy `BROWSER_WORKER_URL` `.internal` → `.flycast`** — On Fly Machines, **`FLY_ALLOC_ID`** skipped the earlier local-only coercion, so a **secret** still pointing at **`*.internal`** caused **`ENOTFOUND`**. **`app.internal`** is now rewritten to **`app.flycast`** at runtime (with a warning). `@bladerunner/api 0.6.168`.
