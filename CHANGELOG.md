@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.231`: **Thinking process — accordion rows** — Expanding a step collapses the previously expanded one (single open row). Active codegen/analyzer step still auto-expands when it becomes active. `@bladerunner/web 0.7.132`.
+
 - `0.10.230`: **Evaluations — codegen decides finish / ask_human / execute** — `evaluation_codegen` JSON uses **`stepMode`**: **`execute_playwright`** (Playwright + deterministic retry/advance), **`finish`** (end run, finalize report), or **`ask_human`** (question + options; coerced to retry while auto sign-in pending). Removed **`signalEvaluationComplete`** in favor of explicit **`finish`**. `@bladerunner/api 0.6.165`.
 
 - `0.10.229`: **Evaluations — remove analyzer vision LLM** — Each step uses one vision call (`evaluation_codegen`) only; after Playwright the orchestrator applies **`deterministicEvaluationStepAnalysis`** (retry on failure, advance on success, **finish** when codegen sets **`signalEvaluationComplete: true`** and execution succeeds). Removed **`evaluationAnalyzeAfterStep`** and **`EVALUATION_ANALYZER_SYSTEM`**. Post-step JPEG/SOM/a11y remain for UI preview. **`evaluation_analyzer`** in Settings is legacy/unused. README/AGENTS updated. `@bladerunner/api 0.6.164`, `@bladerunner/web 0.7.131`.

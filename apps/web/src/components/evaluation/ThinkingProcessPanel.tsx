@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronRight, Cog, Expand, Loader2, Sparkles, XCircle } from 'lucide-react';
 import type { EvaluationStepDto } from '@/lib/api';
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
@@ -104,30 +104,13 @@ type Props = {
 
 export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Props) {
   const activeStepId = useMemo(() => getActiveThinkingStepId(steps, lastProgress), [steps, lastProgress]);
-  /** Steps the user opened stay open except we auto-collapse the previous active when focus moves. */
-  const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
-  const previousActiveStepIdRef = useRef<string | null>(null);
+  /** Accordion: at most one row open; expanding a step collapses the previously expanded one. */
+  const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
 
-  /**
-   * When the active (codegen/analyzer) step changes: expand the new one and remove only the prior active
-   * id from the expanded set — other manually expanded rows are left open.
-   */
+  /** When the codegen/analyzer “active” step moves, expand that row (single slot collapses any other). */
   useEffect(() => {
-    if (activeStepId == null) {
-      previousActiveStepIdRef.current = null;
-      return;
-    }
-    const prevActive = previousActiveStepIdRef.current;
-    previousActiveStepIdRef.current = activeStepId;
-
-    setExpandedStepIds((current) => {
-      const next = new Set(current);
-      if (prevActive != null && prevActive !== activeStepId) {
-        next.delete(prevActive);
-      }
-      next.add(activeStepId);
-      return next;
-    });
+    if (activeStepId == null) return;
+    setExpandedStepId(activeStepId);
   }, [activeStepId]);
 
   if (steps.length === 0) {
@@ -189,14 +172,12 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
           >
             <details
               className="group min-w-0 flex-1"
-              open={expandedStepIds.has(st.id)}
+              open={expandedStepId === st.id}
               onToggle={(e) => {
                 const willOpen = e.currentTarget.open;
-                setExpandedStepIds((prev) => {
-                  const next = new Set(prev);
-                  if (willOpen) next.add(st.id);
-                  else next.delete(st.id);
-                  return next;
+                setExpandedStepId((prev) => {
+                  if (willOpen) return st.id;
+                  return prev === st.id ? null : prev;
                 });
               }}
             >
