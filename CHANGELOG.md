@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.236`: **Local dev — `BROWSER_WORKER_URL` Fly hostnames** — If **`BROWSER_WORKER_URL`** uses **`*.internal`** or **`*.flycast`** but the API is **not** running on Fly (`FLY_ALLOC_ID` unset), resolve to **`ws://127.0.0.1:3002`** with a warning so evaluations don’t **`getaddrinfo ENOTFOUND`** when **`.env`** copies production. `@bladerunner/api 0.6.167`.
+
 - `0.10.235`: **browser-worker Docker — pnpm monorepo build** — Fly/GitHub Actions now **`fly deploy . --config apps/browser-worker/fly.toml`** from **repo root**; **`Dockerfile.production`** uses **`pnpm-lock.yaml`** + **`pnpm install --filter @bladerunner/browser-worker...`** (no isolated **`npm`** / **`package-lock.json`**). Removed **`apps/browser-worker`** from root **`.dockerignore`** so the worker image can COPY workspace files; worker workflow also triggers on root lockfile/`package.json` changes. `@bladerunner/browser-worker 0.2.12`.
 
 - `0.10.234`: **AGENTS.md (continual learning)** — Thinking process: **accordion** + auto-expand active step; deployment: standalone **browser-worker** `package-lock.json`, Fly **GitHub Actions** workflows, **Vercel** via dashboard Git. Refreshed **`continual-learning-index.json`** (47 transcripts).
