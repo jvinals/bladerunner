@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronRight, Cog, Expand, Loader2, Sparkles, XCircle } from 'lucide-react';
 import type { EvaluationStepDto } from '@/lib/api';
 import type { EvaluationProgressPayload } from '@/hooks/useEvaluationLive';
@@ -104,15 +104,27 @@ type Props = {
 
 export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Props) {
   const activeStepId = useMemo(() => getActiveThinkingStepId(steps, lastProgress), [steps, lastProgress]);
-  /** Any number of steps may stay expanded; we only auto-add the active step, never auto-remove. */
+  /** Steps the user opened stay open except we auto-collapse the previous active when focus moves. */
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
+  const previousActiveStepIdRef = useRef<string | null>(null);
 
-  /** Auto-expand the step that is actively running (codegen / analyzer); do not collapse others. */
+  /**
+   * When the active (codegen/analyzer) step changes: expand the new one and remove only the prior active
+   * id from the expanded set — other manually expanded rows are left open.
+   */
   useEffect(() => {
-    if (activeStepId == null) return;
-    setExpandedStepIds((prev) => {
-      if (prev.has(activeStepId)) return prev;
-      const next = new Set(prev);
+    if (activeStepId == null) {
+      previousActiveStepIdRef.current = null;
+      return;
+    }
+    const prevActive = previousActiveStepIdRef.current;
+    previousActiveStepIdRef.current = activeStepId;
+
+    setExpandedStepIds((current) => {
+      const next = new Set(current);
+      if (prevActive != null && prevActive !== activeStepId) {
+        next.delete(prevActive);
+      }
       next.add(activeStepId);
       return next;
     });
