@@ -1,6 +1,12 @@
 # Changelog
 
+## 2026-04-09
+
+- `0.10.211`: **Fly API deploy — fix Dockerfile path** — `apps/api/fly.toml` used `dockerfile = "apps/api/Dockerfile.production"`, which Fly resolved under `apps/api/` → `apps/api/apps/api/Dockerfile.production` (not found in CI). Set to `Dockerfile.production` (relative to `fly.toml`).
+
 ## 2026-04-08
+
+- `0.10.210`: **Browser worker — commit `package-lock.json`** — Locks npm deps for reproducible Fly/Docker builds. `@bladerunner/browser-worker 0.2.8`.
 
 - `0.10.209`: **Browser worker Docker image — build TypeScript in production** — `Dockerfile.production` no longer uses `npm install --production` before `npx tsc || true` (wrong `tsc` package, silent skip, empty `dist/`, crash on start). Now `npm install` → `npm run build` → `npm prune --omit=dev`. `@bladerunner/browser-worker 0.2.7`.
 
