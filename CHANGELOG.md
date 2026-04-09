@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.217`: **OpenRouter + Anthropic — vision request shape** — OpenRouter often returns **`400 Provider returned error`** when **`system` + multimodal `user`** is forwarded to Anthropic. For **`openRouterStyle`** providers with **`anthropic/`** models, **`OpenAiProvider`** now folds **system → first user** text (same pattern as other working clients) and **omits `image_url.detail`** for OpenRouter. **`APIError`** bodies are appended to thrown messages for clearer logs. `@bladerunner/api 0.6.156`.
+
 - `0.10.216`: **LLM — no default `response_format: json_object`** — `chatJson` and **`OpenAiProvider`** now default to **plain text**; JSON is enforced via prompts and **`parseJsonFromLlmText`** (same as Gemini). Avoids OpenRouter 400s, **no double LLM call**, and matches how we already tolerate markdown / CoT. Opt-in **`responseFormat: 'json_object'`** remains for OpenAI-only strict mode. **`action_to_instruction`** uses **`parseJsonFromLlmText`** instead of raw **`JSON.parse`**. `@bladerunner/api 0.6.155`.
 
 - `0.10.215`: **OpenRouter / non-OpenAI models — retry without JSON mode** — Chat completions used **`response_format: { type: 'json_object' }`** (required by `chatJson`). Many OpenRouter targets (e.g. **Anthropic Claude / Haiku**) reject that parameter with **HTTP 400** (`Provider returned error`). On **400**, **`OpenAiProvider`** now retries **once** without `response_format`; prompts already ask for JSON and **`parseJsonFromLlmText`** tolerates prose. `@bladerunner/api 0.6.154`.

@@ -36,6 +36,7 @@ export function createChatLlmProvider(
     return new OpenAiProvider(key, model, {
       ...(credentials.baseUrl?.trim() ? { baseURL: credentials.baseUrl.trim() } : {}),
       ...(Object.keys(defaultHeaders).length ? { defaultHeaders } : {}),
+      openRouterStyle: Boolean(def.openRouterStyle),
     });
   }
   throw new Error(`createChatLlmProvider: unsupported protocol for ${provider}`);
