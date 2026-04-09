@@ -6,8 +6,9 @@ primary_region = "iad"
 
 # Build context must be the **repository root** (Dockerfile COPYs pnpm-workspace, packages/, apps/api/).
 # From root: `fly deploy . --config apps/api/fly.toml`
+# Dockerfile path is relative to this file's directory — do not use `apps/api/...` or Fly resolves `apps/api/apps/api/...`.
 [build]
-  dockerfile = "apps/api/Dockerfile.production"
+  dockerfile = "Dockerfile.production"
 
 [env]
   NODE_ENV = "production"
