@@ -17,13 +17,21 @@ jobs:
   deploy:
     name: Deploy bladerunner-browser-worker
     runs-on: ubuntu-latest
+    # Job-level env so flyctl sees the token on every step (fork PRs still get empty secrets).
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Ensure Fly token is set
+        run: |
+          if [ -z "${FLY_API_TOKEN}" ]; then
+            echo "::error::FLY_API_TOKEN is not set. Add it under Repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      # Build context = apps/browser-worker; run from repo root so --config paths resolve.
       - name: Deploy
-        working-directory: apps/browser-worker
-        run: flyctl deploy . --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy apps/browser-worker --config apps/browser-worker/fly.toml --remote-only
