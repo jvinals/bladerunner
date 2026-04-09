@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.237`: **Fly — rewrite legacy `BROWSER_WORKER_URL` `.internal` → `.flycast`** — On Fly Machines, **`FLY_ALLOC_ID`** skipped the earlier local-only coercion, so a **secret** still pointing at **`*.internal`** caused **`ENOTFOUND`**. **`app.internal`** is now rewritten to **`app.flycast`** at runtime (with a warning). `@bladerunner/api 0.6.168`.
+
 - `0.10.236`: **Local dev — `BROWSER_WORKER_URL` Fly hostnames** — If **`BROWSER_WORKER_URL`** uses **`*.internal`** or **`*.flycast`** but the API is **not** running on Fly (`FLY_ALLOC_ID` unset), resolve to **`ws://127.0.0.1:3002`** with a warning so evaluations don’t **`getaddrinfo ENOTFOUND`** when **`.env`** copies production. `@bladerunner/api 0.6.167`.
 
 - `0.10.235`: **browser-worker Docker — pnpm monorepo build** — Fly/GitHub Actions now **`fly deploy . --config apps/browser-worker/fly.toml`** from **repo root**; **`Dockerfile.production`** uses **`pnpm-lock.yaml`** + **`pnpm install --filter @bladerunner/browser-worker...`** (no isolated **`npm`** / **`package-lock.json`**). Removed **`apps/browser-worker`** from root **`.dockerignore`** so the worker image can COPY workspace files; worker workflow also triggers on root lockfile/`package.json` changes. `@bladerunner/browser-worker 0.2.12`.
