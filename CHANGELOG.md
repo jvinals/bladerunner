@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.215`: **OpenRouter / non-OpenAI models — retry without JSON mode** — Chat completions used **`response_format: { type: 'json_object' }`** (required by `chatJson`). Many OpenRouter targets (e.g. **Anthropic Claude / Haiku**) reject that parameter with **HTTP 400** (`Provider returned error`). On **400**, **`OpenAiProvider`** now retries **once** without `response_format`; prompts already ask for JSON and **`parseJsonFromLlmText`** tolerates prose. `@bladerunner/api 0.6.154`.
+
 - `0.10.214`: **Evaluations — codegen timeout no longer fails the run** — `AbortSignal.timeout` on **evaluation_codegen** (default **120s**) rejects with **`This operation was aborted`**; the analyzer already recovered from its own timeout, but codegen did not, so long vision calls **FAILED** the whole evaluation. On abort/timeout the orchestrator now logs a warning, persists a **no-op** step with **`codegenTimedOut`**, and continues so the **analyzer** can return **retry**. **`isAbortOrTimeoutError`** reads **`name`/`message`** from any thrown object (e.g. **`DOMException`**) so aborts are recognized reliably. `@bladerunner/api 0.6.153`.
 
 - `0.10.213`: **Browser worker — valid CDP WebSocket URL for local evals** — `launchServer` used `host: '::'`, which could produce malformed endpoints (`ws://:::3003/...`) that `chromium.connect` rejects. Bind `0.0.0.0` and normalize returned `wsEndpoint` to `127.0.0.1` when `WORKER_EXTERNAL_HOST` is unset (Fly/production unchanged). `@bladerunner/browser-worker 0.2.9`.

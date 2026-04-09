@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { APIError } from 'openai';
 import { ChatMessage, LlmChatOptions, LlmChatResult, LlmProvider } from './llm-provider.interface';
 
 export class OpenAiProvider implements LlmProvider {
@@ -47,20 +47,36 @@ export class OpenAiProvider implements LlmProvider {
       this.model.includes('gpt-5') || /^o[0-9]/i.test(this.model);
 
     const responseFormat = options?.responseFormat ?? 'json_object';
+    const wantJsonObject = responseFormat === 'json_object';
 
-    const response = await this.client.chat.completions.create(
-      {
-        model: this.model,
-        messages: openAiMessages,
-        temperature: options?.temperature ?? 0.1,
-        max_completion_tokens: maxCompletionTokens,
-        ...(responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
-        ...(options?.reasoningEffort != null && supportsReasoningEffort
-          ? { reasoning_effort: options.reasoningEffort }
-          : {}),
-      },
-      { signal: options?.signal },
-    );
+    const baseParams = {
+      model: this.model,
+      messages: openAiMessages,
+      temperature: options?.temperature ?? 0.1,
+      max_completion_tokens: maxCompletionTokens,
+      ...(options?.reasoningEffort != null && supportsReasoningEffort
+        ? { reasoning_effort: options.reasoningEffort }
+        : {}),
+    } satisfies OpenAI.ChatCompletionCreateParamsNonStreaming;
+
+    let response: OpenAI.ChatCompletion;
+    try {
+      response = await this.client.chat.completions.create(
+        {
+          ...baseParams,
+          ...(wantJsonObject ? { response_format: { type: 'json_object' as const } } : {}),
+        },
+        { signal: options?.signal },
+      );
+    } catch (err) {
+      /** OpenRouter and many non-OpenAI models return 400 when `response_format` JSON mode is unsupported. */
+      const is400JsonMode =
+        wantJsonObject &&
+        err instanceof APIError &&
+        err.status === 400;
+      if (!is400JsonMode) throw err;
+      response = await this.client.chat.completions.create(baseParams, { signal: options?.signal });
+    }
 
     const choice = response.choices[0];
     const msg = choice?.message;
