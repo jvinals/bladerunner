@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.240`: **API — bind on `0.0.0.0` for Fly health checks** — Fixes Fly deploy **`[PM05] failed to connect to machine`** when the deploy probe targets **`0.0.0.0:3001`**. Nest now **`listen(port, API_HOST)`** with default **`0.0.0.0`**. `@bladerunner/api 0.6.171`.
+
 - `0.10.239`: **Flycast browser-worker control WS** — Flycast uses Fly Proxy (port **80**). API now uses `**ws://bladerunner-browser-worker.flycast**` (no `:3002`), and rewrites legacy `**.internal:3002**` → `**.flycast**` (drops port) to avoid persistent `ECONNRESET`. `@bladerunner/api 0.6.170`.
 
 - `0.10.238`: **browser-worker WebSocket — retries on transient Fly errors** — `requestBrowserFromWorker` retries up to **6** times with exponential backoff on **`ECONNRESET`**, **`ECONNREFUSED`**, **`ETIMEDOUT`**, **`EAI_AGAIN`**, socket hang-up, and abnormal close before launch (cold worker / Fly Proxy). `@bladerunner/api 0.6.169`.
