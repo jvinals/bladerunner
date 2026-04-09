@@ -10,11 +10,21 @@ function enrichOpenAiClientError(err: unknown): Error {
         : nested != null
           ? String(nested)
           : '';
-    return new Error(
-      `${err.message}${body ? ` | error_json=${body}` : ''}${err.requestID ? ` | request_id=${err.requestID}` : ''}`,
-    );
+    const base = `${err.message}${body ? ` | error_json=${body}` : ''}${err.requestID ? ` | request_id=${err.requestID}` : ''}`;
+    /** Nested OpenRouter metadata.raw may contain the real upstream message. */
+    const hint = visionBedrockHint(base);
+    return new Error(base + hint);
   }
   return err instanceof Error ? err : new Error(String(err));
+}
+
+/** Bedrock often rejects vision for Claude snapshots; message is wrapped as generic "Provider returned error". */
+function visionBedrockHint(flatMessage: string): string {
+  if (!/does not support image input|image input/i.test(flatMessage)) return '';
+  return (
+    ' | Hint: This model route does not accept screenshots. OpenRouter may send Claude to Amazon Bedrock, where some Haiku/Sonnet snapshots are text-only. ' +
+    'Vision requests from Bladerunner set provider.ignore for amazon-bedrock; you can also prefer Anthropic in OpenRouter presets or use a known vision model (e.g. Sonnet, Gemini).'
+  );
 }
 
 /**
@@ -98,6 +108,17 @@ export class OpenAiProvider implements LlmProvider {
     /** Default `text`: structured routes rely on prompts plus shared JSON extraction; `json_object` is opt-in for strict OpenAI-only callers. */
     const responseFormat = options?.responseFormat ?? 'text';
 
+    /**
+     * OpenRouter load-balances `anthropic/claude-*` across hosts; **Amazon Bedrock** may serve a snapshot that
+     * rejects **image** input (`'…' does not support image input`), while Anthropic's API accepts vision.
+     * Skip Bedrock for multimodal requests so Haiku/Sonnet evaluations receive screenshots.
+     * @see https://openrouter.ai/docs/guides/routing/provider-selection#ignoring-providers
+     */
+    const openRouterVisionRouting =
+      this.openRouterStyle && Boolean(options?.imageBase64?.trim())
+        ? { provider: { ignore: ['amazon-bedrock'] } }
+        : {};
+
     let response: OpenAI.ChatCompletion;
     try {
       response = await this.client.chat.completions.create(
@@ -110,7 +131,8 @@ export class OpenAiProvider implements LlmProvider {
           ...(options?.reasoningEffort != null && supportsReasoningEffort
             ? { reasoning_effort: options.reasoningEffort }
             : {}),
-        },
+          ...openRouterVisionRouting,
+        } as OpenAI.ChatCompletionCreateParamsNonStreaming,
         { signal: options?.signal },
       );
     } catch (e) {

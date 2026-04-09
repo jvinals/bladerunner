@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.219`: **OpenRouter vision — ignore Amazon Bedrock** — OpenRouter can route `anthropic/claude-3-5-haiku-…` to **Amazon Bedrock**, which returned **`'claude-3-5-haiku-20241022' does not support image input`** for evaluation screenshots. Multimodal OpenRouter requests now include **`provider: { ignore: ['amazon-bedrock'] }`** so vision goes to a host that accepts images (typically Anthropic). Errors mentioning unsupported image input get a short **Hint** in the message. `@bladerunner/api 0.6.158`.
+
 - `0.10.218`: **Docs — OpenRouter Claude Haiku 3.5** — Comments clarify that the OpenRouter+Anthropic vision compat path (system folded into user, no `image_url.detail`) applies to **`anthropic/claude-3-5-haiku-…`** and other **`anthropic/claude-…`** slugs. `@bladerunner/api 0.6.157`.
 
 - `0.10.217`: **OpenRouter + Anthropic — vision request shape** — OpenRouter often returns **`400 Provider returned error`** when **`system` + multimodal `user`** is forwarded to Anthropic. For **`openRouterStyle`** providers with **`anthropic/`** models, **`OpenAiProvider`** now folds **system → first user** text (same pattern as other working clients) and **omits `image_url.detail`** for OpenRouter. **`APIError`** bodies are appended to thrown messages for clearer logs. `@bladerunner/api 0.6.156`.
