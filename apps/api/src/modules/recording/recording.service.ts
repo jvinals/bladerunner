@@ -6556,8 +6556,8 @@ export class RecordingService extends EventEmitter {
    * Fly.io may reset the WebSocket while the browser-worker Machine is waking (`ECONNRESET`).
    * Retry transient errors with backoff instead of failing the evaluation immediately.
    */
-  private static readonly BROWSER_WORKER_WS_ATTEMPTS = 6;
-  private static readonly BROWSER_WORKER_WS_ATTEMPT_MS = 45_000;
+  private static readonly BROWSER_WORKER_WS_ATTEMPTS = 10;
+  private static readonly BROWSER_WORKER_WS_ATTEMPT_MS = 60_000;
 
   private requestBrowserFromWorker(workerUrl: string): Promise<string> {
     const attempts = RecordingService.BROWSER_WORKER_WS_ATTEMPTS;
@@ -6575,7 +6575,7 @@ export class RecordingService extends EventEmitter {
           if (!retriable || i === attempts) {
             throw lastErr;
           }
-          const backoff = Math.min(500 * 2 ** (i - 1), 10_000);
+          const backoff = Math.min(2000 * 2 ** (i - 1), 20_000);
           this.logger.warn(
             `Browser worker WebSocket failed (${lastErr.message}); retry ${i}/${attempts} in ${backoff}ms`,
           );
