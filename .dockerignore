@@ -1,0 +1,26 @@
+# API Docker build uses repo root as context (apps/api/Dockerfile.production).
+# Keep this tight so `fly deploy` / CI uploads stay small.
+
+**/.git
+**/.github
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.log
+
+# Apps not needed for API image
+apps/web
+apps/browser-worker
+
+docs
+e2e
+playwright-report
+test-results
+
+*.md
+!README.md
+
+.env
+.env.*
+!.env.example

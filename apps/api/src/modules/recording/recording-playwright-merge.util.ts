@@ -200,10 +200,19 @@ export function fixAmbiguousTableLastRowTdLocator(playwrightCode: string): strin
  * Playback: some shadcn/Radix-style dropdown triggers visually show a label like "Select Provider" but
  * Playwright's accessible-role query resolves zero matches for `getByRole('combobox', { name })`.
  * Keep the original role/name lookup first, then fall back to visible-text combobox/button locators.
+ *
+ * Options must allow extra properties (e.g. `{ name: 'Sign in', exact: true }`) — LLMs often emit them;
+ * a regex that only matched `{ name: '…' }` skipped the rewrite and strict mode errors persisted.
  */
+/** Name capture: exclude quotes and newlines (backtick omitted — would break tagged templates). */
+const GET_BY_ROLE_NAME_OPTIONS = String.raw`\{\s*[^}]*\bname:\s*(['"])([^"'\n\r]+)\1[^}]*\}`;
+
 export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): string {
   return playwrightCode.replace(
-    /\bawait\s+page\.getByRole\(\s*(['"`])combobox\1\s*,\s*\{\s*name:\s*(['"`])([^'"`\n\r]+)\2\s*\}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?/g,
+    new RegExp(
+      String.raw`\bawait\s+page\.getByRole\(\s*(['"])combobox\1\s*,\s*${GET_BY_ROLE_NAME_OPTIONS}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?`,
+      'g',
+    ),
     (_full, _roleQuote: string, _nameQuote: string, rawName: string, firstPart: string, clickPart: string) => {
       const name = String(rawName).trim();
       if (!name || name.length > 160) return _full;
@@ -211,7 +220,7 @@ export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): 
       const first = firstPart ?? '';
       const click = clickPart ?? '.click()';
       const exactFallback = shouldUseExactGetByTextForPlayback(name);
-      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
+      return `await (async () => { const primary = page.getByRole('combobox', { name: ${qName} })${first}; const n = await primary.count(); if (n === 1) { await primary${click}; return; } if (n > 1) { await primary.first()${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
     },
   );
 }
@@ -222,7 +231,10 @@ export function fallbackNamedComboboxClicksForPlayback(playwrightCode: string): 
  */
 export function fallbackNamedButtonSelectTriggerClicksForPlayback(playwrightCode: string): string {
   return playwrightCode.replace(
-    /\bawait\s+page\.getByRole\(\s*(['"`])button\1\s*,\s*\{\s*name:\s*(['"`])([^'"`\n\r]+)\2\s*\}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?/g,
+    new RegExp(
+      String.raw`\bawait\s+page\.getByRole\(\s*(['"])button\1\s*,\s*${GET_BY_ROLE_NAME_OPTIONS}\s*\)(\s*\.first\(\))?(\s*\.click\(\s*(?:\{[^)]*\})?\s*\))\s*;?`,
+      'g',
+    ),
     (_full, _roleQuote: string, _nameQuote: string, rawName: string, firstPart: string, clickPart: string) => {
       const name = String(rawName).trim();
       if (!name || name.length > 160) return _full;
@@ -230,7 +242,7 @@ export function fallbackNamedButtonSelectTriggerClicksForPlayback(playwrightCode
       const first = firstPart ?? '';
       const click = clickPart ?? '.click()';
       const exactFallback = shouldUseExactGetByTextForPlayback(name);
-      return `await (async () => { const primary = page.getByRole('button', { name: ${qName} })${first}; if (await primary.count()) { await primary${click}; return; } const combo = page.getByRole('combobox', { name: ${qName} }); if (await combo.count()) { await combo${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
+      return `await (async () => { const primary = page.getByRole('button', { name: ${qName} })${first}; const n = await primary.count(); if (n === 1) { await primary${click}; return; } if (n > 1) { const inPwdForm = page.locator('form:has(input[type="password"])').first().getByRole('button', { name: ${qName} }); if (await inPwdForm.count()) { await inPwdForm.first()${click}; return; } await primary.first()${click}; return; } const combo = page.getByRole('combobox', { name: ${qName} }); const nc = await combo.count(); if (nc === 1) { await combo${click}; return; } if (nc > 1) { await combo.first()${click}; return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${qName} }).first(); if (await comboByText.count()) { await comboByText${click}; return; } const buttonByText = page.locator('button').filter({ hasText: ${qName} }).first(); if (await buttonByText.count()) { await buttonByText${click}; return; } await page.getByText(${qName}, { exact: ${exactFallback} }).first()${click}; })();`;
     },
   );
 }

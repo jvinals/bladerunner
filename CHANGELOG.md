@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-04-09
+
+- `0.10.212`: **API Docker build — `DATABASE_URL` for `prisma generate`** — `prisma.config.ts` requires `DATABASE_URL` when loading; Fly/GitHub Actions had no env during image build. Set a placeholder `ENV` in `Dockerfile.production` before `prisma generate` / `pnpm run build` (generate does not connect to DB). `@bladerunner/api 0.6.152`.
+
+- `0.10.211`: **Fly API deploy — fix Dockerfile path** — `apps/api/fly.toml` used `dockerfile = "apps/api/Dockerfile.production"`, which Fly resolved under `apps/api/` → `apps/api/apps/api/Dockerfile.production` (not found in CI). Set to `Dockerfile.production` (relative to `fly.toml`).
+
+## 2026-04-08
+
+- `0.10.210`: **Browser worker — commit `package-lock.json`** — Locks npm deps for reproducible Fly/Docker builds. `@bladerunner/browser-worker 0.2.8`.
+
+- `0.10.209`: **Browser worker Docker image — build TypeScript in production** — `Dockerfile.production` no longer uses `npm install --production` before `npx tsc || true` (wrong `tsc` package, silent skip, empty `dist/`, crash on start). Now `npm install` → `npm run build` → `npm prune --omit=dev`. `@bladerunner/browser-worker 0.2.7`.
+
+- `0.10.208`: **CI — Fly.io browser worker deploy on push to `main`** — GitHub Actions workflow deploys `bladerunner-browser-worker` from `apps/browser-worker` when worker paths change; uses `FLY_API_TOKEN` (same secret as API).
+
+- `0.10.207`: **CI — Fly.io API deploy on push to `main`** — GitHub Actions workflow runs `flyctl deploy` from the repo root with `apps/api/fly.toml` (correct Docker context for the monorepo). Requires `FLY_API_TOKEN` in repo secrets. Root `.dockerignore` trims upload size; `apps/api/fly.toml` `[build].dockerfile` set to `apps/api/Dockerfile.production` for root-context deploys.
+
+- `0.10.206`: **Evaluations / playback — getByRole with `exact: true`** — The button/combobox playback rewrites only matched `{ name: '…' }` with no other options, so codegen like `getByRole('button', { name: 'Sign in', exact: true })` was not transformed and strict mode could still fail. Regex now allows extra option properties. `@bladerunner/api 0.6.151`.
+
+- `0.10.205`: **Evaluations / playback — strict mode on duplicate button names** — The button/combobox playback fallbacks used `if (count()) click()`, which still called `.click()` on ambiguous locators when count was **2+** (e.g. two "Sign in" buttons). Now: click only when count is **1**; when **>1**, prefer `form:has(input[type="password"])` for buttons, else `.first()`; combobox path uses the same count split. `@bladerunner/api 0.6.150`.
+
+- `0.10.204`: **Clerk auto sign-in — duplicate "Sign in" buttons** — Password submit now prefers the button inside `form:has(input[type="password"])` so page-level header CTAs do not trigger Playwright strict mode; evaluation LLM guidelines note scoping when multiple "Sign in" buttons exist. `@bladerunner/clerk-agentmail-signin 0.5.3`, `@bladerunner/api 0.6.149`.
+
 ## 2026-04-01
 
 - `0.10.200`: **Evaluations — compact New evaluation on narrow screens** — Below `sm`, the primary action shows **`+` only** (with **`aria-label="New evaluation"`**); from **`sm` up**, **Plus icon + label** unchanged. `@bladerunner/web 0.7.120`.

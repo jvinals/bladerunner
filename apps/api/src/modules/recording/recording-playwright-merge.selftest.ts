@@ -165,7 +165,7 @@ assertEq(
   fallbackNamedComboboxClicksForPlayback(
     `await page.getByRole('combobox', { name: 'Select Provider' }).click();`,
   ),
-  `await (async () => { const primary = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); if (await primary.count()) { await primary.click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
+  `await (async () => { const primary = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); const n = await primary.count(); if (n === 1) { await primary.click(); return; } if (n > 1) { await primary.first().click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
 );
 
 assertEq(
@@ -173,7 +173,15 @@ assertEq(
   fallbackNamedButtonSelectTriggerClicksForPlayback(
     `await page.getByRole('button', { name: 'Select Provider' }).click();`,
   ),
-  `await (async () => { const primary = page.getByRole('button', { name: ${JSON.stringify('Select Provider')} }); if (await primary.count()) { await primary.click(); return; } const combo = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); if (await combo.count()) { await combo.click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
+  `await (async () => { const primary = page.getByRole('button', { name: ${JSON.stringify('Select Provider')} }); const n = await primary.count(); if (n === 1) { await primary.click(); return; } if (n > 1) { const inPwdForm = page.locator('form:has(input[type="password"])').first().getByRole('button', { name: ${JSON.stringify('Select Provider')} }); if (await inPwdForm.count()) { await inPwdForm.first().click(); return; } await primary.first().click(); return; } const combo = page.getByRole('combobox', { name: ${JSON.stringify('Select Provider')} }); const nc = await combo.count(); if (nc === 1) { await combo.click(); return; } if (nc > 1) { await combo.first().click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Select Provider')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Select Provider')}, { exact: true }).first().click(); })();`,
+);
+
+assertEq(
+  'playback: button with exact:true in options still gets fallback rewrite',
+  fallbackNamedButtonSelectTriggerClicksForPlayback(
+    `await page.getByRole('button', { name: 'Sign in', exact: true }).click();`,
+  ),
+  `await (async () => { const primary = page.getByRole('button', { name: ${JSON.stringify('Sign in')} }); const n = await primary.count(); if (n === 1) { await primary.click(); return; } if (n > 1) { const inPwdForm = page.locator('form:has(input[type="password"])').first().getByRole('button', { name: ${JSON.stringify('Sign in')} }); if (await inPwdForm.count()) { await inPwdForm.first().click(); return; } await primary.first().click(); return; } const combo = page.getByRole('combobox', { name: ${JSON.stringify('Sign in')} }); const nc = await combo.count(); if (nc === 1) { await combo.click(); return; } if (nc > 1) { await combo.first().click(); return; } const comboByText = page.locator('button[role="combobox"]').filter({ hasText: ${JSON.stringify('Sign in')} }).first(); if (await comboByText.count()) { await comboByText.click(); return; } const buttonByText = page.locator('button').filter({ hasText: ${JSON.stringify('Sign in')} }).first(); if (await buttonByText.count()) { await buttonByText.click(); return; } await page.getByText(${JSON.stringify('Sign in')}, { exact: true }).first().click(); })();`,
 );
 
 console.log('recording-playwright-merge.selftest: ok');

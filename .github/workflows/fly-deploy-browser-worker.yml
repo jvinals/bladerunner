@@ -1,0 +1,29 @@
+# Deploy internal Playwright browser worker to Fly.io when main changes (or manual run).
+# Uses the same secret as the API workflow: FLY_API_TOKEN.
+#
+# Build context is apps/browser-worker/ (Dockerfile COPY package.json, server sources).
+
+name: Deploy browser worker to Fly.io
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/browser-worker/**'
+      - '.github/workflows/fly-deploy-browser-worker.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy bladerunner-browser-worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        working-directory: apps/browser-worker
+        run: flyctl deploy . --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
