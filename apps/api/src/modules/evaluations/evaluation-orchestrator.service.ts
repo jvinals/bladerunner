@@ -1,7 +1,8 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
-import { LlmService } from '../llm/llm.service';
+import { LlmService, type EvaluationCodegenStepResult } from '../llm/llm.service';
 import { EvaluationsService } from './evaluations.service';
 import { AgentContextService } from '../agent-context/agent-context.service';
 import { formatStepWallDurationMessage } from './evaluation-trace-duration';
@@ -410,7 +411,7 @@ export class EvaluationOrchestratorService {
           : undefined;
 
       let codegenTimedOut = false;
-      let proposed: Awaited<ReturnType<LlmService['evaluationProposePlaywrightStep']>>;
+      let proposed: EvaluationCodegenStepResult;
       try {
         proposed = await this.llm.evaluationProposePlaywrightStep(
           {
@@ -445,6 +446,7 @@ export class EvaluationOrchestratorService {
           timeoutMs: codegenTimeoutMs,
         });
         proposed = {
+          mode: 'execute_playwright',
           stepTitle: 'Codegen model timed out',
           thinking: `Vision/codegen did not return within ${sec}s (${errDetail}). No Playwright was executed for this step; rule-based continuation will retry.`,
           playwrightCode: '',
@@ -458,17 +460,27 @@ export class EvaluationOrchestratorService {
       if (!codegenTimedOut) {
         trace('Codegen LLM: evaluationProposePlaywrightStep returned', {
           msSinceStepStart: Date.now() - stepWallStart,
+          stepMode: proposed.mode,
         });
       }
 
-      const codegenOutputJson = {
+      const codegenOutputJson: Record<string, unknown> = {
         ...(codegenTimedOut ? { codegenTimedOut: true as const, codegenTimeoutMs } : {}),
+        stepMode: proposed.mode,
         ...(proposed.thinkingStructured ? { thinkingStructured: proposed.thinkingStructured } : {}),
         thinking: proposed.thinking,
         stepTitle: proposed.stepTitle,
-        playwrightCode: proposed.playwrightCode,
-        expectedOutcome: proposed.expectedOutcome,
-        ...(proposed.signalEvaluationComplete ? { signalEvaluationComplete: true as const } : {}),
+        ...(proposed.mode === 'execute_playwright'
+          ? {
+              playwrightCode: proposed.playwrightCode,
+              expectedOutcome: proposed.expectedOutcome,
+            }
+          : proposed.mode === 'finish'
+            ? { ...(proposed.finishRationale ? { finishRationale: proposed.finishRationale } : {}) }
+            : {
+                humanQuestion: proposed.humanQuestion,
+                humanOptions: proposed.humanOptions,
+              }),
       };
 
       const codegenInputJsonWithPrompts = {
@@ -484,14 +496,170 @@ export class EvaluationOrchestratorService {
         stepTitle: proposed.stepTitle,
         progressSummaryBefore,
         codegenInputJson: codegenInputJsonWithPrompts,
-        codegenOutputJson,
+        codegenOutputJson: codegenOutputJson as Prisma.InputJsonValue,
         thinkingText: proposed.thinking,
-        proposedCode: proposed.playwrightCode,
-        expectedOutcome: proposed.expectedOutcome,
+        proposedCode: proposed.mode === 'execute_playwright' ? proposed.playwrightCode : null,
+        expectedOutcome:
+          proposed.mode === 'execute_playwright'
+            ? proposed.expectedOutcome
+            : proposed.mode === 'finish'
+              ? proposed.finishRationale ?? null
+              : null,
       });
       trace('Persisted evaluation step row (codegen inputs + outputs)', {
         stepTitle: proposed.stepTitle,
+        stepMode: proposed.mode,
       });
+
+      if (proposed.mode === 'finish') {
+        const rationale =
+          proposed.finishRationale?.trim() ||
+          proposed.thinking.slice(0, 500) ||
+          'Codegen ended the evaluation (stepMode finish).';
+        await this.evaluations.updateStepAfterAnalyzer(evaluationId, sequence, {
+          analyzerInputJson: {
+            analysisMode: 'codegen_decision' as const,
+            decisionSource: 'codegen_finish' as const,
+            note: 'No Playwright; codegen chose stepMode finish.',
+          },
+          analyzerOutputJson: {
+            codegenDecision: true as const,
+            goalProgress: 'complete',
+            decision: 'finish',
+            rationale,
+          },
+          actualOutcome: rationale,
+          errorMessage: null,
+          decision: 'finish',
+          analyzerRationale: rationale,
+          stepDurationMs: Date.now() - stepWallStart,
+        });
+        await this.evaluations.appendProgressSummary(
+          evaluationId,
+          userId,
+          `Step ${sequence}: finish (complete) — ${rationale.slice(0, 500)}`,
+        );
+        this.recording.emitEvaluationProgress(evaluationId, {
+          phase: 'analyzed',
+          sequence,
+          decision: 'finish',
+          goalProgress: 'complete',
+          rationale,
+        });
+        trace('Codegen finish: finalizing report', { sequence });
+        this.emitEvaluationStepWallRunEnd(evaluationId, stepWallPending, 'goal_finish');
+        stepWallPending = null;
+        await this.finalizeReport(evaluationId, userId, ev.intent, ev.desiredOutput);
+        await this.recording.stopEvaluationSession(evaluationId, userId);
+        return;
+      }
+
+      if (proposed.mode === 'ask_human') {
+        if (fresh.autoSignIn && !authState.clerkFullSignInDone) {
+          const suffix =
+            ' (overridden: automatic sign-in is enabled and still in progress; not pausing for a human question.)';
+          const rationale = `Codegen requested ask_human;${suffix}`.slice(0, 8000);
+          await this.evaluations.updateStepAfterAnalyzer(evaluationId, sequence, {
+            analyzerInputJson: {
+              analysisMode: 'codegen_decision' as const,
+              decisionSource: 'coerced_from_ask_human' as const,
+              originalHumanQuestion: proposed.humanQuestion,
+              originalHumanOptions: proposed.humanOptions,
+            },
+            analyzerOutputJson: {
+              codegenDecision: true as const,
+              coercedFromAskHuman: true as const,
+              goalProgress: 'partial',
+              decision: 'retry',
+              rationale,
+            },
+            actualOutcome: 'skipped',
+            errorMessage: null,
+            decision: 'retry',
+            analyzerRationale: rationale,
+            stepDurationMs: Date.now() - stepWallStart,
+          });
+          await this.evaluations.appendProgressSummary(
+            evaluationId,
+            userId,
+            `Step ${sequence}: retry (partial) — ${rationale.slice(0, 500)}`,
+          );
+          this.recording.emitEvaluationProgress(evaluationId, {
+            phase: 'analyzed',
+            sequence,
+            decision: 'retry',
+            goalProgress: 'partial',
+            rationale,
+          });
+          trace('Codegen ask_human coerced to retry while auto sign-in pending', { sequence });
+          llmStepCount += 1;
+          if (fresh.runMode === 'step_review') {
+            await this.prisma.evaluation.update({
+              where: { id: evaluationId, userId },
+              data: { status: 'WAITING_FOR_REVIEW' },
+            });
+            this.recording.emitEvaluationProgress(evaluationId, {
+              phase: 'paused_review',
+              sequence,
+            });
+            this.emitEvaluationStepWallRunEnd(evaluationId, stepWallPending, 'step_review');
+            stepWallPending = null;
+            return;
+          }
+          continue;
+        }
+
+        const rationale = proposed.thinking.slice(0, 500) || 'Human input requested.';
+        await this.evaluations.updateStepAfterAnalyzer(evaluationId, sequence, {
+          analyzerInputJson: {
+            analysisMode: 'codegen_decision' as const,
+            decisionSource: 'codegen_ask_human' as const,
+          },
+          analyzerOutputJson: {
+            codegenDecision: true as const,
+            goalProgress: 'partial',
+            decision: 'ask_human',
+            rationale,
+            humanQuestion: proposed.humanQuestion,
+            humanOptions: proposed.humanOptions,
+          },
+          actualOutcome: 'Waiting for human',
+          errorMessage: null,
+          decision: 'ask_human',
+          analyzerRationale: rationale,
+          stepDurationMs: Date.now() - stepWallStart,
+        });
+        await this.evaluations.appendProgressSummary(
+          evaluationId,
+          userId,
+          `Step ${sequence}: ask_human (partial) — ${rationale.slice(0, 500)}`,
+        );
+        this.recording.emitEvaluationProgress(evaluationId, {
+          phase: 'analyzed',
+          sequence,
+          decision: 'ask_human',
+          goalProgress: 'partial',
+          rationale,
+        });
+        await this.evaluations.createQuestion(userId, {
+          evaluationId,
+          stepSequence: sequence,
+          prompt: proposed.humanQuestion,
+          options: proposed.humanOptions,
+        });
+        await this.prisma.evaluation.update({
+          where: { id: evaluationId, userId },
+          data: { status: 'WAITING_FOR_HUMAN' },
+        });
+        this.recording.emitEvaluationProgress(evaluationId, {
+          phase: 'waiting_human',
+          question: proposed.humanQuestion,
+          options: proposed.humanOptions,
+        });
+        this.emitEvaluationStepWallRunEnd(evaluationId, stepWallPending, 'ask_human');
+        stepWallPending = null;
+        return;
+      }
 
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'executing',
@@ -554,20 +722,18 @@ export class EvaluationOrchestratorService {
         autoSignInCompleted: authState.clerkFullSignInDone,
         analysisMode: 'deterministic' as const,
         note:
-          'After-step capture for UI preview. Continuation (retry/advance/finish) is rule-based; no evaluation_analyzer LLM.',
+          'After-step capture for UI preview. Retry vs advance is rule-based after execute_playwright.',
       };
 
       await this.evaluations.updateStepAnalyzerInputsOnly(evaluationId, sequence, { analyzerInputJson });
 
-      trace('Step continuation: deterministic (no analyzer LLM)', {
+      trace('Step continuation: deterministic (post-execute)', {
         executionOk,
-        signalEvaluationComplete: proposed.signalEvaluationComplete === true,
       });
 
       const analysis = deterministicEvaluationStepAnalysis({
         executionOk,
         errorMessage,
-        signalEvaluationComplete: proposed.signalEvaluationComplete === true,
       });
 
       const analyzerOutputJson = {
@@ -605,14 +771,6 @@ export class EvaluationOrchestratorService {
         goalProgress: analysis.goalProgress,
         msSinceStepStart: Date.now() - stepWallStart,
       });
-
-      if (analysis.decision === 'finish' || analysis.goalProgress === 'complete') {
-        this.emitEvaluationStepWallRunEnd(evaluationId, stepWallPending, 'goal_finish');
-        stepWallPending = null;
-        await this.finalizeReport(evaluationId, userId, ev.intent, ev.desiredOutput);
-        await this.recording.stopEvaluationSession(evaluationId, userId);
-        return;
-      }
 
       llmStepCount += 1;
 

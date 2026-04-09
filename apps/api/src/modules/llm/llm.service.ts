@@ -68,6 +68,150 @@ export type EvaluationCodegenThinkingStructured = {
   playwrightWhy: string;
 };
 
+/**
+ * Single vision LLM response for an evaluation step: either propose Playwright, end the run, or ask the user.
+ */
+export type EvaluationCodegenStepResult =
+  | {
+      mode: 'execute_playwright';
+      stepTitle: string;
+      thinking: string;
+      thinkingStructured?: EvaluationCodegenThinkingStructured;
+      playwrightCode: string;
+      expectedOutcome: string;
+      llmPrompts: { system: string; user: string };
+    }
+  | {
+      mode: 'finish';
+      stepTitle: string;
+      thinking: string;
+      thinkingStructured?: EvaluationCodegenThinkingStructured;
+      /** Optional short reason the evaluation should stop (intent satisfied or blocked). */
+      finishRationale?: string;
+      llmPrompts: { system: string; user: string };
+    }
+  | {
+      mode: 'ask_human';
+      stepTitle: string;
+      thinking: string;
+      thinkingStructured?: EvaluationCodegenThinkingStructured;
+      humanQuestion: string;
+      humanOptions: string[];
+      llmPrompts: { system: string; user: string };
+    };
+
+function parseEvaluationCodegenStepResult(
+  parsed: Record<string, unknown>,
+  llmPrompts: { system: string; user: string },
+): EvaluationCodegenStepResult {
+  const stepTitleRaw = typeof parsed.stepTitle === 'string' ? parsed.stepTitle.trim() : '';
+  const stepTitle = stepTitleRaw.slice(0, 200) || 'Untitled step';
+  const { thinking, thinkingStructured } = parseEvaluationCodegenThinking(parsed);
+
+  const rawMode = parsed.stepMode ?? parsed.evaluationStepMode;
+  const modeStr =
+    typeof rawMode === 'string'
+      ? rawMode.trim().toLowerCase().replace(/-/g, '_')
+      : '';
+
+  const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
+  const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
+
+  const humanQuestionRaw = typeof parsed.humanQuestion === 'string' ? parsed.humanQuestion.trim() : '';
+  const hoRaw = parsed.humanOptions;
+  const humanOptionsParsed = Array.isArray(hoRaw)
+    ? hoRaw.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean).slice(0, 4)
+    : [];
+
+  const finishRationale =
+    typeof parsed.finishRationale === 'string' ? parsed.finishRationale.trim() : undefined;
+
+  const inferAskHuman = humanQuestionRaw.length > 0 && humanOptionsParsed.length >= 3;
+  const inferExecute = playwrightCode.length > 0;
+
+  if (modeStr === 'finish' || modeStr === 'end') {
+    if (inferExecute && playwrightCode.length > 0) {
+      throw new Error('evaluation_codegen: stepMode "finish" must not include playwrightCode');
+    }
+    return {
+      mode: 'finish',
+      stepTitle,
+      thinking,
+      ...(thinkingStructured ? { thinkingStructured } : {}),
+      ...(finishRationale ? { finishRationale } : {}),
+      llmPrompts,
+    };
+  }
+
+  if (modeStr === 'ask_human' || modeStr === 'askhuman') {
+    if (!humanQuestionRaw || humanOptionsParsed.length < 3) {
+      throw new Error(
+        'evaluation_codegen: stepMode "ask_human" requires humanQuestion and at least 3 humanOptions',
+      );
+    }
+    if (inferExecute) {
+      throw new Error('evaluation_codegen: stepMode "ask_human" must not include playwrightCode');
+    }
+    return {
+      mode: 'ask_human',
+      stepTitle,
+      thinking,
+      ...(thinkingStructured ? { thinkingStructured } : {}),
+      humanQuestion: humanQuestionRaw.slice(0, 2000),
+      humanOptions: humanOptionsParsed,
+      llmPrompts,
+    };
+  }
+
+  if (modeStr === 'execute_playwright' || modeStr === 'execute' || modeStr === '') {
+    if (modeStr === '' && !inferExecute && inferAskHuman) {
+      return {
+        mode: 'ask_human',
+        stepTitle,
+        thinking,
+        ...(thinkingStructured ? { thinkingStructured } : {}),
+        humanQuestion: humanQuestionRaw.slice(0, 2000),
+        humanOptions: humanOptionsParsed,
+        llmPrompts,
+      };
+    }
+    if (modeStr === '' && !inferExecute && !inferAskHuman) {
+      const legacyFinish =
+        parsed.signalEvaluationComplete === true ||
+        parsed.evaluationFinished === true ||
+        parsed.finished === true;
+      if (legacyFinish) {
+        return {
+          mode: 'finish',
+          stepTitle,
+          thinking,
+          ...(thinkingStructured ? { thinkingStructured } : {}),
+          ...(finishRationale ? { finishRationale } : {}),
+          llmPrompts,
+        };
+      }
+    }
+    if (!playwrightCode) {
+      throw new Error(
+        'evaluation_codegen: stepMode "execute_playwright" requires non-empty playwrightCode (or set stepMode to finish / ask_human)',
+      );
+    }
+    return {
+      mode: 'execute_playwright',
+      stepTitle,
+      thinking,
+      ...(thinkingStructured ? { thinkingStructured } : {}),
+      playwrightCode,
+      expectedOutcome,
+      llmPrompts,
+    };
+  }
+
+  throw new Error(
+    `evaluation_codegen: invalid stepMode "${modeStr}" — use execute_playwright, finish, or ask_human`,
+  );
+}
+
 function parseEvaluationCodegenThinking(
   parsed: Record<string, unknown>,
 ): { thinking: string; thinkingStructured?: EvaluationCodegenThinkingStructured } {
@@ -157,32 +301,60 @@ Rules:
 
 const EVALUATION_CODEGEN_SYSTEM = `You are a QA automation agent exploring a web app with Playwright. The user authorized testing against their own staging or demo app.
 
-You receive a full-page Set-of-Marks screenshot (numeric badges on interactives), an interactive manifest with the same [n] indices, a Playwright CDP accessibility snapshot, the starting URL, the overall evaluation intent, desired final output, and a short summary of prior steps. Use screenshot + manifest + snapshot together; emitted Playwright must use normal locators (getByRole, getByLabel, getByText, etc.) — never reference badge numbers in the code.
+You receive a full-page Set-of-Marks screenshot (numeric badges on interactives), an interactive manifest with the same [n] indices, a Playwright CDP accessibility snapshot, the starting URL, the overall evaluation intent, desired final output, and a short summary of prior steps. Use screenshot + manifest + snapshot together.
 
-Respond ONLY with valid JSON:
+**You must choose exactly one path per response** via **stepMode**:
+
+1. **execute_playwright** (most steps) — emit the next browser automation as Playwright code. Use normal locators (getByRole, getByLabel, getByText, etc.) — never reference badge numbers in the code.
+
+2. **finish** — the evaluation intent is satisfied, or the goal cannot proceed without stopping; **do not** emit Playwright. The run will end and a final report will be generated.
+
+3. **ask_human** — you need an explicit choice from the user (ambiguous product behavior, destructive action, missing business context). Emit a clear question and **3–4** short option labels. **Do not** emit Playwright for this turn.
+
+Respond ONLY with valid JSON. Shape depends on **stepMode**:
+
+**A) stepMode: "execute_playwright"**
 {
-  "stepTitle": "<short human-readable name for this step (e.g. Open login form) — under 80 chars>",
+  "stepMode": "execute_playwright",
+  "stepTitle": "<short human-readable name — under 80 chars>",
   "thinkingStructured": {
-    "observation": "<what you see on the page from screenshot + manifest + snapshot>",
-    "needsToDoAndWhy": "<what you think needs to happen next toward the intent and why>",
+    "observation": "<what you see from screenshot + manifest + snapshot>",
+    "needsToDoAndWhy": "<what needs to happen next toward the intent and why>",
     "priorFailuresIfAny": "<if prior steps failed for a similar sub-goal, summarize why; otherwise say none>",
-    "actionNowAndWhy": "<the single browser action you will take in this step and why>",
-    "playwrightWhy": "<why this exact playwrightCode (locators, scope) addresses prior failures or avoids repeating them>"
+    "actionNowAndWhy": "<the single browser action for this step and why>",
+    "playwrightWhy": "<why this playwrightCode (locators, scope) fits>"
   },
-  "playwrightCode": "<single async IIFE body using only \`page\` and \`expect\` from Playwright test — valid JavaScript statements, no imports; e.g. await page.getByRole('button', { name: 'Next' }).click();>",
-  "expectedOutcome": "<what should change in the UI after this code runs>",
-  "signalEvaluationComplete": <optional boolean — set true only when this step, if it runs successfully, should end the whole evaluation (intent + desired output fully satisfied); omit or false otherwise>
+  "playwrightCode": "<async IIFE body: only \`page\` and \`expect\`; valid JS statements, no imports>",
+  "expectedOutcome": "<what should change in the UI after this code runs>"
 }
 
-Legacy (only if the model cannot emit thinkingStructured): you may instead include a single string field "thinking" with a short combined rationale — prefer thinkingStructured.
+**B) stepMode: "finish"**
+{
+  "stepMode": "finish",
+  "stepTitle": "<short name, e.g. Goal achieved>",
+  "thinkingStructured": { ... },
+  "finishRationale": "<why the evaluation should stop now>"
+}
+
+**C) stepMode: "ask_human"**
+{
+  "stepMode": "ask_human",
+  "stepTitle": "<short name>",
+  "thinkingStructured": { ... },
+  "humanQuestion": "<one clear question>",
+  "humanOptions": ["<option 1>", "<option 2>", "<option 3>", "<optional 4>"]
+}
+
+For **finish** and **ask_human**, you may use "N/A" or a short note in **playwrightWhy** inside thinkingStructured if a field would otherwise describe code you are not emitting.
+
+Legacy (only if the model cannot emit thinkingStructured): include a single string field "thinking" instead — prefer thinkingStructured.
 
 Rules:
-- **Efficiency:** Take the shortest path toward the intent—avoid redundant actions, duplicate checks, or exploratory clicks when the goal is narrow; one atomic action per step is enough when the UI is ready.
-- Output executable Playwright snippets only; no TypeScript types; no require/import.
-- Prefer getByRole, getByLabel, getByText with stable accessible names. For Shadcn **Select** rows, the trigger is often **button**, not combobox — follow the snapshot/manifest; avoid \`getByRole('combobox')\` when the tree shows \`button\`.
-- For custom selects/listboxes, prefer getByRole('option', { name: /…/i }) (case-insensitive regex) scoped to the open listbox, dialog, or popover so strict mode does not match multiple options; avoid exact: true on option text when labels may include invisible spans or formatting.
-- One focused step per response: for Shadcn/Radix comboboxes, emit only one logical browser action per snippet (e.g. open the trigger, then in a later evaluation step type in the portaled filter input, then in another step pick the option — not all in one playwrightCode block). Avoid multi-page tours in one snippet.
-- **Prior steps:** The "Prior steps" block lists each **step title**, whether Playwright **OK** or **FAIL**, the persisted **decision** (retry/advance/finish), a **code excerpt**, and **err** when execution failed. If several lines show the same goal (e.g. patient selection) with repeated FAIL or copy-paste titles, you MUST change locator strategy (different role, listbox scope, button trigger, placeholder, row/cell) — do not repeat the same approach.
+- **Efficiency:** Shortest path toward the intent; one atomic Playwright step per **execute_playwright** response when the UI is ready.
+- **execute_playwright:** Output executable snippets only; no TypeScript types; no require/import. Prefer getByRole, getByLabel, getByText. For Shadcn **Select**, triggers are often **button**, not combobox.
+- **finish:** Use when the desired outcome is visibly achieved or continuation is inappropriate.
+- **ask_human:** Use when automation alone cannot decide safely; always provide **humanQuestion** and **3–4** **humanOptions**.
+- **Prior steps:** Lists title, OK/FAIL, decision, code excerpt, errors — change strategy after repeated failures; do not repeat the same failed locator pattern.
 
 ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES}`;
 
@@ -199,6 +371,7 @@ function appendEvaluationCodegenAutoSignInUserBlock(
 Run configuration (automatic sign-in):
 - This evaluation has automatic sign-in ENABLED and sign-in has not finished yet in this run.
 - Do NOT emit Playwright that types email, password, OTP, or recovery codes—the host runs Clerk/project test-user sign-in before this step's codegen.
+- Do not use stepMode "ask_human" solely because a login or MFA screen is visible—use "execute_playwright" with a minimal safe step or short wait while automatic sign-in runs.
 - If the page still shows a login or MFA gate, prefer a minimal step (e.g. short waitForTimeout, waitForLoadState, or a safe non-credential interaction) rather than credential entry.`;
 }
 
@@ -1359,17 +1532,7 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       agentContextAppendix?: string;
     },
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
-  ): Promise<{
-    stepTitle: string;
-    thinking: string;
-    thinkingStructured?: EvaluationCodegenThinkingStructured;
-    playwrightCode: string;
-    expectedOutcome: string;
-    /** When true and Playwright succeeds, orchestrator ends the run without a second vision model. */
-    signalEvaluationComplete?: boolean;
-    /** Exact system + user text sent to chatJson (vision image is attached separately). */
-    llmPrompts: { system: string; user: string };
-  }> {
+  ): Promise<EvaluationCodegenStepResult> {
     const dbg = opts?.onDebugLog;
     const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_codegen');
     const llmTrace = { provider: route.provider, model: route.model };
@@ -1448,31 +1611,23 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       ms: Date.now() - tLlm,
     });
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
-    const stepTitleRaw = typeof parsed.stepTitle === 'string' ? parsed.stepTitle.trim() : '';
-    const { thinking, thinkingStructured } = parseEvaluationCodegenThinking(parsed);
-    const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
-    const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
-    const signalEvaluationComplete = parsed.signalEvaluationComplete === true;
+    const out = parseEvaluationCodegenStepResult(parsed, llmPrompts);
     dbgRoute('evaluation_codegen: parsed structured output', {
-      stepTitlePreview: stepTitleRaw.slice(0, 120),
-      thinkingChars: thinking.length,
-      hasThinkingStructured: Boolean(thinkingStructured),
-      playwrightCodeChars: playwrightCode.length,
-      expectedOutcomeChars: expectedOutcome.length,
-      signalEvaluationComplete,
+      stepMode: out.mode,
+      stepTitlePreview: out.stepTitle.slice(0, 120),
+      thinkingChars: out.thinking.length,
+      hasThinkingStructured: Boolean('thinkingStructured' in out && out.thinkingStructured),
+      ...(out.mode === 'execute_playwright'
+        ? {
+            playwrightCodeChars: out.playwrightCode.length,
+            expectedOutcomeChars: out.expectedOutcome.length,
+          }
+        : {}),
+      ...(out.mode === 'ask_human'
+        ? { humanOptionsCount: out.humanOptions.length }
+        : {}),
     });
-    if (!playwrightCode) {
-      throw new Error('evaluation_codegen returned empty playwrightCode');
-    }
-    return {
-      stepTitle: stepTitleRaw.slice(0, 200) || 'Untitled step',
-      thinking,
-      ...(thinkingStructured ? { thinkingStructured } : {}),
-      playwrightCode,
-      expectedOutcome,
-      ...(signalEvaluationComplete ? { signalEvaluationComplete: true as const } : {}),
-      llmPrompts,
-    };
+    return out;
   }
 
   /**

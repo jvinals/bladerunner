@@ -1,19 +1,16 @@
 /**
- * Replaces the former vision **evaluation_analyzer** LLM. The orchestrator applies these rules
- * after each Playwright run so evaluations use a single vision call per step (codegen only).
+ * After **execute_playwright** steps only. Finish / ask_human are decided in the single codegen LLM call.
  */
 
 export type DeterministicEvaluationAnalysis = {
   goalProgress: 'partial' | 'complete' | 'blocked';
-  decision: 'retry' | 'advance' | 'ask_human' | 'finish';
+  decision: 'retry' | 'advance';
   rationale: string;
 };
 
 export function deterministicEvaluationStepAnalysis(args: {
   executionOk: boolean;
   errorMessage?: string | null;
-  /** From codegen JSON: if true and execution succeeds, end the run (replaces vision-based finish). */
-  signalEvaluationComplete?: boolean;
 }): DeterministicEvaluationAnalysis {
   if (!args.executionOk) {
     const err = typeof args.errorMessage === 'string' ? args.errorMessage.trim() : '';
@@ -26,19 +23,9 @@ export function deterministicEvaluationStepAnalysis(args: {
     };
   }
 
-  if (args.signalEvaluationComplete === true) {
-    return {
-      goalProgress: 'complete',
-      decision: 'finish',
-      rationale:
-        'Codegen set signalEvaluationComplete and Playwright succeeded — ending the evaluation.',
-    };
-  }
-
   return {
     goalProgress: 'partial',
     decision: 'advance',
-    rationale:
-      'Playwright succeeded — continuing (rule-based continuation; no separate analyzer LLM).',
+    rationale: 'Playwright succeeded — continuing to the next codegen step.',
   };
 }
