@@ -40,6 +40,26 @@ import {
   PLAYWRIGHT_UI_INTERACTION_GUIDELINES_CONDENSED,
 } from './playwright-ui-guidelines';
 
+/**
+ * Trace messages where `detail` should include `llmInvocation: true` — actual provider request/response,
+ * not routing/config resolution. Orchestrator prefixes the message for WebSocket; this flag stays on `detail`.
+ */
+const LLM_TRACE_INVOCATION_MESSAGES = new Set<string>([
+  'LLM override: response',
+  'LLM Gemini: response',
+  'LLM non-Gemini: request',
+  'LLM non-Gemini: response',
+  'Gemini generateContent: request',
+  'Gemini generateContent: response',
+  'evaluation_codegen: raw JSON response received',
+  'evaluation_analyzer: response received',
+]);
+
+function mergeLlmTraceInvocationFlag(message: string, detail: Record<string, unknown>): Record<string, unknown> {
+  if (!LLM_TRACE_INVOCATION_MESSAGES.has(message)) return detail;
+  return { ...detail, llmInvocation: true as const };
+}
+
 /** Structured reasoning from evaluation_codegen JSON (also nested under codegenOutputJson). */
 export type EvaluationCodegenThinkingStructured = {
   observation: string;
@@ -765,8 +785,10 @@ export class LlmService {
     meta: { provider: string; model: string },
   ): NonNullable<LlmChatOptions['onDebugLog']> | undefined {
     if (!dbg) return undefined;
-    return (message: string, detail?: Record<string, unknown>) =>
-      dbg(message, { ...(detail ?? {}), provider: meta.provider, model: meta.model });
+    return (message: string, detail?: Record<string, unknown>) => {
+      const merged = { ...(detail ?? {}), provider: meta.provider, model: meta.model };
+      dbg(message, mergeLlmTraceInvocationFlag(message, merged));
+    };
   }
 
   private async chatWithUsage(
@@ -781,11 +803,14 @@ export class LlmService {
       dbg?.('LLM route: using override provider', { usage, ...om });
       const t0 = Date.now();
       const result = await this.chatProviderOverride.chat(messages, options);
-      dbg?.('LLM override: response', {
-        ms: Date.now() - t0,
-        contentChars: result.content.length,
-        ...om,
-      });
+      dbg?.(
+        'LLM override: response',
+        mergeLlmTraceInvocationFlag('LLM override: response', {
+          ms: Date.now() - t0,
+          contentChars: result.content.length,
+          ...om,
+        }),
+      );
       return { ...result, provider: 'override', model: 'override' };
     }
 
@@ -1389,7 +1414,8 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
     const dbg = opts?.onDebugLog;
     const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_codegen');
     const llmTrace = { provider: route.provider, model: route.model };
-    const dbgRoute = (m: string, d?: Record<string, unknown>) => dbg?.(m, { ...(d ?? {}), ...llmTrace });
+    const dbgRoute = (m: string, d?: Record<string, unknown>) =>
+      dbg?.(m, mergeLlmTraceInvocationFlag(m, { ...(d ?? {}), ...llmTrace }));
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
     dbgRoute('evaluation_codegen: start', {
@@ -1519,7 +1545,8 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     const dbg = opts?.onDebugLog;
     const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_analyzer');
     const llmTrace = { provider: route.provider, model: route.model };
-    const dbgRoute = (m: string, d?: Record<string, unknown>) => dbg?.(m, { ...(d ?? {}), ...llmTrace });
+    const dbgRoute = (m: string, d?: Record<string, unknown>) =>
+      dbg?.(m, mergeLlmTraceInvocationFlag(m, { ...(d ?? {}), ...llmTrace }));
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
     dbgRoute('evaluation_analyzer: start', {
@@ -1983,7 +2010,8 @@ The attached image is the final Set-of-Marks screenshot. Produce the JSON report
     const dbg = opts?.onDebugLog;
     const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_report');
     const llmTrace = { provider: route.provider, model: route.model };
-    const dbgRoute = (m: string, d?: Record<string, unknown>) => dbg?.(m, { ...(d ?? {}), ...llmTrace });
+    const dbgRoute = (m: string, d?: Record<string, unknown>) =>
+      dbg?.(m, mergeLlmTraceInvocationFlag(m, { ...(d ?? {}), ...llmTrace }));
     dbgRoute('evaluation_report: start', { stepsMarkdownChars: input.stepsMarkdown.length });
     const user = `Overall intent:
 ${input.intent}

@@ -80,47 +80,10 @@ function parseOptions(q: { optionsJson: string }): string[] {
   }
 }
 
-/** True when this trace line reflects an LLM (or LLM routing) call. */
-function isEvaluationTraceLlmRelated(line: EvaluationDebugLogLine): boolean {
-  const detail = line.detail;
-  if (detail && typeof detail === 'object') {
-    const uk = detail.usageKey;
-    if (typeof uk === 'string' && /evaluation_|llm|codegen|analyzer|gemini|report/i.test(uk)) return true;
-  }
-  const lower = line.message.toLowerCase();
-  const needles = [
-    'llm',
-    'chatjson',
-    'gemini',
-    'openrouter',
-    'anthropic',
-    'evaluation_codegen',
-    'evaluation_analyzer',
-    'evaluation_report',
-    'codegen llm',
-    'analyzer llm',
-    'invoking chat',
-    'llm route',
-    'llm non-gemini',
-    'llm gemini',
-    'llm override',
-    'final report llm',
-    'raw json response',
-    'parsed decision',
-    'parsed structured output',
-    'response received',
-    'gpt-',
-    'claude',
-    '/openai',
-    'groq',
-    'cerebras',
-    'moonshot',
-    'kimi',
-    'minimax',
-  ];
-  if (needles.some((n) => lower.includes(n))) return true;
-  if (/\[report\].*llm/.test(lower)) return true;
-  return false;
+/** True when the server marked this line as an actual model request/response (see `llmInvocation` on detail). */
+function isTraceLlmInvocation(line: EvaluationDebugLogLine): boolean {
+  const d = line.detail;
+  return typeof d === 'object' && d != null && d.llmInvocation === true;
 }
 
 function formatTraceDeltaSeconds(ms: number): string {
@@ -179,7 +142,7 @@ function EvaluationTracePanel({
         line,
         idx,
         deltaSincePrevLineMs,
-        isLlm: isEvaluationTraceLlmRelated(line),
+        isLlmInvocation: isTraceLlmInvocation(line),
       };
     });
   }, [evaluationTrace]);
@@ -197,8 +160,8 @@ function EvaluationTracePanel({
         </span>
       </div>
       <p className="text-[10px] text-gray-600 px-3 pb-2 leading-snug shrink-0">
-        Each entry includes Δ duration since the previous log line (chronological). LLM-related lines use bold blue
-        titles. Step wall summaries stay green.
+        Each entry includes Δ duration since the previous log line (chronological). Lines where a model request or
+        response was logged use bold blue titles and show provider/model. Step wall summaries stay green.
       </p>
       <div className="px-2 pb-2 flex-1 min-h-0 flex flex-col font-mono text-[10px] leading-relaxed text-gray-900">
         <div
@@ -215,25 +178,28 @@ function EvaluationTracePanel({
                 : 'No trace in this session (start a run or reconnect while the evaluation is active).'}
             </span>
           ) : (
-            traceEntries.map(({ line, idx, deltaSincePrevLineMs, isLlm }) => {
+            traceEntries.map(({ line, idx, deltaSincePrevLineMs, isLlmInvocation }) => {
               const detailObj =
                 line.detail != null && typeof line.detail === 'object'
                   ? (line.detail as Record<string, unknown>)
                   : undefined;
-              const modelLabel = formatTraceModelLabel(detailObj);
+              const modelLabel =
+                isLlmInvocation && detailObj ? formatTraceModelLabel(detailObj) : null;
               const keyCount = detailObj != null ? Object.keys(detailObj).length : 0;
               const hasDetail = keyCount > 0;
               const isStepWall =
                 line.detail != null &&
                 typeof line.detail === 'object' &&
                 (line.detail as { stepWallKind?: string }).stepWallKind;
-              const titleClass = isLlm
+              const titleClass = isLlmInvocation
                 ? 'font-bold text-blue-700 dark:text-blue-300'
                 : isStepWall
                   ? 'text-emerald-900/90 font-medium'
                   : '';
-              const stampClass = isLlm ? 'text-blue-700 dark:text-blue-300 font-bold' : 'text-amber-800/90';
-              const msgClass = isLlm
+              const stampClass = isLlmInvocation
+                ? 'text-blue-700 dark:text-blue-300 font-bold'
+                : 'text-amber-800/90';
+              const msgClass = isLlmInvocation
                 ? 'text-blue-700 dark:text-blue-300 font-bold break-words whitespace-pre-wrap'
                 : `text-gray-700 break-words whitespace-pre-wrap ${isStepWall ? 'text-emerald-900/90' : ''}`;
 
@@ -248,13 +214,7 @@ function EvaluationTracePanel({
                       <span className={msgClass}>— {line.message}</span>
                     </div>
                     {modelLabel ? (
-                      <div
-                        className={`mt-0.5 pl-1 text-[9px] leading-tight ${
-                          isLlm
-                            ? 'font-semibold text-blue-600 dark:text-blue-400'
-                            : 'text-gray-600'
-                        }`}
-                      >
+                      <div className="mt-0.5 pl-1 text-[9px] leading-tight font-semibold text-blue-600 dark:text-blue-400">
                         Model: {modelLabel}
                       </div>
                     ) : null}

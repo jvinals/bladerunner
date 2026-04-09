@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.226`: **Evaluation trace — blue/bold only on actual LLM calls** — API adds `detail.llmInvocation` for provider request/response lines (including Gemini `generateContent`, non-Gemini request/response, override response, and post-`chatJson` “response received” rows); routing-only lines like `LLM route: resolving config` are unchanged. Web styles those lines blue/bold and shows provider/model only when `llmInvocation` is set. `@bladerunner/api 0.6.163`, `@bladerunner/web 0.7.128`.
+
 - `0.10.219`: **OpenRouter vision — ignore Amazon Bedrock** — OpenRouter can route `anthropic/claude-3-5-haiku-…` to **Amazon Bedrock**, which returned **`'claude-3-5-haiku-20241022' does not support image input`** for evaluation screenshots. Multimodal OpenRouter requests now include **`provider: { ignore: ['amazon-bedrock'] }`** so vision goes to a host that accepts images (typically Anthropic). Errors mentioning unsupported image input get a short **Hint** in the message. `@bladerunner/api 0.6.158`.
 
 - `0.10.218`: **Docs — OpenRouter Claude Haiku 3.5** — Comments clarify that the OpenRouter+Anthropic vision compat path (system folded into user, no `image_url.detail`) applies to **`anthropic/claude-3-5-haiku-…`** and other **`anthropic/claude-…`** slugs. `@bladerunner/api 0.6.157`.
