@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { chromium, BrowserServer } from 'playwright-core';
 
@@ -55,7 +56,13 @@ function rewriteWsEndpoint(wsEndpoint: string): string {
   }
 }
 
-const wss = new WebSocketServer({ port: PORT });
+// Bind **0.0.0.0** explicitly — Fly Proxy / Flycast often connects over IPv4; default `listen(port)` can
+// be dual-stack in ways that drop connections with **ECONNRESET** from the proxy.
+const httpServer = http.createServer((_req, res) => {
+  res.writeHead(404);
+  res.end();
+});
+const wss = new WebSocketServer({ server: httpServer });
 
 function send(ws: WebSocket, data: Record<string, unknown>) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -167,7 +174,9 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log(`[browser-worker] Listening on ws://0.0.0.0:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`[browser-worker] Listening on ws://0.0.0.0:${PORT}`);
+});
 
 async function gracefulShutdown() {
   console.log('[browser-worker] Shutting down...');
@@ -185,6 +194,9 @@ async function gracefulShutdown() {
       ]).catch(() => {});
     }
     await new Promise<void>((resolve) => wss.close(() => resolve()));
+    await new Promise<void>((resolve, reject) => {
+      httpServer.close((err) => (err ? reject(err) : resolve()));
+    });
   } finally {
     clearTimeout(deadline);
   }
