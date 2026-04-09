@@ -4,8 +4,10 @@
 app = "bladerunner-edgehealth-api"
 primary_region = "iad"
 
+# Build context must be the **repository root** (Dockerfile COPYs pnpm-workspace, packages/, apps/api/).
+# From root: `fly deploy . --config apps/api/fly.toml`
 [build]
-  dockerfile = "Dockerfile.production"
+  dockerfile = "apps/api/Dockerfile.production"
 
 [env]
   NODE_ENV = "production"
