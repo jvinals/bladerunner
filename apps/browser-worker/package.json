@@ -1,11 +1,12 @@
 {
   "name": "@bladerunner/browser-worker",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "private": true,
   "scripts": {
     "start": "node dist/server.js",
     "build": "tsc",
-    "dev": "tsx watch server.ts"
+    "dev": "tsx watch server.ts",
+    "refresh-lockfile": "rm -rf node_modules package-lock.json && npm install --no-workspaces"
   },
   "dependencies": {
     "playwright-core": "1.58.2",
