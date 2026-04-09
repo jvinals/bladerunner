@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.235`: **browser-worker Docker — pnpm monorepo build** — Fly/GitHub Actions now **`fly deploy . --config apps/browser-worker/fly.toml`** from **repo root**; **`Dockerfile.production`** uses **`pnpm-lock.yaml`** + **`pnpm install --filter @bladerunner/browser-worker...`** (no isolated **`npm`** / **`package-lock.json`**). Removed **`apps/browser-worker`** from root **`.dockerignore`** so the worker image can COPY workspace files; worker workflow also triggers on root lockfile/`package.json` changes. `@bladerunner/browser-worker 0.2.12`.
+
 - `0.10.234`: **AGENTS.md (continual learning)** — Thinking process: **accordion** + auto-expand active step; deployment: standalone **browser-worker** `package-lock.json`, Fly **GitHub Actions** workflows, **Vercel** via dashboard Git. Refreshed **`continual-learning-index.json`** (47 transcripts).
 
 - `0.10.233`: **CI / browser-worker Docker — fix `npm install` in Fly build** — `package-lock.json` had pnpm workspace paths (`../../node_modules/.pnpm/...`), causing **`EMISSINGTARGET`** on **`RUN npm install`**. Regenerated a standalone npm lockfile (`npm install --no-workspaces`); added **`refresh-lockfile`** script + Dockerfile note. `@bladerunner/browser-worker 0.2.11`.

@@ -1,17 +1,24 @@
+# Build context: **repository root** (same as API). Uses workspace `pnpm-lock.yaml` — do not use a
+# per-app `npm` lockfile here; it is easy to accidentally commit pnpm-relative paths and break CI.
 FROM mcr.microsoft.com/playwright:v1.58.2-noble
 
 WORKDIR /app
 
-# Lockfile must be a standalone npm lock (paths like `node_modules/...` only). If it contains
-# `../node_modules/.pnpm/...`, regenerate: `rm -rf node_modules package-lock.json && npm install --no-workspaces`.
-COPY package.json package-lock.json* ./
-# Install devDependencies too — TypeScript is required to compile `server.ts` → `dist/`.
-# (`npm install --production` + `npx tsc` used to pull the wrong `tsc` npm package and `|| true` hid failures.)
-RUN npm install
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 
-COPY . ./
-RUN npm run build
-RUN npm prune --omit=dev
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
+COPY apps/browser-worker ./apps/browser-worker
+
+RUN pnpm install --frozen-lockfile --filter @bladerunner/browser-worker...
+
+WORKDIR /app/apps/browser-worker
+RUN pnpm run build
+
+WORKDIR /app
+RUN rm -rf node_modules apps/browser-worker/node_modules
+RUN pnpm install --frozen-lockfile --prod --filter @bladerunner/browser-worker...
+
+WORKDIR /app/apps/browser-worker
 
 ENV WORKER_PORT=3002
 EXPOSE 3002

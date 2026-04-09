@@ -9,9 +9,8 @@
 **/coverage
 **/*.log
 
-# Apps not needed for API image
+# Apps not needed for API image (API Dockerfile does not COPY these paths)
 apps/web
-apps/browser-worker
 
 docs
 e2e

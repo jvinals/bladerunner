@@ -1,6 +1,9 @@
 # Fly.io configuration for Bladerunner Browser Worker
 # Internal-only service (Flycast) — no public IP. API reaches it via
 # bladerunner-browser-worker.flycast over Fly private networking.
+#
+# Deploy from **repository root**: `fly deploy . --config apps/browser-worker/fly.toml`
+# (build context is the monorepo root, same pattern as `apps/api/fly.toml`).
 
 app = "bladerunner-browser-worker"
 primary_region = "iad"
