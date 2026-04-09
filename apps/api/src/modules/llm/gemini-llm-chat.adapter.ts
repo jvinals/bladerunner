@@ -34,6 +34,7 @@ export async function geminiChat(
 
   const imgLen = options?.imageBase64?.trim()?.length ?? 0;
   options?.onDebugLog?.('Gemini generateContent: request', {
+    provider: 'gemini',
     model,
     userTextChars: userText.length,
     imageBase64Chars: imgLen,
@@ -57,6 +58,7 @@ export async function geminiChat(
     throw new Error('Gemini returned empty text');
   }
   options?.onDebugLog?.('Gemini generateContent: response', {
+    provider: 'gemini',
     model,
     ms: Date.now() - genStarted,
     responseChars: rawText.length,

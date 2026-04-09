@@ -128,6 +128,19 @@ function formatTraceDeltaSeconds(ms: number): string {
   return `${s.toFixed(2)} s`;
 }
 
+/** `provider / model` when both exist; otherwise model id from trace detail. */
+function formatTraceModelLabel(detail: Record<string, unknown> | undefined): string | null {
+  if (!detail) return null;
+  const model = detail.model;
+  const provider = detail.provider;
+  if (typeof model !== 'string' || !model.trim()) return null;
+  const m = model.trim();
+  if (typeof provider === 'string' && provider.trim()) {
+    return `${provider.trim()} / ${m}`;
+  }
+  return m;
+}
+
 type EvaluationTracePanelProps = {
   evaluationTrace: EvaluationDebugLogLine[];
   connected: boolean;
@@ -203,10 +216,12 @@ function EvaluationTracePanel({
             </span>
           ) : (
             traceEntries.map(({ line, idx, deltaSincePrevLineMs, isLlm }) => {
-              const keyCount =
+              const detailObj =
                 line.detail != null && typeof line.detail === 'object'
-                  ? Object.keys(line.detail as object).length
-                  : 0;
+                  ? (line.detail as Record<string, unknown>)
+                  : undefined;
+              const modelLabel = formatTraceModelLabel(detailObj);
+              const keyCount = detailObj != null ? Object.keys(detailObj).length : 0;
               const hasDetail = keyCount > 0;
               const isStepWall =
                 line.detail != null &&
@@ -232,6 +247,17 @@ function EvaluationTracePanel({
                       <span className={stampClass}>{line.at}</span>{' '}
                       <span className={msgClass}>— {line.message}</span>
                     </div>
+                    {modelLabel ? (
+                      <div
+                        className={`mt-0.5 pl-1 text-[9px] leading-tight ${
+                          isLlm
+                            ? 'font-semibold text-blue-600 dark:text-blue-400'
+                            : 'text-gray-600'
+                        }`}
+                      >
+                        Model: {modelLabel}
+                      </div>
+                    ) : null}
                     {idx > 0 && deltaSincePrevLineMs != null ? (
                       <div className="mt-0.5 pl-1 text-[9px] text-gray-500 leading-tight">
                         Δ {formatTraceDeltaSeconds(deltaSincePrevLineMs)} since previous log line

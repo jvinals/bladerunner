@@ -759,6 +759,16 @@ export class LlmService {
     return this.chatProviderOverride;
   }
 
+  /** Attach provider + model to every evaluation trace line for LLM routing. */
+  private wrapDebugLogWithLlmMeta(
+    dbg: LlmChatOptions['onDebugLog'],
+    meta: { provider: string; model: string },
+  ): NonNullable<LlmChatOptions['onDebugLog']> | undefined {
+    if (!dbg) return undefined;
+    return (message: string, detail?: Record<string, unknown>) =>
+      dbg(message, { ...(detail ?? {}), provider: meta.provider, model: meta.model });
+  }
+
   private async chatWithUsage(
     userId: string | undefined,
     usage: LlmUsageKey,
@@ -767,10 +777,15 @@ export class LlmService {
   ): Promise<{ content: string; thinking?: string; provider: string; model: string }> {
     const dbg = options?.onDebugLog;
     if (this.chatProviderOverride) {
-      dbg?.('LLM route: using override provider', { usage });
+      const om = { provider: 'override' as const, model: 'override' as const };
+      dbg?.('LLM route: using override provider', { usage, ...om });
       const t0 = Date.now();
       const result = await this.chatProviderOverride.chat(messages, options);
-      dbg?.('LLM override: response', { ms: Date.now() - t0, contentChars: result.content.length });
+      dbg?.('LLM override: response', {
+        ms: Date.now() - t0,
+        contentChars: result.content.length,
+        ...om,
+      });
       return { ...result, provider: 'override', model: 'override' };
     }
 
@@ -778,10 +793,10 @@ export class LlmService {
     const tResolve = Date.now();
     const resolved = await this.llmConfig.resolve(userId, usage);
     const credentials = await this.llmConfig.resolveProviderCredentials(userId, resolved.provider);
-    dbg?.('LLM route: resolved', {
+    const meta = { provider: resolved.provider, model: resolved.model };
+    const dbgM = this.wrapDebugLogWithLlmMeta(dbg, meta);
+    dbgM?.('LLM route: resolved', {
       usage,
-      provider: resolved.provider,
-      model: resolved.model,
       credSource: credentials.source,
       ms: Date.now() - tResolve,
     });
@@ -790,10 +805,17 @@ export class LlmService {
         `No API key for provider "${resolved.provider}" (usage: ${usage}). Add the key in Settings → AI/LLM or set the env variable.`,
       );
     }
+    const mergedOptions: LlmChatOptions = {
+      ...options,
+      onDebugLog: dbgM ?? options?.onDebugLog,
+    };
     if (resolved.provider === 'gemini') {
       const tg = Date.now();
-      const result = await geminiChat(credentials.apiKey!, resolved.model, messages, options);
-      dbg?.('LLM Gemini: response', { ms: Date.now() - tg, contentChars: result.content.length });
+      const result = await geminiChat(credentials.apiKey!, resolved.model, messages, mergedOptions);
+      dbgM?.('LLM Gemini: response', {
+        ms: Date.now() - tg,
+        contentChars: result.content.length,
+      });
       return { ...result, provider: resolved.provider, model: resolved.model };
     }
 
@@ -801,18 +823,15 @@ export class LlmService {
     const userLen = messages
       .filter((m) => m.role === 'user')
       .reduce((a, m) => a + m.content.length, 0);
-    dbg?.('LLM non-Gemini: request', {
-      provider: resolved.provider,
-      model: resolved.model,
+    dbgM?.('LLM non-Gemini: request', {
       systemChars: sysLen,
       userChars: userLen,
       hasImage: Boolean(options?.imageBase64?.trim()),
     });
     const t1 = Date.now();
     const client = createChatLlmProvider(this.configService, resolved.provider, resolved.model, credentials);
-    const result = await client.chat(messages, options);
-    dbg?.('LLM non-Gemini: response', {
-      provider: resolved.provider,
+    const result = await client.chat(messages, mergedOptions);
+    dbgM?.('LLM non-Gemini: response', {
       ms: Date.now() - t1,
       contentChars: result.content.length,
       thinkingChars: result.thinking?.length,
@@ -1368,9 +1387,12 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
     llmPrompts: { system: string; user: string };
   }> {
     const dbg = opts?.onDebugLog;
+    const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_codegen');
+    const llmTrace = { provider: route.provider, model: route.model };
+    const dbgRoute = (m: string, d?: Record<string, unknown>) => dbg?.(m, { ...(d ?? {}), ...llmTrace });
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
-    dbg?.('evaluation_codegen: start', {
+    dbgRoute('evaluation_codegen: start', {
       pageUrl: input.pageUrl,
       screenshotBase64Chars: input.screenshotBase64?.length ?? 0,
       somManifestChars: input.somManifest?.length ?? 0,
@@ -1382,7 +1404,7 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
       input.somManifest,
       input.accessibilitySnapshot,
     );
-    dbg?.('evaluation_codegen: after truncation for model', {
+    dbgRoute('evaluation_codegen: after truncation for model', {
       somChars: somT.length,
       a11yChars: a11yT.length,
     });
@@ -1414,11 +1436,11 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     );
     const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
     const llmPrompts = { system: EVALUATION_CODEGEN_SYSTEM, user: userWithAgent };
-    dbg?.('evaluation_codegen: user prompt assembled', {
+    dbgRoute('evaluation_codegen: user prompt assembled', {
       userPromptChars: userWithAgent.length,
       systemPromptChars: EVALUATION_CODEGEN_SYSTEM.length,
     });
-    dbg?.('evaluation_codegen: invoking chatJson (prompted JSON + vision)', { usageKey: 'evaluation_codegen' });
+    dbgRoute('evaluation_codegen: invoking chatJson (prompted JSON + vision)', { usageKey: 'evaluation_codegen' });
     const tLlm = Date.now();
     const res = await this.chatJson(
       opts?.userId,
@@ -1432,10 +1454,10 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
         maxTokens: 8192,
         temperature: 0.2,
         signal: opts?.signal,
-        onDebugLog: dbg,
+        onDebugLog: dbgRoute,
       },
     );
-    dbg?.('evaluation_codegen: raw JSON response received', {
+    dbgRoute('evaluation_codegen: raw JSON response received', {
       contentChars: res.content.length,
       hasThinkingField: res.thinking != null && res.thinking !== '',
       ms: Date.now() - tLlm,
@@ -1445,7 +1467,7 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     const { thinking, thinkingStructured } = parseEvaluationCodegenThinking(parsed);
     const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
-    dbg?.('evaluation_codegen: parsed structured output', {
+    dbgRoute('evaluation_codegen: parsed structured output', {
       stepTitlePreview: stepTitleRaw.slice(0, 120),
       thinkingChars: thinking.length,
       hasThinkingStructured: Boolean(thinkingStructured),
@@ -1495,9 +1517,12 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     llmPrompts?: { system: string; user: string };
   }> {
     const dbg = opts?.onDebugLog;
+    const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_analyzer');
+    const llmTrace = { provider: route.provider, model: route.model };
+    const dbgRoute = (m: string, d?: Record<string, unknown>) => dbg?.(m, { ...(d ?? {}), ...llmTrace });
     const autoSignInEnabled = input.autoSignInEnabled ?? false;
     const autoSignInCompleted = input.autoSignInCompleted ?? false;
-    dbg?.('evaluation_analyzer: start', {
+    dbgRoute('evaluation_analyzer: start', {
       pageUrlAfter: input.pageUrlAfter,
       executionOk: input.executionOk,
       screenshotChars: input.screenshotAfterBase64?.length ?? 0,
@@ -1540,7 +1565,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
     );
     const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
     const llmPrompts = { system: EVALUATION_ANALYZER_SYSTEM, user: userWithAgent };
-    dbg?.('evaluation_analyzer: invoking chatJson', {
+    dbgRoute('evaluation_analyzer: invoking chatJson', {
       userPromptChars: userWithAgent.length,
       usageKey: 'evaluation_analyzer',
     });
@@ -1557,10 +1582,10 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         maxTokens: 4096,
         temperature: 0.2,
         signal: opts?.signal,
-        onDebugLog: dbg,
+        onDebugLog: dbgRoute,
       },
     );
-    dbg?.('evaluation_analyzer: response received', {
+    dbgRoute('evaluation_analyzer: response received', {
       contentChars: res.content.length,
       ms: Date.now() - tLlm,
     });
@@ -1583,7 +1608,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         humanOptions = ho.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 4);
       }
       if (!humanQuestion || !humanOptions?.length) {
-        dbg?.('evaluation_analyzer: ask_human payload invalid; falling back to advance', {});
+        dbgRoute('evaluation_analyzer: ask_human payload invalid; falling back to advance', {});
         return {
           goalProgress,
           decision: 'advance',
@@ -1592,7 +1617,7 @@ The attached image is the full-page Set-of-Marks screenshot after execution.`;
         };
       }
     }
-    dbg?.('evaluation_analyzer: parsed decision', {
+    dbgRoute('evaluation_analyzer: parsed decision', {
       goalProgress,
       decision,
       rationaleChars: rationale.length,
@@ -1956,7 +1981,10 @@ The attached image is the final Set-of-Marks screenshot. Produce the JSON report
     opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
   ): Promise<{ markdown: string; structured?: unknown }> {
     const dbg = opts?.onDebugLog;
-    dbg?.('evaluation_report: start', { stepsMarkdownChars: input.stepsMarkdown.length });
+    const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_report');
+    const llmTrace = { provider: route.provider, model: route.model };
+    const dbgRoute = (m: string, d?: Record<string, unknown>) => dbg?.(m, { ...(d ?? {}), ...llmTrace });
+    dbgRoute('evaluation_report: start', { stepsMarkdownChars: input.stepsMarkdown.length });
     const user = `Overall intent:
 ${input.intent}
 
@@ -1968,7 +1996,7 @@ ${input.progressSummary?.trim() || '(none)'}
 
 Step-by-step trace:
 ${input.stepsMarkdown}`;
-    dbg?.('evaluation_report: invoking chatJson', {
+    dbgRoute('evaluation_report: invoking chatJson', {
       userPromptChars: user.length,
       usageKey: 'evaluation_report',
     });
@@ -1979,12 +2007,12 @@ ${input.stepsMarkdown}`;
         { role: 'system', content: EVALUATION_REPORT_SYSTEM },
         { role: 'user', content: user },
       ],
-      { maxTokens: 16384, temperature: 0.3, signal: opts?.signal, onDebugLog: dbg },
+      { maxTokens: 16384, temperature: 0.3, signal: opts?.signal, onDebugLog: dbgRoute },
     );
     const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
     const markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
     const structured = parsed.structured;
-    dbg?.('evaluation_report: parsed', {
+    dbgRoute('evaluation_report: parsed', {
       markdownChars: markdown.length,
       hasStructured: structured !== undefined,
     });
