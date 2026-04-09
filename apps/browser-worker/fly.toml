@@ -11,7 +11,8 @@ primary_region = "iad"
 [env]
   WORKER_PORT = "3002"
   CDP_PORT = "3003"
-  WORKER_EXTERNAL_HOST = "bladerunner-browser-worker.internal"
+  # Hostname API uses for chromium.connect CDP URL — match Fly Proxy (.flycast), not .internal (no DNS when scaled to zero).
+  WORKER_EXTERNAL_HOST = "bladerunner-browser-worker.flycast"
 
 # Control channel (port 3002) — Flycast for auto-start/stop.
 [http_service]
@@ -21,8 +22,7 @@ primary_region = "iad"
   auto_start_machines = true
   min_machines_running = 0
 
-# CDP/Playwright channel (port 3003) — direct TCP over .internal private network.
-# Exposed as a service so Fly Proxy is aware of it; API connects via .internal DNS.
+# CDP/Playwright channel (port 3003) — TCP service; API reaches it via same app.flycast hostname on port 3003.
 [[services]]
   internal_port = 3003
   protocol = "tcp"

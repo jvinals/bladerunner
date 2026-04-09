@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.232`: **Fly.io — browser worker DNS (`ENOTFOUND`)** — API **`BROWSER_WORKER_URL`** and worker **`WORKER_EXTERNAL_HOST`** default to **`bladerunner-browser-worker.flycast`** (Fly Proxy), not **`.internal`**. Stopped Machines do not resolve on **`.internal`**, which broke evaluations when the worker scaled to zero. Redeploy API + browser-worker; if **`BROWSER_WORKER_URL`** is set as a Fly **secret**, update or remove it so it does not override **`fly.toml`**. `@bladerunner/api 0.6.166`, `@bladerunner/browser-worker 0.2.10`.
+
 - `0.10.231`: **Thinking process — accordion rows** — Expanding a step collapses the previously expanded one (single open row). Active codegen/analyzer step still auto-expands when it becomes active. `@bladerunner/web 0.7.132`.
 
 - `0.10.230`: **Evaluations — codegen decides finish / ask_human / execute** — `evaluation_codegen` JSON uses **`stepMode`**: **`execute_playwright`** (Playwright + deterministic retry/advance), **`finish`** (end run, finalize report), or **`ask_human`** (question + options; coerced to retry while auto sign-in pending). Removed **`signalEvaluationComplete`** in favor of explicit **`finish`**. `@bladerunner/api 0.6.165`.
