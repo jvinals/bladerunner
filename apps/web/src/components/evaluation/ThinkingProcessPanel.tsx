@@ -104,14 +104,18 @@ type Props = {
 
 export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Props) {
   const activeStepId = useMemo(() => getActiveThinkingStepId(steps, lastProgress), [steps, lastProgress]);
-  /** Last expanded step; kept when the run moves on so we never auto-collapse completed steps. */
-  const [openStepId, setOpenStepId] = useState<string | null>(null);
+  /** Any number of steps may stay expanded; we only auto-add the active step, never auto-remove. */
+  const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
 
-  /** Auto-expand whichever step is actively running (codegen / analyzer). */
+  /** Auto-expand the step that is actively running (codegen / analyzer); do not collapse others. */
   useEffect(() => {
-    if (activeStepId != null) {
-      setOpenStepId(activeStepId);
-    }
+    if (activeStepId == null) return;
+    setExpandedStepIds((prev) => {
+      if (prev.has(activeStepId)) return prev;
+      const next = new Set(prev);
+      next.add(activeStepId);
+      return next;
+    });
   }, [activeStepId]);
 
   if (steps.length === 0) {
@@ -121,8 +125,6 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
       </p>
     );
   }
-
-  const expandedStepId = activeStepId ?? openStepId;
 
   return (
     <div className="flex flex-col">
@@ -175,18 +177,15 @@ export function ThinkingProcessPanel({ steps, lastProgress, onOpenFullStep }: Pr
           >
             <details
               className="group min-w-0 flex-1"
-              open={expandedStepId === st.id}
+              open={expandedStepIds.has(st.id)}
               onToggle={(e) => {
-                const el = e.currentTarget;
-                if (activeStepId != null) {
-                  if (st.id === activeStepId && !el.open) {
-                    el.open = true;
-                  } else if (st.id !== activeStepId && el.open) {
-                    el.open = false;
-                  }
-                  return;
-                }
-                setOpenStepId(el.open ? st.id : null);
+                const willOpen = e.currentTarget.open;
+                setExpandedStepIds((prev) => {
+                  const next = new Set(prev);
+                  if (willOpen) next.add(st.id);
+                  else next.delete(st.id);
+                  return next;
+                });
               }}
             >
               <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden hover:bg-gray-50/80">
