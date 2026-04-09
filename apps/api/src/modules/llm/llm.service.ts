@@ -52,7 +52,6 @@ const LLM_TRACE_INVOCATION_MESSAGES = new Set<string>([
   'Gemini generateContent: request',
   'Gemini generateContent: response',
   'evaluation_codegen: raw JSON response received',
-  'evaluation_analyzer: response received',
 ]);
 
 function mergeLlmTraceInvocationFlag(message: string, detail: Record<string, unknown>): Record<string, unknown> {
@@ -171,7 +170,8 @@ Respond ONLY with valid JSON:
     "playwrightWhy": "<why this exact playwrightCode (locators, scope) addresses prior failures or avoids repeating them>"
   },
   "playwrightCode": "<single async IIFE body using only \`page\` and \`expect\` from Playwright test — valid JavaScript statements, no imports; e.g. await page.getByRole('button', { name: 'Next' }).click();>",
-  "expectedOutcome": "<what should change in the UI after this code runs>"
+  "expectedOutcome": "<what should change in the UI after this code runs>",
+  "signalEvaluationComplete": <optional boolean — set true only when this step, if it runs successfully, should end the whole evaluation (intent + desired output fully satisfied); omit or false otherwise>
 }
 
 Legacy (only if the model cannot emit thinkingStructured): you may instead include a single string field "thinking" with a short combined rationale — prefer thinkingStructured.
@@ -182,30 +182,9 @@ Rules:
 - Prefer getByRole, getByLabel, getByText with stable accessible names. For Shadcn **Select** rows, the trigger is often **button**, not combobox — follow the snapshot/manifest; avoid \`getByRole('combobox')\` when the tree shows \`button\`.
 - For custom selects/listboxes, prefer getByRole('option', { name: /…/i }) (case-insensitive regex) scoped to the open listbox, dialog, or popover so strict mode does not match multiple options; avoid exact: true on option text when labels may include invisible spans or formatting.
 - One focused step per response: for Shadcn/Radix comboboxes, emit only one logical browser action per snippet (e.g. open the trigger, then in a later evaluation step type in the portaled filter input, then in another step pick the option — not all in one playwrightCode block). Avoid multi-page tours in one snippet.
-- **Prior steps:** The "Prior steps" block lists each **step title**, whether Playwright **OK** or **FAIL**, the analyzer **decision**, a **code excerpt**, and **err** when execution failed. If several lines show the same goal (e.g. patient selection) with repeated FAIL or copy-paste titles, you MUST change locator strategy (different role, listbox scope, button trigger, placeholder, row/cell) — do not repeat the same approach.
+- **Prior steps:** The "Prior steps" block lists each **step title**, whether Playwright **OK** or **FAIL**, the persisted **decision** (retry/advance/finish), a **code excerpt**, and **err** when execution failed. If several lines show the same goal (e.g. patient selection) with repeated FAIL or copy-paste titles, you MUST change locator strategy (different role, listbox scope, button trigger, placeholder, row/cell) — do not repeat the same approach.
 
 ${PLAYWRIGHT_UI_INTERACTION_GUIDELINES}`;
-
-const EVALUATION_ANALYZER_SYSTEM = `You judge progress of an autonomous web evaluation. The app under test is owned by the user for QA.
-
-You receive a full-page Set-of-Marks screenshot after the step, plus manifest and accessibility snapshot text aligned with the same capture pipeline as codegen.
-
-Respond ONLY with valid JSON:
-{
-  "goalProgress": "partial" | "complete" | "blocked",
-  "decision": "retry" | "advance" | "ask_human" | "finish",
-  "rationale": "<short reasoning>",
-  "humanQuestion": "<only if decision is ask_human: clear question for the user>",
-  "humanOptions": ["<3-4 short option labels>", "..."]
-}
-
-Rules:
-- Prefer **"finish"** as soon as the intent and desired output are visibly satisfied—do not keep choosing **"advance"** for extra exploration unless the intent clearly requires broader coverage.
-- Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
-- Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions. If the user message includes a "Run configuration (automatic sign-in)" section, follow it for when credential screens should not trigger ask_human.
-- Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
-- Use "advance" when the step succeeded and exploration should continue.
-- When execution failed and the **Progress summary** shows repeated **retry** cycles or similar failures for the same sub-goal (e.g. dropdown/patient selection), still use **"retry"** if the goal is reachable, but make **rationale** actionable: name which **different** interaction to try next (e.g. listbox-scoped option, button trigger vs combobox, row click, placeholder) so the next codegen step is not a blind repeat. If the same UI is impossible to interpret from the evidence, choose **"ask_human"** with one focused question.`;
 
 function appendEvaluationCodegenAutoSignInUserBlock(
   baseUser: string,
@@ -221,28 +200,6 @@ Run configuration (automatic sign-in):
 - This evaluation has automatic sign-in ENABLED and sign-in has not finished yet in this run.
 - Do NOT emit Playwright that types email, password, OTP, or recovery codes—the host runs Clerk/project test-user sign-in before this step's codegen.
 - If the page still shows a login or MFA gate, prefer a minimal step (e.g. short waitForTimeout, waitForLoadState, or a safe non-credential interaction) rather than credential entry.`;
-}
-
-function appendEvaluationAnalyzerAutoSignInUserBlock(
-  baseUser: string,
-  autoSignInEnabled: boolean,
-  autoSignInCompleted: boolean,
-): string {
-  if (!autoSignInEnabled) {
-    return baseUser;
-  }
-  if (!autoSignInCompleted) {
-    return `${baseUser}
-
-Run configuration (automatic sign-in):
-- This evaluation has automatic sign-in ENABLED; the host runs automated sign-in before each step until success.
-- Do NOT choose "ask_human" solely because the screenshot shows a login, MFA, or sign-in screen—prefer "retry" if the step failed or the UI is unchanged, or "advance" if the step executed and exploration should continue; the next iteration can run assist again.
-- Use "ask_human" for credential questions only when automatic sign-in is disabled for this run, or for non-credential issues (ambiguous product behavior, destructive actions, etc.).`;
-  }
-  return `${baseUser}
-
-Run configuration (automatic sign-in):
-- Automatic sign-in for this evaluation has already completed for this run; normal "ask_human" rules apply (including new auth gates if needed).`;
 }
 
 function appendAgentContextUserBlock(baseUser: string, appendix?: string | null): string {
@@ -1408,6 +1365,8 @@ Answer the user using only this evidence. Reference tag numbers like [7] when th
     thinkingStructured?: EvaluationCodegenThinkingStructured;
     playwrightCode: string;
     expectedOutcome: string;
+    /** When true and Playwright succeeds, orchestrator ends the run without a second vision model. */
+    signalEvaluationComplete?: boolean;
     /** Exact system + user text sent to chatJson (vision image is attached separately). */
     llmPrompts: { system: string; user: string };
   }> {
@@ -1493,12 +1452,14 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
     const { thinking, thinkingStructured } = parseEvaluationCodegenThinking(parsed);
     const playwrightCode = typeof parsed.playwrightCode === 'string' ? parsed.playwrightCode.trim() : '';
     const expectedOutcome = typeof parsed.expectedOutcome === 'string' ? parsed.expectedOutcome.trim() : '';
+    const signalEvaluationComplete = parsed.signalEvaluationComplete === true;
     dbgRoute('evaluation_codegen: parsed structured output', {
       stepTitlePreview: stepTitleRaw.slice(0, 120),
       thinkingChars: thinking.length,
       hasThinkingStructured: Boolean(thinkingStructured),
       playwrightCodeChars: playwrightCode.length,
       expectedOutcomeChars: expectedOutcome.length,
+      signalEvaluationComplete,
     });
     if (!playwrightCode) {
       throw new Error('evaluation_codegen returned empty playwrightCode');
@@ -1509,153 +1470,8 @@ The attached image is the full-page Set-of-Marks screenshot (numeric badges on i
       ...(thinkingStructured ? { thinkingStructured } : {}),
       playwrightCode,
       expectedOutcome,
+      ...(signalEvaluationComplete ? { signalEvaluationComplete: true as const } : {}),
       llmPrompts,
-    };
-  }
-
-  /**
-   * After executing proposed Playwright, decide retry / advance / human / finish.
-   */
-  async evaluationAnalyzeAfterStep(
-    input: {
-      intent: string;
-      desiredOutput: string;
-      progressSummary: string | null;
-      executedCode: string;
-      executionOk: boolean;
-      errorMessage?: string;
-      pageUrlAfter: string;
-      screenshotAfterBase64: string;
-      somManifest: string;
-      accessibilitySnapshot: string;
-      autoSignInEnabled?: boolean;
-      autoSignInCompleted?: boolean;
-      agentContextAppendix?: string;
-    },
-    opts?: { userId?: string; signal?: AbortSignal; onDebugLog?: (m: string, d?: Record<string, unknown>) => void },
-  ): Promise<{
-    goalProgress: 'partial' | 'complete' | 'blocked';
-    decision: 'retry' | 'advance' | 'ask_human' | 'finish';
-    rationale: string;
-    humanQuestion?: string;
-    humanOptions?: string[];
-    /** Exact system + user text sent to chatJson (vision image is attached separately). */
-    llmPrompts?: { system: string; user: string };
-  }> {
-    const dbg = opts?.onDebugLog;
-    const route = await this.llmConfig.resolve(opts?.userId, 'evaluation_analyzer');
-    const llmTrace = { provider: route.provider, model: route.model };
-    const dbgRoute = (m: string, d?: Record<string, unknown>) =>
-      dbg?.(m, mergeLlmTraceInvocationFlag(m, { ...(d ?? {}), ...llmTrace }));
-    const autoSignInEnabled = input.autoSignInEnabled ?? false;
-    const autoSignInCompleted = input.autoSignInCompleted ?? false;
-    dbgRoute('evaluation_analyzer: start', {
-      pageUrlAfter: input.pageUrlAfter,
-      executionOk: input.executionOk,
-      screenshotChars: input.screenshotAfterBase64?.length ?? 0,
-      executedCodeChars: input.executedCode?.length ?? 0,
-      autoSignInEnabled,
-      autoSignInCompleted,
-    });
-    const { som: somT, a11y: a11yT } = truncateDomSectionsForGemini(
-      input.somManifest,
-      input.accessibilitySnapshot,
-    );
-    const user = `Overall intent:
-${input.intent}
-
-Desired output:
-${input.desiredOutput}
-
-Progress summary:
-${input.progressSummary?.trim() || '(none)'}
-
-Executed Playwright (last step):
-${input.executedCode}
-
-Execution OK: ${input.executionOk}
-${input.errorMessage ? `Error: ${input.errorMessage}` : ''}
-
-Page URL after step: ${input.pageUrlAfter}
-
-Interactive manifest after step (Set-of-Marks [n]; aligned with badges on the image):
-${somT || '(empty)'}
-
-Accessibility snapshot after step:
-${a11yT || '(empty)'}
-
-The attached image is the full-page Set-of-Marks screenshot after execution.`;
-    const userWithAutoSignIn = appendEvaluationAnalyzerAutoSignInUserBlock(
-      user,
-      autoSignInEnabled,
-      autoSignInCompleted,
-    );
-    const userWithAgent = appendAgentContextUserBlock(userWithAutoSignIn, input.agentContextAppendix);
-    const llmPrompts = { system: EVALUATION_ANALYZER_SYSTEM, user: userWithAgent };
-    dbgRoute('evaluation_analyzer: invoking chatJson', {
-      userPromptChars: userWithAgent.length,
-      usageKey: 'evaluation_analyzer',
-    });
-    const tLlm = Date.now();
-    const res = await this.chatJson(
-      opts?.userId,
-      'evaluation_analyzer',
-      [
-        { role: 'system', content: EVALUATION_ANALYZER_SYSTEM },
-        { role: 'user', content: userWithAgent },
-      ],
-      {
-        imageBase64: input.screenshotAfterBase64,
-        maxTokens: 4096,
-        temperature: 0.2,
-        signal: opts?.signal,
-        onDebugLog: dbgRoute,
-      },
-    );
-    dbgRoute('evaluation_analyzer: response received', {
-      contentChars: res.content.length,
-      ms: Date.now() - tLlm,
-    });
-    const parsed = parseJsonFromLlmText(res.content) as Record<string, unknown>;
-    const goalProgress = parsed.goalProgress === 'complete' || parsed.goalProgress === 'blocked' || parsed.goalProgress === 'partial' ? parsed.goalProgress : 'partial';
-    const decision =
-      parsed.decision === 'retry' ||
-      parsed.decision === 'advance' ||
-      parsed.decision === 'ask_human' ||
-      parsed.decision === 'finish'
-        ? parsed.decision
-        : 'advance';
-    const rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '';
-    let humanQuestion: string | undefined;
-    let humanOptions: string[] | undefined;
-    if (decision === 'ask_human') {
-      humanQuestion = typeof parsed.humanQuestion === 'string' ? parsed.humanQuestion.trim() : undefined;
-      const ho = parsed.humanOptions;
-      if (Array.isArray(ho)) {
-        humanOptions = ho.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 4);
-      }
-      if (!humanQuestion || !humanOptions?.length) {
-        dbgRoute('evaluation_analyzer: ask_human payload invalid; falling back to advance', {});
-        return {
-          goalProgress,
-          decision: 'advance',
-          rationale: `${rationale} (fallback: invalid human question payload)`,
-          llmPrompts,
-        };
-      }
-    }
-    dbgRoute('evaluation_analyzer: parsed decision', {
-      goalProgress,
-      decision,
-      rationaleChars: rationale.length,
-    });
-    return {
-      goalProgress,
-      decision,
-      rationale,
-      llmPrompts,
-      ...(humanQuestion ? { humanQuestion } : {}),
-      ...(humanOptions?.length ? { humanOptions } : {}),
     };
   }
 

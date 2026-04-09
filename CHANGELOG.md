@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.229`: **Evaluations — remove analyzer vision LLM** — Each step uses one vision call (`evaluation_codegen`) only; after Playwright the orchestrator applies **`deterministicEvaluationStepAnalysis`** (retry on failure, advance on success, **finish** when codegen sets **`signalEvaluationComplete: true`** and execution succeeds). Removed **`evaluationAnalyzeAfterStep`** and **`EVALUATION_ANALYZER_SYSTEM`**. Post-step JPEG/SOM/a11y remain for UI preview. **`evaluation_analyzer`** in Settings is legacy/unused. README/AGENTS updated. `@bladerunner/api 0.6.164`, `@bladerunner/web 0.7.131`.
+
 - `0.10.228`: **Thinking process — collapse only previous active on handoff** — When the active codegen/analyzer step advances, the new step auto-expands and only the **prior** active step is removed from the expanded set; other manually opened rows stay open. `@bladerunner/web 0.7.130`.
 
 - `0.10.227`: **Thinking process — multi-expand, no forced single row** — The active step still auto-expands when codegen/analyzer runs, but other steps can stay open or be opened while a step is active; removed the single-`expandedStepId` logic and the `onToggle` guard that closed non-active rows. `@bladerunner/web 0.7.129`.

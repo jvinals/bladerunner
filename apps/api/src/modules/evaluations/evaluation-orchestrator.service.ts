@@ -5,6 +5,7 @@ import { LlmService } from '../llm/llm.service';
 import { EvaluationsService } from './evaluations.service';
 import { AgentContextService } from '../agent-context/agent-context.service';
 import { formatStepWallDurationMessage } from './evaluation-trace-duration';
+import { deterministicEvaluationStepAnalysis } from './deterministic-evaluation-analysis';
 
 const MAX_EVALUATION_STEPS = 80;
 
@@ -12,11 +13,6 @@ const MAX_EVALUATION_STEPS = 80;
 function evaluationCodegenTimeoutMs(): number {
   const n = Number(process.env.EVALUATION_CODEGEN_TIMEOUT_MS);
   /** Default 120s so hung vision calls fail faster; override for slow models. */
-  return Number.isFinite(n) && n > 0 ? n : 120_000;
-}
-
-function evaluationAnalyzerTimeoutMs(): number {
-  const n = Number(process.env.EVALUATION_ANALYZER_TIMEOUT_MS);
   return Number.isFinite(n) && n > 0 ? n : 120_000;
 }
 
@@ -450,7 +446,7 @@ export class EvaluationOrchestratorService {
         });
         proposed = {
           stepTitle: 'Codegen model timed out',
-          thinking: `Vision/codegen did not return within ${sec}s (${errDetail}). No Playwright was executed for this step; the analyzer will decide whether to retry.`,
+          thinking: `Vision/codegen did not return within ${sec}s (${errDetail}). No Playwright was executed for this step; rule-based continuation will retry.`,
           playwrightCode: '',
           expectedOutcome: 'No browser actions — codegen hit the time limit.',
           llmPrompts: {
@@ -472,6 +468,7 @@ export class EvaluationOrchestratorService {
         stepTitle: proposed.stepTitle,
         playwrightCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
+        ...(proposed.signalEvaluationComplete ? { signalEvaluationComplete: true as const } : {}),
       };
 
       const codegenInputJsonWithPrompts = {
@@ -555,106 +552,33 @@ export class EvaluationOrchestratorService {
         accessibilitySnapshot: afterCtx.accessibilitySnapshot,
         autoSignInEnabled: fresh.autoSignIn,
         autoSignInCompleted: authState.clerkFullSignInDone,
+        analysisMode: 'deterministic' as const,
         note:
-          'After-step full-page Set-of-Marks JPEG + manifest + accessibility sent to analyzer (afterStepViewportJpegBase64 for UI preview).',
+          'After-step capture for UI preview. Continuation (retry/advance/finish) is rule-based; no evaluation_analyzer LLM.',
       };
 
       await this.evaluations.updateStepAnalyzerInputsOnly(evaluationId, sequence, { analyzerInputJson });
 
-      this.recording.emitEvaluationProgress(evaluationId, {
-        phase: 'analyzing',
-        sequence,
-        pageUrlAfter: afterUrl,
+      trace('Step continuation: deterministic (no analyzer LLM)', {
         executionOk,
-        errorMessage: errorMessage ?? null,
+        signalEvaluationComplete: proposed.signalEvaluationComplete === true,
       });
-      trace('Socket: emitted phase analyzing; analyzer inputs persisted');
 
-      let analysis: Awaited<ReturnType<LlmService['evaluationAnalyzeAfterStep']>>;
-      let analyzerLlmTimedOut = false;
-      const tAnalyzerLlm = Date.now();
-      try {
-        trace('Analyzer LLM: calling evaluationAnalyzeAfterStep', {
-          timeoutMs: evaluationAnalyzerTimeoutMs(),
-        });
-        analysis = await this.llm.evaluationAnalyzeAfterStep(
-          {
-            intent: ev.intent,
-            desiredOutput: ev.desiredOutput,
-            progressSummary: fresh.progressSummary,
-            executedCode: proposed.playwrightCode,
-            executionOk,
-            errorMessage,
-            pageUrlAfter: afterUrl,
-            screenshotAfterBase64: afterB64,
-            somManifest: afterCtx.somManifest,
-            accessibilitySnapshot: afterCtx.accessibilitySnapshot,
-            autoSignInEnabled: fresh.autoSignIn,
-            autoSignInCompleted: authState.clerkFullSignInDone,
-            agentContextAppendix,
-          },
-          {
-            userId,
-            signal: AbortSignal.timeout(evaluationAnalyzerTimeoutMs()),
-            onDebugLog: (m, d) => trace(m, d),
-          },
-        );
-      } catch (e) {
-        if (!isAbortOrTimeoutError(e)) {
-          throw e;
-        }
-        analyzerLlmTimedOut = true;
-        const ms = evaluationAnalyzerTimeoutMs();
-        this.logger.warn(
-          `evaluation_analyzer timed out or aborted (evaluationId=${evaluationId} sequence=${sequence} timeoutMs=${ms}): ${e instanceof Error ? e.message : String(e)}`,
-        );
-        analysis = {
-          goalProgress: 'partial',
-          decision: 'retry',
-          rationale: `Analyzer model did not finish within ${Math.round(ms / 1000)}s (timeout or cancellation).`,
-        };
-        trace('Analyzer LLM: timeout or abort', {
-          timeoutMs: ms,
-          ms: Date.now() - tAnalyzerLlm,
-        });
-      }
-      if (!analyzerLlmTimedOut) {
-        trace('Analyzer LLM: evaluationAnalyzeAfterStep returned', {
-          msSinceStepStart: Date.now() - stepWallStart,
-          ms: Date.now() - tAnalyzerLlm,
-        });
-      }
-
-      if (
-        analysis.decision === 'ask_human' &&
-        fresh.autoSignIn &&
-        !authState.clerkFullSignInDone
-      ) {
-        const suffix =
-          ' (overridden: automatic sign-in is enabled and still in progress; not pausing for credentials.)';
-        analysis = {
-          ...analysis,
-          decision: 'retry',
-          rationale: `${analysis.rationale}${suffix}`.slice(0, 8000),
-          humanQuestion: undefined,
-          humanOptions: undefined,
-        };
-        trace('Analyzer: coerced ask_human to retry while auto sign-in pending', { sequence });
-      }
+      const analysis = deterministicEvaluationStepAnalysis({
+        executionOk,
+        errorMessage,
+        signalEvaluationComplete: proposed.signalEvaluationComplete === true,
+      });
 
       const analyzerOutputJson = {
+        deterministicAnalyzer: true as const,
         goalProgress: analysis.goalProgress,
         decision: analysis.decision,
         rationale: analysis.rationale,
-        ...(analysis.humanQuestion ? { humanQuestion: analysis.humanQuestion } : {}),
-        ...(analysis.humanOptions?.length ? { humanOptions: analysis.humanOptions } : {}),
       };
 
       await this.evaluations.updateStepAfterAnalyzer(evaluationId, sequence, {
-        analyzerInputJson: {
-          ...analyzerInputJson,
-          ...(analysis.llmPrompts ? { llmPrompts: analysis.llmPrompts } : {}),
-        },
+        analyzerInputJson,
         analyzerOutputJson,
         actualOutcome: executionOk ? `OK at ${afterUrl}` : errorMessage ?? 'failed',
         errorMessage: executionOk ? null : errorMessage ?? 'error',
@@ -687,27 +611,6 @@ export class EvaluationOrchestratorService {
         stepWallPending = null;
         await this.finalizeReport(evaluationId, userId, ev.intent, ev.desiredOutput);
         await this.recording.stopEvaluationSession(evaluationId, userId);
-        return;
-      }
-
-      if (analysis.decision === 'ask_human' && analysis.humanQuestion && analysis.humanOptions?.length) {
-        await this.evaluations.createQuestion(userId, {
-          evaluationId,
-          stepSequence: sequence,
-          prompt: analysis.humanQuestion,
-          options: analysis.humanOptions,
-        });
-        await this.prisma.evaluation.update({
-          where: { id: evaluationId, userId },
-          data: { status: 'WAITING_FOR_HUMAN' },
-        });
-        this.recording.emitEvaluationProgress(evaluationId, {
-          phase: 'waiting_human',
-          question: analysis.humanQuestion,
-          options: analysis.humanOptions,
-        });
-        this.emitEvaluationStepWallRunEnd(evaluationId, stepWallPending, 'ask_human');
-        stepWallPending = null;
         return;
       }
 

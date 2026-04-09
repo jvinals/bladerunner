@@ -44,7 +44,7 @@ export const LLM_USAGE_LABELS: Record<LlmUsageKey, string> = {
   suggest_skip_after_change: 'Suggest steps to skip after step change',
   evaluation_planner: 'Evaluation — plan exploration (high-level)',
   evaluation_codegen: 'Evaluation — propose Playwright step from screenshot',
-  evaluation_analyzer: 'Evaluation — analyze result and decide next action',
+  evaluation_analyzer: 'Evaluation — legacy slot (orchestrator no longer calls; use evaluation_codegen + deterministic continuation)',
   evaluation_human_question: 'Evaluation — phrase human verification question',
   evaluation_report: 'Evaluation — final app report',
   project_discovery: 'Project — app discovery (initial map + summary)',
@@ -125,7 +125,7 @@ function legacyGeneralModel(config: ConfigService): string {
 export function getDefaultPreferenceForUsage(config: ConfigService, usage: LlmUsageKey): LlmPreferenceEntry {
   const geminiModel =
     config.get<string>('GEMINI_INSTRUCTION_MODEL')?.trim() || 'gemini-3-flash-preview';
-  /** Autonomous eval loop (codegen + analyzer): default to a fast vision model; override with EVALUATION_VISION_MODEL. */
+  /** Autonomous eval codegen: default to a fast vision model; override with EVALUATION_VISION_MODEL. */
   const evaluationVisionModel =
     config.get<string>('EVALUATION_VISION_MODEL')?.trim() ||
     config.get<string>('GEMINI_EVALUATION_MODEL')?.trim() ||

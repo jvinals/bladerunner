@@ -25,7 +25,7 @@ const LLM_USAGE_ROWS: { key: string; label: string }[] = [
   { key: 'suggest_skip_after_change', label: 'Suggest steps to skip after edit' },
   { key: 'evaluation_planner', label: 'Evaluation — plan exploration (high-level)' },
   { key: 'evaluation_codegen', label: 'Evaluation — propose Playwright step from screenshot' },
-  { key: 'evaluation_analyzer', label: 'Evaluation — analyze result and decide next action' },
+  { key: 'evaluation_analyzer', label: 'Evaluation — legacy (unused; continuation is rule-based)' },
   { key: 'evaluation_human_question', label: 'Evaluation — phrase human verification question' },
   { key: 'evaluation_report', label: 'Evaluation — final app report' },
   { key: 'project_discovery', label: 'Project — app discovery (initial map + summary)' },

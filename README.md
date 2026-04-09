@@ -247,20 +247,19 @@ For **third-party targets** (e.g. Evocare on Vercel), Clerk testing needs a **se
 
 ## Autonomous evaluations (LLM prompts)
 
-An **evaluation** is an autonomous loop on the **browser worker**: it proposes Playwright from a viewport screenshot, runs the code, analyzes the result from a post-step screenshot, and persists steps until the run finishes or needs human input. The loop is implemented in **`EvaluationOrchestratorService`** (`apps/api/src/modules/evaluations/evaluation-orchestrator.service.ts`). In **Settings → AI / LLM**, task keys **`evaluation_codegen`**, **`evaluation_analyzer`**, and **`evaluation_report`** route to user-configured models via `apps/api/src/modules/llm/llm.service.ts`.
+An **evaluation** is an autonomous loop on the **browser worker**: it proposes Playwright from a viewport screenshot, runs the code, then applies **rule-based continuation** (retry on Playwright failure, advance on success, **finish** when codegen sets **`signalEvaluationComplete: true`** and execution succeeds). Post-step captures are still stored for UI preview. The loop is implemented in **`EvaluationOrchestratorService`** (`apps/api/src/modules/evaluations/evaluation-orchestrator.service.ts`). In **Settings → AI / LLM**, task keys **`evaluation_codegen`** and **`evaluation_report`** route to user-configured models; **`evaluation_analyzer`** is a legacy Settings slot (no LLM call).
 
 ### Orchestrator flow (brief)
 
-Each iteration: **propose** (vision) → **execute** Playwright on the evaluation browser → **analyze** (vision) → **persist** step + append progress summary. On **`finish`** or **`goalProgress: complete`**, or when the step cap is reached, the orchestrator calls **`finalizeReport`**, which uses **`evaluationGenerateFinalReport`** (text-only, no image). See the same file for **`evaluationProposePlaywrightStep`**, **`evaluationAnalyzeAfterStep`**, and **`finalizeReport`** / **`evaluationGenerateFinalReport`**.
+Each iteration: **propose** (single vision LLM via **`evaluationProposePlaywrightStep`**) → **execute** Playwright → **deterministic continuation** (`deterministicEvaluationStepAnalysis` — no second vision model) → **persist** step + append progress summary. On **`finish`** (via **`signalEvaluationComplete`** + success) or when the step cap is reached, the orchestrator calls **`finalizeReport`** (**`evaluationGenerateFinalReport`**, text-only). See **`evaluationProposePlaywrightStep`** and **`finalizeReport`** / **`evaluationGenerateFinalReport`** in `llm.service.ts`.
 
 ```mermaid
 flowchart LR
   A[Propose codegen] --> B[Execute Playwright]
-  B --> C[Analyze after step]
+  B --> C[Rule-based continuation]
   C --> D{Decision}
   D -->|advance / retry| A
-  D -->|finish / complete| E[Final report]
-  D -->|ask_human| F[Wait for human]
+  D -->|finish| E[Final report]
 ```
 
 ### Shared request mechanics
@@ -273,7 +272,6 @@ flowchart LR
 | Task key | maxTokens | temperature |
 | -------- | --------- | ----------- |
 | `evaluation_codegen` | 8192 | 0.2 |
-| `evaluation_analyzer` | 4096 | 0.2 |
 | `evaluation_report` | 16384 | 0.3 |
 
 ### `evaluation_codegen` (propose step)
@@ -329,55 +327,11 @@ The attached image is the current viewport.
 | Progress summary | Rolling **`progressSummary`** on the evaluation (updated after each analyzed step). |
 | Prior steps (brief) | Up to **8** latest **`evaluationStep`** rows (desc), formatted as `seq N: decision — excerpt…` (excerpt from **`analyzerRationale`** or **`thinkingText`**, truncated). |
 
-**Expected JSON keys:** `thinking`, `playwrightCode`, `expectedOutcome`. Empty **`playwrightCode`** causes the API to throw (`evaluation_codegen returned empty playwrightCode`).
+**Expected JSON keys:** include structured **`thinking`** / **`thinkingStructured`**, **`playwrightCode`**, **`expectedOutcome`**, optional **`signalEvaluationComplete`** (set **`true`** only when a successful run of this step should end the evaluation). Empty **`playwrightCode`** causes the API to throw (`evaluation_codegen returned empty playwrightCode`).
 
-### `evaluation_analyzer` (after step)
+### After-step continuation (deterministic; no `evaluation_analyzer` LLM)
 
-Canonical system text is **`EVALUATION_ANALYZER_SYSTEM`**:
-
-```
-You judge progress of an autonomous web evaluation. The app under test is owned by the user for QA.
-
-Respond ONLY with valid JSON:
-{
-  "goalProgress": "partial" | "complete" | "blocked",
-  "decision": "retry" | "advance" | "ask_human" | "finish",
-  "rationale": "<short reasoning>",
-  "humanQuestion": "<only if decision is ask_human: clear question for the user>",
-  "humanOptions": ["<3-4 short option labels>", "..."]
-}
-
-Rules:
-- Use "finish" when the evaluation intent and desired output are sufficiently addressed or cannot proceed without external info.
-- Use "ask_human" when authentication, ambiguous business logic, or destructive actions need explicit user choice; always provide humanQuestion and exactly 3-4 humanOptions.
-- Use "retry" when the last Playwright step failed or the UI did not reach the expected state.
-- Use "advance" when the step succeeded and exploration should continue.
-```
-
-**User string template** (from `evaluationAnalyzeAfterStep`):
-
-```
-Overall intent:
-${intent}
-
-Desired output:
-${desiredOutput}
-
-Progress summary:
-${progressSummary || '(none)'}
-
-Executed Playwright (last step):
-${executedCode}
-
-Execution OK: ${executionOk}
-${errorMessage ? `Error: ${errorMessage}` : ''}
-
-Page URL after step: ${pageUrlAfter}
-
-The attached image is the viewport after execution.
-```
-
-**Expected JSON:** `goalProgress`, `decision`, `rationale`; optional `humanQuestion` / `humanOptions` when `decision === 'ask_human'`. If **`decision`** is missing or invalid, the API defaults to **`advance`**. If **`goalProgress`** is invalid, it defaults to **`partial`**. For **`ask_human`**, if `humanQuestion` or `humanOptions` is missing/invalid, the code **falls back** to **`advance`** and appends **`(fallback: invalid human question payload)`** to the rationale.
+The orchestrator does **not** call a second vision model. **`deterministicEvaluationStepAnalysis`** sets **`retry`** if Playwright failed, **`advance`** if it succeeded and the run should continue, or **`finish`** when **`signalEvaluationComplete`** was **`true`** in codegen output and execution succeeded. There is **no** vision-based **`ask_human`** pause from this path (legacy analyzer behavior removed).
 
 ### `evaluation_report` (final report)
 
@@ -417,8 +371,7 @@ ${stepsMarkdown}
 
 | Task key | System constant | User content summary | Image? | JSON keys |
 | -------- | --------------- | --------------------- | ------ | --------- |
-| `evaluation_codegen` | `EVALUATION_CODEGEN_SYSTEM` | Start URL, page URL, intent, desired output, rolling progress, prior steps, viewport line | Yes (before step) | `thinking`, `playwrightCode`, `expectedOutcome` |
-| `evaluation_analyzer` | `EVALUATION_ANALYZER_SYSTEM` | Intent, desired output, progress, executed code, execution OK/error, URL after, viewport line | Yes (after step) | `goalProgress`, `decision`, `rationale`, optional `humanQuestion` / `humanOptions` |
+| `evaluation_codegen` | `EVALUATION_CODEGEN_SYSTEM` | Start URL, page URL, intent, desired output, rolling progress, prior steps, SOM + a11y, viewport | Yes (before step) | Structured thinking, `playwrightCode`, `expectedOutcome`, optional `signalEvaluationComplete` |
 | `evaluation_report` | `EVALUATION_REPORT_SYSTEM` | Intent, desired output, progress, step-by-step markdown trace | No | `markdown` (required), `structured` (optional) |
 
 If prompts or templates change, update **this section** or the **TypeScript constants** in `llm.service.ts` first—the code constants remain the single source of truth.
