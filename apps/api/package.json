@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/api",
-  "version": "0.6.158",
+  "version": "0.6.159",
   "private": true,
   "scripts": {
     "prebuild": "pnpm --filter @bladerunner/clerk-agentmail-signin run build && prisma generate",

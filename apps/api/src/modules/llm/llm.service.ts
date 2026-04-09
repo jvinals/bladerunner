@@ -29,6 +29,7 @@ import { geminiChat } from './gemini-llm-chat.adapter';
 import { LlmConfigService } from './llm-config.service';
 import { createChatLlmProvider } from './llm-provider-factory';
 import type { LlmUsageKey } from './llm-usage-registry';
+import { supportsVisionByDefault } from './llm-provider-registry';
 import {
   generateNonGeminiVisionPlaywrightSnippet,
   verifyPlaywrightAgainstDomNonGemini,
@@ -1041,7 +1042,8 @@ ${input.pageAccessibilityTree.slice(0, 3000)}`;
         ...(verifyOn ? { draftPlaywrightCode } : {}),
         ...(verifyUserPrompt ? { verifyUserPrompt } : {}),
         ...(verifyRawResponse ? { verifyRawResponse } : {}),
-        visionAttached: true,
+        visionAttached:
+          codegen.provider === 'gemini' ? true : supportsVisionByDefault(codegen.provider),
         screenshotBase64: shot,
         ...(thinking ? { thinking } : {}),
       },

@@ -47,15 +47,26 @@ function mergeSystemIntoFirstUserForAnthropicOpenRouter(messages: ChatMessage[])
   );
 }
 
+/** Prefixed to the user prompt when a JPEG was captured but the API only accepts string `content` (e.g. Groq). */
+const TEXT_ONLY_VISION_OMITTED_NOTE =
+  '[Note: No JPEG screenshot was attached — this endpoint accepts text-only chat messages. Use the Set-of-Marks manifest and accessibility tree in this prompt.]\n\n';
+
 export class OpenAiProvider implements LlmProvider {
   private client: OpenAI;
   private model: string;
   private readonly openRouterStyle: boolean;
+  /** When false, never send OpenAI multimodal `content` arrays (Groq and others require string `content`). */
+  private readonly supportsOpenAiVisionMultimodal: boolean;
 
   constructor(
     apiKey: string,
     model = 'gpt-5.4-mini',
-    opts?: { baseURL?: string; defaultHeaders?: Record<string, string>; openRouterStyle?: boolean },
+    opts?: {
+      baseURL?: string;
+      defaultHeaders?: Record<string, string>;
+      openRouterStyle?: boolean;
+      supportsOpenAiVisionMultimodal?: boolean;
+    },
   ) {
     this.client = new OpenAI({
       apiKey,
@@ -64,6 +75,7 @@ export class OpenAiProvider implements LlmProvider {
     });
     this.model = model;
     this.openRouterStyle = opts?.openRouterStyle ?? false;
+    this.supportsOpenAiVisionMultimodal = opts?.supportsOpenAiVisionMultimodal ?? true;
   }
 
   /** OpenRouter + Anthropic slugs (`anthropic/claude-…`, including Haiku 3.5). */
@@ -79,20 +91,26 @@ export class OpenAiProvider implements LlmProvider {
 
     const openAiMessages: OpenAI.ChatCompletionMessageParam[] = normalized.map(
       (msg) => {
-        if (msg.role === 'user' && options?.imageBase64) {
+        if (msg.role === 'user' && options?.imageBase64?.trim()) {
+          if (this.supportsOpenAiVisionMultimodal) {
+            return {
+              role: 'user' as const,
+              content: [
+                { type: 'text' as const, text: msg.content },
+                {
+                  type: 'image_url' as const,
+                  image_url: {
+                    url: `data:image/jpeg;base64,${options.imageBase64}`,
+                    /** OpenRouter + Claude (Haiku, Sonnet, …): omit `detail`; gateway can 400 when `low` is forwarded oddly. */
+                    ...(this.openRouterStyle ? {} : { detail: 'low' as const }),
+                  },
+                },
+              ],
+            };
+          }
           return {
             role: 'user' as const,
-            content: [
-              { type: 'text' as const, text: msg.content },
-              {
-                type: 'image_url' as const,
-                image_url: {
-                  url: `data:image/jpeg;base64,${options.imageBase64}`,
-                  /** OpenRouter + Claude (Haiku, Sonnet, …): omit `detail`; gateway can 400 when `low` is forwarded oddly. */
-                  ...(this.openRouterStyle ? {} : { detail: 'low' as const }),
-                },
-              },
-            ],
+            content: TEXT_ONLY_VISION_OMITTED_NOTE + msg.content,
           };
         }
         return { role: msg.role, content: msg.content };
@@ -115,7 +133,9 @@ export class OpenAiProvider implements LlmProvider {
      * @see https://openrouter.ai/docs/guides/routing/provider-selection#ignoring-providers
      */
     const openRouterVisionRouting =
-      this.openRouterStyle && Boolean(options?.imageBase64?.trim())
+      this.openRouterStyle &&
+      Boolean(options?.imageBase64?.trim()) &&
+      this.supportsOpenAiVisionMultimodal
         ? { provider: { ignore: ['amazon-bedrock'] } }
         : {};
 

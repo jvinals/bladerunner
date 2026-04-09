@@ -37,6 +37,8 @@ export function createChatLlmProvider(
       ...(credentials.baseUrl?.trim() ? { baseURL: credentials.baseUrl.trim() } : {}),
       ...(Object.keys(defaultHeaders).length ? { defaultHeaders } : {}),
       openRouterStyle: Boolean(def.openRouterStyle),
+      /** Groq, Cerebras, etc. reject multimodal `content` arrays — keep JPEG out and rely on SOM + a11y in the text prompt. */
+      supportsOpenAiVisionMultimodal: def.supportsVisionDefault,
     });
   }
   throw new Error(`createChatLlmProvider: unsupported protocol for ${provider}`);
