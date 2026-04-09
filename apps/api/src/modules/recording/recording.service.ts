@@ -6552,34 +6552,115 @@ export class RecordingService extends EventEmitter {
     await fn(page, expect);
   }
 
+  /**
+   * Fly.io may reset the WebSocket while the browser-worker Machine is waking (`ECONNRESET`).
+   * Retry transient errors with backoff instead of failing the evaluation immediately.
+   */
+  private static readonly BROWSER_WORKER_WS_ATTEMPTS = 6;
+  private static readonly BROWSER_WORKER_WS_ATTEMPT_MS = 45_000;
+
   private requestBrowserFromWorker(workerUrl: string): Promise<string> {
+    const attempts = RecordingService.BROWSER_WORKER_WS_ATTEMPTS;
+    const attemptMs = RecordingService.BROWSER_WORKER_WS_ATTEMPT_MS;
+    const tryOnce = () => this.connectBrowserWorkerWebSocketOnce(workerUrl, attemptMs);
+
+    return (async () => {
+      let lastErr: Error = new Error('Browser worker connection failed');
+      for (let i = 1; i <= attempts; i++) {
+        try {
+          return await tryOnce();
+        } catch (err) {
+          lastErr = err instanceof Error ? err : new Error(String(err));
+          const retriable = this.isTransientBrowserWorkerConnectError(lastErr);
+          if (!retriable || i === attempts) {
+            throw lastErr;
+          }
+          const backoff = Math.min(500 * 2 ** (i - 1), 10_000);
+          this.logger.warn(
+            `Browser worker WebSocket failed (${lastErr.message}); retry ${i}/${attempts} in ${backoff}ms`,
+          );
+          await sleepMs(backoff);
+        }
+      }
+      throw lastErr;
+    })();
+  }
+
+  private isTransientBrowserWorkerConnectError(err: Error): boolean {
+    const msg = err.message.toLowerCase();
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ECONNRESET' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN') {
+      return true;
+    }
+    if (
+      msg.includes('econnreset') ||
+      msg.includes('econnrefused') ||
+      msg.includes('etimedout') ||
+      msg.includes('socket hang up') ||
+      msg.includes('eai_again') ||
+      msg.includes('closed before launch')
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private connectBrowserWorkerWebSocketOnce(workerUrl: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       const ws = new WebSocket(workerUrl);
       const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         ws.close();
         reject(new Error('Browser worker connection timeout'));
-      }, 60000);
+      }, timeoutMs);
+
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        fn();
+      };
 
       ws.on('open', () => {
         ws.send(JSON.stringify({ type: 'launch' }));
       });
 
       ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString());
+        let msg: { type?: string; wsEndpoint?: string; error?: string };
+        try {
+          msg = JSON.parse(data.toString()) as { type?: string; wsEndpoint?: string; error?: string };
+        } catch {
+          return;
+        }
         if (msg.type === 'launch:result' && msg.wsEndpoint) {
-          clearTimeout(timeout);
-          ws.close();
-          resolve(msg.wsEndpoint);
+          finish(() => {
+            ws.close();
+            resolve(msg.wsEndpoint!);
+          });
         } else if (msg.type === 'error') {
-          clearTimeout(timeout);
-          ws.close();
-          reject(new Error(msg.error));
+          finish(() => {
+            ws.close();
+            reject(new Error(msg.error ?? 'Browser worker error'));
+          });
         }
       });
 
       ws.on('error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
+        finish(() => reject(err));
+      });
+
+      ws.on('close', (code, reason) => {
+        if (settled) return;
+        const r = reason?.toString?.() ?? '';
+        finish(() =>
+          reject(
+            new Error(
+              `Browser worker WebSocket closed before launch: code=${code}${r ? ` ${r}` : ''}`,
+            ),
+          ),
+        );
       });
     });
   }
