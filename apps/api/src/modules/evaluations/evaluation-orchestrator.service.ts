@@ -20,10 +20,16 @@ function evaluationAnalyzerTimeoutMs(): number {
 }
 
 function isAbortOrTimeoutError(e: unknown): boolean {
-  if (e instanceof Error) {
-    if (e.name === 'AbortError' || e.name === 'TimeoutError') return true;
-    if (/aborted|AbortError|timeout/i.test(e.message)) return true;
-  }
+  const name =
+    e !== null && typeof e === 'object' && 'name' in e ? String((e as { name: unknown }).name) : '';
+  const message =
+    e !== null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string'
+      ? (e as { message: string }).message
+      : e instanceof Error
+        ? e.message
+        : '';
+  if (name === 'AbortError' || name === 'TimeoutError') return true;
+  if (/aborted|AbortError|timeout/i.test(message)) return true;
   return false;
 }
 
@@ -352,37 +358,65 @@ export class EvaluationOrchestratorService {
           'Full-page Set-of-Marks JPEG + SOM manifest + CDP accessibility sent to codegen (viewportJpegBase64 for UI preview).',
       };
 
+      const codegenTimeoutMs = evaluationCodegenTimeoutMs();
       trace('Codegen LLM: calling evaluationProposePlaywrightStep', {
-        timeoutMs: evaluationCodegenTimeoutMs(),
+        timeoutMs: codegenTimeoutMs,
         msSinceStepStart: Date.now() - stepWallStart,
       });
       const agentContextAppendix =
         fresh.projectId != null
           ? (await this.agentContext.getPromptInjectionBlock(userId, fresh.projectId)).trim() || undefined
           : undefined;
-      const proposed = await this.llm.evaluationProposePlaywrightStep(
-        {
-          url: ev.url,
-          intent: ev.intent,
-          desiredOutput: ev.desiredOutput,
-          progressSummary: fresh.progressSummary,
-          priorStepsBrief: priorBrief,
-          screenshotBase64: screenshotB64,
-          pageUrl,
-          somManifest: codegenCtx.somManifest,
-          accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
-          autoSignInEnabled: fresh.autoSignIn,
-          autoSignInCompleted: authState.clerkFullSignInDone,
-          agentContextAppendix,
-        },
-        {
-          userId,
-          signal: AbortSignal.timeout(evaluationCodegenTimeoutMs()),
-          onDebugLog: (m, d) => trace(m, d),
-        },
-      );
+
+      let codegenTimedOut = false;
+      let proposed: Awaited<ReturnType<LlmService['evaluationProposePlaywrightStep']>>;
+      try {
+        proposed = await this.llm.evaluationProposePlaywrightStep(
+          {
+            url: ev.url,
+            intent: ev.intent,
+            desiredOutput: ev.desiredOutput,
+            progressSummary: fresh.progressSummary,
+            priorStepsBrief: priorBrief,
+            screenshotBase64: screenshotB64,
+            pageUrl,
+            somManifest: codegenCtx.somManifest,
+            accessibilitySnapshot: codegenCtx.accessibilitySnapshot,
+            autoSignInEnabled: fresh.autoSignIn,
+            autoSignInCompleted: authState.clerkFullSignInDone,
+            agentContextAppendix,
+          },
+          {
+            userId,
+            signal: AbortSignal.timeout(codegenTimeoutMs),
+            onDebugLog: (m, d) => trace(m, d),
+          },
+        );
+      } catch (e) {
+        if (!isAbortOrTimeoutError(e)) throw e;
+        codegenTimedOut = true;
+        const sec = Math.round(codegenTimeoutMs / 1000);
+        const errDetail = e instanceof Error ? e.message : String(e);
+        this.logger.warn(
+          `evaluation_codegen timed out or aborted (evaluationId=${evaluationId} sequence=${sequence} timeoutMs=${codegenTimeoutMs}): ${errDetail}`,
+        );
+        trace('Codegen LLM: timeout or abort; using no-op Playwright so the run can continue', {
+          timeoutMs: codegenTimeoutMs,
+        });
+        proposed = {
+          stepTitle: 'Codegen model timed out',
+          thinking: `Vision/codegen did not return within ${sec}s (${errDetail}). No Playwright was executed for this step; the analyzer will decide whether to retry.`,
+          playwrightCode: '',
+          expectedOutcome: 'No browser actions — codegen hit the time limit.',
+          llmPrompts: {
+            system: `[Not sent — codegen exceeded ${sec}s or was aborted]`,
+            user: `[Not sent — codegen exceeded ${sec}s or was aborted]`,
+          },
+        };
+      }
 
       const codegenOutputJson = {
+        ...(codegenTimedOut ? { codegenTimedOut: true as const, codegenTimeoutMs } : {}),
         ...(proposed.thinkingStructured ? { thinkingStructured: proposed.thinkingStructured } : {}),
         thinking: proposed.thinking,
         stepTitle: proposed.stepTitle,

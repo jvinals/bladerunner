@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.214`: **Evaluations — codegen timeout no longer fails the run** — `AbortSignal.timeout` on **evaluation_codegen** (default **120s**) rejects with **`This operation was aborted`**; the analyzer already recovered from its own timeout, but codegen did not, so long vision calls **FAILED** the whole evaluation. On abort/timeout the orchestrator now logs a warning, persists a **no-op** step with **`codegenTimedOut`**, and continues so the **analyzer** can return **retry**. **`isAbortOrTimeoutError`** reads **`name`/`message`** from any thrown object (e.g. **`DOMException`**) so aborts are recognized reliably. `@bladerunner/api 0.6.153`.
+
 - `0.10.213`: **Browser worker — valid CDP WebSocket URL for local evals** — `launchServer` used `host: '::'`, which could produce malformed endpoints (`ws://:::3003/...`) that `chromium.connect` rejects. Bind `0.0.0.0` and normalize returned `wsEndpoint` to `127.0.0.1` when `WORKER_EXTERNAL_HOST` is unset (Fly/production unchanged). `@bladerunner/browser-worker 0.2.9`.
 
 - `0.10.212`: **API Docker build — `DATABASE_URL` for `prisma generate`** — `prisma.config.ts` requires `DATABASE_URL` when loading; Fly/GitHub Actions had no env during image build. Set a placeholder `ENV` in `Dockerfile.production` before `prisma generate` / `pnpm run build` (generate does not connect to DB). `@bladerunner/api 0.6.152`.
