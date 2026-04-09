@@ -2,6 +2,8 @@
 
 ## 2026-04-09
 
+- `0.10.218`: **Docs — OpenRouter Claude Haiku 3.5** — Comments clarify that the OpenRouter+Anthropic vision compat path (system folded into user, no `image_url.detail`) applies to **`anthropic/claude-3-5-haiku-…`** and other **`anthropic/claude-…`** slugs. `@bladerunner/api 0.6.157`.
+
 - `0.10.217`: **OpenRouter + Anthropic — vision request shape** — OpenRouter often returns **`400 Provider returned error`** when **`system` + multimodal `user`** is forwarded to Anthropic. For **`openRouterStyle`** providers with **`anthropic/`** models, **`OpenAiProvider`** now folds **system → first user** text (same pattern as other working clients) and **omits `image_url.detail`** for OpenRouter. **`APIError`** bodies are appended to thrown messages for clearer logs. `@bladerunner/api 0.6.156`.
 
 - `0.10.216`: **LLM — no default `response_format: json_object`** — `chatJson` and **`OpenAiProvider`** now default to **plain text**; JSON is enforced via prompts and **`parseJsonFromLlmText`** (same as Gemini). Avoids OpenRouter 400s, **no double LLM call**, and matches how we already tolerate markdown / CoT. Opt-in **`responseFormat: 'json_object'`** remains for OpenAI-only strict mode. **`action_to_instruction`** uses **`parseJsonFromLlmText`** instead of raw **`JSON.parse`**. `@bladerunner/api 0.6.155`.

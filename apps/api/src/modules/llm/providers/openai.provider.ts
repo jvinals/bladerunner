@@ -18,8 +18,9 @@ function enrichOpenAiClientError(err: unknown): Error {
 }
 
 /**
- * OpenRouter's OpenAI shim + Anthropic upstream rejects some `system` + vision `user` shapes with a generic
- * 400 "Provider returned error". Folding system text into the first user message matches working clients (e.g. Zed).
+ * OpenRouter's OpenAI shim + **Anthropic** upstream (e.g. **Claude 3.5 Haiku** at `anthropic/claude-3-5-haiku-…`)
+ * rejects some `system` + multimodal `user` shapes with a generic **400 "Provider returned error"**.
+ * Folding system text into the first user message matches working clients (e.g. Zed).
  */
 function mergeSystemIntoFirstUserForAnthropicOpenRouter(messages: ChatMessage[]): ChatMessage[] {
   const systems = messages.filter((m) => m.role === 'system');
@@ -55,9 +56,14 @@ export class OpenAiProvider implements LlmProvider {
     this.openRouterStyle = opts?.openRouterStyle ?? false;
   }
 
+  /** OpenRouter + Anthropic slugs (`anthropic/claude-…`, including Haiku 3.5). */
+  private isOpenRouterAnthropicModel(): boolean {
+    return this.openRouterStyle && this.model.includes('anthropic/');
+  }
+
   async chat(messages: ChatMessage[], options?: LlmChatOptions): Promise<LlmChatResult> {
     let normalized = messages;
-    if (this.openRouterStyle && this.model.includes('anthropic/')) {
+    if (this.isOpenRouterAnthropicModel()) {
       normalized = mergeSystemIntoFirstUserForAnthropicOpenRouter(messages);
     }
 
@@ -72,7 +78,7 @@ export class OpenAiProvider implements LlmProvider {
                 type: 'image_url' as const,
                 image_url: {
                   url: `data:image/jpeg;base64,${options.imageBase64}`,
-                  /** Omit `detail` for OpenRouter — some Anthropic routes 400 when `low` is forwarded oddly. */
+                  /** OpenRouter + Claude (Haiku, Sonnet, …): omit `detail`; gateway can 400 when `low` is forwarded oddly. */
                   ...(this.openRouterStyle ? {} : { detail: 'low' as const }),
                 },
               },
