@@ -48,6 +48,7 @@ import {
 import { buildPlaybackSkipSet, normalizePlaybackUrl, shouldSkipStoredPlaywrightForClerk } from './playback-skip.util';
 import { filterStepsForPlaybackExecutionChain } from './playback-execution-chain.util';
 import { escapeLocatorCssInPlaywrightSnippet } from './playback-css-escape.util';
+import { resolveBrowserWorkerWebSocketUrl } from './browser-worker-url.util';
 import {
   buildClerkAutoSignInInstruction,
   CLERK_AUTO_SIGN_IN_KIND,
@@ -913,7 +914,10 @@ export class RecordingService extends EventEmitter {
       streamQuality: 'high',
       streamSmoothness: 'high',
     });
-    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const workerUrl = resolveBrowserWorkerWebSocketUrl(
+      this.configService.get<string>('BROWSER_WORKER_URL'),
+      this.logger,
+    );
     const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
     const browser = await chromium.connect(wsEndpoint);
     const ffmpegStagingPath = path.join(os.tmpdir(), `br-eval-screencast-${evaluationId}-${randomUUID()}.mp4`);
@@ -1044,7 +1048,10 @@ export class RecordingService extends EventEmitter {
       streamQuality: 'high',
       streamSmoothness: 'high',
     });
-    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const workerUrl = resolveBrowserWorkerWebSocketUrl(
+      this.configService.get<string>('BROWSER_WORKER_URL'),
+      this.logger,
+    );
     const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
     const browser = await chromium.connect(wsEndpoint);
     const ffmpegStagingPath = path.join(os.tmpdir(), `br-discovery-screencast-${discoverySessionId}-${randomUUID()}.mp4`);
@@ -1380,7 +1387,10 @@ export class RecordingService extends EventEmitter {
     captureSettings: RunCaptureSettings;
     projectAuth: ProjectAutoSignInCredentials | null;
   }): Promise<RecordingSession> {
-    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const workerUrl = resolveBrowserWorkerWebSocketUrl(
+      this.configService.get<string>('BROWSER_WORKER_URL'),
+      this.logger,
+    );
     const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
     const browser = await chromium.connect(wsEndpoint);
     const ffmpegStagingPath = path.join(os.tmpdir(), `br-screencast-${args.runId}-${randomUUID()}.mp4`);
@@ -5467,7 +5477,10 @@ export class RecordingService extends EventEmitter {
       skipStepIds: opts?.skipStepIds,
       playThroughSequence: opts?.playThroughSequence,
     };
-    const workerUrl = this.configService.get<string>('BROWSER_WORKER_URL', 'ws://localhost:3002');
+    const workerUrl = resolveBrowserWorkerWebSocketUrl(
+      this.configService.get<string>('BROWSER_WORKER_URL'),
+      this.logger,
+    );
 
     let wsEndpoint: string;
     let browser: Browser;
