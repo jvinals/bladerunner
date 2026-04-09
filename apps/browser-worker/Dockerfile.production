@@ -3,10 +3,13 @@ FROM mcr.microsoft.com/playwright:v1.58.2-noble
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install --production
+# Install devDependencies too — TypeScript is required to compile `server.ts` → `dist/`.
+# (`npm install --production` + `npx tsc` used to pull the wrong `tsc` npm package and `|| true` hid failures.)
+RUN npm install
 
 COPY . ./
-RUN npx tsc || true
+RUN npm run build
+RUN npm prune --omit=dev
 
 ENV WORKER_PORT=3002
 EXPOSE 3002

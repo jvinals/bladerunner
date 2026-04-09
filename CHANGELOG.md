@@ -2,6 +2,8 @@
 
 ## 2026-04-08
 
+- `0.10.209`: **Browser worker Docker image — build TypeScript in production** — `Dockerfile.production` no longer uses `npm install --production` before `npx tsc || true` (wrong `tsc` package, silent skip, empty `dist/`, crash on start). Now `npm install` → `npm run build` → `npm prune --omit=dev`. `@bladerunner/browser-worker 0.2.7`.
+
 - `0.10.208`: **CI — Fly.io browser worker deploy on push to `main`** — GitHub Actions workflow deploys `bladerunner-browser-worker` from `apps/browser-worker` when worker paths change; uses `FLY_API_TOKEN` (same secret as API).
 
 - `0.10.207`: **CI — Fly.io API deploy on push to `main`** — GitHub Actions workflow runs `flyctl deploy` from the repo root with `apps/api/fly.toml` (correct Docker context for the monorepo). Requires `FLY_API_TOKEN` in repo secrets. Root `.dockerignore` trims upload size; `apps/api/fly.toml` `[build].dockerfile` set to `apps/api/Dockerfile.production` for root-context deploys.
