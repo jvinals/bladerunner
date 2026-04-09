@@ -4,6 +4,7 @@ import { RecordingService } from '../recording/recording.service';
 import { LlmService } from '../llm/llm.service';
 import { EvaluationsService } from './evaluations.service';
 import { AgentContextService } from '../agent-context/agent-context.service';
+import { formatTraceDurationSeconds } from './evaluation-trace-duration';
 
 const MAX_EVALUATION_STEPS = 80;
 
@@ -260,11 +261,14 @@ export class EvaluationOrchestratorService {
         });
         lastSignInDurationMs = Date.now() - tSign;
         await page.waitForLoadState('domcontentloaded').catch(() => {});
-        trace('Auto sign-in: block finished', {
-          ms: lastSignInDurationMs,
-          pageUrl: page.url(),
-          completedThisRun: authState.clerkFullSignInDone,
-        });
+        trace(
+          `Auto sign-in: block finished ${formatTraceDurationSeconds(lastSignInDurationMs)}`,
+          {
+            ms: lastSignInDurationMs,
+            pageUrl: page.url(),
+            completedThisRun: authState.clerkFullSignInDone,
+          },
+        );
       } else if (fresh.autoSignIn) {
         trace('Auto sign-in: skipped (already completed earlier this run)', { sequence });
       } else {
@@ -316,7 +320,7 @@ export class EvaluationOrchestratorService {
         throw new Error('Evaluation codegen capture produced no screenshot');
       }
       const pageUrl = codegenCtx.pageUrl;
-      trace('Codegen capture: finished', {
+      trace(`Codegen capture: finished ${formatTraceDurationSeconds(Date.now() - tCap)}`, {
         ms: Date.now() - tCap,
         pageUrl,
         screenshotBase64Chars: screenshotB64.length,
@@ -368,6 +372,7 @@ export class EvaluationOrchestratorService {
           ? (await this.agentContext.getPromptInjectionBlock(userId, fresh.projectId)).trim() || undefined
           : undefined;
 
+      const tCodegenLlm = Date.now();
       let codegenTimedOut = false;
       let proposed: Awaited<ReturnType<LlmService['evaluationProposePlaywrightStep']>>;
       try {
@@ -400,9 +405,12 @@ export class EvaluationOrchestratorService {
         this.logger.warn(
           `evaluation_codegen timed out or aborted (evaluationId=${evaluationId} sequence=${sequence} timeoutMs=${codegenTimeoutMs}): ${errDetail}`,
         );
-        trace('Codegen LLM: timeout or abort; using no-op Playwright so the run can continue', {
-          timeoutMs: codegenTimeoutMs,
-        });
+        trace(
+          `Codegen LLM: timeout or abort; using no-op Playwright so the run can continue ${formatTraceDurationSeconds(Date.now() - tCodegenLlm)}`,
+          {
+            timeoutMs: codegenTimeoutMs,
+          },
+        );
         proposed = {
           stepTitle: 'Codegen model timed out',
           thinking: `Vision/codegen did not return within ${sec}s (${errDetail}). No Playwright was executed for this step; the analyzer will decide whether to retry.`,
@@ -413,6 +421,11 @@ export class EvaluationOrchestratorService {
             user: `[Not sent — codegen exceeded ${sec}s or was aborted]`,
           },
         };
+      }
+      if (!codegenTimedOut) {
+        trace(`Codegen LLM: evaluationProposePlaywrightStep returned ${formatTraceDurationSeconds(Date.now() - tCodegenLlm)}`, {
+          msSinceStepStart: Date.now() - stepWallStart,
+        });
       }
 
       const codegenOutputJson = {
@@ -429,6 +442,7 @@ export class EvaluationOrchestratorService {
         llmPrompts: proposed.llmPrompts,
       };
 
+      const tPersistStep = Date.now();
       await this.evaluations.createStep(userId, {
         evaluationId,
         sequence,
@@ -442,8 +456,11 @@ export class EvaluationOrchestratorService {
         proposedCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
       });
-      trace('Persisted evaluation step row (codegen inputs + outputs)', { stepTitle: proposed.stepTitle });
+      trace(`Persisted evaluation step row (codegen inputs + outputs) ${formatTraceDurationSeconds(Date.now() - tPersistStep)}`, {
+        stepTitle: proposed.stepTitle,
+      });
 
+      const tEmitExecuting = Date.now();
       this.recording.emitEvaluationProgress(evaluationId, {
         phase: 'executing',
         sequence,
@@ -451,23 +468,31 @@ export class EvaluationOrchestratorService {
         playwrightCode: proposed.playwrightCode,
         expectedOutcome: proposed.expectedOutcome,
       });
-      trace('Socket: emitted phase executing with proposed Playwright snippet', {
-        codeChars: proposed.playwrightCode.length,
-      });
+      trace(
+        `Socket: emitted phase executing with proposed Playwright snippet ${formatTraceDurationSeconds(Date.now() - tEmitExecuting)}`,
+        {
+          codeChars: proposed.playwrightCode.length,
+        },
+      );
 
       let executionOk = true;
       let errorMessage: string | undefined;
+      let tPlaywright = Date.now();
       try {
         trace('Playwright execution: starting runEvaluationPlaywright', {
           msSinceStepStart: Date.now() - stepWallStart,
         });
-        const tPw = Date.now();
+        tPlaywright = Date.now();
         await this.recording.runEvaluationPlaywright(evaluationId, userId, proposed.playwrightCode);
-        trace('Playwright execution: finished OK', { ms: Date.now() - tPw });
+        trace(`Playwright execution: finished OK ${formatTraceDurationSeconds(Date.now() - tPlaywright)}`, {
+          ms: Date.now() - tPlaywright,
+        });
       } catch (e) {
         executionOk = false;
         errorMessage = e instanceof Error ? e.message : String(e);
-        trace('Playwright execution: failed', { error: errorMessage });
+        trace(`Playwright execution: failed ${formatTraceDurationSeconds(Date.now() - tPlaywright)}`, {
+          error: errorMessage,
+        });
       }
 
       trace('Analyzer capture: starting captureEvaluationLlmPageContext (after step)');
@@ -478,7 +503,7 @@ export class EvaluationOrchestratorService {
         throw new Error('Evaluation analyzer capture produced no screenshot');
       }
       const afterUrl = afterCtx.pageUrl;
-      trace('Analyzer capture: finished', {
+      trace(`Analyzer capture: finished ${formatTraceDurationSeconds(Date.now() - tAfterCap)}`, {
         ms: Date.now() - tAfterCap,
         pageUrlAfter: afterUrl,
         afterScreenshotChars: afterB64.length,
@@ -501,6 +526,7 @@ export class EvaluationOrchestratorService {
           'After-step full-page Set-of-Marks JPEG + manifest + accessibility sent to analyzer (afterStepViewportJpegBase64 for UI preview).',
       };
 
+      const tAnalyzerInputsPersist = Date.now();
       await this.evaluations.updateStepAnalyzerInputsOnly(evaluationId, sequence, { analyzerInputJson });
 
       this.recording.emitEvaluationProgress(evaluationId, {
@@ -510,9 +536,13 @@ export class EvaluationOrchestratorService {
         executionOk,
         errorMessage: errorMessage ?? null,
       });
-      trace('Socket: emitted phase analyzing; analyzer inputs persisted');
+      trace(
+        `Socket: emitted phase analyzing; analyzer inputs persisted ${formatTraceDurationSeconds(Date.now() - tAnalyzerInputsPersist)}`,
+      );
 
       let analysis: Awaited<ReturnType<LlmService['evaluationAnalyzeAfterStep']>>;
+      let analyzerLlmTimedOut = false;
+      const tAnalyzerLlm = Date.now();
       try {
         trace('Analyzer LLM: calling evaluationAnalyzeAfterStep', {
           timeoutMs: evaluationAnalyzerTimeoutMs(),
@@ -543,6 +573,7 @@ export class EvaluationOrchestratorService {
         if (!isAbortOrTimeoutError(e)) {
           throw e;
         }
+        analyzerLlmTimedOut = true;
         const ms = evaluationAnalyzerTimeoutMs();
         this.logger.warn(
           `evaluation_analyzer timed out or aborted (evaluationId=${evaluationId} sequence=${sequence} timeoutMs=${ms}): ${e instanceof Error ? e.message : String(e)}`,
@@ -552,7 +583,15 @@ export class EvaluationOrchestratorService {
           decision: 'retry',
           rationale: `Analyzer model did not finish within ${Math.round(ms / 1000)}s (timeout or cancellation).`,
         };
-        trace('Analyzer LLM: timeout or abort', { timeoutMs: ms });
+        trace(`Analyzer LLM: timeout or abort ${formatTraceDurationSeconds(Date.now() - tAnalyzerLlm)}`, {
+          timeoutMs: ms,
+        });
+      }
+      if (!analyzerLlmTimedOut) {
+        trace(
+          `Analyzer LLM: evaluationAnalyzeAfterStep returned ${formatTraceDurationSeconds(Date.now() - tAnalyzerLlm)}`,
+          { msSinceStepStart: Date.now() - stepWallStart },
+        );
       }
 
       if (
@@ -606,7 +645,7 @@ export class EvaluationOrchestratorService {
         goalProgress: analysis.goalProgress,
         rationale: analysis.rationale,
       });
-      trace('Analyzer result persisted', {
+      trace(`Analyzer result persisted ${formatTraceDurationSeconds(Date.now() - stepWallStart)}`, {
         decision: analysis.decision,
         goalProgress: analysis.goalProgress,
         msSinceStepStart: Date.now() - stepWallStart,
@@ -693,6 +732,7 @@ export class EvaluationOrchestratorService {
         stepsCount: steps.length,
       },
     );
+    const tFinalReport = Date.now();
     const report = await this.llm.evaluationGenerateFinalReport(
       {
         intent,
@@ -705,9 +745,13 @@ export class EvaluationOrchestratorService {
         onDebugLog: (m, d) => this.recording.emitEvaluationDebugLog(evaluationId, `[Report] ${m}`, d),
       },
     );
-    this.recording.emitEvaluationDebugLog(evaluationId, '[Report] Final report LLM: done', {
-      markdownChars: report.markdown.length,
-    });
+    this.recording.emitEvaluationDebugLog(
+      evaluationId,
+      `[Report] Final report LLM: done ${formatTraceDurationSeconds(Date.now() - tFinalReport)}`,
+      {
+        markdownChars: report.markdown.length,
+      },
+    );
 
     await this.evaluations.saveReport(userId, {
       evaluationId,
