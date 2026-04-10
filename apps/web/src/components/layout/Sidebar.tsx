@@ -1,11 +1,20 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Play, Settings, ChevronRight, FolderKanban, ClipboardList } from 'lucide-react';
+import {
+  Home,
+  Play,
+  Settings,
+  ChevronRight,
+  FolderKanban,
+  ClipboardList,
+  Navigation as NavigationIcon,
+} from 'lucide-react';
 import { UserButton, useUser } from '@clerk/react';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/runs', label: 'Runs', icon: Play },
   { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
+  { to: '/navigations', label: 'Navigation', icon: NavigationIcon },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -31,10 +40,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* Menu */}
       <nav className="flex-1 py-4 px-3">
         <p className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase px-2 mb-3">
-          Navigation
+          Menu
         </p>
         <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
