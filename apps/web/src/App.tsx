@@ -10,6 +10,8 @@ import SettingsPage from './pages/Settings';
 import ProjectsPage from './pages/Projects';
 import EvaluationsPage from './pages/Evaluations';
 import EvaluationDetailPage from './pages/EvaluationDetail';
+import NavigationsPage from './pages/Navigations';
+import NavigationDetailPage from './pages/NavigationDetail';
 import DetachedPreview from './pages/DetachedPreview';
 import DetachedEvaluationPreview from './pages/DetachedEvaluationPreview';
 import DetachedDiscoveryPreview from './pages/DetachedDiscoveryPreview';
@@ -38,6 +40,8 @@ export default function App() {
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="evaluations" element={<EvaluationsPage />} />
             <Route path="evaluations/:id" element={<EvaluationDetailPage />} />
+            <Route path="navigations" element={<NavigationsPage />} />
+            <Route path="navigations/:id" element={<NavigationDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
