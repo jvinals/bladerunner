@@ -29,8 +29,9 @@ function formatVariablePill(cleanKey: string): string {
   return k ? `{{ ${k} }}` : '{{ }}';
 }
 
-function actionIcon(type: string, refined: boolean) {
-  if (refined) {
+/** Braces icon only for variable / prompt-style steps, not refined click instructions. */
+function actionIcon(type: string, useBracesOverlay: boolean) {
+  if (useBracesOverlay) {
     return <Braces size={14} className="text-violet-600 shrink-0" />;
   }
   switch (type) {
@@ -51,17 +52,24 @@ function actionIcon(type: string, refined: boolean) {
   }
 }
 
+function defaultClickCaption(action: RecordedNavigationAction): string {
+  return (
+    action.elementText?.trim() ||
+    action.ariaLabel ||
+    action.elementId ||
+    `Click (${Math.round(action.x ?? 0)}, ${Math.round(action.y ?? 0)})`
+  );
+}
+
 function actionLabel(action: RecordedNavigationAction): string {
   switch (action.actionType) {
     case 'navigate':
       return action.inputValue ?? action.pageUrl ?? 'Navigate';
-    case 'click':
-      return (
-        action.elementText?.slice(0, 60) ||
-        action.ariaLabel ||
-        action.elementId ||
-        `Click (${Math.round(action.x ?? 0)}, ${Math.round(action.y ?? 0)})`
-      );
+    case 'click': {
+      const custom = action.inputValue?.trim();
+      if (custom) return custom.slice(0, 80);
+      return defaultClickCaption(action).slice(0, 60);
+    }
     case 'type':
       return action.inputValue?.slice(0, 40) || 'Type text';
     case 'variable_input':
@@ -74,12 +82,19 @@ function actionLabel(action: RecordedNavigationAction): string {
   }
 }
 
-function isRefinedHighlight(action: RecordedNavigationAction): boolean {
+function isVariableStyleRefinement(action: RecordedNavigationAction): boolean {
   return (
     action.actionType === 'variable_input' ||
     action.actionType === 'prompt_type' ||
     action.actionType === 'prompt' ||
     action.inputMode === 'variable'
+  );
+}
+
+function isRefinedHighlight(action: RecordedNavigationAction): boolean {
+  return (
+    isVariableStyleRefinement(action) ||
+    (action.actionType === 'click' && !!action.inputValue?.trim())
   );
 }
 
@@ -93,6 +108,10 @@ function isPromptInstructionRow(action: RecordedNavigationAction): boolean {
 
 function isPromptTypeRow(action: RecordedNavigationAction): boolean {
   return action.actionType === 'prompt_type';
+}
+
+function isClickRefineRow(action: RecordedNavigationAction): boolean {
+  return action.actionType === 'click';
 }
 
 type DynamicCompileMode = 'variable_input' | 'prompt_type';
@@ -273,6 +292,36 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
     );
   }
 
+  if (isClickRefineRow(action)) {
+    const detected = defaultClickCaption(action);
+    return (
+      <div className="mt-2 space-y-2 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5">
+        <label className="block space-y-1">
+          <span className="text-[10px] font-medium text-gray-700">Refine click instruction</span>
+          <textarea
+            value={action.inputValue ?? ''}
+            onChange={(e) =>
+              onUpdate({
+                inputValue: e.target.value.trim() === '' ? null : e.target.value,
+              })
+            }
+            placeholder="e.g. Pick the next available day"
+            rows={3}
+            className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-900 placeholder:text-gray-400"
+          />
+        </label>
+        <p className="text-[10px] text-gray-500">
+          <span className="font-medium text-gray-600">Detected: </span>
+          <span className="text-gray-600">{detected.slice(0, 120)}</span>
+          {detected.length > 120 ? '…' : ''}
+        </p>
+        <p className="text-[10px] text-gray-500">
+          Leave blank to use the detected label in the exported workflow.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/80 p-2.5 text-[10px] text-gray-500">
       This step has no text or variable to edit here.
@@ -297,7 +346,11 @@ export function RecordedActionTimeline({ actions, onUpdateAction }: RecordedActi
         {actions.map((action) => {
           const refined = isRefinedHighlight(action);
           const expanded = expandedSequence === action.sequence;
-          const rowBg = refined ? 'bg-violet-50/70 hover:bg-violet-50' : 'hover:bg-gray-50/80';
+          const rowBg = refined
+            ? action.actionType === 'click' && action.inputValue?.trim()
+              ? 'bg-sky-50/80 hover:bg-sky-50'
+              : 'bg-violet-50/70 hover:bg-violet-50'
+            : 'hover:bg-gray-50/80';
 
           return (
             <li key={action.sequence}>
@@ -311,7 +364,7 @@ export function RecordedActionTimeline({ actions, onUpdateAction }: RecordedActi
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">
                   {action.sequence}
                 </span>
-                {actionIcon(action.actionType, refined)}
+                {actionIcon(action.actionType, isVariableStyleRefinement(action))}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
                   {action.actionType !== 'navigate' && action.pageUrl && (

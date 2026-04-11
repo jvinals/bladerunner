@@ -103,10 +103,12 @@ export function compileToSkyvernWorkflow(
       }
 
       case 'click': {
+        const label =
+          action.inputValue?.trim() || resolveSemanticLabel(action);
         blocks.push({
           block_type: 'action',
           action_type: 'click',
-          label: resolveSemanticLabel(action),
+          label,
         });
         break;
       }
