@@ -366,7 +366,10 @@ export class RecordingGateway implements OnGatewayInit {
   }
 
   @SubscribeMessage('nav:pause')
-  async handleNavPause(@MessageBody() data: { navId: string; userId: string; paused: boolean }) {
+  async handleNavPause(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string; paused: boolean },
+  ) {
     try {
       this.navigationRecording.setPaused(data.navId, data.userId, data.paused);
       this.server.to(`run:${data.navId}`).emit('nav:recordingPaused', {
@@ -376,6 +379,7 @@ export class RecordingGateway implements OnGatewayInit {
       return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
       return { ok: false, error };
     }
   }
