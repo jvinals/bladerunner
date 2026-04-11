@@ -287,10 +287,19 @@ export function useNavigationRecording(
 
   const stopRecording = useCallback(() => {
     if (!navId || !socketRef.current?.connected) return;
-    socketRef.current.emit('nav:stopRecording', {
+    const socket = socketRef.current;
+    const payload = () => ({
       navId,
       userId,
-      actions: actionsRef.current,
+      /** Clone so the payload is plain JSON for Socket.IO (no accidental non-enumerable fields). */
+      actions: actionsRef.current.map((a) => ({ ...a })),
+    });
+    /** Defer past the current frame so focus moves / last controlled-input commits land in `actionsRef`. */
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!socket.connected) return;
+        socket.emit('nav:stopRecording', payload());
+      });
     });
   }, [navId, userId]);
 

@@ -72,30 +72,28 @@ interface NavigationLiveSession {
 
 /**
  * Merge timeline refinements from the client into the server session list before persist.
- * Requires identical length and per-index `sequence` values; otherwise returns a copy of `server`.
+ * Matches rows by `sequence` only (partial merge): client may lag one action during a race,
+ * and JSON may coerce sequence types — we normalize with `Number()`.
  */
 function mergeRecordedActionsWithClient(
   server: RecordedNavigationAction[],
-  client: RecordedNavigationAction[] | undefined,
+  client: RecordedNavigationAction[] | undefined | null,
 ): RecordedNavigationAction[] {
-  if (!client?.length) {
-    return [...server];
-  }
-  if (client.length !== server.length) {
+  if (client == null) {
     return [...server];
   }
   const bySeq = new Map<number, RecordedNavigationAction>();
   for (const c of client) {
-    if (bySeq.has(c.sequence)) {
-      return [...server];
-    }
-    bySeq.set(c.sequence, c);
+    const seq = Number(c.sequence);
+    if (!Number.isFinite(seq)) continue;
+    bySeq.set(seq, c);
   }
-  if (bySeq.size !== server.length) {
+  if (bySeq.size === 0) {
     return [...server];
   }
   return server.map((base) => {
-    const cl = bySeq.get(base.sequence);
+    const seq = Number(base.sequence);
+    const cl = bySeq.get(seq);
     if (!cl) {
       return base;
     }

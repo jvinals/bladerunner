@@ -488,7 +488,13 @@ export class RecordingGateway implements OnGatewayInit {
   ) {
     try {
       const nav = await this.navigationsService.findOne(data.navId, data.userId).catch(() => null);
-      const clientActions = Array.isArray(data.actions) ? data.actions : undefined;
+      const rawActions = (data as { actions?: unknown }).actions;
+      const clientActions = Array.isArray(rawActions)
+        ? (rawActions as RecordedNavigationAction[])
+        : undefined;
+      if (clientActions == null) {
+        this.logger.warn(`nav:stopRecording missing actions[] for navId=${data.navId} (merge skipped)`);
+      }
       const actions = await this.navigationRecording.stopSession(
         data.navId,
         data.userId,
