@@ -43,7 +43,56 @@ export default function NavigationsPage() {
 
   const createMutation = useMutation({
     mutationFn: (body: CreateNavigationBody) => navigationsApi.create(body),
+    onMutate: (body) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+        body: JSON.stringify({
+          sessionId: 'd7957e',
+          runId: 'verify',
+          hypothesisId: 'H2',
+          location: 'Navigations.tsx:createMutation.onMutate',
+          message: 'create navigation mutate started',
+          data: { hasIntent: !!body.intent?.trim(), hasDesired: !!body.desiredOutput?.trim(), urlLen: body.url?.length ?? 0 },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    },
+    onError: (err) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+        body: JSON.stringify({
+          sessionId: 'd7957e',
+          runId: 'verify',
+          hypothesisId: 'H2',
+          location: 'Navigations.tsx:createMutation.onError',
+          message: 'create navigation failed',
+          data: { errName: err instanceof Error ? err.name : 'unknown', errMsg: err instanceof Error ? err.message : String(err) },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    },
     onSuccess: () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+        body: JSON.stringify({
+          sessionId: 'd7957e',
+          runId: 'verify',
+          hypothesisId: 'H4',
+          location: 'Navigations.tsx:createMutation.onSuccess',
+          message: 'create navigation succeeded',
+          data: {},
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       void queryClient.invalidateQueries({ queryKey: ['navigations'] });
       setName('');
       setUrl('https://');
@@ -58,6 +107,24 @@ export default function NavigationsPage() {
 
   const submit = () => {
     const u = url.trim();
+    const intentOk = !!intent.trim();
+    const desiredOk = !!desiredOutput.trim();
+    const urlOk = !!u;
+    // #region agent log
+    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+      body: JSON.stringify({
+        sessionId: 'd7957e',
+        runId: 'verify',
+        hypothesisId: 'H1',
+        location: 'Navigations.tsx:submit',
+        message: 'Create clicked — validation snapshot',
+        data: { urlOk, intentOk, desiredOk, earlyReturn: !urlOk || !intentOk || !desiredOk },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (!u || !intent.trim() || !desiredOutput.trim()) return;
     const body: CreateNavigationBody = {
       name: name.trim() || undefined,
@@ -72,6 +139,9 @@ export default function NavigationsPage() {
     }
     createMutation.mutate(body);
   };
+
+  const canCreate =
+    url.trim().length > 0 && intent.trim().length > 0 && desiredOutput.trim().length > 0;
 
   if (isLoading) return <LoadingState message="Loading navigations..." />;
   if (error) return <ErrorState message="Failed to load navigations" />;
@@ -92,7 +162,24 @@ export default function NavigationsPage() {
         <button
           type="button"
           aria-label="New navigation"
-          onClick={() => setPanelOpen((o) => !o)}
+          onClick={() => {
+            // #region agent log
+            fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+              body: JSON.stringify({
+                sessionId: 'd7957e',
+                runId: 'verify',
+                hypothesisId: 'H3',
+                location: 'Navigations.tsx:NewNavigationButton',
+                message: 'New navigation header button clicked',
+                data: { willToggleFrom: panelOpen },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+            setPanelOpen((o) => !o);
+          }}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#4B90FF] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3d7fe6] sm:px-4"
         >
           <span className="text-xl font-medium leading-none sm:hidden">+</span>
@@ -199,6 +286,15 @@ export default function NavigationsPage() {
               />
             </label>
           </div>
+          {!canCreate && (
+            <p
+              id="nav-create-hint"
+              className="mt-4 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2"
+            >
+              Add <strong>Global intent</strong> and <strong>Desired report output</strong> (and a non-empty{' '}
+              <strong>Start URL</strong>) to enable Create.
+            </p>
+          )}
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
@@ -209,8 +305,14 @@ export default function NavigationsPage() {
             </button>
             <button
               type="button"
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || !canCreate}
               onClick={submit}
+              aria-describedby={!canCreate ? 'nav-create-hint' : undefined}
+              title={
+                !canCreate
+                  ? 'Fill Global intent, Desired report output, and Start URL before creating.'
+                  : undefined
+              }
               className="rounded-lg bg-[#4B90FF] text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
             >
               {createMutation.isPending ? 'Creating…' : 'Create'}
