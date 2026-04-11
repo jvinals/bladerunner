@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-11
+
+- `0.10.243`: **Navigation Recording Engine** — Interactive browser recording for Navigations. **Backend**: `NavigationRecordingService` (session lifecycle, `inspectAndClick` with interactive-parent `elementFromPoint` traversal, `resolveInput` for static/variable, ephemeral `scrollPage`); `NavigationAction` Prisma model + migration; Skyvern semantic workflow compiler (`compileToSkyvernWorkflow` — labels only, no DOM selectors); 6 new `nav:*` Socket.IO handlers on `RecordingGateway` (`startRecording`, `click`, `inputResolve`, `type`, `scroll`, `stopRecording`) + frame catch-up. **Frontend**: `useNavigationRecording` hook; `InteractiveCanvasStream` (canvas + throttled scroll + input guard); `VariableInjectionModal` (static text / `{{variable}}`); `RecordedActionTimeline`; `RecordingControls` (start/stop/export JSON); `NavigationRecorderLayout` integrated into `NavigationDetail.tsx`. `@bladerunner/api 0.6.172`, `@bladerunner/web 0.7.136`.
+
 ## 2026-04-09
 
 - `0.10.242`: **Navigations — Postgres table + API** — New **`navigations`** table (mirrors evaluation goal fields: URL, intent, desired output, project, auto-sign-in, run mode, status). REST **`GET/POST /navigations`**, **`GET/PATCH /navigations/:id`**. List create form matches **Evaluations** (project picker, Clerk OTP). Detail loads/saves via API. `@bladerunner/api 0.6.171`, `@bladerunner/web 0.7.135`.

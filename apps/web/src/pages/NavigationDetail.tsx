@@ -10,6 +10,7 @@ import {
   type ProjectDto,
 } from '@/lib/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
+import { NavigationRecorderLayout } from '@/components/navigation/NavigationRecorderLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import type { EvaluationProgressPayload, EvaluationDebugLogLine } from '@/hooks/useEvaluationLive';
 import {
@@ -647,16 +648,7 @@ export default function NavigationDetailPage() {
           )}
 
           <div className="w-full">
-            <div className="w-full rounded-xl border border-gray-200 bg-black overflow-hidden flex relative aspect-video min-h-[200px] items-center justify-center">
-              <span className="text-gray-500 text-sm px-4 text-center">
-                {ev.status === 'COMPLETED'
-                  ? 'Run finished (preview not connected)'
-                  : 'Start the run to see the browser (not connected yet)'}
-              </span>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-2 text-center">
-              Remote browser preview will mirror Evaluations when wired.
-            </p>
+            <NavigationRecorderLayout navId={id} />
           </div>
 
           <section
