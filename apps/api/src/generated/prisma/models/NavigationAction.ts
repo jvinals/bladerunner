@@ -892,7 +892,7 @@ export type $NavigationActionPayload<ExtArgs extends runtime.Types.Extensions.In
     userId: string
     sequence: number
     /**
-     * click | type | navigate | variable_input
+     * click | type | navigate | variable_input | prompt | prompt_type
      */
     actionType: string
     x: number | null

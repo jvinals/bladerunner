@@ -24,7 +24,9 @@ export function VariableInjectionModal({
   onDismiss,
 }: VariableInjectionModalProps) {
   const [tab, setTab] = useState<'static' | 'variable'>('static');
-  const [staticValue, setStaticValue] = useState('');
+  const [staticValue, setStaticValue] = useState(
+    () => (typeof prompt.elementMeta.currentValue === 'string' ? prompt.elementMeta.currentValue : ''),
+  );
   const [variableName, setVariableName] = useState('');
 
   const m = prompt.elementMeta;
@@ -36,8 +38,8 @@ export function VariableInjectionModal({
     (m?.textContent && String(m.textContent).slice(0, 80)) ||
     `${m?.tag ?? 'input'} field`;
 
-  const canSubmit =
-    tab === 'static' ? staticValue.trim().length > 0 : variableName.trim().length > 0;
+  /** Static allows empty string to clear the field; variable still needs a name. */
+  const canSubmit = tab === 'static' ? true : variableName.trim().length > 0;
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -52,7 +54,10 @@ export function VariableInjectionModal({
     <Dialog.Root open onOpenChange={(open) => { if (!open) onDismiss(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[200] bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[201] w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-200 bg-white p-0 shadow-xl outline-none">
+        <Dialog.Content
+          data-bladerunner-variable-injection-modal
+          className="fixed left-1/2 top-1/2 z-[201] w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-200 bg-white p-0 shadow-xl outline-none"
+        >
           <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-5 py-3">
             <Dialog.Title className="text-sm font-semibold text-gray-900">
               Input: {label}
@@ -99,7 +104,7 @@ export function VariableInjectionModal({
             {tab === 'static' ? (
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Text to type into the field
+                  Value (edit, replace, or clear)
                 </label>
                 <textarea
                   autoFocus
