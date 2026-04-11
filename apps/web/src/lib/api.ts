@@ -715,6 +715,21 @@ export const evaluationsApi = {
     }),
 };
 
+// ─── Navigations (planning records; separate from evaluations) ──────────────
+export type CreateNavigationBody = CreateEvaluationBody;
+export type UpdateNavigationBody = UpdateEvaluationBody & {
+  runMode?: EvaluationRunMode;
+};
+
+export const navigationsApi = {
+  list: () => apiFetch<EvaluationRow[]>('/navigations'),
+  create: (body: CreateNavigationBody) =>
+    apiFetch<EvaluationRow>('/navigations', { method: 'POST', body: JSON.stringify(body) }),
+  get: (id: string) => apiFetch<EvaluationDetail>(`/navigations/${id}`),
+  patch: (id: string, body: UpdateNavigationBody) =>
+    apiFetch<EvaluationDetail>(`/navigations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+};
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 export const settingsApi = {
   get: () => apiFetch<unknown>('/settings'),

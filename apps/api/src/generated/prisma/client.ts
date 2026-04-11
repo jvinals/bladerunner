@@ -95,6 +95,11 @@ export type UserLlmCredentials = Prisma.UserLlmCredentialsModel
  */
 export type Evaluation = Prisma.EvaluationModel
 /**
+ * Model Navigation
+ * Navigation planning records (UI shell; separate from autonomous `Evaluation` runs).
+ */
+export type Navigation = Prisma.NavigationModel
+/**
  * Model EvaluationStep
  * 
  */

@@ -62,6 +62,7 @@ export const ModelName = {
   UserLlmPreferences: 'UserLlmPreferences',
   UserLlmCredentials: 'UserLlmCredentials',
   Evaluation: 'Evaluation',
+  Navigation: 'Navigation',
   EvaluationStep: 'EvaluationStep',
   EvaluationQuestion: 'EvaluationQuestion',
   EvaluationReport: 'EvaluationReport'
@@ -260,6 +261,29 @@ export const EvaluationScalarFieldEnum = {
 } as const
 
 export type EvaluationScalarFieldEnum = (typeof EvaluationScalarFieldEnum)[keyof typeof EvaluationScalarFieldEnum]
+
+
+export const NavigationScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  projectId: 'projectId',
+  name: 'name',
+  url: 'url',
+  intent: 'intent',
+  desiredOutput: 'desiredOutput',
+  progressSummary: 'progressSummary',
+  status: 'status',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  failureMessage: 'failureMessage',
+  runMode: 'runMode',
+  autoSignIn: 'autoSignIn',
+  autoSignInClerkOtpMode: 'autoSignInClerkOtpMode',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type NavigationScalarFieldEnum = (typeof NavigationScalarFieldEnum)[keyof typeof NavigationScalarFieldEnum]
 
 
 export const EvaluationStepScalarFieldEnum = {

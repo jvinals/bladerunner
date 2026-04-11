@@ -1,10 +1,17 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { AutoClerkOtpUiMode, EvaluationRunMode, EvaluationStepDto } from '@/lib/api';
-import { ErrorState } from '@/components/ui/States';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  navigationsApi,
+  projectsApi,
+  type AutoClerkOtpUiMode,
+  type EvaluationRunMode,
+  type EvaluationStepDto,
+  type ProjectDto,
+} from '@/lib/api';
+import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import type { EvaluationProgressPayload, EvaluationDebugLogLine } from '@/hooks/useEvaluationLive';
-import { getNavigationDetailForPage } from '@/pages/navigation/mockNavigations';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -16,6 +23,7 @@ import {
   Radio,
   RotateCcw,
   Save,
+  Loader2,
   X,
 } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -238,6 +246,7 @@ const NOT_WIRED_TITLE = 'Not connected yet — backend wiring pending';
 
 export default function NavigationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const [humanSelection, setHumanSelection] = useState<Record<string, number>>({});
   const [intentDraft, setIntentDraft] = useState('');
   const [desiredDraft, setDesiredDraft] = useState('');
@@ -248,10 +257,45 @@ export default function NavigationDetailPage() {
   const [selectedStepIdx, setSelectedStepIdx] = useState(0);
   const [timelineViewMode, setTimelineViewMode] = useState<TimelineViewMode>('stacked');
   const [fullStepModalIdx, setFullStepModalIdx] = useState<number | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const parallelStepsScrollRef = useRef<HTMLDivElement>(null);
   const stackedStepsScrollRef = useRef<HTMLDivElement>(null);
 
-  const ev = useMemo(() => (id ? getNavigationDetailForPage(id) : null), [id]);
+  const query = useQuery({
+    queryKey: ['navigation', id],
+    queryFn: () => navigationsApi.get(id!),
+    enabled: !!id,
+  });
+  const ev = query.data;
+
+  const projectsQuery = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+  });
+  const projects: ProjectDto[] = projectsQuery.data ?? [];
+
+  const { mutate: patchNavigate, isPending: patchPending } = useMutation({
+    mutationFn: () =>
+      navigationsApi.patch(id!, {
+        intent: intentDraft.trim(),
+        desiredOutput: desiredDraft.trim(),
+        projectId: projectIdDraft === '' ? null : projectIdDraft,
+        autoSignIn: autoSignInDraft,
+        autoSignInClerkOtpMode:
+          autoSignInDraft && autoSignInOtpDraft !== 'default' ? autoSignInOtpDraft : null,
+        runMode: runModeDraft,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['navigation', id] });
+      void queryClient.invalidateQueries({ queryKey: ['navigations'] });
+      setSaveFeedback('Saved.');
+      window.setTimeout(() => setSaveFeedback(null), 3000);
+    },
+    onError: (err: unknown) => {
+      setSaveFeedback(err instanceof Error ? err.message : 'Save failed');
+      window.setTimeout(() => setSaveFeedback(null), 5000);
+    },
+  });
 
   const lastProgress: EvaluationProgressPayload | null = null;
   const evaluationTrace: EvaluationDebugLogLine[] = [];
@@ -292,8 +336,6 @@ export default function NavigationDetailPage() {
     }
   }, [selectedStepIdx, displaySteps.length, timelineViewMode]);
 
-  const projects: { id: string; name: string }[] = [];
-
   const pendingQuestion = useMemo(() => {
     if (!ev?.questions?.length) return null;
     return ev.questions.find((q) => q.state === 'pending') ?? null;
@@ -301,13 +343,19 @@ export default function NavigationDetailPage() {
 
   const latestReport = ev?.reports?.[0] ?? null;
 
+  const handleSave = useCallback(() => {
+    if (!intentDraft.trim() || !desiredDraft.trim()) return;
+    patchNavigate();
+  }, [intentDraft, desiredDraft, patchNavigate]);
+
   if (!id) {
     return <ErrorState message="Missing navigation id" />;
   }
-  if (!ev) {
+  if (query.isLoading) return <LoadingState message="Loading navigation..." />;
+  if (query.error || !ev) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-12">
-        <ErrorState message="Navigation not found." />
+        <ErrorState message="Navigation not found or failed to load." />
         <Link to="/navigations" className="text-sm text-[#4B90FF] mt-4 inline-block">
           ← Back to navigations
         </Link>
@@ -328,7 +376,8 @@ export default function NavigationDetailPage() {
     desiredDraft !== ev.desiredOutput ||
     projectIdDraft !== (ev.projectId ?? '') ||
     autoSignInDraft !== ev.autoSignIn ||
-    autoSignInOtpDraft !== serverOtp;
+    autoSignInOtpDraft !== serverOtp ||
+    runModeDraft !== (ev.runMode ?? 'continuous');
   const canStartQueued = ev.status === 'QUEUED';
   const canReprocess =
     ev.status === 'FAILED' ||
@@ -457,6 +506,17 @@ export default function NavigationDetailPage() {
             {ev.failureMessage && (
               <p className="mt-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{ev.failureMessage}</p>
             )}
+            {saveFeedback && (
+              <p
+                className={`mt-2 text-sm rounded-lg px-3 py-2 ${
+                  saveFeedback === 'Saved.'
+                    ? 'text-emerald-800 bg-emerald-50'
+                    : 'text-red-800 bg-red-50'
+                }`}
+              >
+                {saveFeedback}
+              </p>
+            )}
           </div>
 
           <section className="w-full rounded-xl border border-gray-200 bg-white p-4" aria-labelledby="nav-goal-heading">
@@ -488,16 +548,16 @@ export default function NavigationDetailPage() {
             {canEditContent && (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-gray-500 max-w-xl">
-                  Save will persist to the server once this screen is wired to the API.
+                  Save updates the navigations record in the database (same fields as creating an evaluation).
                 </p>
                 {draftsDirty && (
                   <button
                     type="button"
-                    disabled
-                    title={NOT_WIRED_TITLE}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 opacity-50 cursor-not-allowed"
+                    disabled={patchPending || !intentDraft.trim() || !desiredDraft.trim()}
+                    onClick={() => void handleSave()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:border-[#4B90FF]/40 hover:text-[#4B90FF] disabled:opacity-50"
                   >
-                    <Save size={14} />
+                    {patchPending ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                     Save changes
                   </button>
                 )}

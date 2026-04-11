@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RecordingModule } from './modules/recording/recording.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { EvaluationsModule } from './modules/evaluations/evaluations.module';
+import { NavigationsModule } from './modules/navigations/navigations.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { EvaluationsModule } from './modules/evaluations/evaluations.module';
     RecordingModule,
     LlmModule,
     EvaluationsModule,
+    NavigationsModule,
   ],
 })
 export class AppModule {}

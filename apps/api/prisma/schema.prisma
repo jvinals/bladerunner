@@ -93,8 +93,9 @@ model Project {
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  runs        Run[]
-  evaluations Evaluation[]
+  runs         Run[]
+  evaluations  Evaluation[]
+  navigations  Navigation[]
   agentKnowledge ProjectAgentKnowledge?
 
   @@index([userId])
@@ -320,6 +321,34 @@ model Evaluation {
   @@index([userId, createdAt(sort: Desc)])
   @@index([projectId])
   @@map("evaluations")
+}
+
+/// Navigation planning records (UI shell; separate from autonomous `Evaluation` runs).
+model Navigation {
+  id                     String            @id @default(uuid())
+  userId                 String            @map("user_id")
+  projectId              String?           @map("project_id")
+  name                   String            @default("Navigation")
+  url                    String
+  intent                 String            @db.Text
+  desiredOutput          String            @map("desired_output") @db.Text
+  progressSummary        String?           @map("progress_summary") @db.Text
+  status                 EvaluationStatus  @default(QUEUED)
+  startedAt              DateTime?         @map("started_at")
+  completedAt            DateTime?         @map("completed_at")
+  failureMessage         String?           @map("failure_message") @db.Text
+  runMode                EvaluationRunMode @default(continuous) @map("run_mode")
+  autoSignIn             Boolean           @default(false) @map("auto_sign_in")
+  autoSignInClerkOtpMode String?           @map("auto_sign_in_clerk_otp_mode")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId])
+  @@map("navigations")
 }
 
 model EvaluationStep {
