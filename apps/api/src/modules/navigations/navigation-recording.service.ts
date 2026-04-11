@@ -78,17 +78,29 @@ function mergeRecordedActionsWithClient(
   server: RecordedNavigationAction[],
   client: RecordedNavigationAction[] | undefined,
 ): RecordedNavigationAction[] {
-  if (!client || client.length !== server.length) {
+  if (!client?.length) {
     return [...server];
   }
-  const sortedS = [...server].sort((a, b) => a.sequence - b.sequence);
-  const sortedC = [...client].sort((a, b) => a.sequence - b.sequence);
-  for (let i = 0; i < sortedS.length; i++) {
-    if (sortedS[i]?.sequence !== sortedC[i]?.sequence) {
+  if (client.length !== server.length) {
+    return [...server];
+  }
+  const bySeq = new Map<number, RecordedNavigationAction>();
+  for (const c of client) {
+    if (bySeq.has(c.sequence)) {
       return [...server];
     }
+    bySeq.set(c.sequence, c);
   }
-  return sortedS.map((base, i) => mergeOneRecordedAction(base, sortedC[i]!));
+  if (bySeq.size !== server.length) {
+    return [...server];
+  }
+  return server.map((base) => {
+    const cl = bySeq.get(base.sequence);
+    if (!cl) {
+      return base;
+    }
+    return mergeOneRecordedAction(base, cl);
+  });
 }
 
 const SWAPPABLE_TEXT_ACTIONS = new Set<string>(['type', 'variable_input', 'prompt_type']);

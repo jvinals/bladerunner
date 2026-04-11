@@ -149,11 +149,8 @@ export function useNavigationRecording(
 
   const socketRef = useRef<Socket | null>(null);
   const pendingPromptTextRef = useRef<string>('');
+  /** Must stay in sync with `actions` without waiting for `useEffect` — Stop emits this on the same tick as edits. */
   const actionsRef = useRef<RecordedNavigationAction[]>([]);
-
-  useEffect(() => {
-    actionsRef.current = actions;
-  }, [actions]);
 
   // -----------------------------------------------------------------------
   // Socket lifecycle
@@ -181,6 +178,7 @@ export function useNavigationRecording(
       if (payload.navId !== navId) return;
       setIsRecording(true);
       setIsPaused(false);
+      actionsRef.current = [];
       setActions([]);
       setSkyvernWorkflow(null);
       setError(null);
@@ -202,7 +200,11 @@ export function useNavigationRecording(
       'nav:actionRecorded',
       (payload: { navId: string; action: RecordedNavigationAction }) => {
         if (payload.navId !== navId) return;
-        setActions((prev) => [...prev, payload.action]);
+        setActions((prev) => {
+          const next = [...prev, payload.action];
+          actionsRef.current = next;
+          return next;
+        });
       },
     );
 
@@ -252,6 +254,7 @@ export function useNavigationRecording(
         setInputPrompt(null);
         setProposedIntent(null);
         pendingPromptTextRef.current = '';
+        actionsRef.current = payload.actions;
         setActions(payload.actions);
         setSkyvernWorkflow(payload.skyvernWorkflow);
         setFrameDataUrl(null);
@@ -293,9 +296,13 @@ export function useNavigationRecording(
 
   const updateRecordedAction = useCallback(
     (sequenceId: number, updates: Partial<RecordedNavigationAction>) => {
-      setActions((prev) =>
-        prev.map((a) => (a.sequence === sequenceId ? { ...a, ...updates } : a)),
-      );
+      setActions((prev) => {
+        const next = prev.map((a) =>
+          a.sequence === sequenceId ? { ...a, ...updates } : a,
+        );
+        actionsRef.current = next;
+        return next;
+      });
     },
     [],
   );
