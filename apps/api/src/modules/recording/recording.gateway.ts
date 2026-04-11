@@ -267,6 +267,9 @@ export class RecordingGateway implements OnGatewayInit {
     @MessageBody() data: { navId: string; userId: string; x: number; y: number },
   ) {
     try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
       const result = await this.navigationRecording.inspectAndClick(
         data.navId,
         data.userId,
@@ -274,11 +277,21 @@ export class RecordingGateway implements OnGatewayInit {
         data.y,
       );
       if (result.outcome === 'inputDetected') {
+        const elementMeta = result.elementMeta ?? {
+          tag: 'input',
+          id: null,
+          type: null,
+          name: null,
+          placeholder: null,
+          ariaLabel: null,
+          textContent: null,
+          isInput: true,
+        };
         client.emit('nav:inputDetected', {
           navId: data.navId,
           x: result.x,
           y: result.y,
-          elementMeta: result.elementMeta,
+          elementMeta,
         });
         return { event: 'nav:inputDetected', data: { navId: data.navId } };
       }
@@ -300,6 +313,9 @@ export class RecordingGateway implements OnGatewayInit {
     @MessageBody() data: { navId: string; userId: string; mode: 'static' | 'variable'; value: string },
   ) {
     try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
       const action = await this.navigationRecording.resolveInput(
         data.navId,
         data.userId,
@@ -323,6 +339,9 @@ export class RecordingGateway implements OnGatewayInit {
     @MessageBody() data: { navId: string; userId: string; text: string },
   ) {
     try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
       await this.navigationRecording.typeText(data.navId, data.userId, data.text);
       return { ok: true };
     } catch (err) {
@@ -336,11 +355,50 @@ export class RecordingGateway implements OnGatewayInit {
     @MessageBody() data: { navId: string; userId: string; deltaX: number; deltaY: number },
   ) {
     try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
       await this.navigationRecording.scrollPage(data.navId, data.userId, data.deltaX, data.deltaY);
     } catch {
       /* transient scroll failure is non-fatal */
     }
     return { ok: true };
+  }
+
+  @SubscribeMessage('nav:pause')
+  async handleNavPause(@MessageBody() data: { navId: string; userId: string; paused: boolean }) {
+    try {
+      this.navigationRecording.setPaused(data.navId, data.userId, data.paused);
+      this.server.to(`run:${data.navId}`).emit('nav:recordingPaused', {
+        navId: data.navId,
+        paused: data.paused,
+      });
+      return { ok: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      return { ok: false, error };
+    }
+  }
+
+  @SubscribeMessage('nav:cancelRecording')
+  async handleNavCancel(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string },
+  ) {
+    try {
+      await this.navigationRecording.cancelSession(data.navId, data.userId);
+      this.server.to(`run:${data.navId}`).emit('nav:sessionEnded', {
+        navId: data.navId,
+        actions: [],
+        skyvernWorkflow: null,
+        cancelled: true,
+      });
+      return { event: 'nav:sessionEnded', data: { navId: data.navId, cancelled: true } };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { event: 'nav:error', data: { navId: data.navId, error } };
+    }
   }
 
   @SubscribeMessage('nav:stopRecording')

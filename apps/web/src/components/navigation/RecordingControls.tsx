@@ -1,16 +1,20 @@
 /**
- * Start / Stop recording buttons, connection status, and Export Skyvern JSON.
+ * Start / pause / resume / stop / cancel recording, export Skyvern JSON, status.
  */
 
-import { Circle, Square, Download, Radio } from 'lucide-react';
+import { Circle, Square, Download, Radio, Pause, Play, Ban } from 'lucide-react';
 import type { SkyvernWorkflow } from '@/hooks/useNavigationRecording';
 
 interface RecordingControlsProps {
   isRecording: boolean;
+  isPaused: boolean;
   connected: boolean;
   skyvernWorkflow: SkyvernWorkflow | null;
   onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onStop: () => void;
+  onCancel: () => void;
   error: string | null;
 }
 
@@ -26,10 +30,14 @@ function downloadJson(workflow: SkyvernWorkflow) {
 
 export function RecordingControls({
   isRecording,
+  isPaused,
   connected,
   skyvernWorkflow,
   onStart,
+  onPause,
+  onResume,
   onStop,
+  onCancel,
   error,
 }: RecordingControlsProps) {
   return (
@@ -46,15 +54,47 @@ export function RecordingControls({
         </button>
       )}
 
-      {isRecording && (
+      {isRecording && !isPaused && (
         <button
           type="button"
-          onClick={onStop}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-800 text-white text-sm font-medium px-4 py-2 hover:bg-gray-900"
+          onClick={onPause}
+          className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-medium px-4 py-2 hover:bg-amber-100"
         >
-          <Square size={16} />
-          Stop Recording
+          <Pause size={16} />
+          Pause
         </button>
+      )}
+
+      {isRecording && isPaused && (
+        <button
+          type="button"
+          onClick={onResume}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-sm font-medium px-4 py-2 hover:bg-emerald-100"
+        >
+          <Play size={16} className="fill-current" />
+          Resume
+        </button>
+      )}
+
+      {isRecording && (
+        <>
+          <button
+            type="button"
+            onClick={onStop}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-800 text-white text-sm font-medium px-4 py-2 hover:bg-gray-900"
+          >
+            <Square size={16} />
+            Stop recording
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white text-red-700 text-sm font-medium px-4 py-2 hover:bg-red-50"
+          >
+            <Ban size={16} />
+            Cancel
+          </button>
+        </>
       )}
 
       {skyvernWorkflow && (
@@ -73,10 +113,17 @@ export function RecordingControls({
         {connected ? 'Connected' : 'Connecting...'}
       </span>
 
-      {isRecording && (
+      {isRecording && !isPaused && (
         <span className="inline-flex items-center gap-1.5 text-xs text-red-500 animate-pulse">
           <Circle size={8} className="fill-current" />
           Recording
+        </span>
+      )}
+
+      {isRecording && isPaused && (
+        <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 font-medium">
+          <Pause size={12} />
+          Paused
         </span>
       )}
 

@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
 
@@ -61,12 +62,34 @@ export interface InputPromptState {
   elementMeta: ElementMetadata;
 }
 
+const EMPTY_ELEMENT_META: ElementMetadata = {
+  tag: 'input',
+  id: null,
+  type: null,
+  name: null,
+  placeholder: null,
+  ariaLabel: null,
+  textContent: null,
+  isInput: true,
+};
+
+function normalizeElementMeta(raw: ElementMetadata | null | undefined): ElementMetadata {
+  if (!raw || typeof raw !== 'object') return { ...EMPTY_ELEMENT_META };
+  return {
+    ...EMPTY_ELEMENT_META,
+    ...raw,
+    tag: typeof raw.tag === 'string' && raw.tag.length > 0 ? raw.tag : EMPTY_ELEMENT_META.tag,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 export interface UseNavigationRecordingReturn {
   isRecording: boolean;
+  /** Recording session is active but interaction is frozen (browser stays open). */
+  isPaused: boolean;
   connected: boolean;
   frameDataUrl: string | null;
   actions: RecordedNavigationAction[];
@@ -76,6 +99,9 @@ export interface UseNavigationRecordingReturn {
   skyvernWorkflow: SkyvernWorkflow | null;
   startRecording: () => void;
   stopRecording: () => void;
+  pauseRecording: () => void;
+  resumeRecording: () => void;
+  cancelRecording: () => void;
   /** Send a click at viewport coordinates. No-op while the input modal is open. */
   sendClick: (x: number, y: number) => void;
   /** Ephemeral scroll — caller should throttle at ~50ms. */
@@ -89,7 +115,9 @@ export function useNavigationRecording(
   navId: string | undefined,
   userId: string,
 ): UseNavigationRecordingReturn {
+  const queryClient = useQueryClient();
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [connected, setConnected] = useState(false);
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
   const [actions, setActions] = useState<RecordedNavigationAction[]>([]);
@@ -124,9 +152,18 @@ export function useNavigationRecording(
     socket.on('nav:sessionStarted', (payload: { navId: string }) => {
       if (payload.navId !== navId) return;
       setIsRecording(true);
+      setIsPaused(false);
       setActions([]);
       setSkyvernWorkflow(null);
       setError(null);
+    });
+
+    socket.on('nav:recordingPaused', (payload: { navId: string; paused: boolean }) => {
+      if (payload.navId !== navId) return;
+      setIsPaused(payload.paused);
+      if (payload.paused) {
+        setInputPrompt(null);
+      }
     });
 
     socket.on(
@@ -139,9 +176,13 @@ export function useNavigationRecording(
 
     socket.on(
       'nav:inputDetected',
-      (payload: { navId: string; x: number; y: number; elementMeta: ElementMetadata }) => {
+      (payload: { navId: string; x: number; y: number; elementMeta?: ElementMetadata | null }) => {
         if (payload.navId !== navId) return;
-        setInputPrompt({ x: payload.x, y: payload.y, elementMeta: payload.elementMeta });
+        setInputPrompt({
+          x: payload.x,
+          y: payload.y,
+          elementMeta: normalizeElementMeta(payload.elementMeta),
+        });
       },
     );
 
@@ -151,12 +192,17 @@ export function useNavigationRecording(
         navId: string;
         actions: RecordedNavigationAction[];
         skyvernWorkflow: SkyvernWorkflow | null;
+        cancelled?: boolean;
       }) => {
         if (payload.navId !== navId) return;
         setIsRecording(false);
+        setIsPaused(false);
+        setInputPrompt(null);
         setActions(payload.actions);
         setSkyvernWorkflow(payload.skyvernWorkflow);
         setFrameDataUrl(null);
+        void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
+        void queryClient.invalidateQueries({ queryKey: ['navigations'] });
       },
     );
 
@@ -170,7 +216,7 @@ export function useNavigationRecording(
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [navId]);
+  }, [navId, queryClient]);
 
   // -----------------------------------------------------------------------
   // Commands
@@ -187,30 +233,55 @@ export function useNavigationRecording(
     socketRef.current.emit('nav:stopRecording', { navId, userId });
   }, [navId, userId]);
 
+  const pauseRecording = useCallback(() => {
+    if (!navId || !socketRef.current?.connected) return;
+    socketRef.current.emit('nav:pause', { navId, userId, paused: true });
+  }, [navId, userId]);
+
+  const resumeRecording = useCallback(() => {
+    if (!navId || !socketRef.current?.connected) return;
+    socketRef.current.emit('nav:pause', { navId, userId, paused: false });
+  }, [navId, userId]);
+
+  const cancelRecording = useCallback(() => {
+    if (!navId || !socketRef.current?.connected) return;
+    if (
+      !window.confirm(
+        'Cancel this recording? The browser session will close and recorded steps will not be saved.',
+      )
+    ) {
+      return;
+    }
+    socketRef.current.emit('nav:cancelRecording', { navId, userId });
+  }, [navId, userId]);
+
   const sendClick = useCallback(
     (x: number, y: number) => {
       if (!navId || !socketRef.current?.connected) return;
       if (inputPrompt !== null) return;
+      if (isPaused) return;
       socketRef.current.emit('nav:click', { navId, userId, x, y });
     },
-    [navId, userId, inputPrompt],
+    [navId, userId, inputPrompt, isPaused],
   );
 
   const sendScroll = useCallback(
     (deltaX: number, deltaY: number) => {
       if (!navId || !socketRef.current?.connected) return;
+      if (isPaused) return;
       socketRef.current.emit('nav:scroll', { navId, userId, deltaX, deltaY });
     },
-    [navId, userId],
+    [navId, userId, isPaused],
   );
 
   const resolveInput = useCallback(
     (mode: 'static' | 'variable', value: string) => {
       if (!navId || !socketRef.current?.connected) return;
+      if (isPaused) return;
       socketRef.current.emit('nav:inputResolve', { navId, userId, mode, value });
       setInputPrompt(null);
     },
-    [navId, userId],
+    [navId, userId, isPaused],
   );
 
   const dismissInputPrompt = useCallback(() => {
@@ -219,6 +290,7 @@ export function useNavigationRecording(
 
   return {
     isRecording,
+    isPaused,
     connected,
     frameDataUrl,
     actions,
@@ -227,6 +299,9 @@ export function useNavigationRecording(
     skyvernWorkflow,
     startRecording,
     stopRecording,
+    pauseRecording,
+    resumeRecording,
+    cancelRecording,
     sendClick,
     sendScroll,
     resolveInput,

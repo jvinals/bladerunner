@@ -60,6 +60,8 @@ interface NavigationLiveSession {
   sequence: number;
   /** Stashed coordinates for the pending input that triggered the variable modal. */
   pendingInputCoords: { x: number; y: number } | null;
+  /** When true, clicks/scroll/input-resolve are ignored (browser stays open). */
+  paused: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +112,8 @@ function buildElementInspectScript(x: number, y: number): string {
  * Manages interactive navigation recording sessions.
  *
  * Lifecycle: startSession -> user interactions (inspectAndClick / resolveInput /
- * typeText / scrollPage) -> stopSession.
+ * typeText / scrollPage) -> stopSession or cancelSession.
+ * setPaused freezes interaction without closing the browser.
  *
  * Frames are relayed through the existing RecordingService EventEmitter so the
  * RecordingGateway broadcasts them to Socket.IO rooms with zero extra wiring.
@@ -172,6 +175,7 @@ export class NavigationRecordingService {
         actions: [],
         sequence: 0,
         pendingInputCoords: null,
+        paused: false,
       };
       this.sessions.set(navId, session);
 
@@ -255,6 +259,52 @@ export class NavigationRecordingService {
     this.sessions.delete(navId);
     this.logger.log(`Navigation session stopped: ${navId} (${actions.length} actions persisted)`);
     return actions;
+  }
+
+  /**
+   * Close the browser, discard in-memory actions (do not persist), mark navigation CANCELLED.
+   */
+  async cancelSession(navId: string, userId: string): Promise<void> {
+    const session = this.getSession(navId, userId);
+    session.screencastClosing = true;
+
+    try {
+      await session.cdpSession.send('Page.stopScreencast').catch(() => {});
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      await session.browser.close();
+    } catch {
+      /* ignore */
+    }
+    this.sessions.delete(navId);
+
+    await this.prisma.navigation.update({
+      where: { id: navId, userId },
+      data: {
+        status: 'CANCELLED',
+        completedAt: new Date(),
+        failureMessage: 'Recording cancelled by user',
+      },
+    });
+
+    this.logger.log(`Navigation session cancelled: ${navId}`);
+  }
+
+  /** Pause or resume interaction; clears pending input coordinates when pausing. */
+  setPaused(navId: string, userId: string, paused: boolean): void {
+    const session = this.getSession(navId, userId);
+    session.paused = paused;
+    if (paused) {
+      session.pendingInputCoords = null;
+    }
+  }
+
+  isPausedForUser(navId: string, userId: string): boolean {
+    const session = this.sessions.get(navId);
+    return !!session && session.userId === userId && session.paused;
   }
 
   // -----------------------------------------------------------------------
@@ -353,6 +403,9 @@ export class NavigationRecordingService {
    */
   async scrollPage(navId: string, userId: string, deltaX: number, deltaY: number): Promise<void> {
     const session = this.getSession(navId, userId);
+    if (session.paused) {
+      return;
+    }
     await session.page.mouse.wheel(deltaX, deltaY);
   }
 

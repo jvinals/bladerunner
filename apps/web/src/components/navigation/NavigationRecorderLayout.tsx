@@ -23,6 +23,7 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
 
   const {
     isRecording,
+    isPaused,
     connected,
     frameDataUrl,
     actions,
@@ -31,6 +32,9 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     skyvernWorkflow,
     startRecording,
     stopRecording,
+    pauseRecording,
+    resumeRecording,
+    cancelRecording,
     sendClick,
     sendScroll,
     resolveInput,
@@ -42,10 +46,14 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     <div className="space-y-4">
       <RecordingControls
         isRecording={isRecording}
+        isPaused={isPaused}
         connected={connected}
         skyvernWorkflow={skyvernWorkflow}
         onStart={startRecording}
+        onPause={pauseRecording}
+        onResume={resumeRecording}
         onStop={stopRecording}
+        onCancel={cancelRecording}
         error={error}
       />
 
@@ -54,6 +62,7 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
           <InteractiveCanvasStream
             frameDataUrl={frameDataUrl}
             isInputModalOpen={isInputModalOpen}
+            blockCanvasInteraction={isInputModalOpen || isPaused}
             sendClick={sendClick}
             sendScroll={sendScroll}
           />

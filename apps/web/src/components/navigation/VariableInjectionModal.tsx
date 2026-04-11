@@ -27,12 +27,14 @@ export function VariableInjectionModal({
   const [staticValue, setStaticValue] = useState('');
   const [variableName, setVariableName] = useState('');
 
+  const m = prompt.elementMeta;
   const label =
-    prompt.elementMeta.ariaLabel ||
-    prompt.elementMeta.placeholder ||
-    prompt.elementMeta.name ||
-    prompt.elementMeta.id ||
-    `${prompt.elementMeta.tag} field`;
+    (m?.ariaLabel && String(m.ariaLabel)) ||
+    (m?.placeholder && String(m.placeholder)) ||
+    (m?.name && String(m.name)) ||
+    (m?.id && String(m.id)) ||
+    (m?.textContent && String(m.textContent).slice(0, 80)) ||
+    `${m?.tag ?? 'input'} field`;
 
   const canSubmit =
     tab === 'static' ? staticValue.trim().length > 0 : variableName.trim().length > 0;

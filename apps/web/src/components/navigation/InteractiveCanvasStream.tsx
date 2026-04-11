@@ -19,7 +19,10 @@ import { clientToViewportCoords } from '@/lib/canvasViewport';
 
 interface InteractiveCanvasStreamProps {
   frameDataUrl: string | null;
+  /** Variable injection modal: suppress canvas pointer + global keyboard guard. */
   isInputModalOpen: boolean;
+  /** Pause (or modal): block forwarding clicks/scroll to the remote browser. */
+  blockCanvasInteraction: boolean;
   sendClick: (x: number, y: number) => void;
   sendScroll: (deltaX: number, deltaY: number) => void;
 }
@@ -29,6 +32,7 @@ const SCROLL_THROTTLE_MS = 50;
 export function InteractiveCanvasStream({
   frameDataUrl,
   isInputModalOpen,
+  blockCanvasInteraction,
   sendClick,
   sendScroll,
 }: InteractiveCanvasStreamProps) {
@@ -61,6 +65,10 @@ export function InteractiveCanvasStream({
   useEffect(() => {
     if (!isInputModalOpen) return;
     const suppress = (e: KeyboardEvent) => {
+      // Still block keys from reaching the page/canvas, but allow typing in the
+      // Radix variable-injection dialog (and any focus inside `[role="dialog"]`).
+      const t = e.target;
+      if (t instanceof Element && t.closest('[role="dialog"]')) return;
       e.preventDefault();
       e.stopPropagation();
     };
@@ -80,13 +88,13 @@ export function InteractiveCanvasStream({
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (isInputModalOpen) return;
+      if (blockCanvasInteraction) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const { x, y } = clientToViewportCoords(canvas, e.clientX, e.clientY);
       sendClick(x, y);
     },
-    [isInputModalOpen, sendClick],
+    [blockCanvasInteraction, sendClick],
   );
 
   // -----------------------------------------------------------------------
@@ -96,13 +104,13 @@ export function InteractiveCanvasStream({
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLCanvasElement>) => {
       e.preventDefault();
-      if (isInputModalOpen) return;
+      if (blockCanvasInteraction) return;
       const now = Date.now();
       if (now - lastScrollTs.current < SCROLL_THROTTLE_MS) return;
       lastScrollTs.current = now;
       sendScroll(e.deltaX, e.deltaY);
     },
-    [isInputModalOpen, sendScroll],
+    [blockCanvasInteraction, sendScroll],
   );
 
   // -----------------------------------------------------------------------
@@ -128,7 +136,7 @@ export function InteractiveCanvasStream({
         onClick={handleClick}
         onWheel={handleWheel}
         className={`w-full rounded-lg border border-gray-200 bg-black ${
-          isInputModalOpen ? 'pointer-events-none opacity-70' : 'cursor-crosshair'
+          blockCanvasInteraction ? 'pointer-events-none opacity-70' : 'cursor-crosshair'
         }`}
         style={{ aspectRatio: '16 / 9' }}
       />
