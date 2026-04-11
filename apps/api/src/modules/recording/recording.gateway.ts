@@ -6,9 +6,12 @@ import {
   MessageBody,
   OnGatewayInit,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { RecordingService } from './recording.service';
+import { NavigationRecordingService } from '../navigations/navigation-recording.service';
+import { NavigationsService } from '../navigations/navigations.service';
+import { compileToSkyvernWorkflow } from '../navigations/skyvern-compiler';
 
 @WebSocketGateway({
   namespace: '/recording',
@@ -18,7 +21,13 @@ export class RecordingGateway implements OnGatewayInit {
   @WebSocketServer() server!: Server;
   private readonly logger = new Logger(RecordingGateway.name);
 
-  constructor(private readonly recordingService: RecordingService) {}
+  constructor(
+    private readonly recordingService: RecordingService,
+    @Inject(forwardRef(() => NavigationRecordingService))
+    private readonly navigationRecording: NavigationRecordingService,
+    @Inject(forwardRef(() => NavigationsService))
+    private readonly navigationsService: NavigationsService,
+  ) {}
 
   afterInit() {
     this.recordingService.on('frame', (runId: string, frameBase64: string) => {
@@ -69,6 +78,10 @@ export class RecordingGateway implements OnGatewayInit {
       this.server.to(`run:discovery-${projectId}`).emit('discoveryNavigationMermaid', { projectId, mermaid });
     });
 
+    this.recordingService.on('nav:actionRecorded', (navId: string, action: Record<string, unknown>) => {
+      this.server.to(`run:${navId}`).emit('nav:actionRecorded', { navId, action });
+    });
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 
@@ -88,6 +101,7 @@ export class RecordingGateway implements OnGatewayInit {
     const discoveryFrame = discoveryProjectId
       ? this.recordingService.getLatestDiscoveryFrame(discoveryProjectId)
       : null;
+    const navFrame = this.navigationRecording.getLatestFrame(data.runId);
     const latest =
       recFrame && recFrame.length > 0
         ? recFrame
@@ -95,7 +109,9 @@ export class RecordingGateway implements OnGatewayInit {
           ? evalFrame
           : discoveryFrame && discoveryFrame.length > 0
             ? discoveryFrame
-            : null;
+            : navFrame && navFrame.length > 0
+              ? navFrame
+              : null;
     if (latest && latest.length > 0) {
       client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
     }
@@ -223,5 +239,131 @@ export class RecordingGateway implements OnGatewayInit {
       key: data.key,
     });
     return { ok: true };
+  }
+
+  // -----------------------------------------------------------------------
+  // Navigation recording events (nav:*)
+  // -----------------------------------------------------------------------
+
+  @SubscribeMessage('nav:startRecording')
+  async handleNavStart(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string },
+  ) {
+    try {
+      await this.navigationRecording.startSession(data.navId, data.userId);
+      this.server.to(`run:${data.navId}`).emit('nav:sessionStarted', { navId: data.navId });
+      return { event: 'nav:sessionStarted', data: { navId: data.navId } };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { event: 'nav:error', data: { navId: data.navId, error } };
+    }
+  }
+
+  @SubscribeMessage('nav:click')
+  async handleNavClick(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string; x: number; y: number },
+  ) {
+    try {
+      const result = await this.navigationRecording.inspectAndClick(
+        data.navId,
+        data.userId,
+        data.x,
+        data.y,
+      );
+      if (result.outcome === 'inputDetected') {
+        client.emit('nav:inputDetected', {
+          navId: data.navId,
+          x: result.x,
+          y: result.y,
+          elementMeta: result.elementMeta,
+        });
+        return { event: 'nav:inputDetected', data: { navId: data.navId } };
+      }
+      this.server.to(`run:${data.navId}`).emit('nav:actionRecorded', {
+        navId: data.navId,
+        action: result.action,
+      });
+      return { event: 'nav:actionRecorded', data: { navId: data.navId, action: result.action } };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { event: 'nav:error', data: { navId: data.navId, error } };
+    }
+  }
+
+  @SubscribeMessage('nav:inputResolve')
+  async handleNavInputResolve(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string; mode: 'static' | 'variable'; value: string },
+  ) {
+    try {
+      const action = await this.navigationRecording.resolveInput(
+        data.navId,
+        data.userId,
+        data.mode,
+        data.value,
+      );
+      this.server.to(`run:${data.navId}`).emit('nav:actionRecorded', {
+        navId: data.navId,
+        action,
+      });
+      return { event: 'nav:actionRecorded', data: { navId: data.navId, action } };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { event: 'nav:error', data: { navId: data.navId, error } };
+    }
+  }
+
+  @SubscribeMessage('nav:type')
+  async handleNavType(
+    @MessageBody() data: { navId: string; userId: string; text: string },
+  ) {
+    try {
+      await this.navigationRecording.typeText(data.navId, data.userId, data.text);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /** Ephemeral scroll — updates remote viewport, NOT persisted or compiled. */
+  @SubscribeMessage('nav:scroll')
+  async handleNavScroll(
+    @MessageBody() data: { navId: string; userId: string; deltaX: number; deltaY: number },
+  ) {
+    try {
+      await this.navigationRecording.scrollPage(data.navId, data.userId, data.deltaX, data.deltaY);
+    } catch {
+      /* transient scroll failure is non-fatal */
+    }
+    return { ok: true };
+  }
+
+  @SubscribeMessage('nav:stopRecording')
+  async handleNavStop(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string },
+  ) {
+    try {
+      const nav = await this.navigationsService.findOne(data.navId, data.userId).catch(() => null);
+      const actions = await this.navigationRecording.stopSession(data.navId, data.userId);
+      const skyvernWorkflow = nav
+        ? compileToSkyvernWorkflow({ id: nav.id, name: nav.name, url: nav.url }, actions)
+        : null;
+      this.server.to(`run:${data.navId}`).emit('nav:sessionEnded', {
+        navId: data.navId,
+        actions,
+        skyvernWorkflow,
+      });
+      return { event: 'nav:sessionEnded', data: { navId: data.navId } };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { event: 'nav:error', data: { navId: data.navId, error } };
+    }
   }
 }

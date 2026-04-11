@@ -1,12 +1,14 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { RecordingModule } from '../recording/recording.module';
 import { NavigationsController } from './navigations.controller';
 import { NavigationsService } from './navigations.service';
+import { NavigationRecordingService } from './navigation-recording.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, forwardRef(() => RecordingModule)],
   controllers: [NavigationsController],
-  providers: [NavigationsService],
-  exports: [NavigationsService],
+  providers: [NavigationsService, NavigationRecordingService],
+  exports: [NavigationsService, NavigationRecordingService],
 })
 export class NavigationsModule {}

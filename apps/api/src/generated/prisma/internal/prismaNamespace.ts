@@ -396,6 +396,7 @@ export const ModelName = {
   UserLlmCredentials: 'UserLlmCredentials',
   Evaluation: 'Evaluation',
   Navigation: 'Navigation',
+  NavigationAction: 'NavigationAction',
   EvaluationStep: 'EvaluationStep',
   EvaluationQuestion: 'EvaluationQuestion',
   EvaluationReport: 'EvaluationReport'
@@ -414,7 +415,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "userAgentContext" | "project" | "projectAgentKnowledge" | "run" | "aiVisualIdTest" | "runCheckpoint" | "runStep" | "runRecording" | "userLlmPreferences" | "userLlmCredentials" | "evaluation" | "navigation" | "evaluationStep" | "evaluationQuestion" | "evaluationReport"
+    modelProps: "userAgentContext" | "project" | "projectAgentKnowledge" | "run" | "aiVisualIdTest" | "runCheckpoint" | "runStep" | "runRecording" | "userLlmPreferences" | "userLlmCredentials" | "evaluation" | "navigation" | "navigationAction" | "evaluationStep" | "evaluationQuestion" | "evaluationReport"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1306,6 +1307,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    NavigationAction: {
+      payload: Prisma.$NavigationActionPayload<ExtArgs>
+      fields: Prisma.NavigationActionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.NavigationActionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.NavigationActionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>
+        }
+        findFirst: {
+          args: Prisma.NavigationActionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.NavigationActionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>
+        }
+        findMany: {
+          args: Prisma.NavigationActionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>[]
+        }
+        create: {
+          args: Prisma.NavigationActionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>
+        }
+        createMany: {
+          args: Prisma.NavigationActionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.NavigationActionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>[]
+        }
+        delete: {
+          args: Prisma.NavigationActionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>
+        }
+        update: {
+          args: Prisma.NavigationActionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>
+        }
+        deleteMany: {
+          args: Prisma.NavigationActionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.NavigationActionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.NavigationActionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>[]
+        }
+        upsert: {
+          args: Prisma.NavigationActionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationActionPayload>
+        }
+        aggregate: {
+          args: Prisma.NavigationActionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateNavigationAction>
+        }
+        groupBy: {
+          args: Prisma.NavigationActionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NavigationActionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.NavigationActionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NavigationActionCountAggregateOutputType> | number
+        }
+      }
+    }
     EvaluationStep: {
       payload: Prisma.$EvaluationStepPayload<ExtArgs>
       fields: Prisma.EvaluationStepFieldRefs
@@ -1769,6 +1844,27 @@ export const NavigationScalarFieldEnum = {
 export type NavigationScalarFieldEnum = (typeof NavigationScalarFieldEnum)[keyof typeof NavigationScalarFieldEnum]
 
 
+export const NavigationActionScalarFieldEnum = {
+  id: 'id',
+  navigationId: 'navigationId',
+  userId: 'userId',
+  sequence: 'sequence',
+  actionType: 'actionType',
+  x: 'x',
+  y: 'y',
+  elementTag: 'elementTag',
+  elementId: 'elementId',
+  elementText: 'elementText',
+  ariaLabel: 'ariaLabel',
+  inputValue: 'inputValue',
+  inputMode: 'inputMode',
+  pageUrl: 'pageUrl',
+  createdAt: 'createdAt'
+} as const
+
+export type NavigationActionScalarFieldEnum = (typeof NavigationActionScalarFieldEnum)[keyof typeof NavigationActionScalarFieldEnum]
+
+
 export const EvaluationStepScalarFieldEnum = {
   id: 'id',
   evaluationId: 'evaluationId',
@@ -2083,6 +2179,20 @@ export type ListEnumEvaluationRunModeFieldRefInput<$PrismaModel> = FieldRefInput
 
 
 /**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+/**
  * Reference to a field of type 'EvaluationStepKind'
  */
 export type EnumEvaluationStepKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationStepKind'>
@@ -2107,20 +2217,6 @@ export type EnumEvaluationStepDecisionFieldRefInput<$PrismaModel> = FieldRefInpu
  * Reference to a field of type 'EvaluationStepDecision[]'
  */
 export type ListEnumEvaluationStepDecisionFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EvaluationStepDecision[]'>
-    
-
-
-/**
- * Reference to a field of type 'Float'
- */
-export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
-
-
-/**
- * Reference to a field of type 'Float[]'
- */
-export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
 
 /**
@@ -2230,6 +2326,7 @@ export type GlobalOmitConfig = {
   userLlmCredentials?: Prisma.UserLlmCredentialsOmit
   evaluation?: Prisma.EvaluationOmit
   navigation?: Prisma.NavigationOmit
+  navigationAction?: Prisma.NavigationActionOmit
   evaluationStep?: Prisma.EvaluationStepOmit
   evaluationQuestion?: Prisma.EvaluationQuestionOmit
   evaluationReport?: Prisma.EvaluationReportOmit

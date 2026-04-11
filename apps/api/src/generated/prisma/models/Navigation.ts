@@ -279,6 +279,7 @@ export type NavigationWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
+  actions?: Prisma.NavigationActionListRelationFilter
 }
 
 export type NavigationOrderByWithRelationInput = {
@@ -300,6 +301,7 @@ export type NavigationOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
+  actions?: Prisma.NavigationActionOrderByRelationAggregateInput
 }
 
 export type NavigationWhereUniqueInput = Prisma.AtLeast<{
@@ -324,6 +326,7 @@ export type NavigationWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
+  actions?: Prisma.NavigationActionListRelationFilter
 }, "id">
 
 export type NavigationOrderByWithAggregationInput = {
@@ -390,6 +393,7 @@ export type NavigationCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
+  actions?: Prisma.NavigationActionCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUncheckedCreateInput = {
@@ -410,6 +414,7 @@ export type NavigationUncheckedCreateInput = {
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUpdateInput = {
@@ -430,6 +435,7 @@ export type NavigationUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
+  actions?: Prisma.NavigationActionUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateInput = {
@@ -450,6 +456,7 @@ export type NavigationUncheckedUpdateInput = {
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationCreateManyInput = {
@@ -581,6 +588,11 @@ export type NavigationMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
+export type NavigationScalarRelationFilter = {
+  is?: Prisma.NavigationWhereInput
+  isNot?: Prisma.NavigationWhereInput
+}
+
 export type NavigationCreateNestedManyWithoutProjectInput = {
   create?: Prisma.XOR<Prisma.NavigationCreateWithoutProjectInput, Prisma.NavigationUncheckedCreateWithoutProjectInput> | Prisma.NavigationCreateWithoutProjectInput[] | Prisma.NavigationUncheckedCreateWithoutProjectInput[]
   connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutProjectInput | Prisma.NavigationCreateOrConnectWithoutProjectInput[]
@@ -623,6 +635,20 @@ export type NavigationUncheckedUpdateManyWithoutProjectNestedInput = {
   deleteMany?: Prisma.NavigationScalarWhereInput | Prisma.NavigationScalarWhereInput[]
 }
 
+export type NavigationCreateNestedOneWithoutActionsInput = {
+  create?: Prisma.XOR<Prisma.NavigationCreateWithoutActionsInput, Prisma.NavigationUncheckedCreateWithoutActionsInput>
+  connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutActionsInput
+  connect?: Prisma.NavigationWhereUniqueInput
+}
+
+export type NavigationUpdateOneRequiredWithoutActionsNestedInput = {
+  create?: Prisma.XOR<Prisma.NavigationCreateWithoutActionsInput, Prisma.NavigationUncheckedCreateWithoutActionsInput>
+  connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutActionsInput
+  upsert?: Prisma.NavigationUpsertWithoutActionsInput
+  connect?: Prisma.NavigationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.NavigationUpdateToOneWithWhereWithoutActionsInput, Prisma.NavigationUpdateWithoutActionsInput>, Prisma.NavigationUncheckedUpdateWithoutActionsInput>
+}
+
 export type NavigationCreateWithoutProjectInput = {
   id?: string
   userId: string
@@ -640,6 +666,7 @@ export type NavigationCreateWithoutProjectInput = {
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  actions?: Prisma.NavigationActionCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUncheckedCreateWithoutProjectInput = {
@@ -659,6 +686,7 @@ export type NavigationUncheckedCreateWithoutProjectInput = {
   autoSignInClerkOtpMode?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationCreateOrConnectWithoutProjectInput = {
@@ -710,6 +738,102 @@ export type NavigationScalarWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
 }
 
+export type NavigationCreateWithoutActionsInput = {
+  id?: string
+  userId: string
+  name?: string
+  url: string
+  intent: string
+  desiredOutput: string
+  progressSummary?: string | null
+  status?: $Enums.EvaluationStatus
+  startedAt?: Date | string | null
+  completedAt?: Date | string | null
+  failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
+  autoSignIn?: boolean
+  autoSignInClerkOtpMode?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
+}
+
+export type NavigationUncheckedCreateWithoutActionsInput = {
+  id?: string
+  userId: string
+  projectId?: string | null
+  name?: string
+  url: string
+  intent: string
+  desiredOutput: string
+  progressSummary?: string | null
+  status?: $Enums.EvaluationStatus
+  startedAt?: Date | string | null
+  completedAt?: Date | string | null
+  failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
+  autoSignIn?: boolean
+  autoSignInClerkOtpMode?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type NavigationCreateOrConnectWithoutActionsInput = {
+  where: Prisma.NavigationWhereUniqueInput
+  create: Prisma.XOR<Prisma.NavigationCreateWithoutActionsInput, Prisma.NavigationUncheckedCreateWithoutActionsInput>
+}
+
+export type NavigationUpsertWithoutActionsInput = {
+  update: Prisma.XOR<Prisma.NavigationUpdateWithoutActionsInput, Prisma.NavigationUncheckedUpdateWithoutActionsInput>
+  create: Prisma.XOR<Prisma.NavigationCreateWithoutActionsInput, Prisma.NavigationUncheckedCreateWithoutActionsInput>
+  where?: Prisma.NavigationWhereInput
+}
+
+export type NavigationUpdateToOneWithWhereWithoutActionsInput = {
+  where?: Prisma.NavigationWhereInput
+  data: Prisma.XOR<Prisma.NavigationUpdateWithoutActionsInput, Prisma.NavigationUncheckedUpdateWithoutActionsInput>
+}
+
+export type NavigationUpdateWithoutActionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  url?: Prisma.StringFieldUpdateOperationsInput | string
+  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  desiredOutput?: Prisma.StringFieldUpdateOperationsInput | string
+  progressSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumEvaluationStatusFieldUpdateOperationsInput | $Enums.EvaluationStatus
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
+  autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
+}
+
+export type NavigationUncheckedUpdateWithoutActionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  url?: Prisma.StringFieldUpdateOperationsInput | string
+  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  desiredOutput?: Prisma.StringFieldUpdateOperationsInput | string
+  progressSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumEvaluationStatusFieldUpdateOperationsInput | $Enums.EvaluationStatus
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
+  autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
 export type NavigationCreateManyProjectInput = {
   id?: string
   userId: string
@@ -746,6 +870,7 @@ export type NavigationUpdateWithoutProjectInput = {
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.NavigationActionUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateWithoutProjectInput = {
@@ -765,6 +890,7 @@ export type NavigationUncheckedUpdateWithoutProjectInput = {
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateManyWithoutProjectInput = {
@@ -787,6 +913,35 @@ export type NavigationUncheckedUpdateManyWithoutProjectInput = {
 }
 
 
+/**
+ * Count Type NavigationCountOutputType
+ */
+
+export type NavigationCountOutputType = {
+  actions: number
+}
+
+export type NavigationCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  actions?: boolean | NavigationCountOutputTypeCountActionsArgs
+}
+
+/**
+ * NavigationCountOutputType without action
+ */
+export type NavigationCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the NavigationCountOutputType
+   */
+  select?: Prisma.NavigationCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * NavigationCountOutputType without action
+ */
+export type NavigationCountOutputTypeCountActionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.NavigationActionWhereInput
+}
+
 
 export type NavigationSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -807,6 +962,8 @@ export type NavigationSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   createdAt?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
+  actions?: boolean | Prisma.Navigation$actionsArgs<ExtArgs>
+  _count?: boolean | Prisma.NavigationCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["navigation"]>
 
 export type NavigationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -874,6 +1031,8 @@ export type NavigationSelectScalar = {
 export type NavigationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "name" | "url" | "intent" | "desiredOutput" | "progressSummary" | "status" | "startedAt" | "completedAt" | "failureMessage" | "runMode" | "autoSignIn" | "autoSignInClerkOtpMode" | "createdAt" | "updatedAt", ExtArgs["result"]["navigation"]>
 export type NavigationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
+  actions?: boolean | Prisma.Navigation$actionsArgs<ExtArgs>
+  _count?: boolean | Prisma.NavigationCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type NavigationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
@@ -886,6 +1045,7 @@ export type $NavigationPayload<ExtArgs extends runtime.Types.Extensions.Internal
   name: "Navigation"
   objects: {
     project: Prisma.$ProjectPayload<ExtArgs> | null
+    actions: Prisma.$NavigationActionPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1300,6 +1460,7 @@ readonly fields: NavigationFieldRefs;
 export interface Prisma__NavigationClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   project<T extends Prisma.Navigation$projectArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Navigation$projectArgs<ExtArgs>>): Prisma.Prisma__ProjectClient<runtime.Types.Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  actions<T extends Prisma.Navigation$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Navigation$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$NavigationActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1763,6 +1924,30 @@ export type Navigation$projectArgs<ExtArgs extends runtime.Types.Extensions.Inte
    */
   include?: Prisma.ProjectInclude<ExtArgs> | null
   where?: Prisma.ProjectWhereInput
+}
+
+/**
+ * Navigation.actions
+ */
+export type Navigation$actionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the NavigationAction
+   */
+  select?: Prisma.NavigationActionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the NavigationAction
+   */
+  omit?: Prisma.NavigationActionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.NavigationActionInclude<ExtArgs> | null
+  where?: Prisma.NavigationActionWhereInput
+  orderBy?: Prisma.NavigationActionOrderByWithRelationInput | Prisma.NavigationActionOrderByWithRelationInput[]
+  cursor?: Prisma.NavigationActionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.NavigationActionScalarFieldEnum | Prisma.NavigationActionScalarFieldEnum[]
 }
 
 /**

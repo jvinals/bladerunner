@@ -78,6 +78,12 @@ export type Evaluation = Prisma.EvaluationModel
  */
 export type Navigation = Prisma.NavigationModel
 /**
+ * Model NavigationAction
+ * Recorded user interaction within a Navigation recording session.
+ * Scroll events are transient (ephemeral) and are NOT stored here.
+ */
+export type NavigationAction = Prisma.NavigationActionModel
+/**
  * Model EvaluationStep
  * 
  */
