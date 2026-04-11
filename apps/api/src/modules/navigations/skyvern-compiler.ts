@@ -9,6 +9,9 @@
  *   elementText > ariaLabel > placeholder > name > elementId > coordinate fallback
  *
  * Scroll events are ephemeral and never reach this compiler.
+ *
+ * Variable placeholders: `inputValue` stores the **clean** parameter key (no
+ * mustache). Output JSON uses `"text": "{{key}}"`.
  */
 
 import type { RecordedNavigationAction } from './navigation-recording.service';
@@ -41,6 +44,17 @@ export interface SkyvernWorkflow {
 // ---------------------------------------------------------------------------
 // Semantic label resolution
 // ---------------------------------------------------------------------------
+
+/** Normalize DB value: strip legacy `{{name}}` wrappers to a clean workflow key. */
+export function cleanVariableKeyFromStored(stored: string | null | undefined): string {
+  const s = (stored ?? '').trim();
+  const m = s.match(/^\{\{\s*([^}]+?)\s*\}\}$/);
+  return (m ? m[1] : s).trim();
+}
+
+function skyvernMustacheText(key: string): string {
+  return `{{${key}}}`;
+}
 
 /**
  * Derive the most human-readable label from action metadata.
@@ -108,16 +122,41 @@ export function compileToSkyvernWorkflow(
       }
 
       case 'variable_input': {
-        const raw = action.inputValue ?? '';
-        const varMatch = raw.match(/^\{\{(.+)\}\}$/);
-        if (varMatch) {
-          variableNames.add(varMatch[1]);
+        const key = cleanVariableKeyFromStored(action.inputValue);
+        if (key) {
+          variableNames.add(key);
         }
         blocks.push({
           block_type: 'action',
           action_type: 'input_text',
           label: resolveSemanticLabel(action),
-          text: raw,
+          text: key ? skyvernMustacheText(key) : '',
+        });
+        break;
+      }
+
+      case 'prompt': {
+        const label = (action.inputValue ?? '').trim() || 'AI prompt step';
+        blocks.push({
+          block_type: 'action',
+          action_type: 'click',
+          label,
+        });
+        break;
+      }
+
+      case 'prompt_type': {
+        const key = cleanVariableKeyFromStored(action.inputValue);
+        if (key) {
+          variableNames.add(key);
+        }
+        const label =
+          action.elementText?.trim() || resolveSemanticLabel(action);
+        blocks.push({
+          block_type: 'action',
+          action_type: 'input_text',
+          label,
+          text: key ? skyvernMustacheText(key) : '',
         });
         break;
       }

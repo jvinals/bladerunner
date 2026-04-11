@@ -33,7 +33,7 @@ export interface ElementMetadata {
 /** A single recorded user action (accumulated in-memory, persisted on stop). */
 export interface RecordedNavigationAction {
   sequence: number;
-  actionType: 'click' | 'type' | 'navigate' | 'variable_input' | 'prompt';
+  actionType: 'click' | 'type' | 'navigate' | 'variable_input' | 'prompt' | 'prompt_type';
   x: number | null;
   y: number | null;
   elementTag: string | null;
@@ -68,6 +68,66 @@ interface NavigationLiveSession {
   /** Last screencast frame layout size (CDP metadata); falls back to viewport. */
   lastStreamWidth: number;
   lastStreamHeight: number;
+}
+
+/**
+ * Merge timeline refinements from the client into the server session list before persist.
+ * Requires identical length and per-index `sequence` values; otherwise returns a copy of `server`.
+ */
+function mergeRecordedActionsWithClient(
+  server: RecordedNavigationAction[],
+  client: RecordedNavigationAction[] | undefined,
+): RecordedNavigationAction[] {
+  if (!client || client.length !== server.length) {
+    return [...server];
+  }
+  const sortedS = [...server].sort((a, b) => a.sequence - b.sequence);
+  const sortedC = [...client].sort((a, b) => a.sequence - b.sequence);
+  for (let i = 0; i < sortedS.length; i++) {
+    if (sortedS[i]?.sequence !== sortedC[i]?.sequence) {
+      return [...server];
+    }
+  }
+  return sortedS.map((base, i) => mergeOneRecordedAction(base, sortedC[i]!));
+}
+
+const SWAPPABLE_TEXT_ACTIONS = new Set<string>(['type', 'variable_input', 'prompt_type']);
+
+function mergeOneRecordedAction(
+  base: RecordedNavigationAction,
+  client: RecordedNavigationAction,
+): RecordedNavigationAction {
+  const out: RecordedNavigationAction = { ...base };
+  if (client.inputValue !== undefined) {
+    out.inputValue = client.inputValue;
+  }
+  if (client.inputMode !== undefined) {
+    out.inputMode = client.inputMode;
+  }
+  if (client.elementText !== undefined) {
+    out.elementText = client.elementText;
+  }
+  if (client.ariaLabel !== undefined) {
+    out.ariaLabel = client.ariaLabel;
+  }
+
+  const b = base.actionType;
+  const c = client.actionType;
+  if (SWAPPABLE_TEXT_ACTIONS.has(b) && SWAPPABLE_TEXT_ACTIONS.has(c)) {
+    out.actionType = c;
+    if (c === 'type') {
+      out.inputMode = client.inputMode ?? 'static';
+    }
+    if (c === 'variable_input' || c === 'prompt_type') {
+      out.inputMode = 'variable';
+    }
+  } else if (b === 'prompt' && c === 'prompt') {
+    out.actionType = 'prompt';
+  } else if (b === c) {
+    /* keep */
+  }
+
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -579,7 +639,11 @@ export class NavigationRecordingService {
    * Stop screencast, close browser, persist recorded actions to the database,
    * and return the accumulated action list.
    */
-  async stopSession(navId: string, userId: string): Promise<RecordedNavigationAction[]> {
+  async stopSession(
+    navId: string,
+    userId: string,
+    clientActions?: RecordedNavigationAction[],
+  ): Promise<RecordedNavigationAction[]> {
     const session = this.getSession(navId, userId);
     session.screencastClosing = true;
 
@@ -587,7 +651,7 @@ export class NavigationRecordingService {
       await session.cdpSession.send('Page.stopScreencast').catch(() => {});
     } catch { /* ignore */ }
 
-    const actions = [...session.actions];
+    const actions = mergeRecordedActionsWithClient(session.actions, clientActions);
 
     if (actions.length > 0) {
       await this.prisma.navigationAction.createMany({
@@ -735,11 +799,15 @@ export class NavigationRecordingService {
 
     await session.page.mouse.click(coords.x, coords.y);
 
-    const storedValue = mode === 'variable' ? `{{${value}}}` : value;
+    const cleanVar = value.trim().replace(/^\{+|\}+$/g, '');
     const textToApply =
-      storedValue.length > INSPECT_VALUE_MAX_LEN
-        ? storedValue.slice(0, INSPECT_VALUE_MAX_LEN)
-        : storedValue;
+      mode === 'variable'
+        ? cleanVar.length > INSPECT_VALUE_MAX_LEN
+          ? cleanVar.slice(0, INSPECT_VALUE_MAX_LEN)
+          : cleanVar
+        : value.length > INSPECT_VALUE_MAX_LEN
+          ? value.slice(0, INSPECT_VALUE_MAX_LEN)
+          : value;
 
     const applied = await applyEditableValueAtFramePoint(frame, lx, ly, textToApply);
     if (!applied.ok) {
@@ -897,7 +965,7 @@ export class NavigationRecordingService {
     x: number,
     y: number,
     promptText: string,
-  ): Promise<RecordedNavigationAction> {
+  ): Promise<RecordedNavigationAction[]> {
     const session = this.getSession(navId, userId);
     if (session.paused) {
       throw new ConflictException('Navigation recording is paused');
@@ -905,6 +973,7 @@ export class NavigationRecordingService {
     await session.page.mouse.click(x, y);
 
     const toTypeRaw = extractTextToTypeFromPrompt(promptText);
+    let metaAfterType: ElementMetadata | null = null;
     if (toTypeRaw) {
       const toType =
         toTypeRaw.length > INSPECT_VALUE_MAX_LEN
@@ -917,13 +986,14 @@ export class NavigationRecordingService {
           `confirmAndExecuteIntent: could not apply typed value reason=${applied.reason} tag=${applied.tag ?? '?'}`,
         );
       }
+      metaAfterType = (await frame.evaluate(buildElementInspectScript(lx, ly))) as ElementMetadata | null;
     }
 
     const capped =
       promptText.length > INSPECT_VALUE_MAX_LEN
         ? promptText.slice(0, INSPECT_VALUE_MAX_LEN)
         : promptText;
-    const action = this.pushAction(session, {
+    const promptAction = this.pushAction(session, {
       actionType: 'prompt',
       x,
       y,
@@ -935,7 +1005,30 @@ export class NavigationRecordingService {
       inputMode: null,
       pageUrl: session.page.url(),
     });
-    return action;
+
+    if (!toTypeRaw) {
+      return [promptAction];
+    }
+
+    const toType =
+      toTypeRaw.length > INSPECT_VALUE_MAX_LEN
+        ? toTypeRaw.slice(0, INSPECT_VALUE_MAX_LEN)
+        : toTypeRaw;
+
+    const typeAction = this.pushAction(session, {
+      actionType: 'type',
+      x,
+      y,
+      elementTag: metaAfterType?.tag ?? null,
+      elementId: metaAfterType?.id ?? null,
+      elementText: metaAfterType?.textContent ?? null,
+      ariaLabel: metaAfterType?.ariaLabel ?? metaAfterType?.placeholder ?? null,
+      inputValue: toType,
+      inputMode: 'static',
+      pageUrl: session.page.url(),
+    });
+
+    return [promptAction, typeAction];
   }
 
   /** Type literal text into the currently focused element. */

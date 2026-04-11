@@ -27,11 +27,13 @@ export interface ElementMetadata {
   ariaLabel: string | null;
   textContent: string | null;
   isInput: boolean;
+  /** Current value in the remote field (for editing in the modal). */
+  currentValue: string | null;
 }
 
 export interface RecordedNavigationAction {
   sequence: number;
-  actionType: 'click' | 'type' | 'navigate' | 'variable_input';
+  actionType: 'click' | 'type' | 'navigate' | 'variable_input' | 'prompt' | 'prompt_type';
   x: number | null;
   y: number | null;
   elementTag: string | null;
@@ -59,7 +61,16 @@ export interface SkyvernWorkflow {
 export interface InputPromptState {
   x: number;
   y: number;
+  /** Unique per open so the modal remounts with fresh local state. */
+  openedAt: number;
   elementMeta: ElementMetadata;
+}
+
+/** Mock LLM proposal for live prompt injection (viewport box + label). */
+export interface ProposedIntentState {
+  targetBox: { x: number; y: number; width: number; height: number };
+  semanticLabel: string;
+  promptText: string;
 }
 
 const EMPTY_ELEMENT_META: ElementMetadata = {
@@ -71,14 +82,17 @@ const EMPTY_ELEMENT_META: ElementMetadata = {
   ariaLabel: null,
   textContent: null,
   isInput: true,
+  currentValue: null,
 };
 
 function normalizeElementMeta(raw: ElementMetadata | null | undefined): ElementMetadata {
   if (!raw || typeof raw !== 'object') return { ...EMPTY_ELEMENT_META };
+  const cv = raw.currentValue;
   return {
     ...EMPTY_ELEMENT_META,
     ...raw,
     tag: typeof raw.tag === 'string' && raw.tag.length > 0 ? raw.tag : EMPTY_ELEMENT_META.tag,
+    currentValue: typeof cv === 'string' ? cv : cv == null ? null : String(cv),
   };
 }
 
@@ -96,18 +110,25 @@ export interface UseNavigationRecordingReturn {
   inputPrompt: InputPromptState | null;
   /** True when the variable injection modal should be visible and the canvas must suppress input. */
   isInputModalOpen: boolean;
+  /** Live prompt injection: proposed click region after Analyze (viewport1280×720 space). */
+  proposedIntent: ProposedIntentState | null;
   skyvernWorkflow: SkyvernWorkflow | null;
   startRecording: () => void;
   stopRecording: () => void;
   pauseRecording: () => void;
   resumeRecording: () => void;
   cancelRecording: () => void;
-  /** Send a click at viewport coordinates. No-op while the input modal is open. */
-  sendClick: (x: number, y: number) => void;
+  /** Send a click: bitmap coords (x,y) and JPEG/canvas size (stream) for viewport mapping. */
+  sendClick: (x: number, y: number, streamWidth: number, streamHeight: number) => void;
   /** Ephemeral scroll — caller should throttle at ~50ms. */
   sendScroll: (deltaX: number, deltaY: number) => void;
   resolveInput: (mode: 'static' | 'variable', value: string) => void;
   dismissInputPrompt: () => void;
+  analyzePrompt: (text: string) => void;
+  confirmIntent: () => void;
+  cancelIntent: () => void;
+  /** Refine timeline: patch one action in local state (e.g. static vs variable). */
+  updateRecordedAction: (sequenceId: number, updates: Partial<RecordedNavigationAction>) => void;
   error: string | null;
 }
 
@@ -122,10 +143,17 @@ export function useNavigationRecording(
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null);
   const [actions, setActions] = useState<RecordedNavigationAction[]>([]);
   const [inputPrompt, setInputPrompt] = useState<InputPromptState | null>(null);
+  const [proposedIntent, setProposedIntent] = useState<ProposedIntentState | null>(null);
   const [skyvernWorkflow, setSkyvernWorkflow] = useState<SkyvernWorkflow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
+  const pendingPromptTextRef = useRef<string>('');
+  const actionsRef = useRef<RecordedNavigationAction[]>([]);
+
+  useEffect(() => {
+    actionsRef.current = actions;
+  }, [actions]);
 
   // -----------------------------------------------------------------------
   // Socket lifecycle
@@ -156,6 +184,8 @@ export function useNavigationRecording(
       setActions([]);
       setSkyvernWorkflow(null);
       setError(null);
+      setProposedIntent(null);
+      pendingPromptTextRef.current = '';
     });
 
     socket.on('nav:recordingPaused', (payload: { navId: string; paused: boolean }) => {
@@ -163,6 +193,8 @@ export function useNavigationRecording(
       setIsPaused(payload.paused);
       if (payload.paused) {
         setInputPrompt(null);
+        setProposedIntent(null);
+        pendingPromptTextRef.current = '';
       }
     });
 
@@ -175,13 +207,33 @@ export function useNavigationRecording(
     );
 
     socket.on(
+      'nav:intentProposed',
+      (payload: {
+        navId: string;
+        targetBox: ProposedIntentState['targetBox'];
+        semanticLabel: string;
+      }) => {
+        if (payload.navId !== navId) return;
+        setProposedIntent({
+          targetBox: payload.targetBox,
+          semanticLabel: payload.semanticLabel,
+          promptText: pendingPromptTextRef.current,
+        });
+      },
+    );
+
+    socket.on(
       'nav:inputDetected',
       (payload: { navId: string; x: number; y: number; elementMeta?: ElementMetadata | null }) => {
         if (payload.navId !== navId) return;
+        setProposedIntent(null);
+        pendingPromptTextRef.current = '';
+        const elementMeta = normalizeElementMeta(payload.elementMeta);
         setInputPrompt({
           x: payload.x,
           y: payload.y,
-          elementMeta: normalizeElementMeta(payload.elementMeta),
+          openedAt: Date.now(),
+          elementMeta,
         });
       },
     );
@@ -198,6 +250,8 @@ export function useNavigationRecording(
         setIsRecording(false);
         setIsPaused(false);
         setInputPrompt(null);
+        setProposedIntent(null);
+        pendingPromptTextRef.current = '';
         setActions(payload.actions);
         setSkyvernWorkflow(payload.skyvernWorkflow);
         setFrameDataUrl(null);
@@ -230,8 +284,21 @@ export function useNavigationRecording(
 
   const stopRecording = useCallback(() => {
     if (!navId || !socketRef.current?.connected) return;
-    socketRef.current.emit('nav:stopRecording', { navId, userId });
+    socketRef.current.emit('nav:stopRecording', {
+      navId,
+      userId,
+      actions: actionsRef.current,
+    });
   }, [navId, userId]);
+
+  const updateRecordedAction = useCallback(
+    (sequenceId: number, updates: Partial<RecordedNavigationAction>) => {
+      setActions((prev) =>
+        prev.map((a) => (a.sequence === sequenceId ? { ...a, ...updates } : a)),
+      );
+    },
+    [],
+  );
 
   const pauseRecording = useCallback(() => {
     if (!navId || !socketRef.current?.connected) return;
@@ -256,22 +323,31 @@ export function useNavigationRecording(
   }, [navId, userId]);
 
   const sendClick = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, streamWidth: number, streamHeight: number) => {
       if (!navId || !socketRef.current?.connected) return;
       if (inputPrompt !== null) return;
+      if (proposedIntent !== null) return;
       if (isPaused) return;
-      socketRef.current.emit('nav:click', { navId, userId, x, y });
+      socketRef.current.emit('nav:click', {
+        navId,
+        userId,
+        x,
+        y,
+        streamWidth,
+        streamHeight,
+      });
     },
-    [navId, userId, inputPrompt, isPaused],
+    [navId, userId, inputPrompt, proposedIntent, isPaused],
   );
 
   const sendScroll = useCallback(
     (deltaX: number, deltaY: number) => {
       if (!navId || !socketRef.current?.connected) return;
       if (isPaused) return;
+      if (proposedIntent !== null) return;
       socketRef.current.emit('nav:scroll', { navId, userId, deltaX, deltaY });
     },
-    [navId, userId, isPaused],
+    [navId, userId, isPaused, proposedIntent],
   );
 
   const resolveInput = useCallback(
@@ -288,6 +364,42 @@ export function useNavigationRecording(
     setInputPrompt(null);
   }, []);
 
+  const analyzePrompt = useCallback(
+    (text: string) => {
+      if (!navId || !socketRef.current?.connected) return;
+      if (!isRecording || isPaused) return;
+      pendingPromptTextRef.current = text;
+      socketRef.current.emit('nav:analyzeCustomPrompt', {
+        navId,
+        userId,
+        promptText: text,
+      });
+    },
+    [navId, userId, isRecording, isPaused],
+  );
+
+  const confirmIntent = useCallback(() => {
+    if (!navId || !socketRef.current?.connected) return;
+    if (!proposedIntent || isPaused) return;
+    const { targetBox, promptText } = proposedIntent;
+    const x = Math.round(targetBox.x + targetBox.width / 2);
+    const y = Math.round(targetBox.y + targetBox.height / 2);
+    socketRef.current.emit('nav:confirmIntent', {
+      navId,
+      userId,
+      x,
+      y,
+      promptText,
+    });
+    setProposedIntent(null);
+    pendingPromptTextRef.current = '';
+  }, [navId, userId, proposedIntent, isPaused]);
+
+  const cancelIntent = useCallback(() => {
+    setProposedIntent(null);
+    pendingPromptTextRef.current = '';
+  }, []);
+
   return {
     isRecording,
     isPaused,
@@ -296,6 +408,7 @@ export function useNavigationRecording(
     actions,
     inputPrompt,
     isInputModalOpen: inputPrompt !== null,
+    proposedIntent,
     skyvernWorkflow,
     startRecording,
     stopRecording,
@@ -306,6 +419,10 @@ export function useNavigationRecording(
     sendScroll,
     resolveInput,
     dismissInputPrompt,
+    analyzePrompt,
+    confirmIntent,
+    cancelIntent,
+    updateRecordedAction,
     error,
   };
 }

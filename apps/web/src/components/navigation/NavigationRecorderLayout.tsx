@@ -12,6 +12,7 @@ import { InteractiveCanvasStream } from './InteractiveCanvasStream';
 import { RecordedActionTimeline } from './RecordedActionTimeline';
 import { RecordingControls } from './RecordingControls';
 import { VariableInjectionModal } from './VariableInjectionModal';
+import { CustomPromptInput } from './CustomPromptInput';
 
 interface NavigationRecorderLayoutProps {
   navId: string;
@@ -29,6 +30,7 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     actions,
     inputPrompt,
     isInputModalOpen,
+    proposedIntent,
     skyvernWorkflow,
     startRecording,
     stopRecording,
@@ -39,6 +41,10 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     sendScroll,
     resolveInput,
     dismissInputPrompt,
+    analyzePrompt,
+    confirmIntent,
+    cancelIntent,
+    updateRecordedAction,
     error,
   } = useNavigationRecording(navId, userId);
 
@@ -62,24 +68,32 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
           <InteractiveCanvasStream
             frameDataUrl={frameDataUrl}
             isInputModalOpen={isInputModalOpen}
-            blockCanvasInteraction={isInputModalOpen || isPaused}
+            blockCanvasInteraction={isInputModalOpen || isPaused || proposedIntent !== null}
+            proposedIntent={proposedIntent}
+            onConfirmIntent={confirmIntent}
+            onCancelIntent={cancelIntent}
             sendClick={sendClick}
             sendScroll={sendScroll}
           />
         </div>
 
-        <div className="w-72 shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="px-3 py-2.5 border-b border-gray-100">
+        <div className="w-72 shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+          <CustomPromptInput
+            disabled={!isRecording || !connected || isPaused}
+            onAnalyze={analyzePrompt}
+          />
+          <div className="px-3 py-2.5 border-b border-gray-100 shrink-0">
             <h3 className="text-xs font-semibold text-gray-700">
               Recorded Actions ({actions.length})
             </h3>
           </div>
-          <RecordedActionTimeline actions={actions} />
+          <RecordedActionTimeline actions={actions} onUpdateAction={updateRecordedAction} />
         </div>
       </div>
 
       {inputPrompt && (
         <VariableInjectionModal
+          key={inputPrompt.openedAt}
           prompt={inputPrompt}
           onResolve={resolveInput}
           onDismiss={dismissInputPrompt}

@@ -9,7 +9,10 @@ import {
 import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { RecordingService } from './recording.service';
-import { NavigationRecordingService } from '../navigations/navigation-recording.service';
+import {
+  NavigationRecordingService,
+  type RecordedNavigationAction,
+} from '../navigations/navigation-recording.service';
 import { NavigationsService } from '../navigations/navigations.service';
 import { compileToSkyvernWorkflow } from '../navigations/skyvern-compiler';
 
@@ -253,18 +256,27 @@ export class RecordingGateway implements OnGatewayInit {
     try {
       await this.navigationRecording.startSession(data.navId, data.userId);
       this.server.to(`run:${data.navId}`).emit('nav:sessionStarted', { navId: data.navId });
-      return { event: 'nav:sessionStarted', data: { navId: data.navId } };
+      // Do not return `{ event, data }`: IoAdapter would emit again and duplicate or strip payloads.
+      return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       client.emit('nav:error', { navId: data.navId, error });
-      return { event: 'nav:error', data: { navId: data.navId, error } };
+      return { ok: false, error };
     }
   }
 
   @SubscribeMessage('nav:click')
   async handleNavClick(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { navId: string; userId: string; x: number; y: number },
+    @MessageBody()
+    data: {
+      navId: string;
+      userId: string;
+      x: number;
+      y: number;
+      streamWidth?: number;
+      streamHeight?: number;
+    },
   ) {
     try {
       if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
@@ -275,6 +287,8 @@ export class RecordingGateway implements OnGatewayInit {
         data.userId,
         data.x,
         data.y,
+        data.streamWidth,
+        data.streamHeight,
       );
       if (result.outcome === 'inputDetected') {
         const elementMeta = result.elementMeta ?? {
@@ -286,6 +300,7 @@ export class RecordingGateway implements OnGatewayInit {
           ariaLabel: null,
           textContent: null,
           isInput: true,
+          currentValue: null,
         };
         client.emit('nav:inputDetected', {
           navId: data.navId,
@@ -293,17 +308,19 @@ export class RecordingGateway implements OnGatewayInit {
           y: result.y,
           elementMeta,
         });
-        return { event: 'nav:inputDetected', data: { navId: data.navId } };
+        // Full payload is only on client.emit above; a `{ event, data }` return would re-emit
+        // `nav:inputDetected` with stripped `data` (navId only) and wipe the variable modal.
+        return { ok: true };
       }
       this.server.to(`run:${data.navId}`).emit('nav:actionRecorded', {
         navId: data.navId,
         action: result.action,
       });
-      return { event: 'nav:actionRecorded', data: { navId: data.navId, action: result.action } };
+      return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       client.emit('nav:error', { navId: data.navId, error });
-      return { event: 'nav:error', data: { navId: data.navId, error } };
+      return { ok: false, error };
     }
   }
 
@@ -326,11 +343,69 @@ export class RecordingGateway implements OnGatewayInit {
         navId: data.navId,
         action,
       });
-      return { event: 'nav:actionRecorded', data: { navId: data.navId, action } };
+      return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       client.emit('nav:error', { navId: data.navId, error });
-      return { event: 'nav:error', data: { navId: data.navId, error } };
+      return { ok: false, error };
+    }
+  }
+
+  @SubscribeMessage('nav:analyzeCustomPrompt')
+  async handleNavAnalyzeCustomPrompt(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string; promptText: string },
+  ) {
+    try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
+      const { targetBox, semanticLabel } = await this.navigationRecording.analyzeCustomPrompt(
+        data.navId,
+        data.userId,
+        data.promptText ?? '',
+      );
+      this.server.to(`run:${data.navId}`).emit('nav:intentProposed', {
+        navId: data.navId,
+        targetBox,
+        semanticLabel,
+      });
+      return { ok: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { ok: false, error };
+    }
+  }
+
+  @SubscribeMessage('nav:confirmIntent')
+  async handleNavConfirmIntent(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: { navId: string; userId: string; x: number; y: number; promptText: string },
+  ) {
+    try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
+      const recorded = await this.navigationRecording.confirmAndExecuteIntent(
+        data.navId,
+        data.userId,
+        data.x,
+        data.y,
+        data.promptText ?? '',
+      );
+      for (const action of recorded) {
+        this.server.to(`run:${data.navId}`).emit('nav:actionRecorded', {
+          navId: data.navId,
+          action,
+        });
+      }
+      return { ok: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { ok: false, error };
     }
   }
 
@@ -397,22 +472,28 @@ export class RecordingGateway implements OnGatewayInit {
         skyvernWorkflow: null,
         cancelled: true,
       });
-      return { event: 'nav:sessionEnded', data: { navId: data.navId, cancelled: true } };
+      return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       client.emit('nav:error', { navId: data.navId, error });
-      return { event: 'nav:error', data: { navId: data.navId, error } };
+      return { ok: false, error };
     }
   }
 
   @SubscribeMessage('nav:stopRecording')
   async handleNavStop(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { navId: string; userId: string },
+    @MessageBody()
+    data: { navId: string; userId: string; actions?: RecordedNavigationAction[] },
   ) {
     try {
       const nav = await this.navigationsService.findOne(data.navId, data.userId).catch(() => null);
-      const actions = await this.navigationRecording.stopSession(data.navId, data.userId);
+      const clientActions = Array.isArray(data.actions) ? data.actions : undefined;
+      const actions = await this.navigationRecording.stopSession(
+        data.navId,
+        data.userId,
+        clientActions,
+      );
       const skyvernWorkflow = nav
         ? compileToSkyvernWorkflow({ id: nav.id, name: nav.name, url: nav.url }, actions)
         : null;
@@ -421,11 +502,11 @@ export class RecordingGateway implements OnGatewayInit {
         actions,
         skyvernWorkflow,
       });
-      return { event: 'nav:sessionEnded', data: { navId: data.navId } };
+      return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       client.emit('nav:error', { navId: data.navId, error });
-      return { event: 'nav:error', data: { navId: data.navId, error } };
+      return { ok: false, error };
     }
   }
 }

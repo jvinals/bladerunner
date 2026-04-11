@@ -359,7 +359,7 @@ model NavigationAction {
   navigationId   String   @map("navigation_id")
   userId         String   @map("user_id")
   sequence       Int
-  /// click | type | navigate | variable_input
+  /// click | type | navigate | variable_input | prompt | prompt_type
   actionType     String   @map("action_type")
   x              Float?
   y              Float?
