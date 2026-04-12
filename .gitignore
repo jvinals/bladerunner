@@ -10,3 +10,7 @@ playwright/.clerk/
 playwright-report/
 test-results/
 skyvern-frontend/.env
+artifacts/
+videos/
+har/
+.streamlit/

@@ -1,7 +1,0 @@
-@skyvern.cached(cache_key = 's10_click')
-async def s10_click(page: SkyvernPage, context: RunContext):
-    await page.click(
-        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][5]/*[name()="div"][2]/*[name()="div"][1]/*[name()="div"][3]/*[name()="div"][1]/*[name()="div"][1]/*[name()="button"][1]', 
-        ai = 'proactive', 
-        prompt = 'Which provider should be selected to enable healthcare services?',
-    )
