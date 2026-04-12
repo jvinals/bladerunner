@@ -87,14 +87,13 @@ services:
     image: public.ecr.aws/skyvern/skyvern:latest
     ports:
       - "8000:8000"
-      - "8080:8080"
     environment:
       - PORT=8000
       - ENV=local
       - BROWSER_TYPE=cdp-connect
       - LLM_KEY=OPENAI
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_STRING=postgresql://skyvern:skyvern@skyvern-db:5432/skyvern
+      - DATABASE_STRING=postgresql+asyncpg://skyvern:skyvern@skyvern-db:5432/skyvern
       - ALLOWED_ORIGINS=["*"]
     depends_on:
       skyvern-db:
