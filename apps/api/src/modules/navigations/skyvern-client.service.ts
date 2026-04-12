@@ -267,10 +267,14 @@ export class SkyvernClientService {
   /**
    * Live / in-run screenshots often appear here before `screenshot_urls` on `GET /v1/runs/{id}` is populated.
    */
-  async listRunArtifacts(runId: string): Promise<SkyvernArtifact[]> {
+  async listRunArtifacts(runId: string, artifactType?: string): Promise<SkyvernArtifact[]> {
+    const q =
+      artifactType && artifactType.trim()
+        ? `?artifact_type=${encodeURIComponent(artifactType.trim())}`
+        : '';
     const { ok, status, data, text } = await this.request<SkyvernArtifact[]>(
       'GET',
-      `/v1/runs/${encodeURIComponent(runId)}/artifacts`,
+      `/v1/runs/${encodeURIComponent(runId)}/artifacts${q}`,
     );
     if (!ok) {
       this.logger.debug(`Skyvern listRunArtifacts ${runId} (${status}): ${text.slice(0, 160)}`);

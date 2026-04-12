@@ -26,7 +26,11 @@ import { NavigationRecordingService } from './navigation-recording.service';
 
 const WORKER_WS_ATTEMPTS = 10;
 const WORKER_WS_ATTEMPT_MS = 60_000;
+/** Steady poll after the first live frame (or after burst window). */
 const POLL_MS = 1_800;
+/** Poll faster while waiting for Skyvern’s first screenshot/artifact (`queued` often has none). */
+const POLL_MS_UNTIL_FIRST_FRAME = 900;
+const POLL_BURST_FOR_FIRST_FRAME_MS = 120_000;
 
 const SKYVERN_SCREENSHOT_ARTIFACT_TYPES = new Set([
   'screenshot',
@@ -251,7 +255,9 @@ interface NavigationPlaySession {
   userId: string;
   skyvernRunId: string;
   wsEndpoint: string;
-  pollTimer: ReturnType<typeof setInterval> | null;
+  pollTimer: ReturnType<typeof setTimeout> | null;
+  /** Monotonic clock at session start — used for burst polling until first frame. */
+  playStartedAt: number;
   stopped: boolean;
   latestFrame: Buffer | null;
   latestFrameMime: string | null;
@@ -458,6 +464,7 @@ export class NavigationPlayService {
       skyvernRunId: run.run_id,
       wsEndpoint: browserAddressForSkyvern ?? '',
       pollTimer: null,
+      playStartedAt: Date.now(),
       stopped: false,
       latestFrame: null,
       latestFrameMime: null,
@@ -489,10 +496,22 @@ export class NavigationPlayService {
     });
     // #endregion
 
-    session.pollTimer = setInterval(() => {
-      void this.pollOnce(navId, userId);
-    }, POLL_MS);
-    void this.pollOnce(navId, userId);
+    const scheduleFollowingPoll = (): void => {
+      const s = this.sessions.get(navId);
+      if (!s || s.stopped) return;
+      const elapsed = Date.now() - s.playStartedAt;
+      const burst =
+        !s.latestFrame && elapsed < POLL_BURST_FOR_FIRST_FRAME_MS;
+      const delay = burst ? POLL_MS_UNTIL_FIRST_FRAME : POLL_MS;
+      s.pollTimer = setTimeout(() => {
+        void this.pollOnce(navId, userId).finally(() => {
+          scheduleFollowingPoll();
+        });
+      }, delay);
+    };
+    void this.pollOnce(navId, userId).finally(() => {
+      scheduleFollowingPoll();
+    });
 
     return {
       skyvernRunId: run.run_id,
@@ -633,12 +652,14 @@ export class NavigationPlayService {
     }
   }
 
-  /** Newest run-level screenshots last — Skyvern often appends; `[0]` can be stale or already-expired. */
+  /**
+   * Skyvern: `screenshot_urls` are reverse-chronological — **index 0 is the latest** (OpenAPI).
+   * Try in order so the freshest presign is attempted first; still iterate the rest if GET fails.
+   */
   private collectRunScreenshotUrls(run: SkyvernWorkflowRunResponse): string[] {
     const urls = run.screenshot_urls;
     if (!Array.isArray(urls) || urls.length === 0) return [];
-    const out = urls.filter((u): u is string => typeof u === 'string' && u.startsWith('http'));
-    return out.slice().reverse();
+    return urls.filter((u): u is string => typeof u === 'string' && u.startsWith('http'));
   }
 
   private pushPlayFrame(
@@ -670,7 +691,10 @@ export class NavigationPlayService {
     shots: SkyvernArtifact[];
     artsTotal: number;
   }> {
-    const arts = await this.skyvern.listRunArtifacts(runId);
+    let arts = await this.skyvern.listRunArtifacts(runId);
+    if (arts.length === 0) {
+      arts = await this.skyvern.listRunArtifacts(runId, 'screenshot');
+    }
     const shotish = (a: SkyvernArtifact): boolean => {
       if (!a.artifact_id) return false;
       const t = (a.artifact_type ?? '').toLowerCase();
@@ -761,7 +785,7 @@ export class NavigationPlayService {
     if (!session) return;
     session.stopped = true;
     if (session.pollTimer) {
-      clearInterval(session.pollTimer);
+      clearTimeout(session.pollTimer);
       session.pollTimer = null;
     }
     this.sessions.delete(navId);
