@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { appendFileSync } from 'fs';
+import * as path from 'path';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
@@ -30,6 +32,20 @@ const SKYVERN_SCREENSHOT_ARTIFACT_TYPES = new Set([
   'screenshot_action',
   'screenshot_final',
 ]);
+
+// #region agent log
+const _agentNavPlayLogPath = path.join(__dirname, '../../../../..', '.cursor', 'debug-d7957e.log');
+function _agentNavPlayLog(payload: Record<string, unknown>): void {
+  try {
+    appendFileSync(
+      _agentNavPlayLogPath,
+      `${JSON.stringify({ sessionId: 'd7957e', timestamp: Date.now(), ...payload })}\n`,
+    );
+  } catch {
+    /* debug ingest file may be unavailable */
+  }
+}
+// #endregion
 
 function isTimelineBlockFinished(status: string | null | undefined): boolean {
   if (!status) return false;
@@ -456,6 +472,19 @@ export class NavigationPlayService {
       workflowId,
       activeSequence: session.lastActiveSequence,
     });
+    // #region agent log
+    _agentNavPlayLog({
+      hypothesisId: 'H2',
+      location: 'NavigationPlayService.startPlay',
+      message: 'navPlay started emitted',
+      data: {
+        navTail: navId.slice(-8),
+        activeSequence: session.lastActiveSequence,
+        blockCount: skyvernBlockLabels.length,
+        seqSample: playActionSequences.slice(0, 8),
+      },
+    });
+    // #endregion
 
     session.pollTimer = setInterval(() => {
       void this.pollOnce(navId, userId);
@@ -500,6 +529,25 @@ export class NavigationPlayService {
         activeSequence,
         stepCount: run.step_count ?? null,
       });
+      // #region agent log
+      _agentNavPlayLog({
+        hypothesisId: 'H2',
+        location: 'NavigationPlayService.pollOnce',
+        message: 'navPlay runUpdate emitted',
+        data: {
+          navTail: navId.slice(-8),
+          runStatus: run.status,
+          activeSequence,
+          timelineBlockCount: timelineBlocks.length,
+          mergedSize: session.timelineLabelStatus.size,
+          rowSample: timelineBlocks.slice(0, 6).map((r) => `${r.label ?? '?'}:${r.status ?? '?'}`),
+          mergedPairs: [...session.timelineLabelStatus.entries()]
+            .slice(0, 8)
+            .map(([k, v]) => `${k}=${(v ?? '').slice(0, 32)}`),
+          seqSample: session.playActionSequences.slice(0, 8),
+        },
+      });
+      // #endregion
 
       const terminal: SkyvernWorkflowRunStatus[] = [
         'completed',
@@ -536,6 +584,14 @@ export class NavigationPlayService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Play poll error nav=${navId}: ${msg}`);
+      // #region agent log
+      _agentNavPlayLog({
+        hypothesisId: 'H3',
+        location: 'NavigationPlayService.pollOnce',
+        message: 'poll error',
+        data: { navTail: navId.slice(-8), err: msg.slice(0, 400) },
+      });
+      // #endregion
     }
   }
 
@@ -556,6 +612,14 @@ export class NavigationPlayService {
     session.latestFrame = Buffer.from(fetched.base64, 'base64');
     session.latestFrameMime = fetched.mime;
     this.recordingService.emit('frame', this.playRoomId(navId), fetched.base64, fetched.mime);
+    // #region agent log
+    _agentNavPlayLog({
+      hypothesisId: 'H5',
+      location: 'NavigationPlayService.pushPlayFrame',
+      message: 'frame emitted',
+      data: { navTail: navId.slice(-8), frameSource, tryIndex: meta?.tryIndex ?? null },
+    });
+    // #endregion
   }
 
   /** Newest-first screenshot artifacts (may omit `signed_url`; use `getArtifact` to refresh). */

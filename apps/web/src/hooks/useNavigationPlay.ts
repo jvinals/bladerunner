@@ -8,6 +8,18 @@ import { createRecordingSocket } from '@/lib/recordingSocket';
 import { navigationsApi } from '@/lib/api';
 import type { Socket } from 'socket.io-client';
 
+// #region agent log
+const _navPlayIngest =
+  'http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43';
+function _navPlayClientLog(payload: Record<string, unknown>): void {
+  void fetch(_navPlayIngest, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+    body: JSON.stringify({ sessionId: 'd7957e', timestamp: Date.now(), ...payload }),
+  }).catch(() => {});
+}
+// #endregion
+
 export interface UseNavigationPlayReturn {
   isPlaying: boolean;
   connected: boolean;
@@ -21,7 +33,11 @@ export interface UseNavigationPlayReturn {
   stopPlay: () => Promise<void>;
 }
 
-export function useNavigationPlay(navId: string | undefined): UseNavigationPlayReturn {
+export function useNavigationPlay(
+  navId: string | undefined,
+  /** Debug: persisted action `sequence` values — used only for NDJSON correlation (H4). */
+  persistedSequences?: number[],
+): UseNavigationPlayReturn {
   const queryClient = useQueryClient();
   const [isPlaying, setIsPlaying] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -32,6 +48,10 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
   const [playActiveSequence, setPlayActiveSequence] = useState<number | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const roomIdRef = useRef<string | null>(null);
+  const lastRunUpdateSeqRef = useRef<number | null | undefined>(undefined);
+  const firstFrameLoggedRef = useRef(false);
+  const persistedSeqRef = useRef<number[] | undefined>(persistedSequences);
+  persistedSeqRef.current = persistedSequences;
 
   const playRoomId = useCallback((id: string) => `play:${id}`, []);
 
@@ -46,6 +66,14 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
     socket.on('connect', () => {
       setConnected(true);
       socket.emit('join', { runId: roomId });
+      // #region agent log
+      _navPlayClientLog({
+        hypothesisId: 'H1',
+        location: 'useNavigationPlay.connect',
+        message: 'socket connected + join',
+        data: { roomId: roomId.slice(-24), navIdTail: navId.slice(-8) },
+      });
+      // #endregion
       void navigationsApi
         .recordingSession(navId)
         .then((s) => {
@@ -66,6 +94,17 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
       const mime =
         payload.mime && payload.mime.startsWith('image/') ? payload.mime : 'image/jpeg';
       setFrameDataUrl(`data:${mime};base64,${payload.data}`);
+      // #region agent log
+      if (!firstFrameLoggedRef.current) {
+        firstFrameLoggedRef.current = true;
+        _navPlayClientLog({
+          hypothesisId: 'H5',
+          location: 'useNavigationPlay.frame',
+          message: 'first frame received',
+          data: { runIdTail: payload.runId.slice(-24) },
+        });
+      }
+      // #endregion
     });
 
     socket.on(
@@ -77,6 +116,17 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
         if (payload.skyvernRunId) setSkyvernRunId(payload.skyvernRunId);
         setRunStatus('running');
         if (payload.activeSequence !== undefined) setPlayActiveSequence(payload.activeSequence);
+        // #region agent log
+        _navPlayClientLog({
+          hypothesisId: 'H1',
+          location: 'useNavigationPlay.navPlay:started',
+          message: 'socket navPlay started',
+          data: {
+            activeSequence: payload.activeSequence ?? null,
+            skyvernTail: (payload.skyvernRunId ?? '').slice(-12),
+          },
+        });
+        // #endregion
       },
     );
 
@@ -92,6 +142,27 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
         if (payload.status) setRunStatus(payload.status);
         if (payload.failureReason) setPlayError(payload.failureReason);
         if (payload.activeSequence !== undefined) setPlayActiveSequence(payload.activeSequence);
+        // #region agent log
+        if (
+          payload.activeSequence !== undefined &&
+          payload.activeSequence !== lastRunUpdateSeqRef.current
+        ) {
+          lastRunUpdateSeqRef.current = payload.activeSequence;
+          _navPlayClientLog({
+            hypothesisId: 'H1',
+            location: 'useNavigationPlay.navPlay:runUpdate',
+            message: 'socket run update',
+            data: {
+              activeSequence: payload.activeSequence,
+              status: payload.status ?? null,
+              seqMatchesPersisted:
+                persistedSeqRef.current == null || payload.activeSequence == null
+                  ? null
+                  : persistedSeqRef.current.includes(payload.activeSequence),
+            },
+          });
+        }
+        // #endregion
       },
     );
 
@@ -116,12 +187,34 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
     async (parameters?: Record<string, string>) => {
       if (!navId) return;
       setPlayError(null);
+      firstFrameLoggedRef.current = false;
+      lastRunUpdateSeqRef.current = undefined;
       try {
         const res = await navigationsApi.playStart(navId, { parameters });
+        // #region agent log
+        _navPlayClientLog({
+          hypothesisId: 'H1',
+          location: 'useNavigationPlay.startPlay',
+          message: 'playStart HTTP ok — client clears activeSequence next',
+          data: {
+            navIdTail: navId.slice(-8),
+            skyvernTail: res.skyvernRunId.slice(-12),
+            persistedSeqSample: persistedSeqRef.current?.slice(0, 12) ?? null,
+          },
+        });
+        // #endregion
         setSkyvernRunId(res.skyvernRunId);
         setIsPlaying(true);
         setPlayActiveSequence(null);
       } catch (e) {
+        // #region agent log
+        _navPlayClientLog({
+          hypothesisId: 'H3',
+          location: 'useNavigationPlay.startPlay',
+          message: 'playStart HTTP error',
+          data: { err: (e instanceof Error ? e.message : String(e)).slice(0, 400) },
+        });
+        // #endregion
         setPlayError(e instanceof Error ? e.message : String(e));
         setIsPlaying(false);
       }
