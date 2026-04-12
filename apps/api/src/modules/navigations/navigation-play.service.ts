@@ -49,16 +49,6 @@ function isTimelineBlockFinished(status: string | null | undefined): boolean {
   );
 }
 
-function timelineResponseShape(raw: unknown): string {
-  if (raw === null || raw === undefined) return 'empty';
-  if (Array.isArray(raw)) return `array:${raw.length}`;
-  if (typeof raw === 'object') {
-    const keys = Object.keys(raw as object);
-    return `object:${keys.slice(0, 8).join(',')}${keys.length > 8 ? '…' : ''}`;
-  }
-  return typeof raw;
-}
-
 /**
  * Collect block rows from `GET /v1/runs/{id}/timeline` by **deep-walking** the JSON.
  * Runtime logs showed only `s1_*` when following `children` only — later blocks live under other keys.
@@ -491,7 +481,6 @@ export class NavigationPlayService {
       session.lastStatus = run.status;
 
       const timelineBlocks = collectSkyvernTimelineBlockRows(timelineRaw);
-      const timelineShape = timelineResponseShape(timelineRaw);
       if (timelineBlocks.length > 0) {
         mergeTimelinePollIntoLabelStatus(session, timelineBlocks);
       }
@@ -502,49 +491,6 @@ export class NavigationPlayService {
         session.timelineLabelStatus,
       );
       session.lastActiveSequence = activeSequence;
-
-      let outputCompletedBlockHints = -1;
-      if (run.output && typeof run.output === 'object' && !Array.isArray(run.output)) {
-        outputCompletedBlockHints = Object.keys(run.output as Record<string, unknown>).filter((k) =>
-          k.endsWith('_output'),
-        ).length;
-      }
-      const unlabeledRowCount = timelineBlocks.filter((r) => !r.label?.trim()).length;
-      const mergedSample = [...session.timelineLabelStatus.entries()]
-        .slice(0, 5)
-        .map(([k, v]) => `${k}:${v.slice(0, 24)}`);
-      let maxLiveIdxLog: number | null = null;
-      const nn = Math.min(session.skyvernBlockLabels.length, session.playActionSequences.length);
-      for (let i = 0; i < nn; i++) {
-        const st = session.timelineLabelStatus.get(session.skyvernBlockLabels[i]!);
-        if (st === undefined) continue;
-        if (!isTimelineBlockFinished(st)) maxLiveIdxLog = i;
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-        body: JSON.stringify({
-          sessionId: 'd7957e',
-          location: 'navigation-play.service.ts:pollOnce',
-          message: 'play block progress',
-          data: {
-            activeSequence,
-            stepCount: run.step_count ?? null,
-            outputOutputKeyCount: outputCompletedBlockHints,
-            timelineBlockCount: timelineBlocks.length,
-            mergedLabelCount: session.timelineLabelStatus.size,
-            mergedSample,
-            maxLiveBlockIndex: maxLiveIdxLog,
-            timelineShape,
-            unlabeledRowCount,
-            status: run.status,
-          },
-          timestamp: Date.now(),
-          hypothesisId: 'H6',
-        }),
-      }).catch(() => {});
-      // #endregion
 
       this.recordingService.emit('navPlay:runUpdate', navId, {
         navId,
@@ -569,7 +515,7 @@ export class NavigationPlayService {
 
       const fromRun = this.pickScreenshotUrlFromRun(run);
       if (fromRun) {
-        const fetched = await this.fetchScreenshotAsBase64(fromRun, 'run_screenshot_urls');
+        const fetched = await this.fetchScreenshotAsBase64(fromRun);
         if (fetched) {
           this.pushPlayFrame(navId, session, fetched, 'run_urls');
           return;
@@ -577,43 +523,11 @@ export class NavigationPlayService {
       }
 
       const shots = await this.listScreenshotArtifactsSorted(session.skyvernRunId);
-      // #region agent log
-      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-        body: JSON.stringify({
-          sessionId: 'd7957e',
-          location: 'navigation-play.service.ts:pollOnce',
-          message: 'artifact fallback candidates',
-          data: { shotCount: shots.length, navTail: navId.slice(-8) },
-          timestamp: Date.now(),
-          hypothesisId: 'H3',
-        }),
-      }).catch(() => {});
-      // #endregion
       for (let i = 0; i < Math.min(shots.length, 10); i++) {
         const shot = shots[i]!;
         const imageUrl = await this.resolveArtifactDownloadUrl(shot);
-        // #region agent log
-        fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-          body: JSON.stringify({
-            sessionId: 'd7957e',
-            location: 'navigation-play.service.ts:pollOnce',
-            message: 'resolveArtifactDownloadUrl',
-            data: {
-              tryIndex: i,
-              hasUrl: !!imageUrl,
-              hadListSignedUrl: !!(shot.signed_url && String(shot.signed_url).startsWith('http')),
-            },
-            timestamp: Date.now(),
-            hypothesisId: 'H2',
-          }),
-        }).catch(() => {});
-        // #endregion
         if (!imageUrl) continue;
-        const fetched = await this.fetchScreenshotAsBase64(imageUrl, `artifact_try_${i}`);
+        const fetched = await this.fetchScreenshotAsBase64(imageUrl);
         if (fetched) {
           this.pushPlayFrame(navId, session, fetched, 'artifact', { tryIndex: i });
           return;
@@ -639,20 +553,6 @@ export class NavigationPlayService {
     frameSource: 'run_urls' | 'artifact',
     meta?: { tryIndex?: number },
   ): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-      body: JSON.stringify({
-        sessionId: 'd7957e',
-        location: 'navigation-play.service.ts:pushPlayFrame',
-        message: 'play frame emitted',
-        data: { frameSource, tryIndex: meta?.tryIndex ?? null, navTail: navId.slice(-8), mime: fetched.mime },
-        timestamp: Date.now(),
-        hypothesisId: 'H2',
-      }),
-    }).catch(() => {});
-    // #endregion
     session.latestFrame = Buffer.from(fetched.base64, 'base64');
     session.latestFrameMime = fetched.mime;
     this.recordingService.emit('frame', this.playRoomId(navId), fetched.base64, fetched.mime);
@@ -708,35 +608,12 @@ export class NavigationPlayService {
     return {};
   }
 
-  private async fetchScreenshotAsBase64(
-    imageUrl: string,
-    debugPhase?: string,
-  ): Promise<{ base64: string; mime: string } | null> {
+  private async fetchScreenshotAsBase64(imageUrl: string): Promise<{ base64: string; mime: string } | null> {
     try {
       const headers = this.buildScreenshotFetchHeaders(imageUrl);
       const res = await fetch(imageUrl, { headers });
       if (!res.ok) {
         this.logger.warn(`Play screenshot HTTP ${res.status} for ${imageUrl.slice(0, 96)}…`);
-        let host = '';
-        try {
-          host = new URL(imageUrl).hostname;
-        } catch {
-          host = 'invalid-url';
-        }
-        // #region agent log
-        fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-          body: JSON.stringify({
-            sessionId: 'd7957e',
-            location: 'navigation-play.service.ts:fetchScreenshotAsBase64',
-            message: 'screenshot GET not ok',
-            data: { status: res.status, host, phase: debugPhase ?? null },
-            timestamp: Date.now(),
-            hypothesisId: 'H1',
-          }),
-        }).catch(() => {});
-        // #endregion
         return null;
       }
       const rawCt = res.headers.get('content-type')?.split(';')[0]?.trim();
