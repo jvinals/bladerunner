@@ -68,11 +68,10 @@ export function buildSkyvernWorkflowApiPayload(
     switch (action.actionType) {
       case 'navigate': {
         const url = action.inputValue ?? action.pageUrl ?? navigation.url;
-        const goal = `Open the URL and continue: ${url}`;
         blocks.push({
           block_type: 'navigation',
           label: nextLabel('nav'),
-          navigation_goal: goal,
+          navigation_goal: `Navigate to ${url} and wait for the page to load. The task is complete once the page has loaded.`,
           url,
         });
         break;
