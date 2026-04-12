@@ -49,21 +49,34 @@ function isTimelineBlockFinished(status: string | null | undefined): boolean {
   );
 }
 
-/** DFS flatten of `GET /v1/runs/{id}/timeline` nodes with `type: "block"`. */
-function flattenSkyvernTimeline(nodes: unknown): Array<{ label: string | null; status: string | null }> {
+function timelineResponseShape(raw: unknown): string {
+  if (raw === null || raw === undefined) return 'empty';
+  if (Array.isArray(raw)) return `array:${raw.length}`;
+  if (typeof raw === 'object') {
+    const keys = Object.keys(raw as object);
+    return `object:${keys.slice(0, 8).join(',')}${keys.length > 8 ? '…' : ''}`;
+  }
+  return typeof raw;
+}
+
+/**
+ * Collect block rows from `GET /v1/runs/{id}/timeline` by **deep-walking** the JSON.
+ * Runtime logs showed only `s1_*` when following `children` only — later blocks live under other keys.
+ */
+function collectSkyvernTimelineBlockRows(root: unknown): Array<{ label: string | null; status: string | null }> {
   const out: Array<{ label: string | null; status: string | null }> = [];
-  const walk = (node: unknown): void => {
-    if (!node || typeof node !== 'object') return;
-    const o = node as Record<string, unknown>;
+
+  const pushIfBlockLike = (o: Record<string, unknown>): void => {
     if (String(o.type).toLowerCase() === 'block' && o.block && typeof o.block === 'object') {
       const b = o.block as Record<string, unknown>;
       out.push({
         label: typeof b.label === 'string' ? b.label : null,
         status: typeof b.status === 'string' ? b.status : null,
       });
-    } else if (
+      return;
+    }
+    if (
       typeof o.label === 'string' &&
-      (typeof o.status === 'string' || o.status === null) &&
       (typeof o.workflow_run_block_id === 'string' ||
         typeof o.block_workflow_run_id === 'string' ||
         typeof o.block_type === 'string')
@@ -73,16 +86,23 @@ function flattenSkyvernTimeline(nodes: unknown): Array<{ label: string | null; s
         status: typeof o.status === 'string' ? o.status : null,
       });
     }
-    const ch = o.children;
-    if (Array.isArray(ch)) {
-      for (const c of ch) walk(c);
+  };
+
+  const walk = (node: unknown): void => {
+    if (node === null || node === undefined) return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    const o = node as Record<string, unknown>;
+    pushIfBlockLike(o);
+    for (const v of Object.values(o)) {
+      if (v !== null && typeof v === 'object') walk(v);
     }
   };
-  if (Array.isArray(nodes)) {
-    for (const n of nodes) walk(n);
-  } else {
-    walk(nodes);
-  }
+
+  walk(root);
   return out;
 }
 
@@ -439,7 +459,8 @@ export class NavigationPlayService {
       ]);
       session.lastStatus = run.status;
 
-      const timelineBlocks = flattenSkyvernTimeline(timelineRaw);
+      const timelineBlocks = collectSkyvernTimelineBlockRows(timelineRaw);
+      const timelineShape = timelineResponseShape(timelineRaw);
       if (timelineBlocks.length > 0) {
         for (const e of timelineBlocks) {
           if (e.label) {
@@ -487,6 +508,7 @@ export class NavigationPlayService {
             mergedLabelCount: session.timelineLabelStatus.size,
             mergedSample,
             maxLiveBlockIndex: maxLiveIdxLog,
+            timelineShape,
             status: run.status,
           },
           timestamp: Date.now(),
