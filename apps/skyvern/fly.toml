@@ -5,7 +5,7 @@
 # Deploy: fly deploy --config apps/skyvern/fly.toml -a bladerunner-skyvern
 #
 # Required secrets (set via `fly secrets set -a bladerunner-skyvern`):
-#   DATABASE_STRING   postgresql://... (Fly Postgres or Railway)
+#   DATABASE_STRING   postgresql+psycopg://user:pass@host:5432/skyvern
 #   LLM_KEY           OPENAI
 #   OPENAI_API_KEY    sk-...
 #   SECONDARY_LLM_KEY OPENAI

@@ -6,13 +6,13 @@ function skyvernApiBaseForPlay(config: ConfigService): string {
 }
 
 /**
- * **Path B (simple):** Skyvern Cloud / staging — omit `browser_address` so Skyvern runs the workflow in its
- * hosted browser (no browser-worker CDP). **Self-hosted** Skyvern (`SKYVERN_API_BASE_URL` elsewhere) still
- * uses the browser-worker + `browser_address` path unless you point the base URL at Cloud.
+ * Skyvern (Cloud **and** self-hosted) runs its own built-in browser (Xvfb + Chromium for self-hosted,
+ * hosted infra for Cloud). The `browser_address` parameter in the run request is ignored by the
+ * self-hosted worker — it always uses its internal browser. Always omit `browser_address` and skip
+ * browser-worker CDP for Play; Skyvern handles the browser itself.
  */
-export function navigationPlayUsesSkyvernHostedBrowser(config: ConfigService): boolean {
-  const base = skyvernApiBaseForPlay(config);
-  return /^https:\/\/(api|api-staging)\.skyvern\.com\b/i.test(base);
+export function navigationPlayUsesSkyvernHostedBrowser(_config: ConfigService): boolean {
+  return true;
 }
 
 /**

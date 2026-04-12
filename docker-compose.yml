@@ -68,6 +68,7 @@ services:
   skyvern-db:
     profiles: [skyvern]
     image: postgres:16-alpine
+    command: postgres -c timezone=UTC
     environment:
       POSTGRES_USER: skyvern
       POSTGRES_PASSWORD: skyvern
@@ -90,10 +91,11 @@ services:
     environment:
       - PORT=8000
       - ENV=local
-      - BROWSER_TYPE=cdp-connect
+      - BROWSER_TYPE=chromium-headful
       - LLM_KEY=OPENAI
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_STRING=postgresql+asyncpg://skyvern:skyvern@skyvern-db:5432/skyvern
+      - DATABASE_STRING=postgresql+psycopg://skyvern:skyvern@skyvern-db:5432/skyvern
+      - TZ=UTC
       - ALLOWED_ORIGINS=["*"]
     depends_on:
       skyvern-db:
