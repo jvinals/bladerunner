@@ -43,56 +43,7 @@ export default function NavigationsPage() {
 
   const createMutation = useMutation({
     mutationFn: (body: CreateNavigationBody) => navigationsApi.create(body),
-    onMutate: (body) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-        body: JSON.stringify({
-          sessionId: 'd7957e',
-          runId: 'verify',
-          hypothesisId: 'H2',
-          location: 'Navigations.tsx:createMutation.onMutate',
-          message: 'create navigation mutate started',
-          data: { hasIntent: !!body.intent?.trim(), hasDesired: !!body.desiredOutput?.trim(), urlLen: body.url?.length ?? 0 },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    },
-    onError: (err) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-        body: JSON.stringify({
-          sessionId: 'd7957e',
-          runId: 'verify',
-          hypothesisId: 'H2',
-          location: 'Navigations.tsx:createMutation.onError',
-          message: 'create navigation failed',
-          data: { errName: err instanceof Error ? err.name : 'unknown', errMsg: err instanceof Error ? err.message : String(err) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    },
     onSuccess: () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-        body: JSON.stringify({
-          sessionId: 'd7957e',
-          runId: 'verify',
-          hypothesisId: 'H4',
-          location: 'Navigations.tsx:createMutation.onSuccess',
-          message: 'create navigation succeeded',
-          data: {},
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       void queryClient.invalidateQueries({ queryKey: ['navigations'] });
       setName('');
       setUrl('https://');
@@ -107,24 +58,6 @@ export default function NavigationsPage() {
 
   const submit = () => {
     const u = url.trim();
-    const intentOk = !!intent.trim();
-    const desiredOk = !!desiredOutput.trim();
-    const urlOk = !!u;
-    // #region agent log
-    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-      body: JSON.stringify({
-        sessionId: 'd7957e',
-        runId: 'verify',
-        hypothesisId: 'H1',
-        location: 'Navigations.tsx:submit',
-        message: 'Create clicked — validation snapshot',
-        data: { urlOk, intentOk, desiredOk, earlyReturn: !urlOk || !intentOk || !desiredOk },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!u || !intent.trim() || !desiredOutput.trim()) return;
     const body: CreateNavigationBody = {
       name: name.trim() || undefined,
@@ -163,21 +96,6 @@ export default function NavigationsPage() {
           type="button"
           aria-label="New navigation"
           onClick={() => {
-            // #region agent log
-            fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-              body: JSON.stringify({
-                sessionId: 'd7957e',
-                runId: 'verify',
-                hypothesisId: 'H3',
-                location: 'Navigations.tsx:NewNavigationButton',
-                message: 'New navigation header button clicked',
-                data: { willToggleFrom: panelOpen },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
             setPanelOpen((o) => !o);
           }}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#4B90FF] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3d7fe6] sm:px-4"
