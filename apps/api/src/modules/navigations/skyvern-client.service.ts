@@ -61,6 +61,7 @@ export type SkyvernClientOperation =
   | 'updateWorkflow'
   | 'runWorkflow'
   | 'getRun'
+  | 'getRunTimeline'
   | 'cancelRun';
 
 /** Structured failure from Skyvern HTTP API (avoids brittle string parsing for recovery logic). */
@@ -240,6 +241,27 @@ export class SkyvernClientService {
       );
     }
     return data;
+  }
+
+  /**
+   * Block-level status while a workflow run is in flight (`GET /v1/runs/{id}` `output` is often null until the end).
+   */
+  async getRunTimeline(runId: string): Promise<unknown[]> {
+    const { ok, status, data, text } = await this.request<unknown>(
+      'GET',
+      `/v1/runs/${encodeURIComponent(runId)}/timeline`,
+    );
+    if (!ok) {
+      this.logger.debug(`Skyvern getRunTimeline ${runId} (${status}): ${text.slice(0, 160)}`);
+      return [];
+    }
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      const o = data as Record<string, unknown>;
+      if (Array.isArray(o.timeline)) return o.timeline as unknown[];
+      if (Array.isArray(o.entries)) return o.entries as unknown[];
+    }
+    return [];
   }
 
   /**

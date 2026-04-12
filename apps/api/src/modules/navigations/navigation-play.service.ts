@@ -31,16 +31,77 @@ const SKYVERN_SCREENSHOT_ARTIFACT_TYPES = new Set([
   'screenshot_final',
 ]);
 
-/** First workflow block whose `{label}_output` is not yet in `run.output` → maps to that action's `sequence`. */
+function isTimelineBlockFinished(status: string | null | undefined): boolean {
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s === 'completed' || s === 'skipped';
+}
+
+/** DFS flatten of `GET /v1/runs/{id}/timeline` nodes with `type: "block"`. */
+function flattenSkyvernTimeline(nodes: unknown): Array<{ label: string | null; status: string | null }> {
+  const out: Array<{ label: string | null; status: string | null }> = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    const o = node as Record<string, unknown>;
+    if (String(o.type).toLowerCase() === 'block' && o.block && typeof o.block === 'object') {
+      const b = o.block as Record<string, unknown>;
+      out.push({
+        label: typeof b.label === 'string' ? b.label : null,
+        status: typeof b.status === 'string' ? b.status : null,
+      });
+    }
+    const ch = o.children;
+    if (Array.isArray(ch)) {
+      for (const c of ch) walk(c);
+    }
+  };
+  if (Array.isArray(nodes)) {
+    for (const n of nodes) walk(n);
+  } else {
+    walk(nodes);
+  }
+  return out;
+}
+
+function deriveActiveFromTimelineEntries(
+  blockLabels: string[],
+  actionSequences: number[],
+  entries: Array<{ label: string | null; status: string | null }>,
+): number | null {
+  const n = Math.min(blockLabels.length, actionSequences.length);
+  if (n === 0) return null;
+  const byLabel = new Map<string, { label: string | null; status: string | null }>();
+  for (const e of entries) {
+    if (e.label) byLabel.set(e.label, e);
+  }
+  for (let i = 0; i < n; i++) {
+    const lab = blockLabels[i]!;
+    const seq = actionSequences[i]!;
+    const hit = byLabel.get(lab) ?? entries[i];
+    if (!hit) return seq;
+    if (!isTimelineBlockFinished(hit.status)) return seq;
+  }
+  return actionSequences[n - 1] ?? null;
+}
+
+/**
+ * Prefer live **`/timeline`** block statuses; then **`run.output`** `{label}_output` keys; else first/last sequence.
+ */
 function deriveActivePlaySequence(
   run: SkyvernWorkflowRunResponse,
   blockLabels: string[],
   actionSequences: number[],
+  timelineBlocks?: Array<{ label: string | null; status: string | null }>,
 ): number | null {
   if (blockLabels.length === 0 || actionSequences.length === 0) return null;
   const n = Math.min(blockLabels.length, actionSequences.length);
   const labels = blockLabels.slice(0, n);
   const seqs = actionSequences.slice(0, n);
+
+  if (timelineBlocks && timelineBlocks.length > 0) {
+    const fromT = deriveActiveFromTimelineEntries(blockLabels, actionSequences, timelineBlocks);
+    if (fromT != null) return fromT;
+  }
 
   const out = run.output;
   if (!out || typeof out !== 'object' || Array.isArray(out)) {
@@ -337,13 +398,18 @@ export class NavigationPlayService {
     if (!session || session.userId !== userId || session.stopped) return;
 
     try {
-      const run = await this.skyvern.getRun(session.skyvernRunId);
+      const [run, timelineRaw] = await Promise.all([
+        this.skyvern.getRun(session.skyvernRunId),
+        this.skyvern.getRunTimeline(session.skyvernRunId),
+      ]);
       session.lastStatus = run.status;
 
+      const timelineBlocks = flattenSkyvernTimeline(timelineRaw);
       const activeSequence = deriveActivePlaySequence(
         run,
         session.skyvernBlockLabels,
         session.playActionSequences,
+        timelineBlocks,
       );
       session.lastActiveSequence = activeSequence;
 
@@ -365,6 +431,7 @@ export class NavigationPlayService {
             activeSequence,
             stepCount: run.step_count ?? null,
             outputOutputKeyCount: outputCompletedBlockHints,
+            timelineBlockCount: timelineBlocks.length,
             status: run.status,
           },
           timestamp: Date.now(),
