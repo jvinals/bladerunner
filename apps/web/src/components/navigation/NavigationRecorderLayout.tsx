@@ -6,6 +6,7 @@
  * VariableInjectionModal (overlay when an input field is detected).
  */
 
+import { useEffect } from 'react';
 import { useUser } from '@clerk/react';
 import { useNavigationRecording } from '@/hooks/useNavigationRecording';
 import { InteractiveCanvasStream } from './InteractiveCanvasStream';
@@ -16,9 +17,14 @@ import { CustomPromptInput } from './CustomPromptInput';
 
 interface NavigationRecorderLayoutProps {
   navId: string;
+  /** Fires when a recording session is active (start … stop/cancel) so parents can guard UI (e.g. workspace drawer). */
+  onSessionActivityChange?: (isRecording: boolean) => void;
 }
 
-export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProps) {
+export function NavigationRecorderLayout({
+  navId,
+  onSessionActivityChange,
+}: NavigationRecorderLayoutProps) {
   const { user } = useUser();
   const userId = user?.id ?? '';
 
@@ -52,6 +58,10 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     rejectAuditSuggestion,
     error,
   } = useNavigationRecording(navId, userId);
+
+  useEffect(() => {
+    onSessionActivityChange?.(isRecording);
+  }, [isRecording, onSessionActivityChange]);
 
   const canRunSmartAudit = Boolean(
     skyvernWorkflow && actions.length > 0 && !isRecording,

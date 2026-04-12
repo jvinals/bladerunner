@@ -14,7 +14,15 @@ import { NavigationRecorderLayout } from '@/components/navigation/NavigationReco
 import { NavigationPlayWorkspace } from '@/components/navigation/NavigationPlayWorkspace';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import type { RecordedNavigationAction } from '@/hooks/useNavigationRecording';
-import { ArrowLeft, ExternalLink, Loader2, Navigation as NavigationIcon, Save } from 'lucide-react';
+import {
+  ArrowLeft,
+  Circle,
+  ExternalLink,
+  Loader2,
+  Navigation as NavigationIcon,
+  Play,
+  Save,
+} from 'lucide-react';
 
 function toRecordedActions(rows: NavigationDetailDto['actions']): RecordedNavigationAction[] {
   return rows.map((a) => ({
@@ -42,6 +50,11 @@ export default function NavigationDetailPage() {
   const [autoSignInOtpDraft, setAutoSignInOtpDraft] = useState<AutoClerkOtpUiMode>('default');
   const [runModeDraft, setRunModeDraft] = useState<EvaluationRunMode>('continuous');
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  /** null = drawer collapsed; only one of play | record visible at a time. */
+  const [workspaceMode, setWorkspaceMode] = useState<null | 'play' | 'record'>(null);
+  /** Keep recorder mounted when hidden so an active session is not torn down by switching views. */
+  const [recordWorkspaceMounted, setRecordWorkspaceMounted] = useState(false);
+  const [recordingSessionActive, setRecordingSessionActive] = useState(false);
 
   const query = useQuery({
     queryKey: ['navigation', id],
@@ -78,6 +91,12 @@ export default function NavigationDetailPage() {
       window.setTimeout(() => setSaveFeedback(null), 5000);
     },
   });
+
+  useEffect(() => {
+    setWorkspaceMode(null);
+    setRecordWorkspaceMounted(false);
+    setRecordingSessionActive(false);
+  }, [id]);
 
   useEffect(() => {
     if (!ev) return;
@@ -354,19 +373,92 @@ export default function NavigationDetailPage() {
             </div>
           )}
 
-          <section className="w-full rounded-xl border border-emerald-200/80 bg-emerald-50/20 p-4">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">Play</h2>
-            <p className="text-xs text-gray-600 mb-3">
-              Runs the compiled workflow via Skyvern against the browser-worker CDP endpoint. Requires{' '}
-              <code className="text-[10px] bg-white/80 px-1 rounded">SKYVERN_API_KEY</code> and a reachable Skyvern API (
-              <code className="text-[10px] bg-white/80 px-1 rounded">SKYVERN_API_BASE_URL</code> for self-hosted).
+          <section
+            className="w-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+            aria-label="Play or record workspace"
+          >
+            <h2 className="text-sm font-semibold text-gray-800 mb-3">Browser workspace</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Open <strong>Play</strong> or <strong>Record</strong> below. Only one panel is shown at a time. While a
+              recording is active, Play stays unavailable until you stop or cancel.
             </p>
-            <NavigationPlayWorkspace navId={id} persistedActions={persistedRecorded} />
-          </section>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={recordingSessionActive}
+                title={
+                  recordingSessionActive
+                    ? 'Stop or cancel recording before opening Play'
+                    : workspaceMode === 'play'
+                      ? 'Close Play panel'
+                      : 'Open Play panel'
+                }
+                onClick={() => {
+                  if (recordingSessionActive) return;
+                  setWorkspaceMode((m) => (m === 'play' ? null : 'play'));
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                  workspaceMode === 'play'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
+                    : 'border-gray-200 bg-white text-gray-800 hover:border-emerald-300 hover:bg-emerald-50/50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <Play size={18} className={workspaceMode === 'play' ? 'fill-current' : ''} />
+                Play
+              </button>
+              <button
+                type="button"
+                title={
+                  workspaceMode === 'record'
+                    ? recordingSessionActive
+                      ? 'Stop recording before closing'
+                      : 'Close Record panel'
+                    : 'Open Record panel'
+                }
+                onClick={() => {
+                  setRecordWorkspaceMounted(true);
+                  setWorkspaceMode((m) => {
+                    if (m === 'record') {
+                      if (recordingSessionActive) return 'record';
+                      return null;
+                    }
+                    return 'record';
+                  });
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                  workspaceMode === 'record'
+                    ? 'border-red-500 bg-red-50 text-red-900'
+                    : 'border-gray-200 bg-white text-gray-800 hover:border-red-300 hover:bg-red-50/40'
+                }`}
+              >
+                <Circle size={18} className={workspaceMode === 'record' ? 'fill-red-500 text-red-500' : ''} />
+                Record
+              </button>
+            </div>
 
-          <section className="w-full rounded-xl border border-red-200/60 bg-red-50/10 p-4">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">Record</h2>
-            <NavigationRecorderLayout navId={id} />
+            {workspaceMode === 'play' && (
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                <p className="text-xs text-gray-600">
+                  Skyvern workflow run against the browser-worker CDP endpoint. Requires{' '}
+                  <code className="text-[10px] bg-gray-100 px-1 rounded">SKYVERN_API_KEY</code> and a reachable Skyvern
+                  API (<code className="text-[10px] bg-gray-100 px-1 rounded">SKYVERN_API_BASE_URL</code> when
+                  self-hosted).
+                </p>
+                <NavigationPlayWorkspace navId={id} persistedActions={persistedRecorded} />
+              </div>
+            )}
+
+            {recordWorkspaceMounted && (
+              <div
+                className={workspaceMode === 'record' ? 'mt-4 pt-4 border-t border-gray-100' : 'hidden'}
+                aria-hidden={workspaceMode !== 'record'}
+              >
+                <NavigationRecorderLayout
+                  navId={id}
+                  onSessionActivityChange={setRecordingSessionActive}
+                />
+              </div>
+            )}
           </section>
         </div>
       </div>
