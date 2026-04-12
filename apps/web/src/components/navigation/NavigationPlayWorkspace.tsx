@@ -28,10 +28,7 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
     recordingUrl,
     startPlay,
     stopPlay,
-  } = useNavigationPlay(
-    navId,
-    persistedActions.map((a) => a.sequence),
-  );
+  } = useNavigationPlay(navId);
 
   const canPlay = persistedActions.length > 0;
 

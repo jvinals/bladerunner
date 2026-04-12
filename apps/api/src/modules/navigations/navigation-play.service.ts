@@ -1,8 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { appendFileSync } from 'fs';
-import * as path from 'path';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
@@ -38,20 +36,6 @@ const SKYVERN_SCREENSHOT_ARTIFACT_TYPES = new Set([
   'screenshot_action',
   'screenshot_final',
 ]);
-
-// #region agent log
-const _agentNavPlayLogPath = path.join(__dirname, '../../../../..', '.cursor', 'debug-d7957e.log');
-function _agentNavPlayLog(payload: Record<string, unknown>): void {
-  try {
-    appendFileSync(
-      _agentNavPlayLogPath,
-      `${JSON.stringify({ sessionId: 'd7957e', timestamp: Date.now(), ...payload })}\n`,
-    );
-  } catch {
-    /* debug ingest file may be unavailable */
-  }
-}
-// #endregion
 
 function isTimelineBlockFinished(status: string | null | undefined): boolean {
   if (!status) return false;
@@ -483,19 +467,6 @@ export class NavigationPlayService {
       workflowId,
       activeSequence: session.lastActiveSequence,
     });
-    // #region agent log
-    _agentNavPlayLog({
-      hypothesisId: 'H2',
-      location: 'NavigationPlayService.startPlay',
-      message: 'navPlay started emitted',
-      data: {
-        navTail: navId.slice(-8),
-        activeSequence: session.lastActiveSequence,
-        blockCount: skyvernBlockLabels.length,
-        seqSample: playActionSequences.slice(0, 8),
-      },
-    });
-    // #endregion
 
     const scheduleFollowingPoll = (): void => {
       const s = this.sessions.get(navId);
@@ -564,37 +535,13 @@ export class NavigationPlayService {
         'canceled',
       ];
       if (terminal.includes(run.status)) {
-        // #region agent log
-        _agentNavPlayLog({
-          hypothesisId: 'H2',
-          location: 'NavigationPlayService.pollOnce',
-          message: 'pollOnce terminal',
-          data: {
-            navTail: navId.slice(-8),
-            runStatus: run.status,
-            activeSequence,
-            timelineBlockCount: timelineBlocks.length,
-            mergedSize: session.timelineLabelStatus.size,
-            rowSample: timelineBlocks.slice(0, 6).map((r) => `${r.label ?? '?'}:${r.status ?? '?'}`),
-            mergedPairs: [...session.timelineLabelStatus.entries()]
-              .slice(0, 8)
-              .map(([k, v]) => `${k}=${(v ?? '').slice(0, 32)}`),
-            seqSample: session.playActionSequences.slice(0, 8),
-            didPushFrame: false,
-          },
-        });
-        // #endregion
         await this.cleanupSession(navId, false);
         return;
       }
 
       let didPushFrame = false;
-      let artifactTotal = 0;
-      let artifactCandidates = 0;
-      let timelineScreenshotCount = 0;
 
       const timelineScreenshots = collectTimelineScreenshotUrls(timelineRaw);
-      timelineScreenshotCount = timelineScreenshots.length;
       if (timelineScreenshots.length > 0) {
         const newest = timelineScreenshots.slice().reverse();
         for (const imageUrl of newest.slice(0, 5)) {
@@ -620,9 +567,7 @@ export class NavigationPlayService {
       }
 
       if (!didPushFrame) {
-        const { shots, artsTotal } = await this.listScreenshotArtifactsSorted(session.skyvernRunId);
-        artifactTotal = artsTotal;
-        artifactCandidates = shots.length;
+        const { shots } = await this.listScreenshotArtifactsSorted(session.skyvernRunId);
         for (let i = 0; i < Math.min(shots.length, 15); i++) {
           const shot = shots[i]!;
           const imageUrl = await this.resolveArtifactDownloadUrl(shot);
@@ -635,41 +580,9 @@ export class NavigationPlayService {
           }
         }
       }
-
-      // #region agent log
-      _agentNavPlayLog({
-        hypothesisId: didPushFrame ? 'H2' : 'H5',
-        location: 'NavigationPlayService.pollOnce',
-        message: didPushFrame ? 'pollOnce ok' : 'pollOnce no frame',
-        data: {
-          navTail: navId.slice(-8),
-          runStatus: run.status,
-          activeSequence,
-          timelineBlockCount: timelineBlocks.length,
-          mergedSize: session.timelineLabelStatus.size,
-          rowSample: timelineBlocks.slice(0, 6).map((r) => `${r.label ?? '?'}:${r.status ?? '?'}`),
-          mergedPairs: [...session.timelineLabelStatus.entries()]
-            .slice(0, 8)
-            .map(([k, v]) => `${k}=${(v ?? '').slice(0, 32)}`),
-          seqSample: session.playActionSequences.slice(0, 8),
-          didPushFrame,
-          timelineScreenshotCount,
-          artifactTotal,
-          artifactCandidates,
-        },
-      });
-      // #endregion
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Play poll error nav=${navId}: ${msg}`);
-      // #region agent log
-      _agentNavPlayLog({
-        hypothesisId: 'H3',
-        location: 'NavigationPlayService.pollOnce',
-        message: 'poll error',
-        data: { navTail: navId.slice(-8), err: msg.slice(0, 400) },
-      });
-      // #endregion
     }
   }
 
@@ -693,14 +606,6 @@ export class NavigationPlayService {
     session.latestFrame = Buffer.from(fetched.base64, 'base64');
     session.latestFrameMime = fetched.mime;
     this.recordingService.emit('frame', this.playRoomId(navId), fetched.base64, fetched.mime);
-    // #region agent log
-    _agentNavPlayLog({
-      hypothesisId: 'H5',
-      location: 'NavigationPlayService.pushPlayFrame',
-      message: 'frame emitted',
-      data: { navTail: navId.slice(-8), frameSource, tryIndex: meta?.tryIndex ?? null },
-    });
-    // #endregion
   }
 
   /**
