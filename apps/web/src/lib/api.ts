@@ -780,10 +780,12 @@ export const navigationsApi = {
   recordingSession: (id: string) =>
     apiFetch<NavigationRecordingSessionDto>(`/navigations/${id}/recording-session`),
   playStart: (id: string, body?: { parameters?: Record<string, string> }) =>
-    apiFetch<{ skyvernRunId: string; workflowId: string; browserAddress: string }>(
-      `/navigations/${id}/play/start`,
-      { method: 'POST', body: JSON.stringify(body ?? {}) },
-    ),
+    apiFetch<{
+      skyvernRunId: string;
+      workflowId: string;
+      browserAddress: string;
+      activeSequence: number | null;
+    }>(`/navigations/${id}/play/start`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   playStop: (id: string) => apiFetchVoid(`/navigations/${id}/play/stop`, { method: 'POST' }),
 };
 

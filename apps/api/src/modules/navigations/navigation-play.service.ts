@@ -11,6 +11,7 @@ import {
   SkyvernClientService,
   isStaleSkyvernWorkflowError,
   skyvernPersistentWorkflowId,
+  type SkyvernArtifact,
   type SkyvernWorkflowRunResponse,
   type SkyvernWorkflowRunStatus,
 } from './skyvern-client.service';
@@ -324,6 +325,8 @@ export class NavigationPlayService {
     skyvernRunId: string;
     workflowId: string;
     browserAddress: string;
+    /** Initial highlighted workflow step; same as first `navPlay:runUpdate` when timeline is empty. */
+    activeSequence: number | null;
   }> {
     this.skyvern.assertConfigured();
     if (this.moduleRef.get(NavigationRecordingService, { strict: false }).hasSession(navId)) {
@@ -495,6 +498,7 @@ export class NavigationPlayService {
       skyvernRunId: run.run_id,
       workflowId,
       browserAddress: browserAddressForSkyvern ?? '',
+      activeSequence: session.lastActiveSequence,
     };
   }
 
@@ -529,11 +533,74 @@ export class NavigationPlayService {
         activeSequence,
         stepCount: run.step_count ?? null,
       });
+
+      const terminal: SkyvernWorkflowRunStatus[] = [
+        'completed',
+        'failed',
+        'terminated',
+        'timed_out',
+        'canceled',
+      ];
+      if (terminal.includes(run.status)) {
+        // #region agent log
+        _agentNavPlayLog({
+          hypothesisId: 'H2',
+          location: 'NavigationPlayService.pollOnce',
+          message: 'pollOnce terminal',
+          data: {
+            navTail: navId.slice(-8),
+            runStatus: run.status,
+            activeSequence,
+            timelineBlockCount: timelineBlocks.length,
+            mergedSize: session.timelineLabelStatus.size,
+            rowSample: timelineBlocks.slice(0, 6).map((r) => `${r.label ?? '?'}:${r.status ?? '?'}`),
+            mergedPairs: [...session.timelineLabelStatus.entries()]
+              .slice(0, 8)
+              .map(([k, v]) => `${k}=${(v ?? '').slice(0, 32)}`),
+            seqSample: session.playActionSequences.slice(0, 8),
+            didPushFrame: false,
+          },
+        });
+        // #endregion
+        await this.cleanupSession(navId, false);
+        return;
+      }
+
+      let didPushFrame = false;
+      let artifactTotal = 0;
+      let artifactCandidates = 0;
+      const runUrls = this.collectRunScreenshotUrls(run);
+      for (const imageUrl of runUrls) {
+        const fetched = await this.fetchScreenshotAsBase64(imageUrl);
+        if (fetched) {
+          this.pushPlayFrame(navId, session, fetched, 'run_urls');
+          didPushFrame = true;
+          break;
+        }
+      }
+
+      if (!didPushFrame) {
+        const { shots, artsTotal } = await this.listScreenshotArtifactsSorted(session.skyvernRunId);
+        artifactTotal = artsTotal;
+        artifactCandidates = shots.length;
+        for (let i = 0; i < Math.min(shots.length, 15); i++) {
+          const shot = shots[i]!;
+          const imageUrl = await this.resolveArtifactDownloadUrl(shot);
+          if (!imageUrl) continue;
+          const fetched = await this.fetchScreenshotAsBase64(imageUrl);
+          if (fetched) {
+            this.pushPlayFrame(navId, session, fetched, 'artifact', { tryIndex: i });
+            didPushFrame = true;
+            break;
+          }
+        }
+      }
+
       // #region agent log
       _agentNavPlayLog({
-        hypothesisId: 'H2',
+        hypothesisId: didPushFrame ? 'H2' : 'H5',
         location: 'NavigationPlayService.pollOnce',
-        message: 'navPlay runUpdate emitted',
+        message: didPushFrame ? 'pollOnce ok' : 'pollOnce no frame',
         data: {
           navTail: navId.slice(-8),
           runStatus: run.status,
@@ -545,42 +612,13 @@ export class NavigationPlayService {
             .slice(0, 8)
             .map(([k, v]) => `${k}=${(v ?? '').slice(0, 32)}`),
           seqSample: session.playActionSequences.slice(0, 8),
+          didPushFrame,
+          runScreenshotUrlTried: runUrls.length,
+          artifactTotal,
+          artifactCandidates,
         },
       });
       // #endregion
-
-      const terminal: SkyvernWorkflowRunStatus[] = [
-        'completed',
-        'failed',
-        'terminated',
-        'timed_out',
-        'canceled',
-      ];
-      if (terminal.includes(run.status)) {
-        await this.cleanupSession(navId, false);
-        return;
-      }
-
-      const fromRun = this.pickScreenshotUrlFromRun(run);
-      if (fromRun) {
-        const fetched = await this.fetchScreenshotAsBase64(fromRun);
-        if (fetched) {
-          this.pushPlayFrame(navId, session, fetched, 'run_urls');
-          return;
-        }
-      }
-
-      const shots = await this.listScreenshotArtifactsSorted(session.skyvernRunId);
-      for (let i = 0; i < Math.min(shots.length, 10); i++) {
-        const shot = shots[i]!;
-        const imageUrl = await this.resolveArtifactDownloadUrl(shot);
-        if (!imageUrl) continue;
-        const fetched = await this.fetchScreenshotAsBase64(imageUrl);
-        if (fetched) {
-          this.pushPlayFrame(navId, session, fetched, 'artifact', { tryIndex: i });
-          return;
-        }
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Play poll error nav=${navId}: ${msg}`);
@@ -595,11 +633,12 @@ export class NavigationPlayService {
     }
   }
 
-  private pickScreenshotUrlFromRun(run: SkyvernWorkflowRunResponse): string | null {
+  /** Newest run-level screenshots last — Skyvern often appends; `[0]` can be stale or already-expired. */
+  private collectRunScreenshotUrls(run: SkyvernWorkflowRunResponse): string[] {
     const urls = run.screenshot_urls;
-    if (!Array.isArray(urls) || urls.length === 0) return null;
-    const u = urls[0];
-    return typeof u === 'string' && u.startsWith('http') ? u : null;
+    if (!Array.isArray(urls) || urls.length === 0) return [];
+    const out = urls.filter((u): u is string => typeof u === 'string' && u.startsWith('http'));
+    return out.slice().reverse();
   }
 
   private pushPlayFrame(
@@ -622,18 +661,34 @@ export class NavigationPlayService {
     // #endregion
   }
 
-  /** Newest-first screenshot artifacts (may omit `signed_url`; use `getArtifact` to refresh). */
-  private async listScreenshotArtifactsSorted(runId: string) {
+  /**
+   * Newest-first screenshot artifacts (may omit `signed_url`; use `getArtifact` to refresh).
+   * If strict types match nothing but the run has artifacts, fall back to **all** artifact rows so
+   * live Play still gets frames when Skyvern uses nonstandard `artifact_type` strings.
+   */
+  private async listScreenshotArtifactsSorted(runId: string): Promise<{
+    shots: SkyvernArtifact[];
+    artsTotal: number;
+  }> {
     const arts = await this.skyvern.listRunArtifacts(runId);
-    const shots = arts.filter((a) => {
+    const shotish = (a: SkyvernArtifact): boolean => {
       if (!a.artifact_id) return false;
       const t = (a.artifact_type ?? '').toLowerCase();
-      return SKYVERN_SCREENSHOT_ARTIFACT_TYPES.has(a.artifact_type) || t.includes('screenshot');
-    });
+      if (SKYVERN_SCREENSHOT_ARTIFACT_TYPES.has(a.artifact_type)) return true;
+      if (t.includes('screenshot')) return true;
+      if (/image|png|jpe?g|webp|viewport|frame|display|browser|page/i.test(t)) return true;
+      const u = `${a.signed_url ?? ''} ${a.uri ?? ''}`.toLowerCase();
+      if (/\.(png|jpe?g|webp)(\?|$)/.test(u)) return true;
+      return false;
+    };
+    let shots = arts.filter(shotish);
+    if (shots.length === 0) {
+      shots = arts.filter((a) => !!a.artifact_id);
+    }
     shots.sort((a, b) =>
       (b.modified_at ?? b.created_at ?? '').localeCompare(a.modified_at ?? a.created_at ?? ''),
     );
-    return shots;
+    return { shots, artsTotal: arts.length };
   }
 
   private async resolveArtifactDownloadUrl(shot: {

@@ -195,17 +195,18 @@ export function useNavigationPlay(
         _navPlayClientLog({
           hypothesisId: 'H1',
           location: 'useNavigationPlay.startPlay',
-          message: 'playStart HTTP ok — client clears activeSequence next',
+          message: 'playStart HTTP ok — apply activeSequence from API',
           data: {
             navIdTail: navId.slice(-8),
             skyvernTail: res.skyvernRunId.slice(-12),
+            activeSequence: res.activeSequence ?? null,
             persistedSeqSample: persistedSeqRef.current?.slice(0, 12) ?? null,
           },
         });
         // #endregion
         setSkyvernRunId(res.skyvernRunId);
         setIsPlaying(true);
-        setPlayActiveSequence(null);
+        setPlayActiveSequence(res.activeSequence ?? null);
       } catch (e) {
         // #region agent log
         _navPlayClientLog({
