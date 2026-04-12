@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-12
+
+- `0.10.271`: **Navigation Play — recover stale Skyvern workflow id** — If Postgres holds a **`skyvern_workflow_id`** that Skyvern no longer knows (404 **Workflow not found** on update or run—new API key, env, or deleted workflow), the API now **clears the id**, **creates a fresh workflow**, persists it, and **retries** the run once. Removed temporary mapper ingest logging. `@bladerunner/api 0.6.194`.
+
 ## 2026-04-11
 
 - `0.10.270`: **Navigation detail — Play / Record drawer** — Replaced stacked **Play** and **Record** sections with one **Browser workspace**: **Play** and **Record** toggle a single panel below (only one visible). **Record** stays mounted when hidden if it was ever opened so switching views does not drop an active recording socket; **Play** is disabled while recording. **`NavigationRecorderLayout`** accepts **`onSessionActivityChange`**. `@bladerunner/web 0.7.158`.

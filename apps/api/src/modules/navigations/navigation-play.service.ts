@@ -5,7 +5,12 @@ import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { resolveBrowserWorkerWebSocketUrl } from '../recording/browser-worker-url.util';
-import { SkyvernClientService, type SkyvernWorkflowRunStatus } from './skyvern-client.service';
+import {
+  SkyvernClientService,
+  isStaleSkyvernWorkflowError,
+  type SkyvernWorkflowRunResponse,
+  type SkyvernWorkflowRunStatus,
+} from './skyvern-client.service';
 import { buildSkyvernWorkflowApiPayload } from './skyvern-workflow-api.mapper';
 import type { RecordedNavigationAction } from './navigation-recording.service';
 import { NavigationRecordingService } from './navigation-recording.service';
@@ -133,16 +138,46 @@ export class NavigationPlayService {
       status: 'published',
     };
 
-    let workflowId = nav.skyvernWorkflowId?.trim() || '';
-    if (workflowId) {
-      await this.skyvern.updateWorkflow(workflowId, jsonDefinition as Record<string, unknown>);
-    } else {
-      const created = await this.skyvern.createWorkflow(jsonDefinition as Record<string, unknown>);
-      workflowId = created.workflow_id;
+    const persistWorkflowId = async (wfId: string) => {
       await this.prisma.navigation.update({
         where: { id: navId, userId },
-        data: { skyvernWorkflowId: workflowId },
+        data: { skyvernWorkflowId: wfId },
       });
+    };
+
+    const clearStoredWorkflowId = async () => {
+      await this.prisma.navigation.update({
+        where: { id: navId, userId },
+        data: { skyvernWorkflowId: null },
+      });
+    };
+
+    const createWorkflowAndPersist = async (): Promise<string> => {
+      const created = await this.skyvern.createWorkflow(jsonDefinition as Record<string, unknown>);
+      const wfId = created.workflow_id;
+      await persistWorkflowId(wfId);
+      return wfId;
+    };
+
+    let workflowId = nav.skyvernWorkflowId?.trim() || '';
+    if (workflowId) {
+      try {
+        const updated = await this.skyvern.updateWorkflow(workflowId, jsonDefinition as Record<string, unknown>);
+        if (updated.workflow_id && updated.workflow_id !== workflowId) {
+          workflowId = updated.workflow_id;
+          await persistWorkflowId(workflowId);
+        }
+      } catch (err) {
+        if (!isStaleSkyvernWorkflowError(err)) throw err;
+        this.logger.warn(
+          `Skyvern workflow id ${workflowId} is stale or missing (update404); clearing and will create a new workflow.`,
+        );
+        await clearStoredWorkflowId();
+        workflowId = '';
+      }
+    }
+    if (!workflowId) {
+      workflowId = await createWorkflowAndPersist();
     }
 
     const workerUrl = resolveBrowserWorkerWebSocketUrl(
@@ -158,12 +193,28 @@ export class NavigationPlayService {
       }
     }
 
-    const run = await this.skyvern.runWorkflow({
-      workflow_id: workflowId,
-      parameters: paramObj,
-      browser_address: wsEndpoint,
-      title: `Play ${nav.name}`.slice(0, 200),
-    });
+    let run: SkyvernWorkflowRunResponse;
+    try {
+      run = await this.skyvern.runWorkflow({
+        workflow_id: workflowId,
+        parameters: paramObj,
+        browser_address: wsEndpoint,
+        title: `Play ${nav.name}`.slice(0, 200),
+      });
+    } catch (err) {
+      if (!isStaleSkyvernWorkflowError(err)) throw err;
+      this.logger.warn(
+        `Skyvern run rejected workflow id ${workflowId} (404); recreating workflow and retrying once.`,
+      );
+      await clearStoredWorkflowId();
+      workflowId = await createWorkflowAndPersist();
+      run = await this.skyvern.runWorkflow({
+        workflow_id: workflowId,
+        parameters: paramObj,
+        browser_address: wsEndpoint,
+        title: `Play ${nav.name}`.slice(0, 200),
+      });
+    }
 
     const room = this.playRoomId(navId);
     const session: NavigationPlaySession = {

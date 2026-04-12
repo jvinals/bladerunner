@@ -141,29 +141,6 @@ export function buildSkyvernWorkflowApiPayload(
     default_value: '',
   }));
 
-  const labels = blocks.map((b) => b.label);
-  const uniqueLabels = new Set(labels);
-  // #region agent log
-  fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
-    body: JSON.stringify({
-      sessionId: 'd7957e',
-      hypothesisId: 'H1',
-      location: 'skyvern-workflow-api.mapper.ts:buildSkyvernWorkflowApiPayload',
-      message: 'Skyvern block labels uniqueness',
-      data: {
-        actionCount: actions.length,
-        blockCount: blocks.length,
-        labelUnique: uniqueLabels.size === labels.length,
-        duplicateLabelCount: labels.length - uniqueLabels.size,
-        sequencesSample: actions.slice(0, 40).map((a) => ({ t: a.actionType, seq: a.sequence })),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   return {
     title: navigation.name || 'Navigation',
     workflow_definition: {

@@ -29,6 +29,13 @@ export interface SkyvernWorkflowResponse {
   title?: string;
 }
 
+/** True when Skyvern says the stored workflow id no longer exists (wrong env, deleted, or new API key). */
+export function isStaleSkyvernWorkflowError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (!/\(404\)/.test(msg)) return false;
+  return /workflow.*not found|not found.*workflow/i.test(msg);
+}
+
 @Injectable()
 export class SkyvernClientService {
   private readonly logger = new Logger(SkyvernClientService.name);
