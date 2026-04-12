@@ -92,13 +92,41 @@ services:
       - PORT=8000
       - ENV=local
       - BROWSER_TYPE=chromium-headful
-      - LLM_KEY=OPENAI
+      - ENABLE_OPENAI=true
+      - LLM_KEY=OPENAI_GPT4O
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_STRING=postgresql+psycopg://skyvern:skyvern@skyvern-db:5432/skyvern
       - TZ=UTC
       - ALLOWED_ORIGINS=["*"]
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./videos:/data/videos
+      - ./.streamlit:/app/.streamlit
     depends_on:
       skyvern-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/.streamlit/secrets.toml"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern-ui:
+    profiles: [skyvern]
+    image: public.ecr.aws/skyvern/skyvern-ui:latest
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./videos:/data/videos
+      - ./.streamlit:/app/.streamlit
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      - VITE_WSS_BASE_URL=ws://localhost:8000/api/v1
+      - VITE_ARTIFACT_API_BASE_URL=http://localhost:9090
+    depends_on:
+      skyvern:
         condition: service_healthy
 
 volumes:
