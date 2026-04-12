@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTuwpbOSJLvy0yiui1o6jcYX1iX0Q",
+  "created": 1776022791,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f9e6b50693",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"page_info\": \"The page is a healthcare management interface with options to schedule new appointments. The user is in the process of scheduling a new appointment and needs to select a healthcare service. The relevant section for selecting a healthcare service is visible in the 'Schedule New Appointment' dialog.\",\n    \"thoughts\": \"The user instruction is to click on 'Select Healthcare Service'. The HTML elements show a select button with the text 'Select Healthcare Service' and the ID 'AAEi'. This matches the user's instruction.\",\n    \"actions\": [\n        {\n            \"reasoning\": \"The element with ID 'AAEi' is labeled 'Select Healthcare Service', which directly matches the user's instruction to click on this option.\",\n            \"user_detail_query\": null,\n            \"user_detail_answer\": null,\n            \"confidence_float\": 1.0,\n            \"action_type\": \"CLICK\",\n            \"id\": \"AAEi\",\n            \"download\": false,\n            \"file_url\": null\n        }\n    ]\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 209,
+    "prompt_tokens": 3578,
+    "total_tokens": 3787,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

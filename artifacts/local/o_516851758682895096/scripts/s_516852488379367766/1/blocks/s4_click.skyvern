@@ -1,0 +1,7 @@
+@skyvern.cached(cache_key = 's4_click')
+async def s4_click(page: SkyvernPage, context: RunContext):
+    await page.click(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][2]/*[name()="main"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="form"][1]/*[name()="div"][2]/*[name()="button"][1]', 
+        ai = 'proactive', 
+        prompt = "The 'Sign in' button with id 'AAAg' is the one that submits the form, which aligns with the user's intention to sign in.",
+    )

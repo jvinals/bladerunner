@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTuwbyB7Ao7PUHuEzOvMb6KcsEXjY",
+  "created": 1776022777,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_7a9ae34122",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"page_info\": \"The page is for scheduling a new appointment, requiring the selection of a provider to enable healthcare services. The user needs to select a provider from the available options.\",\n    \"reasoning\": \"The context requires selecting a provider to enable healthcare services. The emerging HTML element with id 'AAFb' corresponds to the option 'John Smithdemo', which is a valid provider option. Selecting this option will fulfill the requirement to choose a provider.\",\n    \"confidence_float\": 0.9,\n    \"id\": \"AAFb\",\n    \"action_type\": \"CLICK\",\n    \"value\": \"John Smithdemo\"\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 134,
+    "prompt_tokens": 2233,
+    "total_tokens": 2367,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

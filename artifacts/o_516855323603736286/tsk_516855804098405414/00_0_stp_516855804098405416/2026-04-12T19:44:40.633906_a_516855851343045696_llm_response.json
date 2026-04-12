@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTv1RztOZaHGm6wtnITPuBtPgSZTW",
+  "created": 1776023077,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f9e6b50693",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"user_goal_stage\": \"The user is on the login page and needs to sign in to proceed.\",\n    \"user_goal_achieved\": false,\n    \"action_plan\": \"Input email and password, then click the 'Sign in' button to proceed to the main page.\",\n    \"actions\": [\n        {\n            \"reasoning\": \"The email field is empty and needs to be filled to sign in.\",\n            \"user_detail_query\": \"What email should be used to sign in?\",\n            \"user_detail_answer\": \"you@example.com\",\n            \"confidence_float\": 1.0,\n            \"action_type\": \"INPUT_TEXT\",\n            \"id\": \"AAAa\",\n            \"captcha_type\": null,\n            \"text\": \"you@example.com\",\n            \"key\": null,\n            \"direction\": null,\n            \"file_url\": null,\n            \"download\": false,\n            \"option\": null,\n            \"click_context\": null\n        },\n        {\n            \"reasoning\": \"The password field is empty and needs to be filled to sign in.\",\n            \"user_detail_query\": \"What password should be used to sign in?\",\n            \"user_detail_answer\": \"password\",\n            \"confidence_float\": 1.0,\n            \"action_type\": \"INPUT_TEXT\",\n            \"id\": \"AAAf\",\n            \"captcha_type\": null,\n            \"text\": \"password\",\n            \"key\": null,\n            \"direction\": null,\n            \"file_url\": null,\n            \"download\": false,\n            \"option\": null,\n            \"click_context\": null\n        },\n        {\n            \"reasoning\": \"Clicking the 'Sign in' button is necessary to submit the login form and proceed.\",\n            \"user_detail_query\": \"Should the 'Sign in' button be clicked to proceed?\",\n            \"user_detail_answer\": \"Yes\",\n            \"confidence_float\": 1.0,\n            \"action_type\": \"CLICK\",\n            \"id\": \"AAAg\",\n            \"captcha_type\": null,\n            \"text\": null,\n            \"key\": null,\n            \"direction\": null,\n            \"file_url\": null,\n            \"download\": false,\n            \"option\": null,\n            \"click_context\": {\n                \"thought\": \"Clicking the 'Sign in' button is the only way to submit the form and proceed.\",\n                \"single_option_click\": true\n            }\n        }\n    ]\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 497,
+    "prompt_tokens": 3498,
+    "total_tokens": 3995,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 1792,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

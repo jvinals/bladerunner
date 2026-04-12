@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTup3n109cxZrHBLehU7kodyLq0PW",
+  "created": 1776022309,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f000e9ceb4",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\n    \"thought\": \"The HTML element with ID 'AAAa' is an input field with the type 'email' and a placeholder 'you@example.com', confirming it is for entering an email address.\",\n    \"field\": \"email\",\n    \"is_required\": false,\n    \"is_search_bar\": false,\n    \"is_location_input\": false,\n    \"is_date_related\": false,\n    \"date_format\": null,\n    \"is_text_captcha\": false\n}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 97,
+    "prompt_tokens": 528,
+    "total_tokens": 625,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

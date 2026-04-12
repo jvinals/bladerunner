@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTupIwpvhKjxQKmuPLR6S6PVomCkh",
+  "created": 1776022324,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f9e6b50693",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"page_info\": \"The page is a login screen for Careexpand. It contains fields for email and password, with the password field having a placeholder of '••••••••'.\",\n    \"thoughts\": \"The user instruction specifies typing text into a field with the placeholder '••••••••', which matches the password field on the page.\",\n    \"actions\": [\n        {\n            \"reasoning\": \"The password field is identified by its placeholder '••••••••', which matches the user instruction. Therefore, the action should be performed on this field.\",\n            \"user_detail_query\": \"What text should be input into the password field?\",\n            \"user_detail_answer\": \"careexpandA\",\n            \"confidence_float\": 1.0,\n            \"action_type\": \"INPUT_TEXT\",\n            \"id\": \"AAAf\",\n            \"text\": \"careexpandA\"\n        }\n    ]\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 190,
+    "prompt_tokens": 2066,
+    "total_tokens": 2256,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

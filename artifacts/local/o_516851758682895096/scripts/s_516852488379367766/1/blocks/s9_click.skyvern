@@ -1,0 +1,7 @@
+@skyvern.cached(cache_key = 's9_click')
+async def s9_click(page: SkyvernPage, context: RunContext):
+    await page.click(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="main"][1]/*[name()="header"][1]/*[name()="nav"][1]/*[name()="div"][1]/*[name()="button"][1]', 
+        ai = 'proactive', 
+        prompt = "The element with ID 'AACU' contains the text 'John Smithdemo', which matches the user's instruction to click on 'John Smithdemo'.",
+    )

@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTuqxMo0peuuFL0aXlG0LoUbXHAWF",
+  "created": 1776022427,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f000e9ceb4",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n  \"page_info\": \"The page contains a button labeled 'Create Appointment' which is part of a section titled 'Appointments'. There is also a section titled 'Schedule New Appointment' with fields for patient information, provider, healthcare service, location, appointment note, and scheduling options. The 'Schedule New Appointment' button is currently disabled, indicating that some required fields may not be filled out yet.\",\n  \"thoughts\": \"The user goal was to click on 'Create Appointment'. The action history indicates that the 'Create Appointment' button was successfully clicked. This action likely led to the display of the 'Schedule New Appointment' section, which is consistent with the user's goal of initiating the appointment creation process. Although the 'Schedule New Appointment' button is disabled, the user's goal was specifically to click 'Create Appointment', which has been achieved.\",\n  \"user_goal_achieved\": true\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 185,
+    "prompt_tokens": 2027,
+    "total_tokens": 2212,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

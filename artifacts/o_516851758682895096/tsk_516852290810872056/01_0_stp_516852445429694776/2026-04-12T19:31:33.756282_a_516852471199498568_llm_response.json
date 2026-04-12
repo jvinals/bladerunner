@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTuolxjYmeYlwqw45FEcViKygWW4N",
+  "created": 1776022291,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f9e6b50693",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"user_goal_stage\": \"The user has successfully logged in, but the page has not yet loaded to the main content.\",\n    \"user_goal_achieved\": false,\n    \"action_plan\": \"Wait for the page to load completely after login.\",\n    \"actions\": [\n        {\n            \"reasoning\": \"The login process has been completed, and the next step is to wait for the page to load fully.\",\n            \"user_detail_query\": \"Is there any indication that the page is still loading or should we wait for further actions?\",\n            \"user_detail_answer\": \"The page is still loading.\",\n            \"confidence_float\": 0.9,\n            \"action_type\": \"WAIT\",\n            \"id\": null,\n            \"captcha_type\": null,\n            \"text\": null,\n            \"key\": null,\n            \"direction\": null,\n            \"file_url\": null,\n            \"download\": false,\n            \"option\": null,\n            \"click_context\": null\n        }\n    ]\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 209,
+    "prompt_tokens": 3677,
+    "total_tokens": 3886,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 1792,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

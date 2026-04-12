@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTutxHB5pJAkmBp4Opjsg60zg723a",
+  "created": 1776022613,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f9e6b50693",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"page_info\": \"The page contains various sections including a command palette, navigation buttons, and a section for scheduling new appointments. The user instruction is to click on 'John Smithdemo', which appears in the 'Appointment Information' section under 'Provider'.\",\n    \"thoughts\": \"The user wants to click on 'John Smithdemo', which is visible in the 'Appointment Information' section. The HTML element with the text 'John Smithdemo' is associated with the ID 'AACU'.\",\n    \"actions\": [\n        {\n            \"reasoning\": \"The element with ID 'AACU' contains the text 'John Smithdemo', which matches the user's instruction to click on 'John Smithdemo'.\",\n            \"user_detail_query\": null,\n            \"user_detail_answer\": null,\n            \"confidence_float\": 1.0,\n            \"action_type\": \"CLICK\",\n            \"id\": \"AACU\",\n            \"download\": false,\n            \"file_url\": null\n        }\n    ]\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 210,
+    "prompt_tokens": 3557,
+    "total_tokens": 3767,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

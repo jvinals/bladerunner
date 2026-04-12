@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTv1UCV9H60e9BTiYZ1LH2UfNeLgl",
+  "created": 1776023080,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_e2564de534",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"thought\": \"The element with id 'AAAa' is an input field for email, as indicated by the label 'Email' and the placeholder 'you@example.com'. It is a required field for signing in, as the context mentions the need to fill it. It is not a search bar, location input, date-related field, or text captcha.\",\n    \"field\": \"email\",\n    \"is_required\": true,\n    \"is_search_bar\": false,\n    \"is_location_input\": false,\n    \"is_date_related\": false,\n    \"date_format\": null,\n    \"is_text_captcha\": false\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 133,
+    "prompt_tokens": 499,
+    "total_tokens": 632,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

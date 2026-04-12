@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTupKyjftlTwcVCzjCX0n7FMyVasw",
+  "created": 1776022326,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f9e6b50693",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n    \"thought\": \"The element with id 'AAAf' is an input field with a placeholder '••••••••', which indicates it is a password field. This matches the context provided, confirming that the action should be performed on this field.\",\n    \"field\": \"password\",\n    \"is_required\": false,\n    \"is_search_bar\": false,\n    \"is_location_input\": false,\n    \"is_date_related\": false,\n    \"date_format\": null,\n    \"is_text_captcha\": false\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 111,
+    "prompt_tokens": 529,
+    "total_tokens": 640,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

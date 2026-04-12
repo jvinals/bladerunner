@@ -1,0 +1,7 @@
+@skyvern.cached(cache_key = 's8_click')
+async def s8_click(page: SkyvernPage, context: RunContext):
+    await page.click(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][5]/*[name()="div"][2]/*[name()="div"][1]/*[name()="div"][3]/*[name()="div"][1]/*[name()="div"][1]/*[name()="button"][1]', 
+        ai = 'proactive', 
+        prompt = "The action is to click on the 'Select Provider' dropdown to allow the user to choose a provider for the appointment. The element with id 'AAEc' matches the user's instruction.",
+    )

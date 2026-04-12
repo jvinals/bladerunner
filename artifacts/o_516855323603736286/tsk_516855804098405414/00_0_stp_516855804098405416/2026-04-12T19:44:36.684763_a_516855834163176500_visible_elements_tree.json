@@ -1,0 +1,490 @@
+[
+  {
+    "id": "AAAB",
+    "frame": "main.frame",
+    "frame_index": 0,
+    "interactable": false,
+    "hoverOnly": false,
+    "tagName": "div",
+    "attributes": {
+      "data-slot": "dialog-header",
+      "class": "flex flex-col gap-2 text-center sm:text-left bg-transparent sr-only",
+      "unique_id": "AAAB"
+    },
+    "beforePseudoText": null,
+    "text": "",
+    "afterPseudoText": null,
+    "children": [
+      {
+        "id": "AAAC",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": false,
+        "tagName": "h2",
+        "attributes": {
+          "id": "radix-_r_6_",
+          "data-slot": "dialog-title",
+          "class": "text-lg leading-none font-semibold",
+          "unique_id": "AAAC"
+        },
+        "beforePseudoText": null,
+        "text": "Command Palette",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"h2\"][1]"
+      },
+      {
+        "id": "AAAD",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": false,
+        "tagName": "p",
+        "attributes": {
+          "id": "radix-_r_7_",
+          "data-slot": "dialog-description",
+          "class": "text-muted-foreground text-sm",
+          "unique_id": "AAAD"
+        },
+        "beforePseudoText": null,
+        "text": "Search patients, tasks, routes, and quick actions.",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"p\"][1]"
+      }
+    ],
+    "purgeable": false,
+    "keepAllAttr": false,
+    "isSelectable": false,
+    "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]"
+  },
+  {
+    "id": "AAAE",
+    "frame": "main.frame",
+    "frame_index": 0,
+    "interactable": true,
+    "hoverOnly": false,
+    "tagName": "button",
+    "attributes": {
+      "data-slot": "tooltip-trigger",
+      "class": "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9",
+      "title": "Toggle theme",
+      "data-state": "closed",
+      "unique_id": "AAAE"
+    },
+    "beforePseudoText": null,
+    "text": "",
+    "afterPseudoText": null,
+    "children": [
+      {
+        "id": "AAAF",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": true,
+        "tagName": "svg",
+        "attributes": {
+          "xmlns": "http://www.w3.org/2000/svg",
+          "width": "24",
+          "height": "24",
+          "viewBox": "0 0 24 24",
+          "fill": "none",
+          "stroke": "currentColor",
+          "stroke-width": "2",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+          "class": "lucide lucide-sun h-[1.2rem] w-[1.2rem]",
+          "aria-hidden": "true",
+          "unique_id": "AAAF"
+        },
+        "beforePseudoText": null,
+        "text": "",
+        "afterPseudoText": null,
+        "purgeable": false,
+        "keepAllAttr": true,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"button\"][1]/*[name()=\"svg\"][1]",
+        "isDropped": true
+      },
+      {
+        "id": "AAAP",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": true,
+        "tagName": "span",
+        "attributes": {
+          "class": "sr-only",
+          "unique_id": "AAAP"
+        },
+        "beforePseudoText": null,
+        "text": "Toggle theme",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"button\"][1]/*[name()=\"span\"][1]"
+      }
+    ],
+    "purgeable": false,
+    "keepAllAttr": false,
+    "isSelectable": false,
+    "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"button\"][1]"
+  },
+  {
+    "id": "AAAQ",
+    "frame": "main.frame",
+    "frame_index": 0,
+    "interactable": false,
+    "hoverOnly": true,
+    "tagName": "div",
+    "attributes": {
+      "data-slot": "card",
+      "class": "text-card-foreground flex-col gap-6 border py-6 relative flex h-full w-full items-center justify-center overflow-hidden border-none bg-transparent shadow-none rounded-none",
+      "unique_id": "AAAQ"
+    },
+    "beforePseudoText": null,
+    "text": "",
+    "afterPseudoText": null,
+    "children": [],
+    "purgeable": false,
+    "keepAllAttr": false,
+    "isSelectable": false,
+    "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"aside\"][1]/*[name()=\"div\"][1]"
+  },
+  {
+    "id": "AAAR",
+    "frame": "main.frame",
+    "frame_index": 0,
+    "interactable": false,
+    "hoverOnly": true,
+    "tagName": "div",
+    "attributes": {
+      "data-slot": "card",
+      "class": "text-card-foreground gap-6 rounded-xl w-full max-w-xl bg-card/95 border-0 shadow-none lg:border lg:border-border lg:bg-transparent lg:backdrop-blur-md lg:shadow-lg lg:ml-auto flex flex-col max-h-full overflow-hidden py-3 sm:py-6",
+      "unique_id": "AAAR"
+    },
+    "beforePseudoText": null,
+    "text": "",
+    "afterPseudoText": null,
+    "children": [
+      {
+        "id": "AAAS",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": true,
+        "tagName": "div",
+        "attributes": {
+          "class": "flex flex-wrap items-center justify-between gap-2 sm:gap-4",
+          "unique_id": "AAAS"
+        },
+        "beforePseudoText": null,
+        "text": "",
+        "afterPseudoText": null,
+        "children": [
+          {
+            "id": "AAAT",
+            "frame": "main.frame",
+            "frame_index": 0,
+            "interactable": false,
+            "hoverOnly": true,
+            "tagName": "div",
+            "attributes": {
+              "class": "hidden bg-muted/40 p-1 sm:flex gap-2 rounded-md",
+              "unique_id": "AAAT"
+            },
+            "beforePseudoText": null,
+            "text": "",
+            "afterPseudoText": null,
+            "children": [
+              {
+                "id": "AAAU",
+                "frame": "main.frame",
+                "frame_index": 0,
+                "interactable": true,
+                "hoverOnly": true,
+                "tagName": "button",
+                "attributes": {
+                  "data-slot": "button",
+                  "class": "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
+                  "unique_id": "AAAU"
+                },
+                "beforePseudoText": null,
+                "text": "Sign in",
+                "afterPseudoText": null,
+                "children": [],
+                "purgeable": false,
+                "keepAllAttr": false,
+                "isSelectable": false,
+                "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"button\"][1]"
+              },
+              {
+                "id": "AAAV",
+                "frame": "main.frame",
+                "frame_index": 0,
+                "interactable": true,
+                "hoverOnly": true,
+                "tagName": "button",
+                "attributes": {
+                  "data-slot": "button",
+                  "class": "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
+                  "unique_id": "AAAV"
+                },
+                "beforePseudoText": null,
+                "text": "Sign up",
+                "afterPseudoText": null,
+                "children": [],
+                "purgeable": false,
+                "keepAllAttr": false,
+                "isSelectable": false,
+                "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"button\"][2]"
+              }
+            ],
+            "purgeable": false,
+            "keepAllAttr": false,
+            "isSelectable": false,
+            "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]"
+          }
+        ],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]"
+      },
+      {
+        "id": "AAAW",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": false,
+        "tagName": "label",
+        "attributes": {
+          "data-slot": "form-label",
+          "class": "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 data-[error=true]:text-destructive",
+          "data-error": "false",
+          "for": "_r_n_-form-item",
+          "unique_id": "AAAW"
+        },
+        "beforePseudoText": null,
+        "text": "Email",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"label\"][1]"
+      },
+      {
+        "id": "AAAX",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": true,
+        "tagName": "svg",
+        "attributes": {
+          "xmlns": "http://www.w3.org/2000/svg",
+          "width": "24",
+          "height": "24",
+          "viewBox": "0 0 24 24",
+          "fill": "none",
+          "stroke": "currentColor",
+          "stroke-width": "2",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+          "class": "lucide lucide-mail absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
+          "aria-hidden": "true",
+          "unique_id": "AAAX"
+        },
+        "beforePseudoText": null,
+        "text": "",
+        "afterPseudoText": null,
+        "purgeable": false,
+        "keepAllAttr": true,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"svg\"][1]",
+        "isDropped": true
+      },
+      {
+        "id": "AAAa",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": true,
+        "hoverOnly": true,
+        "tagName": "input",
+        "attributes": {
+          "data-slot": "input",
+          "class": "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md px-3 py-1 text-base transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border-0 bg-transparent pl-10 shadow-none focus-visible:border-0 focus-visible:ring-0",
+          "placeholder": "you@example.com",
+          "type": "email",
+          "value": "",
+          "name": "email",
+          "style": "",
+          "unique_id": "AAAa"
+        },
+        "beforePseudoText": null,
+        "text": "",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"input\"][1]"
+      },
+      {
+        "id": "AAAb",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": false,
+        "tagName": "label",
+        "attributes": {
+          "data-slot": "form-label",
+          "class": "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 data-[error=true]:text-destructive",
+          "data-error": "false",
+          "for": "_r_o_-form-item",
+          "unique_id": "AAAb"
+        },
+        "beforePseudoText": null,
+        "text": "Password",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"label\"][1]"
+      },
+      {
+        "id": "AAAc",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": true,
+        "tagName": "svg",
+        "attributes": {
+          "xmlns": "http://www.w3.org/2000/svg",
+          "width": "24",
+          "height": "24",
+          "viewBox": "0 0 24 24",
+          "fill": "none",
+          "stroke": "currentColor",
+          "stroke-width": "2",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+          "class": "lucide lucide-lock absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
+          "aria-hidden": "true",
+          "unique_id": "AAAc"
+        },
+        "beforePseudoText": null,
+        "text": "",
+        "afterPseudoText": null,
+        "purgeable": false,
+        "keepAllAttr": true,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"svg\"][1]",
+        "isDropped": true
+      },
+      {
+        "id": "AAAf",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": true,
+        "hoverOnly": true,
+        "tagName": "input",
+        "attributes": {
+          "data-slot": "input",
+          "class": "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md px-3 py-1 text-base transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border-0 bg-transparent pl-10 shadow-none focus-visible:border-0 focus-visible:ring-0",
+          "placeholder": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+          "type": "password",
+          "value": "",
+          "name": "password",
+          "style": "",
+          "unique_id": "AAAf"
+        },
+        "beforePseudoText": null,
+        "text": "",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"div\"][1]/*[name()=\"input\"][1]"
+      },
+      {
+        "id": "AAAg",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": true,
+        "hoverOnly": true,
+        "tagName": "button",
+        "attributes": {
+          "data-slot": "button",
+          "class": "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3 w-full",
+          "type": "submit",
+          "unique_id": "AAAg"
+        },
+        "beforePseudoText": null,
+        "text": "Sign in",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][2]/*[name()=\"button\"][1]"
+      },
+      {
+        "id": "AAAh",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": true,
+        "hoverOnly": true,
+        "tagName": "button",
+        "attributes": {
+          "data-slot": "button",
+          "class": "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive text-primary underline-offset-4 hover:underline h-9 px-4 py-2 has-[>svg]:px-3 w-full",
+          "type": "button",
+          "unique_id": "AAAh"
+        },
+        "beforePseudoText": null,
+        "text": "Forgot password?",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][1]/*[name()=\"form\"][1]/*[name()=\"div\"][3]/*[name()=\"button\"][1]"
+      },
+      {
+        "id": "AAAi",
+        "frame": "main.frame",
+        "frame_index": 0,
+        "interactable": false,
+        "hoverOnly": true,
+        "tagName": "p",
+        "attributes": {
+          "unique_id": "AAAi"
+        },
+        "beforePseudoText": null,
+        "text": "By using Careexpand, you agree to our Terms of Service and Privacy Policy",
+        "afterPseudoText": null,
+        "children": [],
+        "purgeable": false,
+        "keepAllAttr": false,
+        "isSelectable": false,
+        "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][3]/*[name()=\"div\"][1]/*[name()=\"p\"][1]"
+      }
+    ],
+    "purgeable": false,
+    "keepAllAttr": false,
+    "isSelectable": false,
+    "xpath": "/*[name()=\"html\"][1]/*[name()=\"body\"][1]/*[name()=\"div\"][1]/*[name()=\"div\"][2]/*[name()=\"div\"][2]/*[name()=\"main\"][1]/*[name()=\"div\"][1]"
+  }
+]

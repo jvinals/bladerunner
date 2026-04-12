@@ -1,0 +1,8 @@
+@skyvern.cached(cache_key = 's3_type')
+async def s3_type(page: SkyvernPage, context: RunContext):
+    await page.fill(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][2]/*[name()="main"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="form"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="div"][1]/*[name()="input"][1]', 
+        value = context.parameters['input_password'], 
+        ai = 'fallback', 
+        prompt = f"What text should be input into the {context.parameters['login_password']} field?",
+    )

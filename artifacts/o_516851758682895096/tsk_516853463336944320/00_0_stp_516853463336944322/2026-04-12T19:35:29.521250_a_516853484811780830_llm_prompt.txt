@@ -1,0 +1,47 @@
+Your are here to help the user to perform a CLICK action on the web page. Use the user instruction, the content of the elements parsed from the page, the screenshots of the page, and user details to determine which element to click.
+Each actionable element is tagged with an ID. Only take the action on the elements provided in the HTML elements, do not image any new element.
+MAKE SURE YOU OUTPUT VALID JSON. No text before or after JSON, no trailing commas, no comments (//), no unnecessary quotes, etc.
+
+Reply in JSON format with the following keys:
+{
+    "page_info": str, // Think step by step. Describe all the useful information in the page related to the user instruction.
+    "thoughts": str, // Think step by step. What information makes you believe which element to click. Use information you see on the site to explain.
+    "actions": array // You are supposed to give only one action("CLICK") in the action list. Here's the format of the action:
+    [{
+        "reasoning": str, // The reasoning behind the action. This reasoning must be user information agnostic. Mention why you chose the action type, and why you chose the element id. Keep the reasoning short and to the point.
+        "user_detail_query": str, // Think of this value as a Jeopardy question. Ask the user for the details you need for executing this action. IMPORTANT: This question must be user information agnostic and must NOT contain specific user data (like names, IDs, specific values, etc.). Ask what information is needed generically. Ask the question even if the details are disclosed in user instruction or user details. If you are clicking on something specific, ask about what to click on. If you're downloading a file and you have multiple options, ask the user which one to download. Otherwise, use null. Examples are: "What is the previous insurance provider of the user?", "Which invoice should I download?", "Does the user have any pets?". If the action doesn't require any user details, use null.
+        "user_detail_answer": str, // The answer to the `user_detail_query`. The source of this answer can be user instruction or user details. This answer CAN contain specific user data.
+        "confidence_float": float, // The confidence of the action. Pick a number between 0.0 and 1.0. 0.0 means no confidence, 1.0 means full confidence
+        "action_type": str, // It's a string enum: "CLICK". "CLICK" type means there's an element you'd like to click.
+        "id": str, // The id of the element to take action on. The id has to be one from the elements list.
+        "download": bool, // If true, the browser will trigger a download by clicking the element. If false, the browser will click the element without triggering a download.
+        "file_url": str, // The url of the file to upload if applicable. This field can be present for CLICK only if the click is to upload the file. It should be null otherwise.
+    }]
+}
+
+User instruction (user's intention or self questioning to help figure out what to click):
+```
+Click on: Select Provider
+```
+
+User details:
+```
+{}
+```
+
+The URL of the page you're on right now is `https://dev.kintsugi.careexpandcloud.com/home?date=2026-04-12`.
+
+HTML elements from `https://dev.kintsugi.careexpandcloud.com/home?date=2026-04-12`:
+```
+<div><h2>Command Palette</h2><p>Search patients, tasks, routes, and quick actions.</p></div><div><div><select type="button" id="AAAl"><span id="AAAm">JC</span><span id="AAAn">John's Clinic</span><span id="AAAo">owner</span></select><div><div>Navigation</div><button id="AAAt"><svg id="AAAu"></svg><span id="AAAx">Dashboard</span></button><button id="AAAy"><svg id="AAAz"></svg><span id="AAA4">Patients</span></button><select type="button" id="AAA5"><span id="AABA">Coordination</span></select><select type="button" id="AABD"><span id="AABK">Engagement</span></select><select type="button" id="AABN"><span id="AABR">Billing</span></select><select type="button" id="AABU"><span id="AABb">Reporting</span></select><select type="button" id="AABe"><span id="AABk">Calendar</span></select></div></div><div id="AABp"><button aria-label="Close sidebar" title="Close sidebar" id="AABq"><span id="AABx">Close sidebar</span></button><a href="/home" id="AABy">Home</a><span aria-disabled="true" aria-current="page" id="AAB1">Dashboard</span></div><div id="AAB2"><div id="AAB3"><button title="Theme" id="AAB4"><span id="AACF">Toggle theme</span></button><button aria-label="Notifications" title="Notifications" id="AACG"><span id="AACK">1</span></button><select title="Select language" type="button" id="AACL"><span id="AACM">Select language</span></select></div><select type="button" id="AACU"><span id="AACV">JS</span><span id="AACW">John Smithdemo</span></select></div><div><div><div id="AACb"><p id="AACc">Today's Appointments</p><span id="AACd">0</span><div id="AACe"><div id="AACf"></div><div id="AACk"><span id="AACl">00:00</span><span id="AACm">23:59</span></div></div></div><div id="AACn"><p id="AACo">April's Appointments</p><span id="AACp">10</span><div id="AACq"><div id="AACr"></div><div id="AAC0"><span id="AAC1">1</span><span id="AAC2">30</span></div></div></div><div id="AAC3"><p id="AAC4">Open Encounters</p><span id="AAC5">10</span></div><div id="AAC6"><div id="AAC7"><p id="AAC8">Your Tasks</p></div><div id="AAC9"><span id="AADA">1</span><div id="AADB"></div></div></div><div id="AADC"><p id="AADD">Review Results</p><span id="AADE">0</span></div><div id="AADF"><div id="AADG"><p id="AADH">Messages</p></div><div id="AADI"><span id="AADJ">0</span><div id="AADK"></div></div></div></div><div id="AADL"><div id="AADM"><h3 id="AADN">Today (04/12/2026)</h3><div id="AADO"><button aria-label="Previous day" title="Previous day" id="AADP"></button><select aria-label="Open calendar" title="Open calendar" type="button" id="AADS"></select><button aria-label="Next day" title="Next day" id="AADY"></button></div></div><div id="AADb"><span id="AADc">12:00am</span><span id="AADd">01:00am</span><span id="AADe">02:00am</span><span id="AADf">03:00am</span><span id="AADg">04:00am</span><span id="AADh">05:00am</span><span id="AADi">06:00am</span><span id="AADj">07:00am</span><span id="AADk">08:00am</span><span id="AADl">09:00am</span><span id="AADm">10:00am</span><span id="AADn">11:00am</span><span id="AADo">12:00pm</span><span id="AADp">01:00pm</span><span id="AADq">02:00pm</span><span id="AADr">03:00pm</span><span id="AADs">04:00pm</span><span id="AADt">05:00pm</span><span id="AADu">06:00pm</span><span id="AADv">07:00pm</span><span id="AADw">08:00pm</span><span id="AADx">09:00pm</span><span id="AADy">10:00pm</span><span id="AADz">11:00pm</span><div></div></div></div><div id="AAD1"><div id="AAD2"><div id="AAD3"><h3 id="AAD4">Appointments</h3><span id="AAD5">0</span></div><button id="AAD6">Create Appointment</button></div><div id="AAEA"><div><p id="AAEC">No appointments scheduled</p></div></div></div></div></div><button type="button" aria-label="Open agent" id="AAED"></button><span>7</span><div><h2>Schedule New Appointment</h2><label>Patient Information</label><input placeholder="Search by name, patient ID, phone, email, birthdate, or gender" type="text" value="ca" id="AAEV"><div id="AAFJ"><div id="AAFK"><svg id="AAFL"></svg><div id="AAFO"><div id="AAFP">Calista Winterbourne</div><div id="AAFQ">36459 •;04/28/1978 • 47yo</div></div></div></div><label>Appointment Information</label><label>Provider</label><select type="button" id="AAEc"><span id="AAEd">Select Provider</span></select><label>Healthcare Service</label><select type="button" disabled="true" id="AAEi"><span id="AAEj">Select a provider first</span></select><label>Location</label><select type="button" id="AAEo"><span id="AAEp">Select Location</span></select><label>Appointment Note</label><textarea placeholder="Write a comment" value id="AAEy"></textarea><label>Scheduling Options</label><p id="AAE3">Select provider and location to view available dates</p><div><button type="button" id="AAE5">Cancel</button><button type="button" disabled="true" id="AAE6">Schedule New Appointment</button></div><button type="button" id="AAE7"><span id="AAFB">Close</span></button></div>
+```
+
+Consider the action history from the previous steps and the screenshot together, if actions from the previous steps don't yield positive impact, try to take an action on a different element.
+Action history from previous steps:
+```
+[]
+```
+Current datetime, ISO format:
+```
+2026-04-12T19:35:29.519679
+```

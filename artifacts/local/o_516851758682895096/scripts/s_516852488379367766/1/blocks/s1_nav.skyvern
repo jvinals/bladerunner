@@ -1,0 +1,21 @@
+@skyvern.cached(cache_key = 's1_nav')
+async def s1_nav(page: SkyvernPage, context: RunContext):
+    await page.goto('https://dev.kintsugi.careexpandcloud.com/')
+    await page.fill(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][2]/*[name()="main"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="form"][1]/*[name()="div"][1]/*[name()="div"][1]/*[name()="div"][1]/*[name()="div"][1]/*[name()="input"][1]', 
+        value = context.parameters['login_email'], 
+        ai = 'fallback', 
+        prompt = 'What email should be used for login?',
+    )
+    await page.fill(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][2]/*[name()="main"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="form"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="div"][1]/*[name()="input"][1]', 
+        value = context.parameters['login_password'], 
+        ai = 'fallback', 
+        prompt = f"What {context.parameters['login_password']} should be used for login?",
+    )
+    await page.click(
+        selector = 'xpath=/*[name()="html"][1]/*[name()="body"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][2]/*[name()="main"][1]/*[name()="div"][1]/*[name()="div"][2]/*[name()="div"][1]/*[name()="form"][1]/*[name()="div"][2]/*[name()="button"][1]', 
+        ai = 'fallback', 
+        prompt = "Should the 'Sign in' button be clicked to proceed?",
+    )
+    await page.complete()

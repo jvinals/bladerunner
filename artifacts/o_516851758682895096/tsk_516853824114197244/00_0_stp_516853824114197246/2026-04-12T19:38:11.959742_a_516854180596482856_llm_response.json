@@ -1,0 +1,46 @@
+{
+  "id": "chatcmpl-DTuvBKXPSKVTRQ00IY9bqtwKuP61S",
+  "created": 1776022689,
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_f000e9ceb4",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "```json\n{\n  \"page_info\": \"The page contains a section with a command palette for searching patients, tasks, routes, and quick actions. There is a navigation menu with options like Dashboard, Patients, Coordination, Engagement, Billing, Reporting, and Calendar. A sidebar is present with options to close it and navigate to the Home page. There is a section for today's appointments, April's appointments, open encounters, tasks, review results, and messages. A calendar section is available for viewing and navigating through days. There is also a section for scheduling new appointments with fields for patient information, provider, healthcare service, location, appointment note, and scheduling options. The element with ID 'AACU' contains the text 'John Smithdemo', which was clicked as per the user's goal.\",\n  \"thoughts\": \"The user's goal was to click on 'John Smithdemo'. The action history indicates that the element with ID 'AACU', which contains the text 'John Smithdemo', was successfully clicked. This matches the user's goal exactly, indicating that the goal has been achieved.\",\n  \"user_goal_achieved\": true\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "provider_specific_fields": {
+          "refusal": null
+        },
+        "annotations": []
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 230,
+    "prompt_tokens": 1960,
+    "total_tokens": 2190,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "text_tokens": null,
+      "image_tokens": null,
+      "video_tokens": null
+    }
+  },
+  "service_tier": "default"
+}

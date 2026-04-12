@@ -1,0 +1,15 @@
+{
+  "page_info": "The page is a login screen for Careexpand. It contains fields for email and password, with placeholders indicating their expected input format. The email field has a placeholder 'you@example.com', which matches the user instruction.",
+  "thoughts": "The user instruction specifies inputting an email into the field with the placeholder 'you@example.com'. The HTML elements show an input field with this placeholder and the ID 'AAAa'. This matches the user's instruction.",
+  "actions": [
+    {
+      "reasoning": "The action is to input text into the email field. The field with ID 'AAAa' matches the placeholder 'you@example.com', which is specified in the user instruction.",
+      "user_detail_query": "What email address should be input into the email field?",
+      "user_detail_answer": "bladerunner@mailslurp.biz",
+      "confidence_float": 1.0,
+      "action_type": "INPUT_TEXT",
+      "id": "AAAa",
+      "text": "bladerunner@mailslurp.biz"
+    }
+  ]
+}
