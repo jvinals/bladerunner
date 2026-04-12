@@ -34,7 +34,19 @@ const SKYVERN_SCREENSHOT_ARTIFACT_TYPES = new Set([
 function isTimelineBlockFinished(status: string | null | undefined): boolean {
   if (!status) return false;
   const s = status.toLowerCase();
-  return s === 'completed' || s === 'skipped';
+  return (
+    s === 'completed' ||
+    s === 'skipped' ||
+    s === 'complete' ||
+    s === 'succeeded' ||
+    s === 'success' ||
+    s === 'done' ||
+    s === 'failed' ||
+    s === 'terminated' ||
+    s === 'timed_out' ||
+    s === 'canceled' ||
+    s === 'cancelled'
+  );
 }
 
 /** DFS flatten of `GET /v1/runs/{id}/timeline` nodes with `type: "block"`. */
@@ -75,8 +87,9 @@ function flattenSkyvernTimeline(nodes: unknown): Array<{ label: string | null; s
 }
 
 /**
- * Skyvern often returns only the **current** block row per poll — never use positional `entries[i]`
- * (that pinned every run to `sequence` 1). Merge **`label → status`** across polls so completed blocks stay visible.
+ * Merge **`label → status`** across polls. Timeline often omits `completed` for earlier blocks while a **later** block
+ * is `running`; a naive “first non-finished” scan then sticks on **`s1_*` forever** (logs: `s1_nav:running` + later rows).
+ * Use the **last** workflow index that is still non-terminal.
  */
 function deriveActiveFromMergedTimeline(
   blockLabels: string[],
@@ -85,12 +98,20 @@ function deriveActiveFromMergedTimeline(
 ): number | null {
   const n = Math.min(blockLabels.length, actionSequences.length);
   if (n === 0) return null;
+
+  let maxLiveIdx = -1;
   for (let i = 0; i < n; i++) {
-    const lab = blockLabels[i]!;
-    const seq = actionSequences[i]!;
-    const st = labelStatus.get(lab);
-    if (st === undefined) return seq;
-    if (!isTimelineBlockFinished(st)) return seq;
+    const st = labelStatus.get(blockLabels[i]!);
+    if (st === undefined) continue;
+    if (!isTimelineBlockFinished(st)) maxLiveIdx = i;
+  }
+  if (maxLiveIdx >= 0) {
+    return actionSequences[maxLiveIdx]!;
+  }
+
+  for (let i = 0; i < n; i++) {
+    const st = labelStatus.get(blockLabels[i]!);
+    if (st === undefined) return actionSequences[i]!;
   }
   return actionSequences[n - 1] ?? null;
 }
@@ -443,6 +464,13 @@ export class NavigationPlayService {
       const mergedSample = [...session.timelineLabelStatus.entries()]
         .slice(0, 5)
         .map(([k, v]) => `${k}:${v.slice(0, 24)}`);
+      let maxLiveIdxLog: number | null = null;
+      const nn = Math.min(session.skyvernBlockLabels.length, session.playActionSequences.length);
+      for (let i = 0; i < nn; i++) {
+        const st = session.timelineLabelStatus.get(session.skyvernBlockLabels[i]!);
+        if (st === undefined) continue;
+        if (!isTimelineBlockFinished(st)) maxLiveIdxLog = i;
+      }
       // #region agent log
       fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
         method: 'POST',
@@ -458,6 +486,7 @@ export class NavigationPlayService {
             timelineBlockCount: timelineBlocks.length,
             mergedLabelCount: session.timelineLabelStatus.size,
             mergedSample,
+            maxLiveBlockIndex: maxLiveIdxLog,
             status: run.status,
           },
           timestamp: Date.now(),
