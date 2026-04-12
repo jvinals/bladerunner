@@ -23,6 +23,7 @@ import {
 import { buildSkyvernWorkflowApiPayload } from './skyvern-workflow-api.mapper';
 import type { RecordedNavigationAction } from './navigation-recording.service';
 import { NavigationRecordingService } from './navigation-recording.service';
+import { collectTimelineScreenshotUrls } from './_timeline-screenshots';
 
 const WORKER_WS_ATTEMPTS = 10;
 const WORKER_WS_ATTEMPT_MS = 60_000;
@@ -590,13 +591,31 @@ export class NavigationPlayService {
       let didPushFrame = false;
       let artifactTotal = 0;
       let artifactCandidates = 0;
-      const runUrls = this.collectRunScreenshotUrls(run);
-      for (const imageUrl of runUrls) {
-        const fetched = await this.fetchScreenshotAsBase64(imageUrl);
-        if (fetched) {
-          this.pushPlayFrame(navId, session, fetched, 'run_urls');
-          didPushFrame = true;
-          break;
+      let timelineScreenshotCount = 0;
+
+      const timelineScreenshots = collectTimelineScreenshotUrls(timelineRaw);
+      timelineScreenshotCount = timelineScreenshots.length;
+      if (timelineScreenshots.length > 0) {
+        const newest = timelineScreenshots.slice().reverse();
+        for (const imageUrl of newest.slice(0, 5)) {
+          const fetched = await this.fetchScreenshotAsBase64(imageUrl);
+          if (fetched) {
+            this.pushPlayFrame(navId, session, fetched, 'run_urls');
+            didPushFrame = true;
+            break;
+          }
+        }
+      }
+
+      if (!didPushFrame) {
+        const runUrls = this.collectRunScreenshotUrls(run);
+        for (const imageUrl of runUrls) {
+          const fetched = await this.fetchScreenshotAsBase64(imageUrl);
+          if (fetched) {
+            this.pushPlayFrame(navId, session, fetched, 'run_urls');
+            didPushFrame = true;
+            break;
+          }
         }
       }
 
@@ -634,10 +653,9 @@ export class NavigationPlayService {
             .map(([k, v]) => `${k}=${(v ?? '').slice(0, 32)}`),
           seqSample: session.playActionSequences.slice(0, 8),
           didPushFrame,
-          runScreenshotUrlTried: runUrls.length,
+          timelineScreenshotCount,
           artifactTotal,
           artifactCandidates,
-          runKeySample: Object.keys(run as unknown as Record<string, unknown>).slice(0, 28),
         },
       });
       // #endregion
