@@ -40,8 +40,17 @@ function skyvernMustacheText(key: string): string {
   return `{{${key}}}`;
 }
 
-function blockLabel(prefix: string, sequence: number): string {
-  return `${prefix}_${sequence}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 120);
+/**
+ * Skyvern requires **unique** `label` per block. Recording `sequence` can repeat in the DB
+ * (e.g. duplicate rows) or across types; use a monotonic index per emitted block.
+ */
+function makeNextBlockLabel(): (kind: string) => string {
+  let i = 0;
+  return (kind: string) => {
+    i += 1;
+    const raw = `s${i}_${kind}`.replace(/[^a-zA-Z0-9_-]+/g, '_');
+    return raw.slice(0, 120);
+  };
 }
 
 /**
@@ -53,16 +62,16 @@ export function buildSkyvernWorkflowApiPayload(
 ): { title: string; workflow_definition: SkyvernWorkflowDefinitionPayload } {
   const blocks: SkyvernApiBlock[] = [];
   const variableNames = new Set<string>();
+  const nextLabel = makeNextBlockLabel();
 
   for (const action of actions) {
-    const seq = action.sequence;
     switch (action.actionType) {
       case 'navigate': {
         const url = action.inputValue ?? action.pageUrl ?? navigation.url;
         const goal = `Open the URL and continue: ${url}`;
         blocks.push({
           block_type: 'navigation',
-          label: blockLabel('nav', seq),
+          label: nextLabel('nav'),
           navigation_goal: goal,
           url,
         });
@@ -72,7 +81,7 @@ export function buildSkyvernWorkflowApiPayload(
         const caption = action.inputValue?.trim() || resolveSemanticLabel(action);
         blocks.push({
           block_type: 'action',
-          label: blockLabel('click', seq),
+          label: nextLabel('click'),
           navigation_goal: `Click on: ${caption}`,
         });
         break;
@@ -82,7 +91,7 @@ export function buildSkyvernWorkflowApiPayload(
         const text = action.inputValue ?? '';
         blocks.push({
           block_type: 'action',
-          label: blockLabel('type', seq),
+          label: nextLabel('type'),
           navigation_goal: `In the field "${caption}", type the text: ${text}`,
         });
         break;
@@ -94,7 +103,7 @@ export function buildSkyvernWorkflowApiPayload(
         const paramRef = key ? skyvernMustacheText(key) : '(empty)';
         blocks.push({
           block_type: 'action',
-          label: blockLabel('var', seq),
+          label: nextLabel('var'),
           navigation_goal: `In the field "${caption}", enter the workflow parameter value ${paramRef}`,
         });
         break;
@@ -103,7 +112,7 @@ export function buildSkyvernWorkflowApiPayload(
         const caption = (action.inputValue ?? '').trim() || 'AI-guided click';
         blocks.push({
           block_type: 'action',
-          label: blockLabel('prompt', seq),
+          label: nextLabel('prompt'),
           navigation_goal: `Click: ${caption}`,
         });
         break;
@@ -115,7 +124,7 @@ export function buildSkyvernWorkflowApiPayload(
         const paramRef = key ? skyvernMustacheText(key) : '(empty)';
         blocks.push({
           block_type: 'action',
-          label: blockLabel('ptype', seq),
+          label: nextLabel('ptype'),
           navigation_goal: `In the field "${caption}", enter the workflow parameter value ${paramRef}`,
         });
         break;
@@ -131,6 +140,29 @@ export function buildSkyvernWorkflowApiPayload(
     workflow_parameter_type: 'string',
     default_value: '',
   }));
+
+  const labels = blocks.map((b) => b.label);
+  const uniqueLabels = new Set(labels);
+  // #region agent log
+  fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+    body: JSON.stringify({
+      sessionId: 'd7957e',
+      hypothesisId: 'H1',
+      location: 'skyvern-workflow-api.mapper.ts:buildSkyvernWorkflowApiPayload',
+      message: 'Skyvern block labels uniqueness',
+      data: {
+        actionCount: actions.length,
+        blockCount: blocks.length,
+        labelUnique: uniqueLabels.size === labels.length,
+        duplicateLabelCount: labels.length - uniqueLabels.size,
+        sequencesSample: actions.slice(0, 40).map((a) => ({ t: a.actionType, seq: a.sequence })),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   return {
     title: navigation.name || 'Navigation',
