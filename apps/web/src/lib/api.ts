@@ -766,6 +766,8 @@ export type NavigationRecordingSessionDto = {
   playActive: boolean;
   skyvernRunId: string | null;
   playStatus: string | null;
+  /** Skyvern workflow block aligned to `NavigationAction.sequence` while Play is active. */
+  playActiveSequence: number | null;
 };
 
 export const navigationsApi = {

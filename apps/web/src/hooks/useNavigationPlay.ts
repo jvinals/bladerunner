@@ -15,6 +15,8 @@ export interface UseNavigationPlayReturn {
   playError: string | null;
   runStatus: string | null;
   skyvernRunId: string | null;
+  /** Recorded action `sequence` for the workflow block Skyvern is on (or starting). */
+  playActiveSequence: number | null;
   startPlay: (parameters?: Record<string, string>) => Promise<void>;
   stopPlay: () => Promise<void>;
 }
@@ -27,6 +29,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
   const [playError, setPlayError] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<string | null>(null);
   const [skyvernRunId, setSkyvernRunId] = useState<string | null>(null);
+  const [playActiveSequence, setPlayActiveSequence] = useState<number | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const roomIdRef = useRef<string | null>(null);
 
@@ -50,6 +53,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
             setIsPlaying(true);
             setRunStatus(s.playStatus ?? 'running');
             if (s.skyvernRunId) setSkyvernRunId(s.skyvernRunId);
+            if (s.playActiveSequence !== undefined) setPlayActiveSequence(s.playActiveSequence);
           }
         })
         .catch(() => {});
@@ -57,25 +61,37 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
 
     socket.on('disconnect', () => setConnected(false));
 
-    socket.on('frame', (payload: { runId: string; data: string }) => {
+    socket.on('frame', (payload: { runId: string; data: string; mime?: string }) => {
       if (payload.runId !== roomId) return;
-      setFrameDataUrl(`data:image/jpeg;base64,${payload.data}`);
-    });
-
-    socket.on('navPlay:started', (payload: { navId: string; skyvernRunId?: string }) => {
-      if (payload.navId !== navId) return;
-      setIsPlaying(true);
-      setPlayError(null);
-      if (payload.skyvernRunId) setSkyvernRunId(payload.skyvernRunId);
-      setRunStatus('running');
+      const mime =
+        payload.mime && payload.mime.startsWith('image/') ? payload.mime : 'image/jpeg';
+      setFrameDataUrl(`data:${mime};base64,${payload.data}`);
     });
 
     socket.on(
+      'navPlay:started',
+      (payload: { navId: string; skyvernRunId?: string; activeSequence?: number | null }) => {
+        if (payload.navId !== navId) return;
+        setIsPlaying(true);
+        setPlayError(null);
+        if (payload.skyvernRunId) setSkyvernRunId(payload.skyvernRunId);
+        setRunStatus('running');
+        if (payload.activeSequence !== undefined) setPlayActiveSequence(payload.activeSequence);
+      },
+    );
+
+    socket.on(
       'navPlay:runUpdate',
-      (payload: { navId: string; status?: string; failureReason?: string | null }) => {
+      (payload: {
+        navId: string;
+        status?: string;
+        failureReason?: string | null;
+        activeSequence?: number | null;
+      }) => {
         if (payload.navId !== navId) return;
         if (payload.status) setRunStatus(payload.status);
         if (payload.failureReason) setPlayError(payload.failureReason);
+        if (payload.activeSequence !== undefined) setPlayActiveSequence(payload.activeSequence);
       },
     );
 
@@ -84,6 +100,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
       setIsPlaying(false);
       setRunStatus(null);
       setSkyvernRunId(null);
+      setPlayActiveSequence(null);
       void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
     });
 
@@ -103,6 +120,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
         const res = await navigationsApi.playStart(navId, { parameters });
         setSkyvernRunId(res.skyvernRunId);
         setIsPlaying(true);
+        setPlayActiveSequence(null);
       } catch (e) {
         setPlayError(e instanceof Error ? e.message : String(e));
         setIsPlaying(false);
@@ -122,6 +140,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
     setFrameDataUrl(null);
     setRunStatus(null);
     setSkyvernRunId(null);
+    setPlayActiveSequence(null);
   }, [navId]);
 
   return {
@@ -131,6 +150,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
     playError,
     runStatus,
     skyvernRunId,
+    playActiveSequence,
     startPlay,
     stopPlay,
   };

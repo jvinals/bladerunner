@@ -22,6 +22,8 @@ export interface SkyvernWorkflowRunResponse {
   created_at?: string;
   modified_at?: string;
   finished_at?: string | null;
+  /** Agent steps executed (may exceed workflow block count). */
+  step_count?: number | null;
 }
 
 /** `GET /v1/runs/{run_id}/artifacts` item (screenshots use `signed_url` for download). */

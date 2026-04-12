@@ -31,6 +31,41 @@ const SKYVERN_SCREENSHOT_ARTIFACT_TYPES = new Set([
   'screenshot_final',
 ]);
 
+/** First workflow block whose `{label}_output` is not yet in `run.output` → maps to that action's `sequence`. */
+function deriveActivePlaySequence(
+  run: SkyvernWorkflowRunResponse,
+  blockLabels: string[],
+  actionSequences: number[],
+): number | null {
+  if (blockLabels.length === 0 || actionSequences.length === 0) return null;
+  const n = Math.min(blockLabels.length, actionSequences.length);
+  const labels = blockLabels.slice(0, n);
+  const seqs = actionSequences.slice(0, n);
+
+  const out = run.output;
+  if (!out || typeof out !== 'object' || Array.isArray(out)) {
+    if (run.status === 'running' || run.status === 'queued' || run.status === 'created') {
+      return seqs[0] ?? null;
+    }
+    return seqs[n - 1] ?? null;
+  }
+
+  const completed = new Set<string>();
+  for (const key of Object.keys(out as Record<string, unknown>)) {
+    if (key.endsWith('_output')) {
+      completed.add(key.slice(0, -'_output'.length));
+    }
+  }
+
+  for (let i = 0; i < labels.length; i++) {
+    const lab = labels[i]!;
+    if (!completed.has(lab)) {
+      return seqs[i] ?? null;
+    }
+  }
+  return seqs[n - 1] ?? null;
+}
+
 function prismaActionToRecorded(row: {
   sequence: number;
   actionType: string;
@@ -70,6 +105,10 @@ interface NavigationPlaySession {
   latestFrame: Buffer | null;
   latestFrameMime: string | null;
   lastStatus: SkyvernWorkflowRunStatus | null;
+  /** Skyvern block `label` values (same order as recorded actions → blocks). */
+  skyvernBlockLabels: string[];
+  playActionSequences: number[];
+  lastActiveSequence: number | null;
 }
 
 @Injectable()
@@ -111,12 +150,18 @@ export class NavigationPlayService {
     active: boolean;
     skyvernRunId: string | null;
     lastStatus: SkyvernWorkflowRunStatus | null;
+    playActiveSequence: number | null;
   } {
     const s = this.sessions.get(navId);
     if (!s || s.userId !== userId) {
-      return { active: false, skyvernRunId: null, lastStatus: null };
+      return { active: false, skyvernRunId: null, lastStatus: null, playActiveSequence: null };
     }
-    return { active: true, skyvernRunId: s.skyvernRunId, lastStatus: s.lastStatus };
+    return {
+      active: true,
+      skyvernRunId: s.skyvernRunId,
+      lastStatus: s.lastStatus,
+      playActiveSequence: s.lastActiveSequence,
+    };
   }
 
   /**
@@ -248,6 +293,9 @@ export class NavigationPlayService {
       }
     }
 
+    const skyvernBlockLabels = workflow_definition.blocks.map((b) => b.label);
+    const playActionSequences = recorded.map((a) => a.sequence);
+
     const room = this.playRoomId(navId);
     const session: NavigationPlaySession = {
       navigationId: navId,
@@ -259,6 +307,9 @@ export class NavigationPlayService {
       latestFrame: null,
       latestFrameMime: null,
       lastStatus: run.status,
+      skyvernBlockLabels,
+      playActionSequences,
+      lastActiveSequence: playActionSequences[0] ?? null,
     };
     this.sessions.set(navId, session);
 
@@ -266,6 +317,7 @@ export class NavigationPlayService {
       navId,
       skyvernRunId: run.run_id,
       workflowId,
+      activeSequence: session.lastActiveSequence,
     });
 
     session.pollTimer = setInterval(() => {
@@ -288,11 +340,46 @@ export class NavigationPlayService {
       const run = await this.skyvern.getRun(session.skyvernRunId);
       session.lastStatus = run.status;
 
+      const activeSequence = deriveActivePlaySequence(
+        run,
+        session.skyvernBlockLabels,
+        session.playActionSequences,
+      );
+      session.lastActiveSequence = activeSequence;
+
+      let outputCompletedBlockHints = -1;
+      if (run.output && typeof run.output === 'object' && !Array.isArray(run.output)) {
+        outputCompletedBlockHints = Object.keys(run.output as Record<string, unknown>).filter((k) =>
+          k.endsWith('_output'),
+        ).length;
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd7957e' },
+        body: JSON.stringify({
+          sessionId: 'd7957e',
+          location: 'navigation-play.service.ts:pollOnce',
+          message: 'play block progress',
+          data: {
+            activeSequence,
+            stepCount: run.step_count ?? null,
+            outputOutputKeyCount: outputCompletedBlockHints,
+            status: run.status,
+          },
+          timestamp: Date.now(),
+          hypothesisId: 'H6',
+        }),
+      }).catch(() => {});
+      // #endregion
+
       this.recordingService.emit('navPlay:runUpdate', navId, {
         navId,
         status: run.status,
         failureReason: run.failure_reason ?? null,
         runId: run.run_id,
+        activeSequence,
+        stepCount: run.step_count ?? null,
       });
 
       const terminal: SkyvernWorkflowRunStatus[] = [

@@ -28,6 +28,8 @@ interface RecordedActionTimelineProps {
   onRejectAuditSuggestion?: (sequence: number) => void;
   /** Play mode: list only, no editing or expansion. */
   readOnly?: boolean;
+  /** When set (e.g. Skyvern Play), highlight this action row. */
+  highlightSequence?: number | null;
 }
 
 function stripMustache(raw: string): string {
@@ -346,6 +348,7 @@ export function RecordedActionTimeline({
   onAcceptAuditSuggestion,
   onRejectAuditSuggestion,
   readOnly = false,
+  highlightSequence = null,
 }: RecordedActionTimelineProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
 
@@ -374,13 +377,26 @@ export function RecordedActionTimeline({
               ? 'bg-amber-50/60 hover:bg-amber-50/80'
               : 'hover:bg-gray-50/80';
 
+          const playHere =
+            readOnly && highlightSequence != null && action.sequence === highlightSequence;
+
           if (readOnly) {
             return (
               <li key={action.sequence}>
                 <div
-                  className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs ${rowBg}`}
+                  className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs ${rowBg} ${
+                    playHere
+                      ? 'ring-2 ring-emerald-500/80 ring-inset bg-emerald-50/90 shadow-sm'
+                      : ''
+                  }`}
                 >
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">
+                  <span
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                      playHere
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gray-100 text-gray-500'
+                    }`}
+                  >
                     {action.sequence}
                   </span>
                   {actionIcon(action.actionType, isVariableStyleRefinement(action))}

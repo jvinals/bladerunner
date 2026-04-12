@@ -23,6 +23,7 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
     playError,
     runStatus,
     skyvernRunId,
+    playActiveSequence,
     startPlay,
     stopPlay,
   } = useNavigationPlay(navId);
@@ -101,6 +102,7 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
             actions={persistedActions}
             onUpdateAction={noop}
             readOnly
+            highlightSequence={isPlaying ? playActiveSequence : null}
           />
         </div>
       </div>

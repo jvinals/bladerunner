@@ -139,6 +139,7 @@ export class NavigationsService {
       playActive: play.active,
       skyvernRunId: play.skyvernRunId,
       playStatus: play.lastStatus,
+      playActiveSequence: play.playActiveSequence,
     };
   }
 
