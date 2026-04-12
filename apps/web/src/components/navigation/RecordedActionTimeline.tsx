@@ -12,6 +12,8 @@ import {
   MessageSquareText,
   Braces,
   Sparkles,
+  Check,
+  X,
 } from 'lucide-react';
 import type {
   RecordedNavigationAction,
@@ -23,6 +25,7 @@ interface RecordedActionTimelineProps {
   onUpdateAction: (sequence: number, updates: Partial<RecordedNavigationAction>) => void;
   auditSuggestions?: Record<number, NavigationAuditSuggestion>;
   onAcceptAuditSuggestion?: (sequence: number) => void;
+  onRejectAuditSuggestion?: (sequence: number) => void;
 }
 
 function stripMustache(raw: string): string {
@@ -339,6 +342,7 @@ export function RecordedActionTimeline({
   onUpdateAction,
   auditSuggestions = {},
   onAcceptAuditSuggestion,
+  onRejectAuditSuggestion,
 }: RecordedActionTimelineProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
 
@@ -385,19 +389,30 @@ export function RecordedActionTimeline({
                   )}
                 </div>
               </button>
-              {audit && onAcceptAuditSuggestion ? (
+              {audit && onAcceptAuditSuggestion && onRejectAuditSuggestion ? (
                 <div className="space-y-2 border-b border-amber-100 bg-amber-50/40 px-3 py-2">
                   <p className="text-[10px] text-amber-900">{audit.warning}</p>
                   <p className="text-[10px] text-gray-700 font-mono whitespace-pre-wrap break-words">
                     {audit.suggestedPrompt}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => onAcceptAuditSuggestion(action.sequence)}
-                    className="rounded-md bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-700"
-                  >
-                    Accept suggestion
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onAcceptAuditSuggestion(action.sequence)}
+                      className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[10px] font-medium text-white hover:bg-emerald-700"
+                    >
+                      <Check size={12} strokeWidth={2.5} aria-hidden />
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRejectAuditSuggestion(action.sequence)}
+                      className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-[10px] font-medium text-white hover:bg-blue-700"
+                    >
+                      <X size={12} strokeWidth={2.5} aria-hidden />
+                      Reject
+                    </button>
+                  </div>
                 </div>
               ) : null}
               {expanded ? (

@@ -49,6 +49,7 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     auditRunning,
     runSmartAudit,
     acceptAuditSuggestion,
+    rejectAuditSuggestion,
     error,
   } = useNavigationRecording(navId, userId);
 
@@ -103,6 +104,7 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
             onUpdateAction={updateRecordedAction}
             auditSuggestions={auditSuggestions}
             onAcceptAuditSuggestion={acceptAuditSuggestion}
+            onRejectAuditSuggestion={rejectAuditSuggestion}
           />
         </div>
       </div>

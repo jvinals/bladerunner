@@ -140,6 +140,7 @@ export interface UseNavigationRecordingReturn {
   auditRunning: boolean;
   runSmartAudit: () => void;
   acceptAuditSuggestion: (sequenceId: number) => void;
+  rejectAuditSuggestion: (sequenceId: number) => void;
   error: string | null;
 }
 
@@ -494,6 +495,14 @@ export function useNavigationRecording(
     });
   }, [auditSuggestions]);
 
+  const rejectAuditSuggestion = useCallback((sequenceId: number) => {
+    setAuditSuggestions((s) => {
+      if (!(sequenceId in s)) return s;
+      const { [sequenceId]: _removed, ...rest } = s;
+      return rest;
+    });
+  }, []);
+
   return {
     isRecording,
     isPaused,
@@ -521,6 +530,7 @@ export function useNavigationRecording(
     auditRunning,
     runSmartAudit,
     acceptAuditSuggestion,
+    rejectAuditSuggestion,
     error,
   };
 }
