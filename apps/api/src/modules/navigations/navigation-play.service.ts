@@ -106,6 +106,35 @@ function collectSkyvernTimelineBlockRows(root: unknown): Array<{ label: string |
   return out;
 }
 
+/** Apply one poll’s timeline rows: labeled rows first (by workflow index), then bind **missing labels** to `s1…sN` in order. */
+function mergeTimelinePollIntoLabelStatus(
+  session: NavigationPlaySession,
+  timelineBlocks: Array<{ label: string | null; status: string | null }>,
+): void {
+  const nLabels = Math.min(session.skyvernBlockLabels.length, session.playActionSequences.length);
+  if (nLabels === 0 || timelineBlocks.length === 0) return;
+
+  const scored = timelineBlocks.map((e, j) => {
+    const t = e.label?.trim();
+    let ord = 10_000 + j;
+    if (t) {
+      const ix = session.skyvernBlockLabels.indexOf(t);
+      if (ix >= 0) ord = ix;
+    }
+    return { e, ord };
+  });
+  scored.sort((a, b) => a.ord - b.ord);
+
+  for (let k = 0; k < scored.length; k++) {
+    const e = scored[k]!.e;
+    const lab =
+      (e.label && e.label.trim()) || (k < nLabels ? session.skyvernBlockLabels[k]! : null);
+    if (lab) {
+      session.timelineLabelStatus.set(lab, e.status ?? '');
+    }
+  }
+}
+
 /**
  * Merge **`label → status`** across polls. Timeline often omits `completed` for earlier blocks while a **later** block
  * is `running`; a naive “first non-finished” scan then sticks on **`s1_*` forever** (logs: `s1_nav:running` + later rows).
@@ -462,11 +491,7 @@ export class NavigationPlayService {
       const timelineBlocks = collectSkyvernTimelineBlockRows(timelineRaw);
       const timelineShape = timelineResponseShape(timelineRaw);
       if (timelineBlocks.length > 0) {
-        for (const e of timelineBlocks) {
-          if (e.label) {
-            session.timelineLabelStatus.set(e.label, e.status ?? '');
-          }
-        }
+        mergeTimelinePollIntoLabelStatus(session, timelineBlocks);
       }
       const activeSequence = deriveActivePlaySequence(
         run,
@@ -482,6 +507,7 @@ export class NavigationPlayService {
           k.endsWith('_output'),
         ).length;
       }
+      const unlabeledRowCount = timelineBlocks.filter((r) => !r.label?.trim()).length;
       const mergedSample = [...session.timelineLabelStatus.entries()]
         .slice(0, 5)
         .map(([k, v]) => `${k}:${v.slice(0, 24)}`);
@@ -509,6 +535,7 @@ export class NavigationPlayService {
             mergedSample,
             maxLiveBlockIndex: maxLiveIdxLog,
             timelineShape,
+            unlabeledRowCount,
             status: run.status,
           },
           timestamp: Date.now(),
