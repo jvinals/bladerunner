@@ -2,7 +2,7 @@
  * Play mode: Skyvern workflow run with live frames (screenshot polling) and read-only action list.
  */
 
-import { Loader2, Play, Square, Radio } from 'lucide-react';
+import { ExternalLink, Loader2, Play, Square, Radio, Video } from 'lucide-react';
 import { InteractiveCanvasStream } from './InteractiveCanvasStream';
 import { RecordedActionTimeline } from './RecordedActionTimeline';
 import { useNavigationPlay } from '@/hooks/useNavigationPlay';
@@ -24,6 +24,8 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
     runStatus,
     skyvernRunId,
     playActiveSequence,
+    appUrl,
+    recordingUrl,
     startPlay,
     stopPlay,
   } = useNavigationPlay(
@@ -66,6 +68,28 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
             {skyvernRunId}
           </span>
         )}
+        {appUrl && (
+          <a
+            href={appUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            <ExternalLink size={12} />
+            Live view
+          </a>
+        )}
+        {recordingUrl && (
+          <a
+            href={recordingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+          >
+            <Video size={12} />
+            Recording
+          </a>
+        )}
       </div>
       {!canPlay && (
         <p className="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
@@ -80,10 +104,28 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
         <div className="flex-1 min-w-0 relative">
           {isPlaying && !frameDataUrl && (
             <div className="absolute inset-0 flex items-center justify-center z-10 rounded-xl bg-white/80 border border-dashed border-gray-200">
-              <span className="inline-flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="animate-spin" size={18} />
-                Waiting for frames…
-              </span>
+              <div className="flex flex-col items-center gap-3 text-center px-6">
+                <Loader2 className="animate-spin text-gray-400" size={22} />
+                <span className="text-sm text-gray-500">
+                  Skyvern is executing…
+                </span>
+                <span className="text-[11px] text-gray-400 max-w-xs leading-relaxed">
+                  Screenshots appear when steps complete.
+                  {appUrl && (
+                    <>
+                      {' '}
+                      <a
+                        href={appUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-500 hover:text-indigo-700 underline underline-offset-2"
+                      >
+                        Watch live on Skyvern
+                      </a>
+                    </>
+                  )}
+                </span>
+              </div>
             </div>
           )}
           <InteractiveCanvasStream

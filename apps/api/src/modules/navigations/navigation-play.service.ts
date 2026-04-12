@@ -551,6 +551,8 @@ export class NavigationPlayService {
         runId: run.run_id,
         activeSequence,
         stepCount: run.step_count ?? null,
+        appUrl: run.app_url ?? null,
+        recordingUrl: run.recording_url ?? null,
       });
 
       const terminal: SkyvernWorkflowRunStatus[] = [

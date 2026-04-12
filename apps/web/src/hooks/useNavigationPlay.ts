@@ -29,6 +29,10 @@ export interface UseNavigationPlayReturn {
   skyvernRunId: string | null;
   /** Recorded action `sequence` for the workflow block Skyvern is on (or starting). */
   playActiveSequence: number | null;
+  /** Skyvern dashboard URL for live viewing while the run executes. */
+  appUrl: string | null;
+  /** Recording video URL (usually available after run completes). */
+  recordingUrl: string | null;
   startPlay: (parameters?: Record<string, string>) => Promise<void>;
   stopPlay: () => Promise<void>;
 }
@@ -46,6 +50,8 @@ export function useNavigationPlay(
   const [runStatus, setRunStatus] = useState<string | null>(null);
   const [skyvernRunId, setSkyvernRunId] = useState<string | null>(null);
   const [playActiveSequence, setPlayActiveSequence] = useState<number | null>(null);
+  const [appUrl, setAppUrl] = useState<string | null>(null);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const roomIdRef = useRef<string | null>(null);
   const lastRunUpdateSeqRef = useRef<number | null | undefined>(undefined);
@@ -137,11 +143,15 @@ export function useNavigationPlay(
         status?: string;
         failureReason?: string | null;
         activeSequence?: number | null;
+        appUrl?: string | null;
+        recordingUrl?: string | null;
       }) => {
         if (payload.navId !== navId) return;
         if (payload.status) setRunStatus(payload.status);
         if (payload.failureReason) setPlayError(payload.failureReason);
         if (payload.activeSequence !== undefined) setPlayActiveSequence(payload.activeSequence);
+        if (payload.appUrl) setAppUrl(payload.appUrl);
+        if (payload.recordingUrl) setRecordingUrl(payload.recordingUrl);
         // #region agent log
         if (
           payload.activeSequence !== undefined &&
@@ -172,6 +182,7 @@ export function useNavigationPlay(
       setRunStatus(null);
       setSkyvernRunId(null);
       setPlayActiveSequence(null);
+      setAppUrl(null);
       void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
     });
 
@@ -235,6 +246,8 @@ export function useNavigationPlay(
     setRunStatus(null);
     setSkyvernRunId(null);
     setPlayActiveSequence(null);
+    setAppUrl(null);
+    setRecordingUrl(null);
   }, [navId]);
 
   return {
@@ -245,6 +258,8 @@ export function useNavigationPlay(
     runStatus,
     skyvernRunId,
     playActiveSequence,
+    appUrl,
+    recordingUrl,
     startPlay,
     stopPlay,
   };
