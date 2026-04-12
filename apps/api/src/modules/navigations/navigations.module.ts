@@ -5,11 +5,23 @@ import { LlmModule } from '../llm/llm.module';
 import { NavigationsController } from './navigations.controller';
 import { NavigationsService } from './navigations.service';
 import { NavigationRecordingService } from './navigation-recording.service';
+import { NavigationPlayService } from './navigation-play.service';
+import { SkyvernClientService } from './skyvern-client.service';
 
 @Module({
   imports: [PrismaModule, LlmModule, forwardRef(() => RecordingModule)],
   controllers: [NavigationsController],
-  providers: [NavigationsService, NavigationRecordingService],
-  exports: [NavigationsService, NavigationRecordingService],
+  providers: [
+    NavigationsService,
+    NavigationRecordingService,
+    NavigationPlayService,
+    SkyvernClientService,
+  ],
+  exports: [
+    NavigationsService,
+    NavigationRecordingService,
+    NavigationPlayService,
+    SkyvernClientService,
+  ],
 })
 export class NavigationsModule {}

@@ -340,6 +340,8 @@ model Navigation {
   runMode                EvaluationRunMode @default(continuous) @map("run_mode")
   autoSignIn             Boolean           @default(false) @map("auto_sign_in")
   autoSignInClerkOtpMode String?           @map("auto_sign_in_clerk_otp_mode")
+  /// Skyvern `wpid_…` after workflow is created or updated via API (Play mode).
+  skyvernWorkflowId      String?           @map("skyvern_workflow_id")
   createdAt              DateTime          @default(now()) @map("created_at")
   updatedAt              DateTime          @updatedAt @map("updated_at")
 

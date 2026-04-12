@@ -63,7 +63,7 @@ function skyvernMustacheText(key: string): string {
  * fallback during recording) > name attribute (not stored separately —
  * captured as part of elementId heuristic) > elementId > coordinate fallback.
  */
-function resolveSemanticLabel(action: RecordedNavigationAction): string {
+export function resolveSemanticLabel(action: RecordedNavigationAction): string {
   if (action.elementText?.trim()) return action.elementText.trim();
   if (action.ariaLabel?.trim()) return action.ariaLabel.trim();
   if (action.elementId?.trim()) return action.elementId.trim();

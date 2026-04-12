@@ -280,6 +280,7 @@ export const NavigationScalarFieldEnum = {
   runMode: 'runMode',
   autoSignIn: 'autoSignIn',
   autoSignInClerkOtpMode: 'autoSignInClerkOtpMode',
+  skyvernWorkflowId: 'skyvernWorkflowId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

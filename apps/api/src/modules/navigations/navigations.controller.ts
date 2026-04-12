@@ -2,13 +2,17 @@ import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nest
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { NavigationsService } from './navigations.service';
-import { CreateNavigationDto, UpdateNavigationDto } from './navigations.dto';
+import { NavigationPlayService } from './navigation-play.service';
+import { CreateNavigationDto, NavigationPlayStartDto, UpdateNavigationDto } from './navigations.dto';
 
 @ApiTags('navigations')
 @Controller('navigations')
 @UseGuards(ClerkAuthGuard)
 export class NavigationsController {
-  constructor(private readonly navigations: NavigationsService) {}
+  constructor(
+    private readonly navigations: NavigationsService,
+    private readonly navigationPlay: NavigationPlayService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List navigations' })
@@ -28,6 +32,28 @@ export class NavigationsController {
       autoSignIn: dto.autoSignIn,
       autoSignInClerkOtpMode: dto.autoSignInClerkOtpMode ?? null,
     });
+  }
+
+  @Get(':id/recording-session')
+  @ApiOperation({ summary: 'Live recording/play session flags for Continue recording UI' })
+  recordingSession(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+    return this.navigations.getLiveSessions(id, req.user.sub);
+  }
+
+  @Post(':id/play/start')
+  @ApiOperation({ summary: 'Start Skyvern workflow run against browser-worker CDP' })
+  playStart(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Body() body: NavigationPlayStartDto,
+  ) {
+    return this.navigationPlay.startPlay(id, req.user.sub, body?.parameters);
+  }
+
+  @Post(':id/play/stop')
+  @ApiOperation({ summary: 'Cancel Skyvern play run' })
+  playStop(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+    return this.navigationPlay.stopPlay(id, req.user.sub);
   }
 
   @Get(':id')

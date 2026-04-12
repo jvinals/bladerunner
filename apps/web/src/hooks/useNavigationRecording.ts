@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
+import { navigationsApi } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Shared types (mirrored from backend; keep in sync)
@@ -181,6 +182,15 @@ export function useNavigationRecording(
     socket.on('connect', () => {
       setConnected(true);
       socket.emit('join', { runId: navId });
+      void navigationsApi
+        .recordingSession(navId)
+        .then((s) => {
+          if (s.recordingActive) {
+            setIsRecording(true);
+            setIsPaused(s.recordingPaused);
+          }
+        })
+        .catch(() => {});
     });
 
     socket.on('disconnect', () => setConnected(false));

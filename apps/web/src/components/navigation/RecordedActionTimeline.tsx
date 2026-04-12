@@ -26,6 +26,8 @@ interface RecordedActionTimelineProps {
   auditSuggestions?: Record<number, NavigationAuditSuggestion>;
   onAcceptAuditSuggestion?: (sequence: number) => void;
   onRejectAuditSuggestion?: (sequence: number) => void;
+  /** Play mode: list only, no editing or expansion. */
+  readOnly?: boolean;
 }
 
 function stripMustache(raw: string): string {
@@ -343,13 +345,16 @@ export function RecordedActionTimeline({
   auditSuggestions = {},
   onAcceptAuditSuggestion,
   onRejectAuditSuggestion,
+  readOnly = false,
 }: RecordedActionTimelineProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
 
   if (actions.length === 0) {
     return (
       <p className="text-xs text-gray-400 px-3 py-4 text-center">
-        No actions recorded yet. Click on the browser to begin.
+        {readOnly
+          ? 'No actions in this navigation yet.'
+          : 'No actions recorded yet. Click on the browser to begin.'}
       </p>
     );
   }
@@ -368,6 +373,27 @@ export function RecordedActionTimeline({
             : audit
               ? 'bg-amber-50/60 hover:bg-amber-50/80'
               : 'hover:bg-gray-50/80';
+
+          if (readOnly) {
+            return (
+              <li key={action.sequence}>
+                <div
+                  className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs ${rowBg}`}
+                >
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">
+                    {action.sequence}
+                  </span>
+                  {actionIcon(action.actionType, isVariableStyleRefinement(action))}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
+                    {action.actionType !== 'navigate' && action.pageUrl && (
+                      <p className="mt-0.5 truncate text-[10px] text-gray-400">{action.pageUrl}</p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          }
 
           return (
             <li key={action.sequence}>

@@ -40,6 +40,7 @@ export type NavigationMinAggregateOutputType = {
   runMode: $Enums.EvaluationRunMode | null
   autoSignIn: boolean | null
   autoSignInClerkOtpMode: string | null
+  skyvernWorkflowId: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -60,6 +61,7 @@ export type NavigationMaxAggregateOutputType = {
   runMode: $Enums.EvaluationRunMode | null
   autoSignIn: boolean | null
   autoSignInClerkOtpMode: string | null
+  skyvernWorkflowId: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -80,6 +82,7 @@ export type NavigationCountAggregateOutputType = {
   runMode: number
   autoSignIn: number
   autoSignInClerkOtpMode: number
+  skyvernWorkflowId: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -102,6 +105,7 @@ export type NavigationMinAggregateInputType = {
   runMode?: true
   autoSignIn?: true
   autoSignInClerkOtpMode?: true
+  skyvernWorkflowId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -122,6 +126,7 @@ export type NavigationMaxAggregateInputType = {
   runMode?: true
   autoSignIn?: true
   autoSignInClerkOtpMode?: true
+  skyvernWorkflowId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -142,6 +147,7 @@ export type NavigationCountAggregateInputType = {
   runMode?: true
   autoSignIn?: true
   autoSignInClerkOtpMode?: true
+  skyvernWorkflowId?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -235,6 +241,7 @@ export type NavigationGroupByOutputType = {
   runMode: $Enums.EvaluationRunMode
   autoSignIn: boolean
   autoSignInClerkOtpMode: string | null
+  skyvernWorkflowId: string | null
   createdAt: Date
   updatedAt: Date
   _count: NavigationCountAggregateOutputType | null
@@ -276,6 +283,7 @@ export type NavigationWhereInput = {
   runMode?: Prisma.EnumEvaluationRunModeFilter<"Navigation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFilter<"Navigation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableFilter<"Navigation"> | string | null
+  skyvernWorkflowId?: Prisma.StringNullableFilter<"Navigation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
@@ -298,6 +306,7 @@ export type NavigationOrderByWithRelationInput = {
   runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrderInput | Prisma.SortOrder
+  skyvernWorkflowId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
@@ -323,6 +332,7 @@ export type NavigationWhereUniqueInput = Prisma.AtLeast<{
   runMode?: Prisma.EnumEvaluationRunModeFilter<"Navigation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFilter<"Navigation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableFilter<"Navigation"> | string | null
+  skyvernWorkflowId?: Prisma.StringNullableFilter<"Navigation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
@@ -345,6 +355,7 @@ export type NavigationOrderByWithAggregationInput = {
   runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrderInput | Prisma.SortOrder
+  skyvernWorkflowId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.NavigationCountOrderByAggregateInput
@@ -371,6 +382,7 @@ export type NavigationScalarWhereWithAggregatesInput = {
   runMode?: Prisma.EnumEvaluationRunModeWithAggregatesFilter<"Navigation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolWithAggregatesFilter<"Navigation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableWithAggregatesFilter<"Navigation"> | string | null
+  skyvernWorkflowId?: Prisma.StringNullableWithAggregatesFilter<"Navigation"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Navigation"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Navigation"> | Date | string
 }
@@ -390,6 +402,7 @@ export type NavigationCreateInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
@@ -412,6 +425,7 @@ export type NavigationUncheckedCreateInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
@@ -432,6 +446,7 @@ export type NavigationUpdateInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
@@ -454,6 +469,7 @@ export type NavigationUncheckedUpdateInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
@@ -475,6 +491,7 @@ export type NavigationCreateManyInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -494,6 +511,7 @@ export type NavigationUpdateManyMutationInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -514,6 +532,7 @@ export type NavigationUncheckedUpdateManyInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -544,6 +563,7 @@ export type NavigationCountOrderByAggregateInput = {
   runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrder
+  skyvernWorkflowId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -564,6 +584,7 @@ export type NavigationMaxOrderByAggregateInput = {
   runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrder
+  skyvernWorkflowId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -584,6 +605,7 @@ export type NavigationMinOrderByAggregateInput = {
   runMode?: Prisma.SortOrder
   autoSignIn?: Prisma.SortOrder
   autoSignInClerkOtpMode?: Prisma.SortOrder
+  skyvernWorkflowId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -664,6 +686,7 @@ export type NavigationCreateWithoutProjectInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.NavigationActionCreateNestedManyWithoutNavigationInput
@@ -684,6 +707,7 @@ export type NavigationUncheckedCreateWithoutProjectInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
@@ -734,6 +758,7 @@ export type NavigationScalarWhereInput = {
   runMode?: Prisma.EnumEvaluationRunModeFilter<"Navigation"> | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFilter<"Navigation"> | boolean
   autoSignInClerkOtpMode?: Prisma.StringNullableFilter<"Navigation"> | string | null
+  skyvernWorkflowId?: Prisma.StringNullableFilter<"Navigation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
 }
@@ -753,6 +778,7 @@ export type NavigationCreateWithoutActionsInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
@@ -774,6 +800,7 @@ export type NavigationUncheckedCreateWithoutActionsInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -809,6 +836,7 @@ export type NavigationUpdateWithoutActionsInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
@@ -830,6 +858,7 @@ export type NavigationUncheckedUpdateWithoutActionsInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -849,6 +878,7 @@ export type NavigationCreateManyProjectInput = {
   runMode?: $Enums.EvaluationRunMode
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -868,6 +898,7 @@ export type NavigationUpdateWithoutProjectInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.NavigationActionUpdateManyWithoutNavigationNestedInput
@@ -888,6 +919,7 @@ export type NavigationUncheckedUpdateWithoutProjectInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
@@ -908,6 +940,7 @@ export type NavigationUncheckedUpdateManyWithoutProjectInput = {
   runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
   autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
   autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -959,6 +992,7 @@ export type NavigationSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
+  skyvernWorkflowId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
@@ -982,6 +1016,7 @@ export type NavigationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
+  skyvernWorkflowId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
@@ -1003,6 +1038,7 @@ export type NavigationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
+  skyvernWorkflowId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
@@ -1024,11 +1060,12 @@ export type NavigationSelectScalar = {
   runMode?: boolean
   autoSignIn?: boolean
   autoSignInClerkOtpMode?: boolean
+  skyvernWorkflowId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type NavigationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "name" | "url" | "intent" | "desiredOutput" | "progressSummary" | "status" | "startedAt" | "completedAt" | "failureMessage" | "runMode" | "autoSignIn" | "autoSignInClerkOtpMode" | "createdAt" | "updatedAt", ExtArgs["result"]["navigation"]>
+export type NavigationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "name" | "url" | "intent" | "desiredOutput" | "progressSummary" | "status" | "startedAt" | "completedAt" | "failureMessage" | "runMode" | "autoSignIn" | "autoSignInClerkOtpMode" | "skyvernWorkflowId" | "createdAt" | "updatedAt", ExtArgs["result"]["navigation"]>
 export type NavigationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
   actions?: boolean | Prisma.Navigation$actionsArgs<ExtArgs>
@@ -1063,6 +1100,10 @@ export type $NavigationPayload<ExtArgs extends runtime.Types.Extensions.Internal
     runMode: $Enums.EvaluationRunMode
     autoSignIn: boolean
     autoSignInClerkOtpMode: string | null
+    /**
+     * Skyvern `wpid_…` after workflow is created or updated via API (Play mode).
+     */
+    skyvernWorkflowId: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["navigation"]>
@@ -1505,6 +1546,7 @@ export interface NavigationFieldRefs {
   readonly runMode: Prisma.FieldRef<"Navigation", 'EvaluationRunMode'>
   readonly autoSignIn: Prisma.FieldRef<"Navigation", 'Boolean'>
   readonly autoSignInClerkOtpMode: Prisma.FieldRef<"Navigation", 'String'>
+  readonly skyvernWorkflowId: Prisma.FieldRef<"Navigation", 'String'>
   readonly createdAt: Prisma.FieldRef<"Navigation", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Navigation", 'DateTime'>
 }

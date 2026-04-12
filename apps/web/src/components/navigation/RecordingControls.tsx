@@ -79,7 +79,7 @@ export function RecordingControls({
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-sm font-medium px-4 py-2 hover:bg-emerald-100"
         >
           <Play size={16} className="fill-current" />
-          Resume
+          Continue recording
         </button>
       )}
 

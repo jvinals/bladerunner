@@ -14,6 +14,7 @@ import {
   type RecordedNavigationAction,
 } from '../navigations/navigation-recording.service';
 import { NavigationsService } from '../navigations/navigations.service';
+import { NavigationPlayService } from '../navigations/navigation-play.service';
 import { compileToSkyvernWorkflow } from '../navigations/skyvern-compiler';
 
 @WebSocketGateway({
@@ -30,6 +31,8 @@ export class RecordingGateway implements OnGatewayInit {
     private readonly navigationRecording: NavigationRecordingService,
     @Inject(forwardRef(() => NavigationsService))
     private readonly navigationsService: NavigationsService,
+    @Inject(forwardRef(() => NavigationPlayService))
+    private readonly navigationPlay: NavigationPlayService,
   ) {}
 
   afterInit() {
@@ -85,6 +88,16 @@ export class RecordingGateway implements OnGatewayInit {
       this.server.to(`run:${navId}`).emit('nav:actionRecorded', { navId, action });
     });
 
+    this.recordingService.on('navPlay:started', (navId: string, payload: Record<string, unknown>) => {
+      this.server.to(`run:play:${navId}`).emit('navPlay:started', payload);
+    });
+    this.recordingService.on('navPlay:runUpdate', (navId: string, payload: Record<string, unknown>) => {
+      this.server.to(`run:play:${navId}`).emit('navPlay:runUpdate', payload);
+    });
+    this.recordingService.on('navPlay:ended', (navId: string, payload: Record<string, unknown>) => {
+      this.server.to(`run:play:${navId}`).emit('navPlay:ended', payload);
+    });
+
     this.logger.log('Recording WebSocket gateway initialized');
   }
 
@@ -105,6 +118,9 @@ export class RecordingGateway implements OnGatewayInit {
       ? this.recordingService.getLatestDiscoveryFrame(discoveryProjectId)
       : null;
     const navFrame = this.navigationRecording.getLatestFrame(data.runId);
+    const playPrefix = 'play:';
+    const playNavId = data.runId.startsWith(playPrefix) ? data.runId.slice(playPrefix.length) : null;
+    const playFrame = playNavId ? this.navigationPlay.getLatestFrame(playNavId) : null;
     const latest =
       recFrame && recFrame.length > 0
         ? recFrame
@@ -114,7 +130,9 @@ export class RecordingGateway implements OnGatewayInit {
             ? discoveryFrame
             : navFrame && navFrame.length > 0
               ? navFrame
-              : null;
+              : playFrame && playFrame.length > 0
+                ? playFrame
+                : null;
     if (latest && latest.length > 0) {
       client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
     }

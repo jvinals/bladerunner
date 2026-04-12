@@ -721,13 +721,68 @@ export type UpdateNavigationBody = UpdateEvaluationBody & {
   runMode?: EvaluationRunMode;
 };
 
+export type NavigationActionDto = {
+  id: string;
+  navigationId: string;
+  userId: string;
+  sequence: number;
+  actionType: string;
+  x: number | null;
+  y: number | null;
+  elementTag: string | null;
+  elementId: string | null;
+  elementText: string | null;
+  ariaLabel: string | null;
+  inputValue: string | null;
+  inputMode: string | null;
+  pageUrl: string | null;
+  createdAt: string;
+};
+
+export type NavigationSummaryDto = {
+  totalSteps: number;
+  actionTypeCounts: Record<string, number>;
+  variableStepCount: number;
+  lastRecordedAt: string | null;
+};
+
+/** Navigation detail: same shell as evaluations list row + goal fields + persisted actions (not evaluation steps). */
+export type NavigationDetailDto = EvaluationRow & {
+  intent: string;
+  desiredOutput: string;
+  progressSummary: string | null;
+  failureMessage: string | null;
+  skyvernWorkflowId: string | null;
+  actions: NavigationActionDto[];
+  summary: NavigationSummaryDto;
+  steps: EvaluationStepDto[];
+  questions: EvaluationQuestionDto[];
+  reports: EvaluationReportDto[];
+};
+
+export type NavigationRecordingSessionDto = {
+  recordingActive: boolean;
+  recordingPaused: boolean;
+  playActive: boolean;
+  skyvernRunId: string | null;
+  playStatus: string | null;
+};
+
 export const navigationsApi = {
   list: () => apiFetch<EvaluationRow[]>('/navigations'),
   create: (body: CreateNavigationBody) =>
     apiFetch<EvaluationRow>('/navigations', { method: 'POST', body: JSON.stringify(body) }),
-  get: (id: string) => apiFetch<EvaluationDetail>(`/navigations/${id}`),
+  get: (id: string) => apiFetch<NavigationDetailDto>(`/navigations/${id}`),
   patch: (id: string, body: UpdateNavigationBody) =>
-    apiFetch<EvaluationDetail>(`/navigations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    apiFetch<NavigationDetailDto>(`/navigations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  recordingSession: (id: string) =>
+    apiFetch<NavigationRecordingSessionDto>(`/navigations/${id}/recording-session`),
+  playStart: (id: string, body?: { parameters?: Record<string, string> }) =>
+    apiFetch<{ skyvernRunId: string; workflowId: string; browserAddress: string }>(
+      `/navigations/${id}/play/start`,
+      { method: 'POST', body: JSON.stringify(body ?? {}) },
+    ),
+  playStop: (id: string) => apiFetchVoid(`/navigations/${id}/play/stop`, { method: 'POST' }),
 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────

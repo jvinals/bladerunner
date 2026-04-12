@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsIn,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -83,4 +84,10 @@ export class UpdateNavigationDto {
   @IsOptional()
   @IsIn(['continuous', 'step_review'])
   runMode?: 'continuous' | 'step_review';
+}
+
+export class NavigationPlayStartDto {
+  @IsOptional()
+  @IsObject()
+  parameters?: Record<string, string>;
 }

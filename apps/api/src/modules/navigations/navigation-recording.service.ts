@@ -1,9 +1,5 @@
-import {
-  Injectable,
-  Logger,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, ConflictException, NotFoundException } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import { chromium, type Browser, type Page, type CDPSession, type Frame } from 'playwright-core';
@@ -556,6 +552,7 @@ export class NavigationRecordingService {
     private readonly configService: ConfigService,
     private readonly recordingService: RecordingService,
     private readonly llmService: LlmService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -567,6 +564,8 @@ export class NavigationRecordingService {
    * screencast, and begin recording user interactions.
    */
   async startSession(navId: string, userId: string): Promise<void> {
+    const { NavigationPlayService } = await import('./navigation-play.service');
+    this.moduleRef.get(NavigationPlayService, { strict: false }).assertNoPlaySession(navId);
     if (this.sessions.has(navId)) {
       throw new ConflictException('Navigation recording session already active');
     }
@@ -665,25 +664,28 @@ export class NavigationRecordingService {
 
     const actions = mergeRecordedActionsWithClient(session.actions, clientActions);
 
-    if (actions.length > 0) {
-      await this.prisma.navigationAction.createMany({
-        data: actions.map((a) => ({
-          navigationId: navId,
-          userId,
-          sequence: a.sequence,
-          actionType: a.actionType,
-          x: a.x,
-          y: a.y,
-          elementTag: a.elementTag,
-          elementId: a.elementId,
-          elementText: a.elementText,
-          ariaLabel: a.ariaLabel,
-          inputValue: a.inputValue,
-          inputMode: a.inputMode,
-          pageUrl: a.pageUrl,
-        })),
-      });
-    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.navigationAction.deleteMany({ where: { navigationId: navId } });
+      if (actions.length > 0) {
+        await tx.navigationAction.createMany({
+          data: actions.map((a) => ({
+            navigationId: navId,
+            userId,
+            sequence: a.sequence,
+            actionType: a.actionType,
+            x: a.x,
+            y: a.y,
+            elementTag: a.elementTag,
+            elementId: a.elementId,
+            elementText: a.elementText,
+            ariaLabel: a.ariaLabel,
+            inputValue: a.inputValue,
+            inputMode: a.inputMode,
+            pageUrl: a.pageUrl,
+          })),
+        });
+      }
+    });
 
     await this.prisma.navigation.update({
       where: { id: navId, userId },
@@ -1078,6 +1080,15 @@ export class NavigationRecordingService {
   /** Whether a live session exists for this navigation id. */
   hasSession(navId: string): boolean {
     return this.sessions.has(navId);
+  }
+
+  /** For REST: whether a recording session is active and if it is paused. */
+  getSessionState(navId: string, userId: string): { active: boolean; paused: boolean } {
+    const session = this.sessions.get(navId);
+    if (!session || session.userId !== userId) {
+      return { active: false, paused: false };
+    }
+    return { active: true, paused: session.paused };
   }
 
   // -----------------------------------------------------------------------

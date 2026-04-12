@@ -1,10 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '../../generated/prisma/client';
+import { NavigationRecordingService } from './navigation-recording.service';
+import { NavigationPlayService } from './navigation-play.service';
 
 @Injectable()
 export class NavigationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly navigationRecording: NavigationRecordingService,
+    private readonly navigationPlay: NavigationPlayService,
+  ) {}
 
   private async assertProjectOwned(userId: string, projectId: string): Promise<void> {
     const p = await this.prisma.project.findFirst({ where: { id: projectId, userId } });
@@ -52,6 +58,7 @@ export class NavigationsService {
         autoSignIn: true,
         autoSignInClerkOtpMode: true,
         runMode: true,
+        skyvernWorkflowId: true,
       },
     });
   }
@@ -74,6 +81,7 @@ export class NavigationsService {
         autoSignIn: true,
         autoSignInClerkOtpMode: true,
         runMode: true,
+        skyvernWorkflowId: true,
       },
     });
   }
@@ -83,14 +91,54 @@ export class NavigationsService {
       where: { id, userId },
       include: {
         project: { select: { id: true, name: true, color: true } },
+        actions: { orderBy: { sequence: 'asc' } },
       },
     });
     if (!row) throw new NotFoundException(`Navigation ${id} not found`);
+
+    const { actions, ...rest } = row;
+    const actionTypeCounts: Record<string, number> = {};
+    for (const a of actions) {
+      actionTypeCounts[a.actionType] = (actionTypeCounts[a.actionType] ?? 0) + 1;
+    }
+    const variableStepCount = actions.filter(
+      (a) => a.actionType === 'variable_input' || a.actionType === 'prompt_type',
+    ).length;
+    let lastRecordedAt: string | null = null;
+    if (actions.length > 0) {
+      const latest = actions.reduce(
+        (max, a) => (a.createdAt > max ? a.createdAt : max),
+        actions[0].createdAt,
+      );
+      lastRecordedAt = latest.toISOString();
+    }
+
     return {
-      ...row,
+      ...rest,
+      actions,
+      summary: {
+        totalSteps: actions.length,
+        actionTypeCounts,
+        variableStepCount,
+        lastRecordedAt,
+      },
       steps: [],
       questions: [],
       reports: [],
+    };
+  }
+
+  async getLiveSessions(id: string, userId: string) {
+    const nav = await this.prisma.navigation.findFirst({ where: { id, userId }, select: { id: true } });
+    if (!nav) throw new NotFoundException(`Navigation ${id} not found`);
+    const recording = this.navigationRecording.getSessionState(id, userId);
+    const play = this.navigationPlay.getSessionSummary(id, userId);
+    return {
+      recordingActive: recording.active,
+      recordingPaused: recording.paused,
+      playActive: play.active,
+      skyvernRunId: play.skyvernRunId,
+      playStatus: play.lastStatus,
     };
   }
 
