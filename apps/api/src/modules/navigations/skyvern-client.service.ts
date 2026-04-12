@@ -24,16 +24,68 @@ export interface SkyvernWorkflowRunResponse {
   finished_at?: string | null;
 }
 
+/** `GET /v1/runs/{run_id}/artifacts` item (screenshots use `signed_url` for download). */
+export interface SkyvernArtifact {
+  artifact_id: string;
+  artifact_type: string;
+  uri: string;
+  signed_url?: string | null;
+  created_at?: string;
+  modified_at?: string;
+}
+
 export interface SkyvernWorkflowResponse {
-  workflow_id: string;
+  /** Version-scoped id (often `wf_` / `w_`); do not use alone for `POST /v1/run/workflows`. */
+  workflow_id?: string;
+  /** Stable id (`wpid_…`); this is what Skyvern expects as `workflow_id` in the run request. */
+  workflow_permanent_id?: string;
   title?: string;
 }
 
-/** True when Skyvern says the stored workflow id no longer exists (wrong env, deleted, or new API key). */
+/**
+ * Persist and pass this to `runWorkflow` / DB: Skyvern run API expects **`workflow_permanent_id`**, not the
+ * version-only `workflow_id` (see Skyvern docs: run body uses the id returned as `workflow_permanent_id`).
+ */
+export function skyvernPersistentWorkflowId(res: SkyvernWorkflowResponse): string {
+  const permanent = res.workflow_permanent_id?.trim();
+  const versioned = res.workflow_id?.trim();
+  if (permanent) return permanent;
+  if (versioned) return versioned;
+  throw new Error('Skyvern workflow response missing workflow_permanent_id and workflow_id');
+}
+
+export type SkyvernClientOperation =
+  | 'createWorkflow'
+  | 'updateWorkflow'
+  | 'runWorkflow'
+  | 'getRun'
+  | 'cancelRun';
+
+/** Structured failure from Skyvern HTTP API (avoids brittle string parsing for recovery logic). */
+export class SkyvernClientError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly operation: SkyvernClientOperation,
+    readonly bodySnippet: string,
+  ) {
+    super(message);
+    this.name = 'SkyvernClientError';
+  }
+}
+
+/** True when the stored workflow id is invalid for this Skyvern tenant/env (404 on sync or run). */
 export function isStaleSkyvernWorkflowError(err: unknown): boolean {
+  if (err instanceof SkyvernClientError) {
+    if (err.status !== 404) return false;
+    return err.operation === 'updateWorkflow' || err.operation === 'runWorkflow';
+  }
   const msg = err instanceof Error ? err.message : String(err);
   if (!/\(404\)/.test(msg)) return false;
-  return /workflow.*not found|not found.*workflow/i.test(msg);
+  return (
+    /workflow_permanent_id/i.test(msg) ||
+    /workflow.*not found|not found.*workflow/i.test(msg)
+  );
 }
 
 @Injectable()
@@ -92,8 +144,23 @@ export class SkyvernClientService {
     const { ok, status, data, text } = await this.request<SkyvernWorkflowResponse>('POST', '/v1/workflows', {
       json_definition: jsonDefinition,
     });
-    if (!ok || !data?.workflow_id) {
-      throw new Error(`Skyvern create workflow failed (${status}): ${text.slice(0, 500)}`);
+    if (!ok || !data) {
+      throw new SkyvernClientError(
+        `Skyvern create workflow failed (${status}): ${text.slice(0, 500)}`,
+        status,
+        'createWorkflow',
+        text.slice(0, 500),
+      );
+    }
+    try {
+      skyvernPersistentWorkflowId(data);
+    } catch {
+      throw new SkyvernClientError(
+        `Skyvern create workflow failed (${status}): ${text.slice(0, 500)}`,
+        status,
+        'createWorkflow',
+        text.slice(0, 500),
+      );
     }
     return data;
   }
@@ -107,8 +174,23 @@ export class SkyvernClientService {
       `/v1/workflows/${encodeURIComponent(workflowId)}`,
       { json_definition: jsonDefinition },
     );
-    if (!ok || !data?.workflow_id) {
-      throw new Error(`Skyvern update workflow failed (${status}): ${text.slice(0, 500)}`);
+    if (!ok || !data) {
+      throw new SkyvernClientError(
+        `Skyvern update workflow failed (${status}): ${text.slice(0, 500)}`,
+        status,
+        'updateWorkflow',
+        text.slice(0, 500),
+      );
+    }
+    try {
+      skyvernPersistentWorkflowId(data);
+    } catch {
+      throw new SkyvernClientError(
+        `Skyvern update workflow failed (${status}): ${text.slice(0, 500)}`,
+        status,
+        'updateWorkflow',
+        text.slice(0, 500),
+      );
     }
     return data;
   }
@@ -132,7 +214,12 @@ export class SkyvernClientService {
       },
     );
     if (!ok || !data?.run_id) {
-      throw new Error(`Skyvern run workflow failed (${status}): ${text.slice(0, 500)}`);
+      throw new SkyvernClientError(
+        `Skyvern run workflow failed (${status}): ${text.slice(0, 500)}`,
+        status,
+        'runWorkflow',
+        text.slice(0, 500),
+      );
     }
     return data;
   }
@@ -143,7 +230,40 @@ export class SkyvernClientService {
       `/v1/runs/${encodeURIComponent(runId)}`,
     );
     if (!ok || !data?.run_id) {
-      throw new Error(`Skyvern get run failed (${status}): ${text.slice(0, 500)}`);
+      throw new SkyvernClientError(
+        `Skyvern get run failed (${status}): ${text.slice(0, 500)}`,
+        status,
+        'getRun',
+        text.slice(0, 500),
+      );
+    }
+    return data;
+  }
+
+  /**
+   * Live / in-run screenshots often appear here before `screenshot_urls` on `GET /v1/runs/{id}` is populated.
+   */
+  async listRunArtifacts(runId: string): Promise<SkyvernArtifact[]> {
+    const { ok, status, data, text } = await this.request<SkyvernArtifact[]>(
+      'GET',
+      `/v1/runs/${encodeURIComponent(runId)}/artifacts`,
+    );
+    if (!ok) {
+      this.logger.debug(`Skyvern listRunArtifacts ${runId} (${status}): ${text.slice(0, 160)}`);
+      return [];
+    }
+    return Array.isArray(data) ? data : [];
+  }
+
+  /** Fresh `signed_url` for S3 (list responses can be stale or not yet valid → HTTP404 on GET). */
+  async getArtifact(artifactId: string): Promise<SkyvernArtifact | null> {
+    const { ok, status, data, text } = await this.request<SkyvernArtifact>(
+      'GET',
+      `/v1/artifacts/${encodeURIComponent(artifactId)}`,
+    );
+    if (!ok || !data?.artifact_id) {
+      this.logger.debug(`Skyvern getArtifact ${artifactId} (${status}): ${text.slice(0, 120)}`);
+      return null;
     }
     return data;
   }

@@ -1,8 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { NavigationsService } from './navigations.service';
 import { NavigationPlayService } from './navigation-play.service';
+import { SkyvernClientError } from './skyvern-client.service';
 import { CreateNavigationDto, NavigationPlayStartDto, UpdateNavigationDto } from './navigations.dto';
 
 @ApiTags('navigations')
@@ -42,12 +53,19 @@ export class NavigationsController {
 
   @Post(':id/play/start')
   @ApiOperation({ summary: 'Start Skyvern workflow run against browser-worker CDP' })
-  playStart(
+  async playStart(
     @Req() req: { user: { sub: string } },
     @Param('id') id: string,
     @Body() body: NavigationPlayStartDto,
   ) {
-    return this.navigationPlay.startPlay(id, req.user.sub, body?.parameters);
+    try {
+      return await this.navigationPlay.startPlay(id, req.user.sub, body?.parameters);
+    } catch (err) {
+      if (err instanceof SkyvernClientError) {
+        throw new BadGatewayException(err.message);
+      }
+      throw err;
+    }
   }
 
   @Post(':id/play/stop')
