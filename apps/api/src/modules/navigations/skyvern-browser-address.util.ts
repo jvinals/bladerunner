@@ -1,6 +1,20 @@
 import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+function skyvernApiBaseForPlay(config: ConfigService): string {
+  return config.get<string>('SKYVERN_API_BASE_URL')?.trim() || 'https://api.skyvern.com';
+}
+
+/**
+ * **Path B (simple):** Skyvern Cloud / staging — omit `browser_address` so Skyvern runs the workflow in its
+ * hosted browser (no browser-worker CDP). **Self-hosted** Skyvern (`SKYVERN_API_BASE_URL` elsewhere) still
+ * uses the browser-worker + `browser_address` path unless you point the base URL at Cloud.
+ */
+export function navigationPlayUsesSkyvernHostedBrowser(config: ConfigService): boolean {
+  const base = skyvernApiBaseForPlay(config);
+  return /^https:\/\/(api|api-staging)\.skyvern\.com\b/i.test(base);
+}
+
 /**
  * Skyvern calls `connect_over_cdp(browser_address)` from *its* process. A URL like
  * `ws://127.0.0.1:3003/...` is loopback on **Skyvern's** machine (e.g. Docker, remote worker), not the
@@ -33,10 +47,10 @@ export function resolveBrowserAddressForSkyvern(
   }
 }
 
-/** Skyvern Cloud cannot attach to a CDP server on the operator's localhost. */
+/** Block localhost CDP when the API is configured for Skyvern Cloud but this code path still has a loopback URL (should not happen if Play uses hosted browser for Cloud). */
 export function assertSkyvernCloudCannotUseLocalhostCdp(wsEndpoint: string, config: ConfigService): void {
-  const base = config.get<string>('SKYVERN_API_BASE_URL')?.trim() || 'https://api.skyvern.com';
-  const isSkyvernCloud = /^https:\/\/api\.skyvern\.com\b/i.test(base);
+  const base = skyvernApiBaseForPlay(config);
+  const isSkyvernCloud = /^https:\/\/(api|api-staging)\.skyvern\.com\b/i.test(base);
   if (!isSkyvernCloud) return;
   if (!/127\.0\.0\.1|\[::1\]|localhost/i.test(wsEndpoint)) return;
   throw new BadRequestException(

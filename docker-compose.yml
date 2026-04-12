@@ -56,6 +56,8 @@ services:
       dockerfile: apps/browser-worker/Dockerfile
     ports:
       - "3002:3002"
+      # Playwright CDP (launchServer); Skyvern / API connect here — publish or they only see loopback inside the container.
+      - "3003:3003"
     environment:
       - WORKER_PORT=3002
     shm_size: '2gb'

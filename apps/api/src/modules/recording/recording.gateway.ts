@@ -36,8 +36,8 @@ export class RecordingGateway implements OnGatewayInit {
   ) {}
 
   afterInit() {
-    this.recordingService.on('frame', (runId: string, frameBase64: string) => {
-      this.server.to(`run:${runId}`).emit('frame', { runId, data: frameBase64 });
+    this.recordingService.on('frame', (runId: string, frameBase64: string, mime?: string) => {
+      this.server.to(`run:${runId}`).emit('frame', { runId, data: frameBase64, mime });
     });
 
     this.recordingService.on('step', (runId: string, step: any) => {
@@ -121,6 +121,7 @@ export class RecordingGateway implements OnGatewayInit {
     const playPrefix = 'play:';
     const playNavId = data.runId.startsWith(playPrefix) ? data.runId.slice(playPrefix.length) : null;
     const playFrame = playNavId ? this.navigationPlay.getLatestFrame(playNavId) : null;
+    const playFrameMime = playNavId ? this.navigationPlay.getLatestFrameMime(playNavId) : null;
     const latest =
       recFrame && recFrame.length > 0
         ? recFrame
@@ -134,7 +135,11 @@ export class RecordingGateway implements OnGatewayInit {
                 ? playFrame
                 : null;
     if (latest && latest.length > 0) {
-      client.emit('frame', { runId: data.runId, data: latest.toString('base64') });
+      client.emit('frame', {
+        runId: data.runId,
+        data: latest.toString('base64'),
+        ...(playFrame && latest === playFrame && playFrameMime ? { mime: playFrameMime } : {}),
+      });
     }
     const evalProgress = this.recordingService.getLatestEvaluationProgress(data.runId);
     if (evalProgress) {
