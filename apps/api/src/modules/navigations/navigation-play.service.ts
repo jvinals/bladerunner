@@ -49,6 +49,17 @@ function flattenSkyvernTimeline(nodes: unknown): Array<{ label: string | null; s
         label: typeof b.label === 'string' ? b.label : null,
         status: typeof b.status === 'string' ? b.status : null,
       });
+    } else if (
+      typeof o.label === 'string' &&
+      (typeof o.status === 'string' || o.status === null) &&
+      (typeof o.workflow_run_block_id === 'string' ||
+        typeof o.block_workflow_run_id === 'string' ||
+        typeof o.block_type === 'string')
+    ) {
+      out.push({
+        label: o.label,
+        status: typeof o.status === 'string' ? o.status : null,
+      });
     }
     const ch = o.children;
     if (Array.isArray(ch)) {
@@ -63,43 +74,43 @@ function flattenSkyvernTimeline(nodes: unknown): Array<{ label: string | null; s
   return out;
 }
 
-function deriveActiveFromTimelineEntries(
+/**
+ * Skyvern often returns only the **current** block row per poll — never use positional `entries[i]`
+ * (that pinned every run to `sequence` 1). Merge **`label → status`** across polls so completed blocks stay visible.
+ */
+function deriveActiveFromMergedTimeline(
   blockLabels: string[],
   actionSequences: number[],
-  entries: Array<{ label: string | null; status: string | null }>,
+  labelStatus: Map<string, string>,
 ): number | null {
   const n = Math.min(blockLabels.length, actionSequences.length);
   if (n === 0) return null;
-  const byLabel = new Map<string, { label: string | null; status: string | null }>();
-  for (const e of entries) {
-    if (e.label) byLabel.set(e.label, e);
-  }
   for (let i = 0; i < n; i++) {
     const lab = blockLabels[i]!;
     const seq = actionSequences[i]!;
-    const hit = byLabel.get(lab) ?? entries[i];
-    if (!hit) return seq;
-    if (!isTimelineBlockFinished(hit.status)) return seq;
+    const st = labelStatus.get(lab);
+    if (st === undefined) return seq;
+    if (!isTimelineBlockFinished(st)) return seq;
   }
   return actionSequences[n - 1] ?? null;
 }
 
 /**
- * Prefer live **`/timeline`** block statuses; then **`run.output`** `{label}_output` keys; else first/last sequence.
+ * Prefer merged **`/timeline`** `label→status`; then **`run.output`** `{label}_output` keys; else first/last sequence.
  */
 function deriveActivePlaySequence(
   run: SkyvernWorkflowRunResponse,
   blockLabels: string[],
   actionSequences: number[],
-  timelineBlocks?: Array<{ label: string | null; status: string | null }>,
+  labelStatus: Map<string, string>,
 ): number | null {
   if (blockLabels.length === 0 || actionSequences.length === 0) return null;
   const n = Math.min(blockLabels.length, actionSequences.length);
   const labels = blockLabels.slice(0, n);
   const seqs = actionSequences.slice(0, n);
 
-  if (timelineBlocks && timelineBlocks.length > 0) {
-    const fromT = deriveActiveFromTimelineEntries(blockLabels, actionSequences, timelineBlocks);
+  if (labelStatus.size > 0) {
+    const fromT = deriveActiveFromMergedTimeline(blockLabels, actionSequences, labelStatus);
     if (fromT != null) return fromT;
   }
 
@@ -170,6 +181,8 @@ interface NavigationPlaySession {
   skyvernBlockLabels: string[];
   playActionSequences: number[];
   lastActiveSequence: number | null;
+  /** Latest known status per workflow block label (timeline may only return the active block each poll). */
+  timelineLabelStatus: Map<string, string>;
 }
 
 @Injectable()
@@ -371,6 +384,7 @@ export class NavigationPlayService {
       skyvernBlockLabels,
       playActionSequences,
       lastActiveSequence: playActionSequences[0] ?? null,
+      timelineLabelStatus: new Map(),
     };
     this.sessions.set(navId, session);
 
@@ -405,11 +419,18 @@ export class NavigationPlayService {
       session.lastStatus = run.status;
 
       const timelineBlocks = flattenSkyvernTimeline(timelineRaw);
+      if (timelineBlocks.length > 0) {
+        for (const e of timelineBlocks) {
+          if (e.label) {
+            session.timelineLabelStatus.set(e.label, e.status ?? '');
+          }
+        }
+      }
       const activeSequence = deriveActivePlaySequence(
         run,
         session.skyvernBlockLabels,
         session.playActionSequences,
-        timelineBlocks,
+        session.timelineLabelStatus,
       );
       session.lastActiveSequence = activeSequence;
 
@@ -419,6 +440,9 @@ export class NavigationPlayService {
           k.endsWith('_output'),
         ).length;
       }
+      const mergedSample = [...session.timelineLabelStatus.entries()]
+        .slice(0, 5)
+        .map(([k, v]) => `${k}:${v.slice(0, 24)}`);
       // #region agent log
       fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
         method: 'POST',
@@ -432,6 +456,8 @@ export class NavigationPlayService {
             stepCount: run.step_count ?? null,
             outputOutputKeyCount: outputCompletedBlockHints,
             timelineBlockCount: timelineBlocks.length,
+            mergedLabelCount: session.timelineLabelStatus.size,
+            mergedSample,
             status: run.status,
           },
           timestamp: Date.now(),
