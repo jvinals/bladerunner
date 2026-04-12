@@ -635,6 +635,7 @@ export class NavigationPlayService {
           runScreenshotUrlTried: runUrls.length,
           artifactTotal,
           artifactCandidates,
+          runKeySample: Object.keys(run as unknown as Record<string, unknown>).slice(0, 28),
         },
       });
       // #endregion

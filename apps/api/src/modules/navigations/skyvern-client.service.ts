@@ -91,6 +91,53 @@ export function isStaleSkyvernWorkflowError(err: unknown): boolean {
   );
 }
 
+/** Merge nested run envelopes and camelCase aliases so Play can read `screenshot_urls` / artifacts. */
+function normalizeWorkflowRunPayload(raw: unknown): SkyvernWorkflowRunResponse | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  let merged: Record<string, unknown> = { ...o };
+  for (const k of ['workflow_run', 'workflowRun'] as const) {
+    const inner = o[k];
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+      merged = { ...merged, ...(inner as Record<string, unknown>) };
+    }
+  }
+  if (typeof merged.screenshot_urls === 'string') {
+    const s = merged.screenshot_urls.trim();
+    if (s.startsWith('[')) {
+      try {
+        const p = JSON.parse(s) as unknown;
+        if (Array.isArray(p)) merged.screenshot_urls = p;
+      } catch {
+        /* keep string */
+      }
+    }
+    if (typeof merged.screenshot_urls === 'string' && merged.screenshot_urls.startsWith('http')) {
+      merged.screenshot_urls = [merged.screenshot_urls];
+    }
+  }
+  if (!Array.isArray(merged.screenshot_urls) && Array.isArray(merged.screenshotUrls)) {
+    merged.screenshot_urls = merged.screenshotUrls;
+  }
+  if (merged.recording_url == null && typeof merged.recordingUrl === 'string') {
+    merged.recording_url = merged.recordingUrl;
+  }
+  if (typeof merged.run_id !== 'string') return null;
+  return merged as unknown as SkyvernWorkflowRunResponse;
+}
+
+function normalizeArtifactListPayload(raw: unknown): SkyvernArtifact[] {
+  if (Array.isArray(raw)) return raw as SkyvernArtifact[];
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    for (const k of ['artifacts', 'data', 'items', 'results', 'rows']) {
+      const v = o[k];
+      if (Array.isArray(v)) return v as SkyvernArtifact[];
+    }
+  }
+  return [];
+}
+
 @Injectable()
 export class SkyvernClientService {
   private readonly logger = new Logger(SkyvernClientService.name);
@@ -228,11 +275,12 @@ export class SkyvernClientService {
   }
 
   async getRun(runId: string): Promise<SkyvernWorkflowRunResponse> {
-    const { ok, status, data, text } = await this.request<SkyvernWorkflowRunResponse>(
+    const { ok, status, data, text } = await this.request<unknown>(
       'GET',
       `/v1/runs/${encodeURIComponent(runId)}`,
     );
-    if (!ok || !data?.run_id) {
+    const normalized = normalizeWorkflowRunPayload(data);
+    if (!ok || !normalized?.run_id) {
       throw new SkyvernClientError(
         `Skyvern get run failed (${status}): ${text.slice(0, 500)}`,
         status,
@@ -240,7 +288,7 @@ export class SkyvernClientService {
         text.slice(0, 500),
       );
     }
-    return data;
+    return normalized;
   }
 
   /**
@@ -272,7 +320,7 @@ export class SkyvernClientService {
       artifactType && artifactType.trim()
         ? `?artifact_type=${encodeURIComponent(artifactType.trim())}`
         : '';
-    const { ok, status, data, text } = await this.request<SkyvernArtifact[]>(
+    const { ok, status, data, text } = await this.request<unknown>(
       'GET',
       `/v1/runs/${encodeURIComponent(runId)}/artifacts${q}`,
     );
@@ -280,7 +328,7 @@ export class SkyvernClientService {
       this.logger.debug(`Skyvern listRunArtifacts ${runId} (${status}): ${text.slice(0, 160)}`);
       return [];
     }
-    return Array.isArray(data) ? data : [];
+    return normalizeArtifactListPayload(data);
   }
 
   /** Fresh `signed_url` for S3 (list responses can be stale or not yet valid → HTTP404 on GET). */
