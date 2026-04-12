@@ -106,7 +106,11 @@ function collectSkyvernTimelineBlockRows(root: unknown): Array<{ label: string |
   return out;
 }
 
-/** Apply one poll’s timeline rows: labeled rows first (by workflow index), then bind **missing labels** to `s1…sN` in order. */
+/**
+ * Apply one poll’s timeline rows. API often emits **duplicate `s1_*` labels** for two rows (`unlabeledRowCount` = 0 but
+ * `timelineBlockCount` &gt; 1); merging by label alone collapses to one map entry. After sorting by label index, row **k**
+ * always updates **`skyvernBlockLabels[k]`** (status from that row).
+ */
 function mergeTimelinePollIntoLabelStatus(
   session: NavigationPlaySession,
   timelineBlocks: Array<{ label: string | null; status: string | null }>,
@@ -121,17 +125,15 @@ function mergeTimelinePollIntoLabelStatus(
       const ix = session.skyvernBlockLabels.indexOf(t);
       if (ix >= 0) ord = ix;
     }
-    return { e, ord };
+    return { e, ord, j };
   });
-  scored.sort((a, b) => a.ord - b.ord);
+  scored.sort((a, b) => (a.ord === b.ord ? a.j - b.j : a.ord - b.ord));
 
-  for (let k = 0; k < scored.length; k++) {
+  const limit = Math.min(scored.length, nLabels);
+  for (let k = 0; k < limit; k++) {
     const e = scored[k]!.e;
-    const lab =
-      (e.label && e.label.trim()) || (k < nLabels ? session.skyvernBlockLabels[k]! : null);
-    if (lab) {
-      session.timelineLabelStatus.set(lab, e.status ?? '');
-    }
+    const lab = session.skyvernBlockLabels[k]!;
+    session.timelineLabelStatus.set(lab, e.status ?? '');
   }
 }
 
