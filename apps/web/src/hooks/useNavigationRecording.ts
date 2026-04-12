@@ -66,7 +66,13 @@ export interface InputPromptState {
   elementMeta: ElementMetadata;
 }
 
-/** Mock LLM proposal for live prompt injection (viewport box + label). */
+/** Smart Audit suggestion for a step (keyed by `sequence` in UI state). */
+export interface NavigationAuditSuggestion {
+  warning: string;
+  suggestedPrompt: string;
+}
+
+/** LLM proposal for live prompt injection (viewport box + label). */
 export interface ProposedIntentState {
   targetBox: { x: number; y: number; width: number; height: number };
   semanticLabel: string;
@@ -129,6 +135,11 @@ export interface UseNavigationRecordingReturn {
   cancelIntent: () => void;
   /** Refine timeline: patch one action in local state (e.g. static vs variable). */
   updateRecordedAction: (sequenceId: number, updates: Partial<RecordedNavigationAction>) => void;
+  /** Smart Audit: LLM suggestions keyed by action sequence. */
+  auditSuggestions: Record<number, NavigationAuditSuggestion>;
+  auditRunning: boolean;
+  runSmartAudit: () => void;
+  acceptAuditSuggestion: (sequenceId: number) => void;
   error: string | null;
 }
 
@@ -146,6 +157,10 @@ export function useNavigationRecording(
   const [proposedIntent, setProposedIntent] = useState<ProposedIntentState | null>(null);
   const [skyvernWorkflow, setSkyvernWorkflow] = useState<SkyvernWorkflow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [auditSuggestions, setAuditSuggestions] = useState<
+    Record<number, NavigationAuditSuggestion>
+  >({});
+  const [auditRunning, setAuditRunning] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const pendingPromptTextRef = useRef<string>('');
@@ -183,6 +198,8 @@ export function useNavigationRecording(
       setSkyvernWorkflow(null);
       setError(null);
       setProposedIntent(null);
+      setAuditSuggestions({});
+      setAuditRunning(false);
       pendingPromptTextRef.current = '';
     });
 
@@ -258,14 +275,35 @@ export function useNavigationRecording(
         setActions(payload.actions);
         setSkyvernWorkflow(payload.skyvernWorkflow);
         setFrameDataUrl(null);
+        setAuditSuggestions({});
+        setAuditRunning(false);
         void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
         void queryClient.invalidateQueries({ queryKey: ['navigations'] });
+      },
+    );
+
+    socket.on(
+      'nav:auditResults',
+      (payload: {
+        navId: string;
+        suggestions: Array<{ sequence: number; warning: string; suggestedPrompt: string }>;
+      }) => {
+        if (payload.navId !== navId) return;
+        const next: Record<number, NavigationAuditSuggestion> = {};
+        for (const s of payload.suggestions ?? []) {
+          const seq = Number(s.sequence);
+          if (!Number.isFinite(seq)) continue;
+          next[seq] = { warning: s.warning, suggestedPrompt: s.suggestedPrompt };
+        }
+        setAuditSuggestions(next);
+        setAuditRunning(false);
       },
     );
 
     socket.on('nav:error', (payload: { navId: string; error: string }) => {
       if (payload.navId !== navId) return;
       setError(payload.error);
+      setAuditRunning(false);
     });
 
     return () => {
@@ -416,6 +454,46 @@ export function useNavigationRecording(
     pendingPromptTextRef.current = '';
   }, []);
 
+  const runSmartAudit = useCallback(() => {
+    if (!navId || !socketRef.current?.connected) return;
+    if (actionsRef.current.length === 0) return;
+    setError(null);
+    setAuditRunning(true);
+    socketRef.current.emit('nav:requestAudit', {
+      navId,
+      userId,
+      actions: actionsRef.current.map((a) => ({ ...a })),
+      skyvernWorkflow: skyvernWorkflow ?? undefined,
+    });
+  }, [navId, userId, skyvernWorkflow]);
+
+  const acceptAuditSuggestion = useCallback((sequenceId: number) => {
+    const sug = auditSuggestions[sequenceId];
+    if (!sug) return;
+    setActions((prev) => {
+      const next = prev.map((a) => {
+        if (a.sequence !== sequenceId) return a;
+        const t = a.actionType;
+        const nextType: RecordedNavigationAction['actionType'] =
+          t === 'type' || t === 'variable_input' || t === 'prompt_type'
+            ? 'prompt_type'
+            : 'prompt';
+        return {
+          ...a,
+          actionType: nextType,
+          inputValue: sug.suggestedPrompt,
+          inputMode: 'variable' as const,
+        };
+      });
+      actionsRef.current = next;
+      return next;
+    });
+    setAuditSuggestions((s) => {
+      const { [sequenceId]: _removed, ...rest } = s;
+      return rest;
+    });
+  }, [auditSuggestions]);
+
   return {
     isRecording,
     isPaused,
@@ -439,6 +517,10 @@ export function useNavigationRecording(
     confirmIntent,
     cancelIntent,
     updateRecordedAction,
+    auditSuggestions,
+    auditRunning,
+    runSmartAudit,
+    acceptAuditSuggestion,
     error,
   };
 }

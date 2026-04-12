@@ -480,6 +480,37 @@ export class RecordingGateway implements OnGatewayInit {
     }
   }
 
+  @SubscribeMessage('nav:requestAudit')
+  async handleNavRequestAudit(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      navId: string;
+      userId: string;
+      actions?: RecordedNavigationAction[];
+      skyvernWorkflow?: unknown;
+    },
+  ) {
+    try {
+      const raw = (data as { actions?: unknown }).actions;
+      const actions = Array.isArray(raw) ? (raw as RecordedNavigationAction[]) : [];
+      const suggestions = await this.navigationRecording.runSkyvernWorkflowAudit(
+        data.userId,
+        actions,
+        data.skyvernWorkflow ?? null,
+      );
+      this.server.to(`run:${data.navId}`).emit('nav:auditResults', {
+        navId: data.navId,
+        suggestions,
+      });
+      return { ok: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { ok: false, error };
+    }
+  }
+
   @SubscribeMessage('nav:stopRecording')
   async handleNavStop(
     @ConnectedSocket() client: Socket,

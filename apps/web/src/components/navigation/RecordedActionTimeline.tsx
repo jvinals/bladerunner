@@ -13,11 +13,16 @@ import {
   Braces,
   Sparkles,
 } from 'lucide-react';
-import type { RecordedNavigationAction } from '@/hooks/useNavigationRecording';
+import type {
+  RecordedNavigationAction,
+  NavigationAuditSuggestion,
+} from '@/hooks/useNavigationRecording';
 
 interface RecordedActionTimelineProps {
   actions: RecordedNavigationAction[];
   onUpdateAction: (sequence: number, updates: Partial<RecordedNavigationAction>) => void;
+  auditSuggestions?: Record<number, NavigationAuditSuggestion>;
+  onAcceptAuditSuggestion?: (sequence: number) => void;
 }
 
 function stripMustache(raw: string): string {
@@ -329,7 +334,12 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
   );
 }
 
-export function RecordedActionTimeline({ actions, onUpdateAction }: RecordedActionTimelineProps) {
+export function RecordedActionTimeline({
+  actions,
+  onUpdateAction,
+  auditSuggestions = {},
+  onAcceptAuditSuggestion,
+}: RecordedActionTimelineProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
 
   if (actions.length === 0) {
@@ -346,11 +356,14 @@ export function RecordedActionTimeline({ actions, onUpdateAction }: RecordedActi
         {actions.map((action) => {
           const refined = isRefinedHighlight(action);
           const expanded = expandedSequence === action.sequence;
+          const audit = auditSuggestions[action.sequence];
           const rowBg = refined
             ? action.actionType === 'click' && action.inputValue?.trim()
               ? 'bg-sky-50/80 hover:bg-sky-50'
               : 'bg-violet-50/70 hover:bg-violet-50'
-            : 'hover:bg-gray-50/80';
+            : audit
+              ? 'bg-amber-50/60 hover:bg-amber-50/80'
+              : 'hover:bg-gray-50/80';
 
           return (
             <li key={action.sequence}>
@@ -372,6 +385,21 @@ export function RecordedActionTimeline({ actions, onUpdateAction }: RecordedActi
                   )}
                 </div>
               </button>
+              {audit && onAcceptAuditSuggestion ? (
+                <div className="space-y-2 border-b border-amber-100 bg-amber-50/40 px-3 py-2">
+                  <p className="text-[10px] text-amber-900">{audit.warning}</p>
+                  <p className="text-[10px] text-gray-700 font-mono whitespace-pre-wrap break-words">
+                    {audit.suggestedPrompt}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onAcceptAuditSuggestion(action.sequence)}
+                    className="rounded-md bg-amber-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-amber-700"
+                  >
+                    Accept suggestion
+                  </button>
+                </div>
+              ) : null}
               {expanded ? (
                 <div className="border-t border-gray-100 bg-white px-3 pb-3">
                   <TimelineInlineEditor

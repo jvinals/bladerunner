@@ -45,8 +45,16 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
     confirmIntent,
     cancelIntent,
     updateRecordedAction,
+    auditSuggestions,
+    auditRunning,
+    runSmartAudit,
+    acceptAuditSuggestion,
     error,
   } = useNavigationRecording(navId, userId);
+
+  const canRunSmartAudit = Boolean(
+    skyvernWorkflow && actions.length > 0 && !isRecording,
+  );
 
   return (
     <div className="space-y-4">
@@ -55,6 +63,9 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
         isPaused={isPaused}
         connected={connected}
         skyvernWorkflow={skyvernWorkflow}
+        canRunSmartAudit={canRunSmartAudit}
+        auditRunning={auditRunning}
+        onRunSmartAudit={runSmartAudit}
         onStart={startRecording}
         onPause={pauseRecording}
         onResume={resumeRecording}
@@ -87,7 +98,12 @@ export function NavigationRecorderLayout({ navId }: NavigationRecorderLayoutProp
               Recorded Actions ({actions.length})
             </h3>
           </div>
-          <RecordedActionTimeline actions={actions} onUpdateAction={updateRecordedAction} />
+          <RecordedActionTimeline
+            actions={actions}
+            onUpdateAction={updateRecordedAction}
+            auditSuggestions={auditSuggestions}
+            onAcceptAuditSuggestion={acceptAuditSuggestion}
+          />
         </div>
       </div>
 

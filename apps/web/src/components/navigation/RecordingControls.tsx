@@ -2,7 +2,7 @@
  * Start / pause / resume / stop / cancel recording, export Skyvern JSON, status.
  */
 
-import { Circle, Square, Download, Radio, Pause, Play, Ban } from 'lucide-react';
+import { Circle, Square, Download, Radio, Pause, Play, Ban, Sparkles, Loader2 } from 'lucide-react';
 import type { SkyvernWorkflow } from '@/hooks/useNavigationRecording';
 
 interface RecordingControlsProps {
@@ -10,6 +10,10 @@ interface RecordingControlsProps {
   isPaused: boolean;
   connected: boolean;
   skyvernWorkflow: SkyvernWorkflow | null;
+  /** After stop: allow running LLM audit on the recorded timeline. */
+  canRunSmartAudit?: boolean;
+  auditRunning?: boolean;
+  onRunSmartAudit?: () => void;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -33,6 +37,9 @@ export function RecordingControls({
   isPaused,
   connected,
   skyvernWorkflow,
+  canRunSmartAudit = false,
+  auditRunning = false,
+  onRunSmartAudit,
   onStart,
   onPause,
   onResume,
@@ -98,14 +105,31 @@ export function RecordingControls({
       )}
 
       {skyvernWorkflow && (
-        <button
-          type="button"
-          onClick={() => downloadJson(skyvernWorkflow)}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#4B90FF] text-white text-sm font-medium px-4 py-2 hover:bg-[#3d7fe6]"
-        >
-          <Download size={16} />
-          Export Skyvern JSON
-        </button>
+        <>
+          {canRunSmartAudit && onRunSmartAudit ? (
+            <button
+              type="button"
+              disabled={!connected || auditRunning}
+              onClick={onRunSmartAudit}
+              className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 text-violet-900 text-sm font-medium px-4 py-2 hover:bg-violet-100 disabled:opacity-50"
+            >
+              {auditRunning ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              {auditRunning ? 'Running audit…' : 'Run AI audit'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => downloadJson(skyvernWorkflow)}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4B90FF] text-white text-sm font-medium px-4 py-2 hover:bg-[#3d7fe6]"
+          >
+            <Download size={16} />
+            Export Skyvern JSON
+          </button>
+        </>
       )}
 
       <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">

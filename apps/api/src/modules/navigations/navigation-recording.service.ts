@@ -11,6 +11,7 @@ import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { resolveBrowserWorkerWebSocketUrl } from '../recording/browser-worker-url.util';
+import { LlmService } from '../llm/llm.service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -554,6 +555,7 @@ export class NavigationRecordingService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly recordingService: RecordingService,
+    private readonly llmService: LlmService,
   ) {}
 
   // -----------------------------------------------------------------------
@@ -1281,6 +1283,23 @@ export class NavigationRecordingService {
         );
       });
     });
+  }
+
+  /**
+   * LLM-backed refinement suggestions for a finished recording (Skyvern-oriented).
+   * Raw actions are minimized inside {@link LlmService.refineNavigationSkyvernWorkflow}.
+   */
+  async runSkyvernWorkflowAudit(
+    userId: string,
+    actions: RecordedNavigationAction[],
+    skyvernWorkflow: unknown | null | undefined,
+  ): Promise<Array<{ sequence: number; warning: string; suggestedPrompt: string }>> {
+    const skyvernWorkflowJson =
+      skyvernWorkflow == null ? undefined : JSON.stringify(skyvernWorkflow);
+    return this.llmService.refineNavigationSkyvernWorkflow(
+      { actions, skyvernWorkflowJson },
+      { userId },
+    );
   }
 
   private isTransientWorkerError(err: Error): boolean {

@@ -1011,6 +1011,114 @@ export class LlmService {
     return { content: result.content, thinking: result.thinking };
   }
 
+  private static readonly NAVIGATION_SKYVERN_REFINEMENT_SYSTEM = `You help refine recorded navigation steps for export to Skyvern-style semantic workflows.
+You receive "recordedSteps": for each step only sequence, actionType, elementText, ariaLabel, and inputValue (no coordinates, element ids, or page URLs).
+Optionally "skyvernWorkflowDraft" is a JSON string of a draft workflow.
+
+Review steps for vague labels, brittle wording, confusing variable text, or instructions that are hard to verify on a staging app.
+Return ONLY valid JSON (no markdown fences) with exactly this shape:
+{"suggestions":[{"sequence":<number>,"warning":"<short neutral QA reason>","suggestedPrompt":"<clear instruction text>"}]}
+Only include steps that need improvement. sequence must match an input step. If nothing needs changes, return {"suggestions":[]}.`;
+
+  /**
+   * Strip noisy fields before sending navigation actions to the refinement LLM (token savings).
+   */
+  private mapRecordedActionsForSkyvernRefinementLlm(
+    actions: ReadonlyArray<{
+      sequence: number;
+      actionType: string;
+      elementText?: string | null;
+      ariaLabel?: string | null;
+      inputValue?: string | null;
+    }>,
+  ): Array<{
+    sequence: number;
+    actionType: string;
+    elementText: string | null;
+    ariaLabel: string | null;
+    inputValue: string | null;
+  }> {
+    return actions.map((a) => ({
+      sequence: Number(a.sequence),
+      actionType: String(a.actionType ?? ''),
+      elementText: a.elementText ?? null,
+      ariaLabel: a.ariaLabel ?? null,
+      inputValue: a.inputValue ?? null,
+    }));
+  }
+
+  private parseNavigationRefinementSuggestions(raw: string): Array<{
+    sequence: number;
+    warning: string;
+    suggestedPrompt: string;
+  }> {
+    const parsed = parseJsonFromLlmText(raw) as { suggestions?: unknown };
+    const list = Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
+    const out: Array<{ sequence: number; warning: string; suggestedPrompt: string }> = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const rec = item as Record<string, unknown>;
+      const seq = Number(rec.sequence);
+      const warning = typeof rec.warning === 'string' ? rec.warning.trim() : '';
+      const suggestedPrompt =
+        typeof rec.suggestedPrompt === 'string' ? rec.suggestedPrompt.trim() : '';
+      if (!Number.isFinite(seq) || !suggestedPrompt) continue;
+      out.push({ sequence: seq, warning, suggestedPrompt });
+    }
+    return out;
+  }
+
+  /**
+   * Suggest refinements for a navigation recording destined for Skyvern export.
+   * Uses usage key navigation_skyvern_workflow_refinement (minimized step payload only).
+   */
+  async refineNavigationSkyvernWorkflow(
+    input: {
+      actions: ReadonlyArray<{
+        sequence: number;
+        actionType: string;
+        elementText?: string | null;
+        ariaLabel?: string | null;
+        inputValue?: string | null;
+      }>;
+      skyvernWorkflowJson?: string | null;
+    },
+    opts?: { userId?: string },
+  ): Promise<Array<{ sequence: number; warning: string; suggestedPrompt: string }>> {
+    const recordedSteps = this.mapRecordedActionsForSkyvernRefinementLlm(input.actions);
+    const userPayload: Record<string, unknown> = { recordedSteps };
+    const draft = input.skyvernWorkflowJson?.trim();
+    if (draft) {
+      userPayload.skyvernWorkflowDraft = draft.slice(0, 50_000);
+    }
+    const userContent = JSON.stringify(userPayload);
+    const system = LlmService.NAVIGATION_SKYVERN_REFINEMENT_SYSTEM;
+
+    if (this.chatProviderOverride) {
+      try {
+        const r = await this.chatProviderOverride.chat([
+          { role: 'system', content: system },
+          { role: 'user', content: userContent },
+        ]);
+        return this.parseNavigationRefinementSuggestions(r.content);
+      } catch (err) {
+        this.logger.error('refineNavigationSkyvernWorkflow (override) failed', err);
+        return [];
+      }
+    }
+
+    const response = await this.chatJson(
+      opts?.userId,
+      'navigation_skyvern_workflow_refinement',
+      [
+        { role: 'system', content: system },
+        { role: 'user', content: userContent },
+      ],
+      { maxTokens: 8192, temperature: 0.2 },
+    );
+    return this.parseNavigationRefinementSuggestions(response.content);
+  }
+
   async actionToInstruction(
     input: ActionToInstructionInput,
     opts?: { userId?: string },
