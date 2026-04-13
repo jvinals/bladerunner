@@ -288,6 +288,14 @@ function clampPromptTargetBox(box: {
 
 const INSPECT_VALUE_MAX_LEN = 8000;
 
+/**
+ * `closest()` target for `elementFromPoint` hits. cmdk / Radix command palettes expose a
+ * `role="listbox"` container with `tabindex`; rows are `role="option"` / `[cmdk-item]`.
+ * Those rows must win so `textContent` is one item, not the whole palette.
+ */
+const NAV_RECORDING_INTERACTIVE_CLOSEST =
+  'button, a, input, select, textarea, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="treeitem"], [cmdk-item], [data-radix-collection-item], [tabindex]';
+
 /** Domain in prompts like `@mailslurp.biz`, `at mailslurp.biz`, `domain mailslurp.biz`. */
 function extractEmailDomainHint(raw: string): string | null {
   const mAt = raw.match(
@@ -385,16 +393,47 @@ function extractTextToTypeFromPrompt(promptText: string): string | null {
 // ---------------------------------------------------------------------------
 
 function buildElementInspectScript(x: number, y: number): string {
+  const sel = JSON.stringify(NAV_RECORDING_INTERACTIVE_CLOSEST);
   return `(() => {
+  function navRecordingPrimaryLabel(el) {
+    const al = el.getAttribute && el.getAttribute('aria-label');
+    if (al && al.trim()) return al.trim().slice(0, 200);
+    const r = el.getAttribute && el.getAttribute('role');
+    const isShortcutRow =
+      (el.hasAttribute && el.hasAttribute('cmdk-item')) ||
+      r === 'option' ||
+      r === 'treeitem' ||
+      r === 'menuitem';
+    if (!isShortcutRow) {
+      const t = el.textContent && el.textContent.trim();
+      return t ? t.slice(0, 200) : null;
+    }
+    const pieces = [];
+    const walk = (n) => {
+      if (!n) return;
+      if (n.nodeType === 3) {
+        const x = n.textContent;
+        if (x && x.trim()) pieces.push(x.trim());
+      } else if (n.nodeType === 1) {
+        const tn = n.tagName;
+        if (tn === 'KBD' || tn === 'SVG' || tn === 'STYLE' || tn === 'SCRIPT') return;
+        if (n.getAttribute && n.getAttribute('aria-hidden') === 'true') return;
+        const nr = n.getAttribute && n.getAttribute('role');
+        if (nr === 'separator') return;
+        for (let c = n.firstChild; c; c = c.nextSibling) walk(c);
+      }
+    };
+    walk(el);
+    const out = pieces.join(' ').replace(/\\s+/g, ' ').trim();
+    return out ? out.slice(0, 200) : null;
+  }
   let el = document.elementFromPoint(${x}, ${y});
   if (!el) return null;
   const labelAncestor = el.closest && el.closest('label');
   if (labelAncestor && labelAncestor.control && labelAncestor.control instanceof HTMLElement) {
     el = labelAncestor.control;
   }
-  let interactiveEl = el.closest(
-    'button, a, input, select, textarea, [role="button"], [role="link"], [role="menuitem"], [tabindex]'
-  ) || el;
+  let interactiveEl = el.closest(${sel}) || el;
   let tag = interactiveEl.tagName.toLowerCase();
   if (!['input', 'textarea', 'select'].includes(tag)) {
     const nested =
@@ -448,7 +487,7 @@ function buildElementInspectScript(x: number, y: number): string {
     name: interactiveEl.getAttribute('name') || null,
     placeholder: interactiveEl.getAttribute('placeholder') || null,
     ariaLabel: interactiveEl.getAttribute('aria-label') || null,
-    textContent: interactiveEl.textContent?.trim()?.slice(0, 200) || null,
+    textContent: navRecordingPrimaryLabel(interactiveEl),
     isInput,
     currentValue,
   };
@@ -473,7 +512,7 @@ async function applyEditableValueAtFramePoint(
       ? newValue.slice(0, INSPECT_VALUE_MAX_LEN)
       : newValue;
   return (await frame.evaluate(
-    ({ x, y, val }) => {
+    ({ x, y, val, interactiveSel }) => {
       let el: Element | null = document.elementFromPoint(x, y);
       if (!el) return { ok: false as const, reason: 'no-hit' };
       const labelAncestor = el.closest && el.closest('label');
@@ -484,9 +523,7 @@ async function applyEditableValueAtFramePoint(
         el = (labelAncestor as HTMLLabelElement).control;
       }
       if (!el) return { ok: false as const, reason: 'no-target' };
-      let interactiveEl = (el.closest(
-        'button, a, input, select, textarea, [role="button"], [role="link"], [role="menuitem"], [tabindex]',
-      ) || el) as HTMLElement;
+      let interactiveEl = (el.closest(interactiveSel) || el) as HTMLElement;
       let tag = interactiveEl.tagName.toLowerCase();
       if (!['input', 'textarea', 'select'].includes(tag)) {
         const nested = interactiveEl.querySelector?.(
@@ -529,7 +566,7 @@ async function applyEditableValueAtFramePoint(
 
       return { ok: false as const, reason: 'not-editable', tag };
     },
-    { x: lx, y: ly, val: v },
+    { x: lx, y: ly, val: v, interactiveSel: NAV_RECORDING_INTERACTIVE_CLOSEST },
   )) as ApplyEditableResult;
 }
 

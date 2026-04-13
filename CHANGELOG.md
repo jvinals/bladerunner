@@ -2,6 +2,14 @@
 
 ## 2026-04-13
 
+- `0.10.315`: **Chore — remove navigation recording cmdk debug NDJSON** — Dropped **`inspectAndClick`** **`appendFileSync`** to **`.cursor/debug-d7957e.log`** and **`ElementMetadata`** debug fields. `@bladerunner/api 0.6.228`.
+
+- `0.10.314`: **Navigation recording — strip shortcut hints from palette labels** — For **`cmdk-item`** / **`role="option"`** (and **`treeitem`**, **`menuitem`**), **`elementText`** is built by walking text nodes and skipping **`KBD`**, **`SVG`**, **`aria-hidden`**, and **`role="separator"`**, so goals read **“Patient snapshot”** instead of **“Patient snapshotEnter”**. `@bladerunner/api 0.6.227`.
+
+- `0.10.313`: **Navigation recording — cmdk / shadcn command row labels** — Interactive `closest()` selector now includes **`[role="option"]`**, **`[cmdk-item]`**, **`[data-radix-collection-item]`**, **`[role="treeitem"]`** before **`[tabindex]`**, so hits inside a **`role="listbox"`** palette resolve to one row (fixes Default Skyvern goal / `elementText` concatenating the whole modal). Shared **`NAV_RECORDING_INTERACTIVE_CLOSEST`** for inspect + **`applyEditableValueAtFramePoint`**. Debug NDJSON **`runId: cmdk-label-postfix`**. `@bladerunner/api 0.6.226`.
+
+- `0.10.312`: **Debug — navigation recording click metadata (cmdk / shadcn)** — NDJSON to **`.cursor/debug-d7957e.log`** on **`inspectAndClick`**: resolved tag/role, **`cmdk-item`** vs **`cmdk-root`**, text length/preview (investigate bloated Default Skyvern goals). `@bladerunner/api 0.6.225`.
+
 - `0.10.311`: **Chore — remove Smart Audit persist debug instrumentation** — Dropped ingest **`fetch`** from **`acceptAuditSuggestion`** and **`appendFileSync`** from **`patchNavigationAction`**. `@bladerunner/api 0.6.224`, `@bladerunner/web 0.7.174`.
 
 - `0.10.310`: **Navigation — persist Smart Audit accept** — **`PATCH /navigations/:id/actions/:sequence`** accepts optional **`action_type`**, **`input_value`**, **`input_mode`** (plus **`action_instruction`**); at least one field required. **`acceptAuditSuggestion`** calls the API when not recording and invalidates navigation queries. `@bladerunner/api 0.6.223`, `@bladerunner/web 0.7.173`.
