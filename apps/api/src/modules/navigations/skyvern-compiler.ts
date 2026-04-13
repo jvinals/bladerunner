@@ -92,19 +92,21 @@ export function compileToSkyvernWorkflow(
   const variableNames = new Set<string>();
 
   for (const action of actions) {
+    const ins = action.actionInstruction?.trim();
     switch (action.actionType) {
       case 'navigate': {
+        const url = action.inputValue ?? action.pageUrl ?? navigation.url;
         blocks.push({
           block_type: 'navigation',
-          label: `Navigate to ${action.inputValue ?? action.pageUrl ?? navigation.url}`,
-          url: action.inputValue ?? action.pageUrl ?? navigation.url,
+          label: ins || `Navigate to ${url}`,
+          url,
         });
         break;
       }
 
       case 'click': {
         const label =
-          action.inputValue?.trim() || resolveSemanticLabel(action);
+          ins || action.inputValue?.trim() || resolveSemanticLabel(action);
         blocks.push({
           block_type: 'action',
           action_type: 'click',
@@ -117,7 +119,7 @@ export function compileToSkyvernWorkflow(
         blocks.push({
           block_type: 'action',
           action_type: 'input_text',
-          label: resolveSemanticLabel(action),
+          label: ins || resolveSemanticLabel(action),
           text: action.inputValue ?? '',
         });
         break;
@@ -131,14 +133,15 @@ export function compileToSkyvernWorkflow(
         blocks.push({
           block_type: 'action',
           action_type: 'input_text',
-          label: resolveSemanticLabel(action),
+          label: ins || resolveSemanticLabel(action),
           text: key ? skyvernMustacheText(key) : '',
         });
         break;
       }
 
       case 'prompt': {
-        const label = (action.inputValue ?? '').trim() || 'AI prompt step';
+        const label =
+          ins || (action.inputValue ?? '').trim() || 'AI prompt step';
         blocks.push({
           block_type: 'action',
           action_type: 'click',
@@ -153,7 +156,7 @@ export function compileToSkyvernWorkflow(
           variableNames.add(key);
         }
         const label =
-          action.elementText?.trim() || resolveSemanticLabel(action);
+          ins || action.elementText?.trim() || resolveSemanticLabel(action);
         blocks.push({
           block_type: 'action',
           action_type: 'input_text',

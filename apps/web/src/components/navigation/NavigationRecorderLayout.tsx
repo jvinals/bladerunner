@@ -17,12 +17,15 @@ import { CustomPromptInput } from './CustomPromptInput';
 
 interface NavigationRecorderLayoutProps {
   navId: string;
+  /** Base URL for this navigation — used to show default Skyvern goals in the timeline. */
+  navigationUrl: string;
   /** Fires when a recording session is active (start … stop/cancel) so parents can guard UI (e.g. workspace drawer). */
   onSessionActivityChange?: (isRecording: boolean) => void;
 }
 
 export function NavigationRecorderLayout({
   navId,
+  navigationUrl,
   onSessionActivityChange,
 }: NavigationRecorderLayoutProps) {
   const { user } = useUser();
@@ -110,6 +113,8 @@ export function NavigationRecorderLayout({
             </h3>
           </div>
           <RecordedActionTimeline
+            navigationId={navId}
+            navigationUrl={navigationUrl}
             actions={actions}
             onUpdateAction={updateRecordedAction}
             auditSuggestions={auditSuggestions}

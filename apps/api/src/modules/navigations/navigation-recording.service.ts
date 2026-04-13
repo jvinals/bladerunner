@@ -40,6 +40,8 @@ export interface RecordedNavigationAction {
   inputValue: string | null;
   inputMode: 'static' | 'variable' | null;
   pageUrl: string | null;
+  /** Optional NL goal for Skyvern; persisted as `action_instruction`. */
+  actionInstruction?: string | null;
 }
 
 /** Result of `inspectAndClick`: either an action was recorded or an input was detected. */
@@ -116,6 +118,9 @@ function mergeOneRecordedAction(
   }
   if (client.ariaLabel !== undefined) {
     out.ariaLabel = client.ariaLabel;
+  }
+  if (client.actionInstruction !== undefined) {
+    out.actionInstruction = client.actionInstruction;
   }
 
   const b = base.actionType;
@@ -682,6 +687,7 @@ export class NavigationRecordingService {
             inputValue: a.inputValue,
             inputMode: a.inputMode,
             pageUrl: a.pageUrl,
+            actionInstruction: a.actionInstruction ?? null,
           })),
         });
       }

@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { createRecordingSocket } from '@/lib/recordingSocket';
-import { navigationsApi } from '@/lib/api';
+import { navigationsApi, type NavigationDetailDto } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Shared types (mirrored from backend; keep in sync)
@@ -44,6 +44,28 @@ export interface RecordedNavigationAction {
   inputValue: string | null;
   inputMode: 'static' | 'variable' | null;
   pageUrl: string | null;
+  /** Optional natural-language override for Skyvern `navigation_goal` when set. */
+  actionInstruction?: string | null;
+}
+
+/** Align with `NavigationDetail.tsx` / API — used to restore the sidebar after a failed start. */
+function mapDetailActionsToRecorded(
+  rows: NavigationDetailDto['actions'],
+): RecordedNavigationAction[] {
+  return rows.map((a) => ({
+    sequence: a.sequence,
+    actionType: a.actionType as RecordedNavigationAction['actionType'],
+    x: a.x,
+    y: a.y,
+    elementTag: a.elementTag,
+    elementId: a.elementId,
+    elementText: a.elementText,
+    ariaLabel: a.ariaLabel,
+    inputValue: a.inputValue,
+    inputMode: (a.inputMode as RecordedNavigationAction['inputMode']) ?? null,
+    pageUrl: a.pageUrl,
+    actionInstruction: a.actionInstruction ?? null,
+  }));
 }
 
 export interface SkyvernWorkflow {
@@ -164,10 +186,15 @@ export function useNavigationRecording(
   >({});
   const [auditRunning, setAuditRunning] = useState(false);
 
+  const isRecordingRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const pendingPromptTextRef = useRef<string>('');
   /** Must stay in sync with `actions` without waiting for `useEffect` — Stop emits this on the same tick as edits. */
   const actionsRef = useRef<RecordedNavigationAction[]>([]);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   // -----------------------------------------------------------------------
   // Socket lifecycle
@@ -204,8 +231,8 @@ export function useNavigationRecording(
       if (payload.navId !== navId) return;
       setIsRecording(true);
       setIsPaused(false);
-      actionsRef.current = [];
-      setActions([]);
+      /** Do not clear `actions` here: the server emits `nav:actionRecorded` (initial navigate) before
+       * this event; clearing would wipe that step. The list is reset in `startRecording` instead. */
       setSkyvernWorkflow(null);
       setError(null);
       setProposedIntent(null);
@@ -315,6 +342,15 @@ export function useNavigationRecording(
       if (payload.navId !== navId) return;
       setError(payload.error);
       setAuditRunning(false);
+      /** Failed start: we already cleared actions in `startRecording` but never got `nav:sessionStarted`. */
+      if (!isRecordingRef.current && navId) {
+        const cached = queryClient.getQueryData<NavigationDetailDto>(['navigation', navId]);
+        if (cached?.actions?.length) {
+          const next = mapDetailActionsToRecorded(cached.actions);
+          actionsRef.current = next;
+          setActions(next);
+        }
+      }
     });
 
     return () => {
@@ -331,6 +367,13 @@ export function useNavigationRecording(
   const startRecording = useCallback(() => {
     if (!navId || !socketRef.current?.connected) return;
     setError(null);
+    actionsRef.current = [];
+    setActions([]);
+    setSkyvernWorkflow(null);
+    setProposedIntent(null);
+    setAuditSuggestions({});
+    setAuditRunning(false);
+    pendingPromptTextRef.current = '';
     socketRef.current.emit('nav:startRecording', { navId, userId });
   }, [navId, userId]);
 
@@ -361,8 +404,21 @@ export function useNavigationRecording(
         actionsRef.current = next;
         return next;
       });
+      if (
+        updates.actionInstruction !== undefined &&
+        navId &&
+        !isRecordingRef.current
+      ) {
+        void navigationsApi
+          .patchActionInstruction(navId, sequenceId, {
+            actionInstruction: updates.actionInstruction ?? null,
+          })
+          .catch(() => {
+            /* Row may not exist in DB until recording is saved */
+          });
+      }
     },
-    [],
+    [navId],
   );
 
   const pauseRecording = useCallback(() => {

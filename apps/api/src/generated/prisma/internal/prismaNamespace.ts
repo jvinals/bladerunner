@@ -1860,6 +1860,7 @@ export const NavigationActionScalarFieldEnum = {
   inputValue: 'inputValue',
   inputMode: 'inputMode',
   pageUrl: 'pageUrl',
+  actionInstruction: 'actionInstruction',
   createdAt: 'createdAt'
 } as const
 

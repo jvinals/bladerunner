@@ -1119,6 +1119,57 @@ Only include steps that need improvement. sequence must match an input step. If 
     return this.parseNavigationRefinementSuggestions(response.content);
   }
 
+  private static readonly NAVIGATION_ACTION_INSTRUCTION_IMPROVE_SYSTEM = `You improve short natural-language instructions for Skyvern browser automation on staging or QA web apps.
+
+Rules:
+- Output a single clear imperative the agent can execute in one browser step (Skyvern takes one action per block).
+- Neutral QA verification tone; describe what to verify or do on the app under test.
+- Do not use attack-like or hostile phrasing. Do not ask for credentials or secrets.
+- Prefer stable semantic descriptions (e.g. role + name) over brittle wording.
+- Return ONLY valid JSON (no markdown fences) with exactly: {"improved":"<string>"}
+- The improved text should usually be under 500 characters.`;
+
+  /**
+   * Refine a user-drafted action instruction for Navigation → Skyvern export.
+   */
+  async improveNavigationActionInstruction(
+    input: {
+      draft: string;
+      actionType: string;
+      elementText?: string | null;
+      ariaLabel?: string | null;
+      inputValue?: string | null;
+      pageUrl?: string | null;
+    },
+    opts?: { userId?: string },
+  ): Promise<{ improved: string }> {
+    const draft = (input.draft ?? '').trim();
+    const payload = JSON.stringify({
+      draft: draft || '(empty)',
+      actionType: input.actionType,
+      elementText: input.elementText ?? null,
+      ariaLabel: input.ariaLabel ?? null,
+      inputValue: input.inputValue ?? null,
+      pageUrl: input.pageUrl ?? null,
+    });
+    const response = await this.chatJson(
+      opts?.userId,
+      'navigation_action_instruction_improve',
+      [
+        { role: 'system', content: LlmService.NAVIGATION_ACTION_INSTRUCTION_IMPROVE_SYSTEM },
+        { role: 'user', content: payload },
+      ],
+      { maxTokens: 2048, temperature: 0.25 },
+    );
+    const parsed = parseJsonFromLlmText(response.content) as { improved?: unknown };
+    const improved =
+      typeof parsed.improved === 'string' ? parsed.improved.trim() : '';
+    if (!improved) {
+      throw new Error('Model returned no improved instruction');
+    }
+    return { improved };
+  }
+
   async actionToInstruction(
     input: ActionToInstructionInput,
     opts?: { userId?: string },

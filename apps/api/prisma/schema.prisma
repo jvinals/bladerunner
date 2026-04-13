@@ -374,6 +374,8 @@ model NavigationAction {
   /// "static" | "variable" — null for non-input actions
   inputMode      String?  @map("input_mode")
   pageUrl        String?  @map("page_url")
+  /// Optional natural-language goal for Skyvern (overrides default compiled goal when set).
+  actionInstruction String? @map("action_instruction") @db.Text
   createdAt      DateTime @default(now()) @map("created_at")
 
   navigation Navigation @relation(fields: [navigationId], references: [id], onDelete: Cascade)

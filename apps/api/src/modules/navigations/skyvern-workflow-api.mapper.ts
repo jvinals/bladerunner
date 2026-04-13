@@ -65,33 +65,40 @@ export function buildSkyvernWorkflowApiPayload(
   const nextLabel = makeNextBlockLabel();
 
   for (const action of actions) {
+    const ins = action.actionInstruction?.trim();
     switch (action.actionType) {
       case 'navigate': {
         const url = action.inputValue ?? action.pageUrl ?? navigation.url;
+        const navigation_goal = ins
+          ? ins
+          : `Navigate to ${url} and wait for the page to load. The task is complete once the page has loaded.`;
         blocks.push({
           block_type: 'navigation',
           label: nextLabel('nav'),
-          navigation_goal: `Navigate to ${url} and wait for the page to load. The task is complete once the page has loaded.`,
+          navigation_goal,
           url,
         });
         break;
       }
       case 'click': {
         const caption = action.inputValue?.trim() || resolveSemanticLabel(action);
+        const navigation_goal = ins || `Click on: ${caption}`;
         blocks.push({
           block_type: 'action',
           label: nextLabel('click'),
-          navigation_goal: `Click on: ${caption}`,
+          navigation_goal,
         });
         break;
       }
       case 'type': {
         const caption = resolveSemanticLabel(action);
         const text = action.inputValue ?? '';
+        const navigation_goal =
+          ins || `In the field "${caption}", type the text: ${text}`;
         blocks.push({
           block_type: 'action',
           label: nextLabel('type'),
-          navigation_goal: `In the field "${caption}", type the text: ${text}`,
+          navigation_goal,
         });
         break;
       }
@@ -100,19 +107,23 @@ export function buildSkyvernWorkflowApiPayload(
         if (key) variableNames.add(key);
         const caption = resolveSemanticLabel(action);
         const paramRef = key ? skyvernMustacheText(key) : '(empty)';
+        const navigation_goal =
+          ins ||
+          `In the field "${caption}", enter the workflow parameter value ${paramRef}`;
         blocks.push({
           block_type: 'action',
           label: nextLabel('var'),
-          navigation_goal: `In the field "${caption}", enter the workflow parameter value ${paramRef}`,
+          navigation_goal,
         });
         break;
       }
       case 'prompt': {
         const caption = (action.inputValue ?? '').trim() || 'AI-guided click';
+        const navigation_goal = ins || `Click: ${caption}`;
         blocks.push({
           block_type: 'action',
           label: nextLabel('prompt'),
-          navigation_goal: `Click: ${caption}`,
+          navigation_goal,
         });
         break;
       }
@@ -121,10 +132,13 @@ export function buildSkyvernWorkflowApiPayload(
         if (key) variableNames.add(key);
         const caption = action.elementText?.trim() || resolveSemanticLabel(action);
         const paramRef = key ? skyvernMustacheText(key) : '(empty)';
+        const navigation_goal =
+          ins ||
+          `In the field "${caption}", enter the workflow parameter value ${paramRef}`;
         blocks.push({
           block_type: 'action',
           label: nextLabel('ptype'),
-          navigation_goal: `In the field "${caption}", enter the workflow parameter value ${paramRef}`,
+          navigation_goal,
         });
         break;
       }
