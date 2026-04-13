@@ -15,6 +15,7 @@ import {
   Check,
   X,
   Wand2,
+  Trash2,
 } from 'lucide-react';
 import type {
   RecordedNavigationAction,
@@ -41,8 +42,44 @@ interface RecordedActionTimelineProps {
    * When `readOnly` is true, allow accordion expand for step details (Play) without inline editors.
    */
   readOnlyInteractive?: boolean;
+  /**
+   * With `readOnly` + `readOnlyInteractive`: allow editing Skyvern action instructions + Improve with AI
+   * (same as Record mode for those controls). Requires `navigationId` and a real `onUpdateAction` that persists.
+   */
+  playInstructionEditing?: boolean;
   /** When set (e.g. Skyvern Play), highlight this action row. */
   highlightSequence?: number | null;
+  /** Delete step (REST during idle playback, or socket while recording). */
+  onDeleteAction?: (sequence: number) => void;
+  /** Disable delete control (e.g. while a Skyvern play run is active). */
+  deleteActionDisabled?: boolean;
+}
+
+function DeleteStepButton({
+  sequence,
+  onDelete,
+  disabled,
+}: {
+  sequence: number;
+  onDelete?: (sequence: number) => void;
+  disabled?: boolean;
+}) {
+  if (!onDelete) return null;
+  return (
+    <button
+      type="button"
+      title="Delete this step"
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onDelete(sequence);
+      }}
+      className="mt-0.5 shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+      aria-label="Delete step"
+    >
+      <Trash2 size={14} strokeWidth={2} />
+    </button>
+  );
 }
 
 function stripMustache(raw: string): string {
@@ -520,7 +557,10 @@ export function RecordedActionTimeline({
   onRejectAuditSuggestion,
   readOnly = false,
   readOnlyInteractive = false,
+  playInstructionEditing = false,
   highlightSequence = null,
+  onDeleteAction,
+  deleteActionDisabled = false,
 }: RecordedActionTimelineProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
   const [improveLoadingSeq, setImproveLoadingSeq] = useState<number | null>(null);
@@ -537,6 +577,13 @@ export function RecordedActionTimeline({
       setExpandedSequence(highlightSequence);
     }
   }, [readOnly, readOnlyInteractive, highlightSequence]);
+
+  useEffect(() => {
+    if (expandedSequence == null) return;
+    if (!actions.some((a) => a.sequence === expandedSequence)) {
+      setExpandedSequence(null);
+    }
+  }, [actions, expandedSequence]);
 
   const handleImproveClick = async (action: RecordedNavigationAction) => {
     if (!navigationId) return;
@@ -579,7 +626,7 @@ export function RecordedActionTimeline({
 
   return (
     <>
-      {improveErr && !readOnly ? (
+      {improveErr && (!readOnly || playInstructionEditing) ? (
         <p className="border-b border-red-100 px-3 py-2 text-[11px] text-red-600">{improveErr}</p>
       ) : null}
       <div className="overflow-y-auto max-h-[600px]">
@@ -603,28 +650,35 @@ export function RecordedActionTimeline({
             return (
               <li key={action.sequence}>
                 <div
-                  className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs ${rowBg} ${
+                  className={`flex w-full items-start gap-1 px-3 py-2.5 text-left text-xs ${rowBg} ${
                     playHere
                       ? 'ring-2 ring-emerald-500/80 ring-inset bg-emerald-50/90 shadow-sm'
                       : ''
                   }`}
                 >
-                  <span
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
-                      playHere
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {action.sequence}
-                  </span>
-                  {actionIcon(action.actionType, isVariableStyleRefinement(action))}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
-                    {action.actionType !== 'navigate' && action.pageUrl && (
-                      <p className="mt-0.5 truncate text-[10px] text-gray-400">{action.pageUrl}</p>
-                    )}
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                    <span
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                        playHere
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {action.sequence}
+                    </span>
+                    {actionIcon(action.actionType, isVariableStyleRefinement(action))}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
+                      {action.actionType !== 'navigate' && action.pageUrl && (
+                        <p className="mt-0.5 truncate text-[10px] text-gray-400">{action.pageUrl}</p>
+                      )}
+                    </div>
                   </div>
+                  <DeleteStepButton
+                    sequence={action.sequence}
+                    onDelete={onDeleteAction}
+                    disabled={deleteActionDisabled}
+                  />
                 </div>
               </li>
             );
@@ -633,22 +687,79 @@ export function RecordedActionTimeline({
           if (readOnly && readOnlyInteractive) {
             return (
               <li key={action.sequence}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedSequence(expanded ? null : action.sequence)}
-                  className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs transition-colors ${rowBg} ${
-                    playHere
-                      ? 'ring-2 ring-emerald-500/80 ring-inset bg-emerald-50/90 shadow-sm'
-                      : ''
-                  }`}
-                >
-                  <span
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                <div className="flex w-full items-start gap-1 px-3 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSequence(expanded ? null : action.sequence)}
+                    className={`flex min-w-0 flex-1 items-start gap-2.5 text-left text-xs transition-colors ${rowBg} rounded-md px-0 py-0 ${
                       playHere
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-gray-100 text-gray-500'
+                        ? 'ring-2 ring-emerald-500/80 ring-inset bg-emerald-50/90 shadow-sm'
+                        : ''
                     }`}
                   >
+                    <span
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                        playHere
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {action.sequence}
+                    </span>
+                    {actionIcon(action.actionType, isVariableStyleRefinement(action))}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
+                      {action.actionType !== 'navigate' && action.pageUrl && (
+                        <p className="mt-0.5 truncate text-[10px] text-gray-400">{action.pageUrl}</p>
+                      )}
+                    </div>
+                  </button>
+                  <DeleteStepButton
+                    sequence={action.sequence}
+                    onDelete={onDeleteAction}
+                    disabled={deleteActionDisabled}
+                  />
+                </div>
+                {expanded ? (
+                  playInstructionEditing ? (
+                    <div className="border-t border-gray-100 bg-white px-3 pb-3 pt-2 space-y-2">
+                      {supportsActionInstruction(action) ? (
+                        <ActionInstructionEditor
+                          action={action}
+                          onUpdate={(u) => onUpdateAction(action.sequence, u)}
+                          navigationId={navigationId}
+                          navigationUrl={navigationUrl}
+                          improveLoadingSequence={improveLoadingSeq}
+                          onImproveClick={handleImproveClick}
+                        />
+                      ) : null}
+                      <PlayStepReadOnlyDetail
+                        action={action}
+                        navigationUrl={navigationUrl}
+                        variant={
+                          supportsActionInstruction(action) ? 'recordedFieldsOnly' : 'full'
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <PlayStepReadOnlyDetail action={action} navigationUrl={navigationUrl} />
+                  )
+                ) : null}
+              </li>
+            );
+          }
+
+          return (
+            <li key={action.sequence}>
+              <div className="flex w-full items-start gap-1 px-3 py-2.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedSequence(expanded ? null : action.sequence)
+                  }
+                  className={`flex min-w-0 flex-1 items-start gap-2.5 text-left text-xs transition-colors ${rowBg} rounded-md px-0 py-0`}
+                >
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">
                     {action.sequence}
                   </span>
                   {actionIcon(action.actionType, isVariableStyleRefinement(action))}
@@ -659,33 +770,12 @@ export function RecordedActionTimeline({
                     )}
                   </div>
                 </button>
-                {expanded ? (
-                  <PlayStepReadOnlyDetail action={action} navigationUrl={navigationUrl} />
-                ) : null}
-              </li>
-            );
-          }
-
-          return (
-            <li key={action.sequence}>
-              <button
-                type="button"
-                onClick={() =>
-                  setExpandedSequence(expanded ? null : action.sequence)
-                }
-                className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs transition-colors ${rowBg}`}
-              >
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">
-                  {action.sequence}
-                </span>
-                {actionIcon(action.actionType, isVariableStyleRefinement(action))}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
-                  {action.actionType !== 'navigate' && action.pageUrl && (
-                    <p className="mt-0.5 truncate text-[10px] text-gray-400">{action.pageUrl}</p>
-                  )}
-                </div>
-              </button>
+                <DeleteStepButton
+                  sequence={action.sequence}
+                  onDelete={onDeleteAction}
+                  disabled={deleteActionDisabled}
+                />
+              </div>
               {audit && onAcceptAuditSuggestion && onRejectAuditSuggestion ? (
                 <div className="space-y-2 border-b border-amber-100 bg-amber-50/40 px-3 py-2">
                   <p className="text-[10px] text-amber-900">{audit.warning}</p>

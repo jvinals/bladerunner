@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -19,7 +20,7 @@ import {
   CreateNavigationDto,
   ImproveNavigationActionInstructionDto,
   NavigationPlayStartDto,
-  PatchNavigationActionInstructionDto,
+  PatchNavigationActionDto,
   UpdateNavigationDto,
 } from './navigations.dto';
 
@@ -69,14 +70,27 @@ export class NavigationsController {
   }
 
   @Patch(':id/actions/:sequence')
-  @ApiOperation({ summary: 'Update persisted action_instruction for one recorded step' })
-  patchActionInstruction(
+  @ApiOperation({
+    summary:
+      'Update one recorded step — optional action_instruction, action_type, input_value, input_mode (at least one)',
+  })
+  patchNavigationAction(
     @Req() req: { user: { sub: string } },
     @Param('id') id: string,
     @Param('sequence', ParseIntPipe) sequence: number,
-    @Body() dto: PatchNavigationActionInstructionDto,
+    @Body() dto: PatchNavigationActionDto,
   ) {
-    return this.navigations.patchActionInstruction(id, req.user.sub, sequence, dto);
+    return this.navigations.patchNavigationAction(id, req.user.sub, sequence, dto);
+  }
+
+  @Delete(':id/actions/:sequence')
+  @ApiOperation({ summary: 'Delete one recorded step and renumber remaining actions' })
+  deleteNavigationAction(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Param('sequence', ParseIntPipe) sequence: number,
+  ) {
+    return this.navigations.deleteNavigationAction(id, req.user.sub, sequence);
   }
 
   @Post(':id/play/start')

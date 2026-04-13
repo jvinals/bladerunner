@@ -8,11 +8,21 @@ import { defaultSkyvernNavigationGoal } from '@/lib/navigationSkyvernDefaults';
 export interface PlayStepReadOnlyDetailProps {
   action: RecordedNavigationAction;
   navigationUrl: string;
+  /**
+   * When the parent shows `ActionInstructionEditor` (e.g. Play mode editing), skip duplicate
+   * default-goal / override blocks and only show step meta + recorded fields.
+   */
+  variant?: 'full' | 'recordedFieldsOnly';
 }
 
-export function PlayStepReadOnlyDetail({ action, navigationUrl }: PlayStepReadOnlyDetailProps) {
+export function PlayStepReadOnlyDetail({
+  action,
+  navigationUrl,
+  variant = 'full',
+}: PlayStepReadOnlyDetailProps) {
   const defaultGoal = defaultSkyvernNavigationGoal(action, navigationUrl);
   const override = action.actionInstruction?.trim() ?? '';
+  const showGoals = variant === 'full';
 
   return (
     <div className="space-y-2 border-t border-gray-100 bg-white px-3 pb-3 pt-2 text-xs">
@@ -23,7 +33,7 @@ export function PlayStepReadOnlyDetail({ action, navigationUrl }: PlayStepReadOn
         <span className="text-[10px] text-gray-500">Step {action.sequence}</span>
       </div>
 
-      {defaultGoal ? (
+      {showGoals && defaultGoal ? (
         <div className="rounded-md border border-slate-100 bg-slate-50/80 px-2 py-1.5">
           <p className="text-[10px] font-medium text-gray-600">Default Skyvern goal</p>
           <p className="mt-1 text-[11px] leading-snug text-gray-800 whitespace-pre-wrap break-words">
@@ -32,16 +42,18 @@ export function PlayStepReadOnlyDetail({ action, navigationUrl }: PlayStepReadOn
         </div>
       ) : null}
 
-      <div className="rounded-md border border-violet-100 bg-violet-50/40 px-2 py-1.5">
-        <p className="text-[10px] font-medium text-gray-700">Action instruction override</p>
-        {override ? (
-          <p className="mt-1 text-[11px] leading-snug text-gray-900 whitespace-pre-wrap break-words">
-            {override}
-          </p>
-        ) : (
-          <p className="mt-1 text-[10px] text-gray-500">No override — default goal above is used.</p>
-        )}
-      </div>
+      {showGoals ? (
+        <div className="rounded-md border border-violet-100 bg-violet-50/40 px-2 py-1.5">
+          <p className="text-[10px] font-medium text-gray-700">Action instruction override</p>
+          {override ? (
+            <p className="mt-1 text-[11px] leading-snug text-gray-900 whitespace-pre-wrap break-words">
+              {override}
+            </p>
+          ) : (
+            <p className="mt-1 text-[10px] text-gray-500">No override — default goal above is used.</p>
+          )}
+        </div>
+      ) : null}
 
       <details className="group rounded-md border border-gray-100 bg-gray-50/50">
         <summary className="cursor-pointer select-none px-2 py-1.5 text-[10px] font-medium text-gray-600">

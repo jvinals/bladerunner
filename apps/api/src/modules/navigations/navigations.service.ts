@@ -6,7 +6,7 @@ import { NavigationPlayService } from './navigation-play.service';
 import { LlmService } from '../llm/llm.service';
 import type {
   ImproveNavigationActionInstructionDto,
-  PatchNavigationActionInstructionDto,
+  PatchNavigationActionDto,
 } from './navigations.dto';
 
 @Injectable()
@@ -214,11 +214,11 @@ export class NavigationsService {
     );
   }
 
-  async patchActionInstruction(
+  async patchNavigationAction(
     navigationId: string,
     userId: string,
     sequence: number,
-    dto: PatchNavigationActionInstructionDto,
+    dto: PatchNavigationActionDto,
   ) {
     const nav = await this.prisma.navigation.findFirst({
       where: { id: navigationId, userId },
@@ -232,9 +232,25 @@ export class NavigationsService {
     ) {
       throw new BadRequestException('Cannot edit actions while this navigation is in a running or paused state');
     }
+    const data: Prisma.NavigationActionUpdateManyMutationInput = {};
+    if (dto.actionInstruction !== undefined) {
+      data.actionInstruction = dto.actionInstruction;
+    }
+    if (dto.actionType !== undefined) {
+      data.actionType = dto.actionType;
+    }
+    if (dto.inputValue !== undefined) {
+      data.inputValue = dto.inputValue;
+    }
+    if (dto.inputMode !== undefined) {
+      data.inputMode = dto.inputMode;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No fields to update');
+    }
     const updated = await this.prisma.navigationAction.updateMany({
       where: { navigationId, userId, sequence },
-      data: { actionInstruction: dto.actionInstruction },
+      data,
     });
     if (updated.count === 0) {
       throw new NotFoundException(`No action with sequence ${sequence} on this navigation`);
@@ -243,5 +259,60 @@ export class NavigationsService {
       where: { navigationId, userId, sequence },
     });
     return row;
+  }
+
+  /**
+   * Delete one step and renumber remaining actions to 1…n so Skyvern block order stays consistent.
+   */
+  async deleteNavigationAction(navigationId: string, userId: string, sequence: number) {
+    const nav = await this.prisma.navigation.findFirst({
+      where: { id: navigationId, userId },
+      select: { status: true },
+    });
+    if (!nav) throw new NotFoundException(`Navigation ${navigationId} not found`);
+    if (
+      nav.status === 'RUNNING' ||
+      nav.status === 'WAITING_FOR_HUMAN' ||
+      nav.status === 'WAITING_FOR_REVIEW'
+    ) {
+      throw new BadRequestException('Cannot edit actions while this navigation is in a running or paused state');
+    }
+
+    const rows = await this.prisma.navigationAction.findMany({
+      where: { navigationId, userId },
+      orderBy: { sequence: 'asc' },
+    });
+    const idx = rows.findIndex((r) => r.sequence === sequence);
+    if (idx === -1) {
+      throw new NotFoundException(`No action with sequence ${sequence} on this navigation`);
+    }
+
+    const remaining = rows.filter((_, i) => i !== idx);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.navigationAction.deleteMany({ where: { navigationId } });
+      if (remaining.length > 0) {
+        await tx.navigationAction.createMany({
+          data: remaining.map((r, i) => ({
+            navigationId: r.navigationId,
+            userId: r.userId,
+            sequence: i + 1,
+            actionType: r.actionType,
+            x: r.x,
+            y: r.y,
+            elementTag: r.elementTag,
+            elementId: r.elementId,
+            elementText: r.elementText,
+            ariaLabel: r.ariaLabel,
+            inputValue: r.inputValue,
+            inputMode: r.inputMode,
+            pageUrl: r.pageUrl,
+            actionInstruction: r.actionInstruction,
+          })),
+        });
+      }
+    });
+
+    return this.findOne(navigationId, userId);
   }
 }

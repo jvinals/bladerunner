@@ -449,6 +449,7 @@ export default function NavigationDetailPage() {
                   navId={id}
                   persistedActions={persistedRecorded}
                   navigationUrl={ev?.url ?? ''}
+                  canDeleteActions={canEditContent}
                 />
               </div>
             )}
@@ -461,6 +462,7 @@ export default function NavigationDetailPage() {
                 <NavigationRecorderLayout
                   navId={id}
                   navigationUrl={ev.url}
+                  canDeleteActions={canEditContent}
                   onSessionActivityChange={setRecordingSessionActive}
                 />
               </div>

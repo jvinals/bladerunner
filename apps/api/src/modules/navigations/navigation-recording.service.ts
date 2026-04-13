@@ -750,6 +750,22 @@ export class NavigationRecordingService {
     return !!session && session.userId === userId && session.paused;
   }
 
+  /**
+   * Drop one step from the live session list and renumber 1…n.
+   * Keeps `session.sequence` aligned with the last step index for the next `pushAction`.
+   */
+  removeAction(navId: string, userId: string, sequence: number): RecordedNavigationAction[] {
+    const session = this.getSession(navId, userId);
+    const idx = session.actions.findIndex((a) => a.sequence === sequence);
+    if (idx === -1) {
+      throw new NotFoundException(`No action with sequence ${sequence} in this session`);
+    }
+    session.actions.splice(idx, 1);
+    session.actions = session.actions.map((a, i) => ({ ...a, sequence: i + 1 }));
+    session.sequence = session.actions.length;
+    return session.actions.map((a) => ({ ...a }));
+  }
+
   // -----------------------------------------------------------------------
   // User interactions
   // -----------------------------------------------------------------------
