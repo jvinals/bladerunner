@@ -1,5 +1,5 @@
 # Deploy self-hosted Skyvern to Fly.io when config changes (or manual run).
-# Uses the official Skyvern Docker image from ECR -- no local build step.
+# Builds `apps/skyvern/Dockerfile` (official image + LocalStorage patch for UI screenshots).
 # Requires repo secret: FLY_API_TOKEN.
 
 name: Deploy Skyvern to Fly.io

@@ -146,8 +146,9 @@ Navigation Play replays recorded navigations via Skyvern (LLM-driven browser aut
 ```bash
 # 1. Start Docker Desktop
 
-# 2. Start Skyvern + its Postgres (profile keeps it separate from other services)
-docker compose --profile skyvern up -d skyvern-db skyvern
+# 2. Start Skyvern + its Postgres + dashboard/artifact server (profile keeps it separate)
+#    First build may take a minute (thin Dockerfile over official Skyvern + LocalStorage patch for UI screenshots).
+docker compose --profile skyvern up -d skyvern-db skyvern skyvern-ui
 
 # 3. Wait ~30s for first boot (DB migrations), then grab the auto-generated API key
 docker compose --profile skyvern logs skyvern 2>&1 | grep -i "token\|organization"

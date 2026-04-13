@@ -85,7 +85,10 @@ services:
 
   skyvern:
     profiles: [skyvern]
-    image: public.ecr.aws/skyvern/skyvern:latest
+    build:
+      context: ./apps/skyvern
+      dockerfile: Dockerfile
+    image: bladerunner-skyvern:local
     ports:
       - "8000:8000"
     environment:

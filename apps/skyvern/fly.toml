@@ -1,6 +1,6 @@
 # Fly.io configuration for self-hosted Skyvern
 # Internal-only service (Flycast) -- only the Bladerunner API calls it.
-# Uses the official Skyvern Docker image from ECR (no local build).
+# Builds from `apps/skyvern/Dockerfile` (official image + LocalStorage patch for UI screenshots).
 #
 # Deploy: fly deploy --config apps/skyvern/fly.toml -a bladerunner-skyvern
 #
@@ -20,7 +20,7 @@ app = "bladerunner-skyvern"
 primary_region = "iad"
 
 [build]
-  image = "public.ecr.aws/skyvern/skyvern:latest"
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "8000"
