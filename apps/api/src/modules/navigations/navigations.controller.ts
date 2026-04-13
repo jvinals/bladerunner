@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Req,
@@ -14,7 +15,13 @@ import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { NavigationsService } from './navigations.service';
 import { NavigationPlayService } from './navigation-play.service';
 import { SkyvernClientError } from './skyvern-client.service';
-import { CreateNavigationDto, NavigationPlayStartDto, UpdateNavigationDto } from './navigations.dto';
+import {
+  CreateNavigationDto,
+  ImproveNavigationActionInstructionDto,
+  NavigationPlayStartDto,
+  PatchNavigationActionInstructionDto,
+  UpdateNavigationDto,
+} from './navigations.dto';
 
 @ApiTags('navigations')
 @Controller('navigations')
@@ -51,6 +58,27 @@ export class NavigationsController {
     return this.navigations.getLiveSessions(id, req.user.sub);
   }
 
+  @Post(':id/actions/improve-instruction')
+  @ApiOperation({ summary: 'LLM-improve a draft action instruction for Skyvern navigation_goal' })
+  improveActionInstruction(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Body() dto: ImproveNavigationActionInstructionDto,
+  ) {
+    return this.navigations.improveActionInstruction(id, req.user.sub, dto);
+  }
+
+  @Patch(':id/actions/:sequence')
+  @ApiOperation({ summary: 'Update persisted action_instruction for one recorded step' })
+  patchActionInstruction(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Param('sequence', ParseIntPipe) sequence: number,
+    @Body() dto: PatchNavigationActionInstructionDto,
+  ) {
+    return this.navigations.patchActionInstruction(id, req.user.sub, sequence, dto);
+  }
+
   @Post(':id/play/start')
   @ApiOperation({ summary: 'Start Skyvern workflow run against browser-worker CDP' })
   async playStart(
@@ -72,6 +100,12 @@ export class NavigationsController {
   @ApiOperation({ summary: 'Cancel Skyvern play run' })
   playStop(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
     return this.navigationPlay.stopPlay(id, req.user.sub);
+  }
+
+  @Get(':id/skyvern-workflow')
+  @ApiOperation({ summary: 'Get Skyvern workflow definition JSON (same payload as Play sync)' })
+  getSkyvernWorkflow(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+    return this.navigationPlay.getSkyvernWorkflowDefinition(id, req.user.sub);
   }
 
   @Get(':id')

@@ -1,6 +1,6 @@
 {
   "name": "@bladerunner/web",
-  "version": "0.7.164",
+  "version": "0.7.168",
   "private": true,
   "type": "module",
   "scripts": {
@@ -23,6 +23,8 @@
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "js-yaml": "^4.1.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.460.0",
     "mermaid": "^11.14.0",
     "react": "^19.0.0",
@@ -33,6 +35,8 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/jspdf": "^2.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",

@@ -218,6 +218,7 @@ function prismaActionToRecorded(row: {
   inputValue: string | null;
   inputMode: string | null;
   pageUrl: string | null;
+  actionInstruction: string | null;
 }): RecordedNavigationAction {
   const at = row.actionType as RecordedNavigationAction['actionType'];
   return {
@@ -232,6 +233,7 @@ function prismaActionToRecorded(row: {
     inputValue: row.inputValue,
     inputMode: (row.inputMode as RecordedNavigationAction['inputMode']) ?? null,
     pageUrl: row.pageUrl,
+    actionInstruction: row.actionInstruction ?? null,
   };
 }
 
@@ -309,6 +311,61 @@ export class NavigationPlayService {
   }
 
   /**
+   * Load navigation actions and build the same **`{ title, workflow_definition, status }`** payload
+   * sent to Skyvern create/update (used by Play and GET preview).
+   */
+  private async loadPublishedWorkflowDefinition(
+    navId: string,
+    userId: string,
+  ): Promise<{
+    nav: NonNullable<Awaited<ReturnType<NavigationPlayService['prisma']['navigation']['findFirst']>>>;
+    recorded: RecordedNavigationAction[];
+    jsonDefinition: {
+      title: string;
+      workflow_definition: ReturnType<typeof buildSkyvernWorkflowApiPayload>['workflow_definition'];
+      status: 'published';
+    };
+  }> {
+    const nav = await this.prisma.navigation.findFirst({
+      where: { id: navId, userId },
+      include: { actions: { orderBy: { sequence: 'asc' } } },
+    });
+    if (!nav) throw new NotFoundException(`Navigation ${navId} not found`);
+    if (nav.actions.length === 0) {
+      throw new BadRequestException('No recorded actions — record a navigation first');
+    }
+    const recorded = nav.actions.map(prismaActionToRecorded);
+    const { title, workflow_definition } = buildSkyvernWorkflowApiPayload(
+      { id: nav.id, name: nav.name, url: nav.url },
+      recorded,
+    );
+    return {
+      nav,
+      recorded,
+      jsonDefinition: {
+        title,
+        workflow_definition,
+        status: 'published',
+      },
+    };
+  }
+
+  /**
+   * Preview/export: same JSON as Skyvern workflow sync (no Skyvern API call).
+   */
+  async getSkyvernWorkflowDefinition(
+    navId: string,
+    userId: string,
+  ): Promise<{
+    title: string;
+    workflow_definition: ReturnType<typeof buildSkyvernWorkflowApiPayload>['workflow_definition'];
+    status: 'published';
+  }> {
+    const { jsonDefinition } = await this.loadPublishedWorkflowDefinition(navId, userId);
+    return jsonDefinition;
+  }
+
+  /**
    * Sync workflow to Skyvern, start run. **Skyvern Cloud:** hosted browser (no `browser_address`).
    * **Self-hosted:** acquire CDP from browser-worker and pass `browser_address`.
    */
@@ -325,26 +382,7 @@ export class NavigationPlayService {
     }
     this.assertNoPlaySession(navId);
 
-    const nav = await this.prisma.navigation.findFirst({
-      where: { id: navId, userId },
-      include: { actions: { orderBy: { sequence: 'asc' } } },
-    });
-    if (!nav) throw new NotFoundException(`Navigation ${navId} not found`);
-    if (nav.actions.length === 0) {
-      throw new BadRequestException('No recorded actions — record a navigation first');
-    }
-
-    const recorded = nav.actions.map(prismaActionToRecorded);
-    const { title, workflow_definition } = buildSkyvernWorkflowApiPayload(
-      { id: nav.id, name: nav.name, url: nav.url },
-      recorded,
-    );
-
-    const jsonDefinition = {
-      title,
-      workflow_definition,
-      status: 'published',
-    };
+    const { nav, recorded, jsonDefinition } = await this.loadPublishedWorkflowDefinition(navId, userId);
 
     const persistWorkflowId = async (wfId: string) => {
       await this.prisma.navigation.update({
@@ -439,7 +477,7 @@ export class NavigationPlayService {
       }
     }
 
-    const skyvernBlockLabels = workflow_definition.blocks.map((b) => b.label);
+    const skyvernBlockLabels = jsonDefinition.workflow_definition.blocks.map((b) => b.label);
     const playActionSequences = recorded.map((a) => a.sequence);
 
     const room = this.playRoomId(navId);

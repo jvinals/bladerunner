@@ -54,6 +54,7 @@ export type NavigationActionMinAggregateOutputType = {
   inputValue: string | null
   inputMode: string | null
   pageUrl: string | null
+  actionInstruction: string | null
   createdAt: Date | null
 }
 
@@ -72,6 +73,7 @@ export type NavigationActionMaxAggregateOutputType = {
   inputValue: string | null
   inputMode: string | null
   pageUrl: string | null
+  actionInstruction: string | null
   createdAt: Date | null
 }
 
@@ -90,6 +92,7 @@ export type NavigationActionCountAggregateOutputType = {
   inputValue: number
   inputMode: number
   pageUrl: number
+  actionInstruction: number
   createdAt: number
   _all: number
 }
@@ -122,6 +125,7 @@ export type NavigationActionMinAggregateInputType = {
   inputValue?: true
   inputMode?: true
   pageUrl?: true
+  actionInstruction?: true
   createdAt?: true
 }
 
@@ -140,6 +144,7 @@ export type NavigationActionMaxAggregateInputType = {
   inputValue?: true
   inputMode?: true
   pageUrl?: true
+  actionInstruction?: true
   createdAt?: true
 }
 
@@ -158,6 +163,7 @@ export type NavigationActionCountAggregateInputType = {
   inputValue?: true
   inputMode?: true
   pageUrl?: true
+  actionInstruction?: true
   createdAt?: true
   _all?: true
 }
@@ -263,6 +269,7 @@ export type NavigationActionGroupByOutputType = {
   inputValue: string | null
   inputMode: string | null
   pageUrl: string | null
+  actionInstruction: string | null
   createdAt: Date
   _count: NavigationActionCountAggregateOutputType | null
   _avg: NavigationActionAvgAggregateOutputType | null
@@ -304,6 +311,7 @@ export type NavigationActionWhereInput = {
   inputValue?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   inputMode?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   pageUrl?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
+  actionInstruction?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   createdAt?: Prisma.DateTimeFilter<"NavigationAction"> | Date | string
   navigation?: Prisma.XOR<Prisma.NavigationScalarRelationFilter, Prisma.NavigationWhereInput>
 }
@@ -323,6 +331,7 @@ export type NavigationActionOrderByWithRelationInput = {
   inputValue?: Prisma.SortOrderInput | Prisma.SortOrder
   inputMode?: Prisma.SortOrderInput | Prisma.SortOrder
   pageUrl?: Prisma.SortOrderInput | Prisma.SortOrder
+  actionInstruction?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   navigation?: Prisma.NavigationOrderByWithRelationInput
 }
@@ -345,6 +354,7 @@ export type NavigationActionWhereUniqueInput = Prisma.AtLeast<{
   inputValue?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   inputMode?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   pageUrl?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
+  actionInstruction?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   createdAt?: Prisma.DateTimeFilter<"NavigationAction"> | Date | string
   navigation?: Prisma.XOR<Prisma.NavigationScalarRelationFilter, Prisma.NavigationWhereInput>
 }, "id">
@@ -364,6 +374,7 @@ export type NavigationActionOrderByWithAggregationInput = {
   inputValue?: Prisma.SortOrderInput | Prisma.SortOrder
   inputMode?: Prisma.SortOrderInput | Prisma.SortOrder
   pageUrl?: Prisma.SortOrderInput | Prisma.SortOrder
+  actionInstruction?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.NavigationActionCountOrderByAggregateInput
   _avg?: Prisma.NavigationActionAvgOrderByAggregateInput
@@ -390,6 +401,7 @@ export type NavigationActionScalarWhereWithAggregatesInput = {
   inputValue?: Prisma.StringNullableWithAggregatesFilter<"NavigationAction"> | string | null
   inputMode?: Prisma.StringNullableWithAggregatesFilter<"NavigationAction"> | string | null
   pageUrl?: Prisma.StringNullableWithAggregatesFilter<"NavigationAction"> | string | null
+  actionInstruction?: Prisma.StringNullableWithAggregatesFilter<"NavigationAction"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"NavigationAction"> | Date | string
 }
 
@@ -407,6 +419,7 @@ export type NavigationActionCreateInput = {
   inputValue?: string | null
   inputMode?: string | null
   pageUrl?: string | null
+  actionInstruction?: string | null
   createdAt?: Date | string
   navigation: Prisma.NavigationCreateNestedOneWithoutActionsInput
 }
@@ -426,6 +439,7 @@ export type NavigationActionUncheckedCreateInput = {
   inputValue?: string | null
   inputMode?: string | null
   pageUrl?: string | null
+  actionInstruction?: string | null
   createdAt?: Date | string
 }
 
@@ -443,6 +457,7 @@ export type NavigationActionUpdateInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   navigation?: Prisma.NavigationUpdateOneRequiredWithoutActionsNestedInput
 }
@@ -462,6 +477,7 @@ export type NavigationActionUncheckedUpdateInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -480,6 +496,7 @@ export type NavigationActionCreateManyInput = {
   inputValue?: string | null
   inputMode?: string | null
   pageUrl?: string | null
+  actionInstruction?: string | null
   createdAt?: Date | string
 }
 
@@ -497,6 +514,7 @@ export type NavigationActionUpdateManyMutationInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -515,6 +533,7 @@ export type NavigationActionUncheckedUpdateManyInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -543,6 +562,7 @@ export type NavigationActionCountOrderByAggregateInput = {
   inputValue?: Prisma.SortOrder
   inputMode?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
+  actionInstruction?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -567,6 +587,7 @@ export type NavigationActionMaxOrderByAggregateInput = {
   inputValue?: Prisma.SortOrder
   inputMode?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
+  actionInstruction?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -585,6 +606,7 @@ export type NavigationActionMinOrderByAggregateInput = {
   inputValue?: Prisma.SortOrder
   inputMode?: Prisma.SortOrder
   pageUrl?: Prisma.SortOrder
+  actionInstruction?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -658,6 +680,7 @@ export type NavigationActionCreateWithoutNavigationInput = {
   inputValue?: string | null
   inputMode?: string | null
   pageUrl?: string | null
+  actionInstruction?: string | null
   createdAt?: Date | string
 }
 
@@ -675,6 +698,7 @@ export type NavigationActionUncheckedCreateWithoutNavigationInput = {
   inputValue?: string | null
   inputMode?: string | null
   pageUrl?: string | null
+  actionInstruction?: string | null
   createdAt?: Date | string
 }
 
@@ -722,6 +746,7 @@ export type NavigationActionScalarWhereInput = {
   inputValue?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   inputMode?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   pageUrl?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
+  actionInstruction?: Prisma.StringNullableFilter<"NavigationAction"> | string | null
   createdAt?: Prisma.DateTimeFilter<"NavigationAction"> | Date | string
 }
 
@@ -739,6 +764,7 @@ export type NavigationActionCreateManyNavigationInput = {
   inputValue?: string | null
   inputMode?: string | null
   pageUrl?: string | null
+  actionInstruction?: string | null
   createdAt?: Date | string
 }
 
@@ -756,6 +782,7 @@ export type NavigationActionUpdateWithoutNavigationInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -773,6 +800,7 @@ export type NavigationActionUncheckedUpdateWithoutNavigationInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -790,6 +818,7 @@ export type NavigationActionUncheckedUpdateManyWithoutNavigationInput = {
   inputValue?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inputMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  actionInstruction?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -810,6 +839,7 @@ export type NavigationActionSelect<ExtArgs extends runtime.Types.Extensions.Inte
   inputValue?: boolean
   inputMode?: boolean
   pageUrl?: boolean
+  actionInstruction?: boolean
   createdAt?: boolean
   navigation?: boolean | Prisma.NavigationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["navigationAction"]>
@@ -829,6 +859,7 @@ export type NavigationActionSelectCreateManyAndReturn<ExtArgs extends runtime.Ty
   inputValue?: boolean
   inputMode?: boolean
   pageUrl?: boolean
+  actionInstruction?: boolean
   createdAt?: boolean
   navigation?: boolean | Prisma.NavigationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["navigationAction"]>
@@ -848,6 +879,7 @@ export type NavigationActionSelectUpdateManyAndReturn<ExtArgs extends runtime.Ty
   inputValue?: boolean
   inputMode?: boolean
   pageUrl?: boolean
+  actionInstruction?: boolean
   createdAt?: boolean
   navigation?: boolean | Prisma.NavigationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["navigationAction"]>
@@ -867,10 +899,11 @@ export type NavigationActionSelectScalar = {
   inputValue?: boolean
   inputMode?: boolean
   pageUrl?: boolean
+  actionInstruction?: boolean
   createdAt?: boolean
 }
 
-export type NavigationActionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "navigationId" | "userId" | "sequence" | "actionType" | "x" | "y" | "elementTag" | "elementId" | "elementText" | "ariaLabel" | "inputValue" | "inputMode" | "pageUrl" | "createdAt", ExtArgs["result"]["navigationAction"]>
+export type NavigationActionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "navigationId" | "userId" | "sequence" | "actionType" | "x" | "y" | "elementTag" | "elementId" | "elementText" | "ariaLabel" | "inputValue" | "inputMode" | "pageUrl" | "actionInstruction" | "createdAt", ExtArgs["result"]["navigationAction"]>
 export type NavigationActionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   navigation?: boolean | Prisma.NavigationDefaultArgs<ExtArgs>
 }
@@ -910,6 +943,10 @@ export type $NavigationActionPayload<ExtArgs extends runtime.Types.Extensions.In
      */
     inputMode: string | null
     pageUrl: string | null
+    /**
+     * Optional natural-language goal for Skyvern (overrides default compiled goal when set).
+     */
+    actionInstruction: string | null
     createdAt: Date
   }, ExtArgs["result"]["navigationAction"]>
   composites: {}
@@ -1349,6 +1386,7 @@ export interface NavigationActionFieldRefs {
   readonly inputValue: Prisma.FieldRef<"NavigationAction", 'String'>
   readonly inputMode: Prisma.FieldRef<"NavigationAction", 'String'>
   readonly pageUrl: Prisma.FieldRef<"NavigationAction", 'String'>
+  readonly actionInstruction: Prisma.FieldRef<"NavigationAction", 'String'>
   readonly createdAt: Prisma.FieldRef<"NavigationAction", 'DateTime'>
 }
     

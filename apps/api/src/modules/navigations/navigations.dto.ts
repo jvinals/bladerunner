@@ -1,6 +1,8 @@
 import {
   IsBoolean,
+  IsDefined,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -10,7 +12,7 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class CreateNavigationDto {
   @IsOptional()
@@ -90,4 +92,48 @@ export class NavigationPlayStartDto {
   @IsOptional()
   @IsObject()
   parameters?: Record<string, string>;
+}
+
+/** Body for POST …/actions/improve-instruction (LLM refines draft using step context). */
+export class ImproveNavigationActionInstructionDto {
+  @IsString()
+  @MaxLength(8000)
+  draft!: string;
+
+  @IsInt()
+  @Type(() => Number)
+  sequence!: number;
+
+  @IsString()
+  @IsIn(['navigate', 'click', 'type', 'variable_input', 'prompt', 'prompt_type'])
+  actionType!: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  elementText?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  ariaLabel?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  inputValue?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  pageUrl?: string | null;
+}
+
+/** Body for PATCH …/actions/:sequence — persist optional Skyvern goal override. */
+export class PatchNavigationActionInstructionDto {
+  @IsDefined()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  @MaxLength(8000)
+  actionInstruction!: string | null;
 }

@@ -3,6 +3,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '../../generated/prisma/client';
 import { NavigationRecordingService } from './navigation-recording.service';
 import { NavigationPlayService } from './navigation-play.service';
+import { LlmService } from '../llm/llm.service';
+import type {
+  ImproveNavigationActionInstructionDto,
+  PatchNavigationActionInstructionDto,
+} from './navigations.dto';
 
 @Injectable()
 export class NavigationsService {
@@ -10,6 +15,7 @@ export class NavigationsService {
     private readonly prisma: PrismaService,
     private readonly navigationRecording: NavigationRecordingService,
     private readonly navigationPlay: NavigationPlayService,
+    private readonly llm: LlmService,
   ) {}
 
   private async assertProjectOwned(userId: string, projectId: string): Promise<void> {
@@ -183,5 +189,59 @@ export class NavigationsService {
     }
     await this.prisma.navigation.update({ where: { id, userId }, data: patch });
     return this.findOne(id, userId);
+  }
+
+  async improveActionInstruction(
+    navigationId: string,
+    userId: string,
+    dto: ImproveNavigationActionInstructionDto,
+  ): Promise<{ improved: string }> {
+    const nav = await this.prisma.navigation.findFirst({
+      where: { id: navigationId, userId },
+      select: { id: true },
+    });
+    if (!nav) throw new NotFoundException(`Navigation ${navigationId} not found`);
+    return this.llm.improveNavigationActionInstruction(
+      {
+        draft: dto.draft,
+        actionType: dto.actionType,
+        elementText: dto.elementText ?? null,
+        ariaLabel: dto.ariaLabel ?? null,
+        inputValue: dto.inputValue ?? null,
+        pageUrl: dto.pageUrl ?? null,
+      },
+      { userId },
+    );
+  }
+
+  async patchActionInstruction(
+    navigationId: string,
+    userId: string,
+    sequence: number,
+    dto: PatchNavigationActionInstructionDto,
+  ) {
+    const nav = await this.prisma.navigation.findFirst({
+      where: { id: navigationId, userId },
+      select: { status: true },
+    });
+    if (!nav) throw new NotFoundException(`Navigation ${navigationId} not found`);
+    if (
+      nav.status === 'RUNNING' ||
+      nav.status === 'WAITING_FOR_HUMAN' ||
+      nav.status === 'WAITING_FOR_REVIEW'
+    ) {
+      throw new BadRequestException('Cannot edit actions while this navigation is in a running or paused state');
+    }
+    const updated = await this.prisma.navigationAction.updateMany({
+      where: { navigationId, userId, sequence },
+      data: { actionInstruction: dto.actionInstruction },
+    });
+    if (updated.count === 0) {
+      throw new NotFoundException(`No action with sequence ${sequence} on this navigation`);
+    }
+    const row = await this.prisma.navigationAction.findFirst({
+      where: { navigationId, userId, sequence },
+    });
+    return row;
   }
 }

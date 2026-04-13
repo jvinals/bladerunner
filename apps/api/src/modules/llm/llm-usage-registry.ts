@@ -17,6 +17,7 @@ export const LLM_USAGE_KEYS = [
   'evaluation_report',
   'project_discovery',
   'navigation_skyvern_workflow_refinement',
+  'navigation_action_instruction_improve',
 ] as const;
 
 export type LlmUsageKey = (typeof LLM_USAGE_KEYS)[number];
@@ -50,6 +51,7 @@ export const LLM_USAGE_LABELS: Record<LlmUsageKey, string> = {
   evaluation_report: 'Evaluation — final app report',
   project_discovery: 'Project — app discovery (initial map + summary)',
   navigation_skyvern_workflow_refinement: 'Navigation — Skyvern Workflow Refinement Evaluation',
+  navigation_action_instruction_improve: 'Navigation — Improve action instruction (Skyvern)',
 };
 
 export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
@@ -67,6 +69,7 @@ export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
   evaluation_report: true,
   project_discovery: true,
   navigation_skyvern_workflow_refinement: false,
+  navigation_action_instruction_improve: false,
 };
 
 const SUGGESTED_MODELS_BY_PROVIDER: Record<string, string[]> = {
@@ -140,6 +143,7 @@ export function getDefaultPreferenceForUsage(config: ConfigService, usage: LlmUs
 
   switch (usage) {
     case 'navigation_skyvern_workflow_refinement':
+    case 'navigation_action_instruction_improve':
       return {
         provider: 'openrouter',
         model:

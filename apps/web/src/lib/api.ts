@@ -736,7 +736,19 @@ export type NavigationActionDto = {
   inputValue: string | null;
   inputMode: string | null;
   pageUrl: string | null;
+  /** Optional override for Skyvern block `navigation_goal`. */
+  actionInstruction?: string | null;
   createdAt: string;
+};
+
+export type ImproveNavigationActionInstructionBody = {
+  draft: string;
+  sequence: number;
+  actionType: string;
+  elementText?: string | null;
+  ariaLabel?: string | null;
+  inputValue?: string | null;
+  pageUrl?: string | null;
 };
 
 export type NavigationSummaryDto = {
@@ -770,6 +782,13 @@ export type NavigationRecordingSessionDto = {
   playActiveSequence: number | null;
 };
 
+/** Same payload Skyvern create/update uses (Play sync). */
+export type SkyvernWorkflowDefinitionDto = {
+  title: string;
+  workflow_definition: Record<string, unknown>;
+  status: 'published';
+};
+
 export const navigationsApi = {
   list: () => apiFetch<EvaluationRow[]>('/navigations'),
   create: (body: CreateNavigationBody) =>
@@ -787,6 +806,22 @@ export const navigationsApi = {
       activeSequence: number | null;
     }>(`/navigations/${id}/play/start`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   playStop: (id: string) => apiFetchVoid(`/navigations/${id}/play/stop`, { method: 'POST' }),
+  skyvernWorkflow: (id: string) =>
+    apiFetch<SkyvernWorkflowDefinitionDto>(`/navigations/${id}/skyvern-workflow`),
+  improveActionInstruction: (id: string, body: ImproveNavigationActionInstructionBody) =>
+    apiFetch<{ improved: string }>(`/navigations/${id}/actions/improve-instruction`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  patchActionInstruction: (
+    id: string,
+    sequence: number,
+    body: { actionInstruction: string | null },
+  ) =>
+    apiFetch<NavigationActionDto>(`/navigations/${id}/actions/${sequence}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────

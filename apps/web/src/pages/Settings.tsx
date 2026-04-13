@@ -33,6 +33,10 @@ const LLM_USAGE_ROWS: { key: string; label: string }[] = [
     key: 'navigation_skyvern_workflow_refinement',
     label: 'Navigation — Skyvern Workflow Refinement Evaluation',
   },
+  {
+    key: 'navigation_action_instruction_improve',
+    label: 'Navigation — Improve action instruction (Skyvern)',
+  },
 ];
 
 type LlmProviderCapability = {

@@ -2,20 +2,29 @@
  * Play mode: Skyvern workflow run with live frames (screenshot polling) and read-only action list.
  */
 
-import { ExternalLink, Loader2, Play, Square, Radio, Video } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, FileJson, Loader2, Play, Square, Radio, Video } from 'lucide-react';
 import { InteractiveCanvasStream } from './InteractiveCanvasStream';
 import { RecordedActionTimeline } from './RecordedActionTimeline';
+import { SkyvernWorkflowPreviewModal } from './SkyvernWorkflowPreviewModal';
 import { useNavigationPlay } from '@/hooks/useNavigationPlay';
 import type { RecordedNavigationAction } from '@/hooks/useNavigationRecording';
 
 interface NavigationPlayWorkspaceProps {
   navId: string;
   persistedActions: RecordedNavigationAction[];
+  /** Navigation entry URL — used for default Skyvern goal strings in the read-only step detail. */
+  navigationUrl: string;
 }
 
 function noop() {}
 
-export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationPlayWorkspaceProps) {
+export function NavigationPlayWorkspace({
+  navId,
+  persistedActions,
+  navigationUrl,
+}: NavigationPlayWorkspaceProps) {
+  const [workflowPreviewOpen, setWorkflowPreviewOpen] = useState(false);
   const {
     isPlaying,
     connected,
@@ -53,6 +62,20 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
           <Square size={16} />
           Stop
         </button>
+        <button
+          type="button"
+          disabled={!canPlay}
+          onClick={() => setWorkflowPreviewOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/80 text-indigo-900 text-sm font-medium px-4 py-2 hover:bg-indigo-100/80 disabled:opacity-50"
+        >
+          <FileJson size={16} />
+          Preview workflow
+        </button>
+        <SkyvernWorkflowPreviewModal
+          navId={navId}
+          open={workflowPreviewOpen}
+          onOpenChange={setWorkflowPreviewOpen}
+        />
         <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
           <Radio size={14} className={connected ? 'text-green-500' : 'text-amber-500'} />
           {connected ? 'Socket connected' : 'Connecting…'}
@@ -144,6 +167,8 @@ export function NavigationPlayWorkspace({ navId, persistedActions }: NavigationP
             actions={persistedActions}
             onUpdateAction={noop}
             readOnly
+            readOnlyInteractive
+            navigationUrl={navigationUrl}
             highlightSequence={isPlaying ? playActiveSequence : null}
           />
         </div>
