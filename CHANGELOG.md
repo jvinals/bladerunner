@@ -2,6 +2,18 @@
 
 ## 2026-04-13
 
+- `0.10.311`: **Chore — remove Smart Audit persist debug instrumentation** — Dropped ingest **`fetch`** from **`acceptAuditSuggestion`** and **`appendFileSync`** from **`patchNavigationAction`**. `@bladerunner/api 0.6.224`, `@bladerunner/web 0.7.174`.
+
+- `0.10.310`: **Navigation — persist Smart Audit accept** — **`PATCH /navigations/:id/actions/:sequence`** accepts optional **`action_type`**, **`input_value`**, **`input_mode`** (plus **`action_instruction`**); at least one field required. **`acceptAuditSuggestion`** calls the API when not recording and invalidates navigation queries. `@bladerunner/api 0.6.223`, `@bladerunner/web 0.7.173`.
+
+- `0.10.309`: **Navigation — delete recorded steps (Play + Record)** — **`DELETE /navigations/:id/actions/:sequence`** renumbers remaining rows; **`nav:deleteAction`** + **`nav:actionsReplaced`** during live recording. Timeline trash control; disabled when navigation is non-editable or Play run is active. `@bladerunner/api 0.6.222`, `@bladerunner/web 0.7.172`.
+
+- `0.10.308`: **Navigation Play — edit Skyvern goals + Improve with AI** — Play workspace keeps local action state, **`PATCH`** instruction overrides, and **`playInstructionEditing`** on the timeline (same `ActionInstructionEditor` / modal as Record). Editing is disabled while a Skyvern run is **active** (`isPlaying`). `PlayStepReadOnlyDetail` adds **`recordedFieldsOnly`** to avoid duplicate goal UI. `@bladerunner/web 0.7.171`.
+
+- `0.10.307`: **Navigation — detach live stream windows** — Recording and Play workspaces add **Pop out stream** / **Dock stream** so the JPEG canvas can open in a separate browser window (`DetachedStreamPortal` + `createPortal`). `InteractiveCanvasStream` supports **`embedWithoutAppStyles`** for popups without the app CSS. `@bladerunner/web 0.7.170`.
+
+- `0.10.306`: **Chore — remove debug navigation-session instrumentation** — Dropped temporary `nav:stopRecording` / `stopSession` NDJSON and ingest logging. `@bladerunner/api 0.6.221`, `@bladerunner/web 0.7.169`.
+
 - `0.10.305`: **Navigation Play — workflow preview + read-only step details** — **API**: `GET /navigations/:id/skyvern-workflow` returns the same JSON as Skyvern create/update (`title`, `workflow_definition`, `status: published`); shared loader with `startPlay`. **Web**: **Preview workflow** opens a modal with JSON / YAML / PDF preview and per-format download (`js-yaml`, `jspdf`). Play timeline uses **`readOnlyInteractive`**: accordion rows with **default Skyvern goal**, **action instruction override**, and **recorded fields** (`PlayStepReadOnlyDetail`). **`navigationUrl`** passed into Play workspace for navigate defaults. `@bladerunner/api 0.6.220`, `@bladerunner/web 0.7.168`.
 
 - `0.10.304`: **Navigation timeline — show default Skyvern goals** — Expanded steps now show a read-only **Default Skyvern goal** (same strings as Play / `buildSkyvernWorkflowApiPayload`) so the “original” instruction is visible while the override field is empty. **`prompt_type`** inline editor state syncs when switching steps. **Improve with AI** uses the default goal as the draft when no override is set. **`navigationUrl`** passed from `NavigationDetail` into the recorder layout. `@bladerunner/web 0.7.167`.

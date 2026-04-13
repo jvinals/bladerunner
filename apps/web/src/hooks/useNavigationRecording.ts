@@ -164,6 +164,8 @@ export interface UseNavigationRecordingReturn {
   runSmartAudit: () => void;
   acceptAuditSuggestion: (sequenceId: number) => void;
   rejectAuditSuggestion: (sequenceId: number) => void;
+  /** Remove a step (live session via socket, or persisted navigation via REST). */
+  deleteRecordedAction: (sequenceId: number) => void;
   error: string | null;
 }
 
@@ -260,6 +262,16 @@ export function useNavigationRecording(
           actionsRef.current = next;
           return next;
         });
+      },
+    );
+
+    socket.on(
+      'nav:actionsReplaced',
+      (payload: { navId: string; actions: RecordedNavigationAction[] }) => {
+        if (payload.navId !== navId) return;
+        actionsRef.current = payload.actions;
+        setActions(payload.actions);
+        setAuditSuggestions({});
       },
     );
 
@@ -534,32 +546,56 @@ export function useNavigationRecording(
     });
   }, [navId, userId, skyvernWorkflow]);
 
-  const acceptAuditSuggestion = useCallback((sequenceId: number) => {
-    const sug = auditSuggestions[sequenceId];
-    if (!sug) return;
-    setActions((prev) => {
-      const next = prev.map((a) => {
-        if (a.sequence !== sequenceId) return a;
-        const t = a.actionType;
-        const nextType: RecordedNavigationAction['actionType'] =
-          t === 'type' || t === 'variable_input' || t === 'prompt_type'
-            ? 'prompt_type'
-            : 'prompt';
-        return {
-          ...a,
-          actionType: nextType,
-          inputValue: sug.suggestedPrompt,
-          inputMode: 'variable' as const,
-        };
+  const acceptAuditSuggestion = useCallback(
+    (sequenceId: number) => {
+      const sug = auditSuggestions[sequenceId];
+      if (!sug) return;
+      const prevAction = actionsRef.current.find((a) => a.sequence === sequenceId);
+      if (!prevAction) return;
+      const t = prevAction.actionType;
+      const nextType: RecordedNavigationAction['actionType'] =
+        t === 'type' || t === 'variable_input' || t === 'prompt_type'
+          ? 'prompt_type'
+          : 'prompt';
+      const nextInputValue = sug.suggestedPrompt;
+      const nextInputMode = 'variable' as const;
+
+      setActions((prev) => {
+        const next = prev.map((a) => {
+          if (a.sequence !== sequenceId) return a;
+          return {
+            ...a,
+            actionType: nextType,
+            inputValue: nextInputValue,
+            inputMode: nextInputMode,
+          };
+        });
+        actionsRef.current = next;
+        return next;
       });
-      actionsRef.current = next;
-      return next;
-    });
-    setAuditSuggestions((s) => {
-      const { [sequenceId]: _removed, ...rest } = s;
-      return rest;
-    });
-  }, [auditSuggestions]);
+      setAuditSuggestions((s) => {
+        const { [sequenceId]: _removed, ...rest } = s;
+        return rest;
+      });
+
+      if (navId && !isRecordingRef.current) {
+        void navigationsApi
+          .patchActionInstruction(navId, sequenceId, {
+            actionType: nextType,
+            inputValue: nextInputValue,
+            inputMode: nextInputMode,
+          })
+          .then(() => {
+            void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
+            void queryClient.invalidateQueries({ queryKey: ['navigations'] });
+          })
+          .catch((e) => {
+            setError(e instanceof Error ? e.message : 'Could not save audit change');
+          });
+      }
+    },
+    [auditSuggestions, navId, queryClient],
+  );
 
   const rejectAuditSuggestion = useCallback((sequenceId: number) => {
     setAuditSuggestions((s) => {
@@ -568,6 +604,39 @@ export function useNavigationRecording(
       return rest;
     });
   }, []);
+
+  const deleteRecordedAction = useCallback(
+    (sequenceId: number) => {
+      if (!navId) return;
+      if (
+        !window.confirm(
+          'Delete this step? Remaining steps will be renumbered. This cannot be undone.',
+        )
+      ) {
+        return;
+      }
+      setError(null);
+
+      if (isRecordingRef.current && socketRef.current?.connected) {
+        socketRef.current.emit('nav:deleteAction', { navId, userId, sequence: sequenceId });
+        return;
+      }
+
+      void navigationsApi
+        .deleteAction(navId, sequenceId)
+        .then((detail) => {
+          const next = mapDetailActionsToRecorded(detail.actions);
+          actionsRef.current = next;
+          setActions(next);
+          void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
+          void queryClient.invalidateQueries({ queryKey: ['navigations'] });
+        })
+        .catch((e) => {
+          setError(e instanceof Error ? e.message : 'Could not delete step');
+        });
+    },
+    [navId, userId, isPaused, queryClient],
+  );
 
   return {
     isRecording,
@@ -597,6 +666,7 @@ export function useNavigationRecording(
     runSmartAudit,
     acceptAuditSuggestion,
     rejectAuditSuggestion,
+    deleteRecordedAction,
     error,
   };
 }

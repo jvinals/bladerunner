@@ -463,6 +463,29 @@ export class RecordingGateway implements OnGatewayInit {
     return { ok: true };
   }
 
+  @SubscribeMessage('nav:deleteAction')
+  async handleNavDeleteAction(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { navId: string; userId: string; sequence: number },
+  ) {
+    try {
+      const actions = this.navigationRecording.removeAction(
+        data.navId,
+        data.userId,
+        Number(data.sequence),
+      );
+      this.server.to(`run:${data.navId}`).emit('nav:actionsReplaced', {
+        navId: data.navId,
+        actions,
+      });
+      return { ok: true, actions };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      client.emit('nav:error', { navId: data.navId, error });
+      return { ok: false, error };
+    }
+  }
+
   @SubscribeMessage('nav:pause')
   async handleNavPause(
     @ConnectedSocket() client: Socket,

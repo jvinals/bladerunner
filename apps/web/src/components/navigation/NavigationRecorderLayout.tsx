@@ -6,11 +6,13 @@
  * VariableInjectionModal (overlay when an input field is detected).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/react';
 import { useNavigationRecording } from '@/hooks/useNavigationRecording';
+import { DetachedStreamPortal } from './DetachedStreamPortal';
 import { InteractiveCanvasStream } from './InteractiveCanvasStream';
 import { RecordedActionTimeline } from './RecordedActionTimeline';
+import { StreamDetachToolbar } from './StreamDetachToolbar';
 import { RecordingControls } from './RecordingControls';
 import { VariableInjectionModal } from './VariableInjectionModal';
 import { CustomPromptInput } from './CustomPromptInput';
@@ -21,12 +23,15 @@ interface NavigationRecorderLayoutProps {
   navigationUrl: string;
   /** Fires when a recording session is active (start … stop/cancel) so parents can guard UI (e.g. workspace drawer). */
   onSessionActivityChange?: (isRecording: boolean) => void;
+  /** When false, step delete is disabled for persisted navigations (running / review states). Ignored while a live recording session is active. */
+  canDeleteActions?: boolean;
 }
 
 export function NavigationRecorderLayout({
   navId,
   navigationUrl,
   onSessionActivityChange,
+  canDeleteActions = true,
 }: NavigationRecorderLayoutProps) {
   const { user } = useUser();
   const userId = user?.id ?? '';
@@ -54,6 +59,7 @@ export function NavigationRecorderLayout({
     confirmIntent,
     cancelIntent,
     updateRecordedAction,
+    deleteRecordedAction,
     auditSuggestions,
     auditRunning,
     runSmartAudit,
@@ -65,6 +71,8 @@ export function NavigationRecorderLayout({
   useEffect(() => {
     onSessionActivityChange?.(isRecording);
   }, [isRecording, onSessionActivityChange]);
+
+  const [streamDetached, setStreamDetached] = useState(false);
 
   const canRunSmartAudit = Boolean(
     skyvernWorkflow && actions.length > 0 && !isRecording,
@@ -90,16 +98,45 @@ export function NavigationRecorderLayout({
 
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
-          <InteractiveCanvasStream
-            frameDataUrl={frameDataUrl}
-            isInputModalOpen={isInputModalOpen}
-            blockCanvasInteraction={isInputModalOpen || isPaused || proposedIntent !== null}
-            proposedIntent={proposedIntent}
-            onConfirmIntent={confirmIntent}
-            onCancelIntent={cancelIntent}
-            sendClick={sendClick}
-            sendScroll={sendScroll}
+          <StreamDetachToolbar
+            detached={streamDetached}
+            onDetach={() => setStreamDetached(true)}
+            onDock={() => setStreamDetached(false)}
           />
+          {!streamDetached ? (
+            <InteractiveCanvasStream
+              frameDataUrl={frameDataUrl}
+              isInputModalOpen={isInputModalOpen}
+              blockCanvasInteraction={isInputModalOpen || isPaused || proposedIntent !== null}
+              proposedIntent={proposedIntent}
+              onConfirmIntent={confirmIntent}
+              onCancelIntent={cancelIntent}
+              sendClick={sendClick}
+              sendScroll={sendScroll}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/90 px-4 py-14 text-center text-sm text-slate-600">
+              Live stream is in a separate window. Use <span className="font-medium">Dock stream</span> above
+              to show it here again.
+            </div>
+          )}
+          <DetachedStreamPortal
+            open={streamDetached}
+            onOpenChange={setStreamDetached}
+            title="Navigation recording — live stream"
+          >
+            <InteractiveCanvasStream
+              frameDataUrl={frameDataUrl}
+              isInputModalOpen={isInputModalOpen}
+              blockCanvasInteraction={isInputModalOpen || isPaused || proposedIntent !== null}
+              proposedIntent={proposedIntent}
+              onConfirmIntent={confirmIntent}
+              onCancelIntent={cancelIntent}
+              sendClick={sendClick}
+              sendScroll={sendScroll}
+              embedWithoutAppStyles
+            />
+          </DetachedStreamPortal>
         </div>
 
         <div className="w-72 shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
@@ -117,6 +154,8 @@ export function NavigationRecorderLayout({
             navigationUrl={navigationUrl}
             actions={actions}
             onUpdateAction={updateRecordedAction}
+            onDeleteAction={deleteRecordedAction}
+            deleteActionDisabled={!isRecording && !canDeleteActions}
             auditSuggestions={auditSuggestions}
             onAcceptAuditSuggestion={acceptAuditSuggestion}
             onRejectAuditSuggestion={rejectAuditSuggestion}

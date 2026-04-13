@@ -816,12 +816,19 @@ export const navigationsApi = {
   patchActionInstruction: (
     id: string,
     sequence: number,
-    body: { actionInstruction: string | null },
+    body: {
+      actionInstruction?: string | null;
+      actionType?: string;
+      inputValue?: string | null;
+      inputMode?: 'static' | 'variable' | null;
+    },
   ) =>
     apiFetch<NavigationActionDto>(`/navigations/${id}/actions/${sequence}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  deleteAction: (id: string, sequence: number) =>
+    apiFetch<NavigationDetailDto>(`/navigations/${id}/actions/${sequence}`, { method: 'DELETE' }),
 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────

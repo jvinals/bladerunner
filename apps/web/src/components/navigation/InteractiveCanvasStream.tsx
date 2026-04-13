@@ -36,6 +36,11 @@ interface InteractiveCanvasStreamProps {
   onCancelIntent: () => void;
   sendClick: (x: number, y: number, streamWidth: number, streamHeight: number) => void;
   sendScroll: (deltaX: number, deltaY: number) => void;
+  /**
+   * Use inline layout only (no Tailwind). Required when rendered in a detached `window`
+   * that does not load the app stylesheet.
+   */
+  embedWithoutAppStyles?: boolean;
 }
 
 const SCROLL_THROTTLE_MS = 50;
@@ -49,6 +54,7 @@ export function InteractiveCanvasStream({
   onCancelIntent,
   sendClick,
   sendScroll,
+  embedWithoutAppStyles = false,
 }: InteractiveCanvasStreamProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -173,37 +179,118 @@ export function InteractiveCanvasStream({
   // Render
   // -----------------------------------------------------------------------
 
+  const wrapClass = embedWithoutAppStyles ? undefined : 'relative w-full';
+  const wrapStyle = embedWithoutAppStyles
+    ? ({ position: 'relative' as const, width: '100%' })
+    : undefined;
+
+  const canvasClass = embedWithoutAppStyles
+    ? undefined
+    : `w-full rounded-lg border border-gray-200 bg-black ${
+        blockCanvasInteraction ? 'pointer-events-none opacity-70' : 'cursor-crosshair'
+      }`;
+
+  const canvasStyle = embedWithoutAppStyles
+    ? {
+        width: '100%',
+        display: 'block' as const,
+        aspectRatio: '16 / 9',
+        borderRadius: 8,
+        border: '1px solid #e5e7eb',
+        background: '#000',
+        pointerEvents: (blockCanvasInteraction ? 'none' : 'auto') as 'none' | 'auto',
+        opacity: blockCanvasInteraction ? 0.7 : 1,
+        cursor: blockCanvasInteraction ? 'default' : 'crosshair',
+      }
+    : { aspectRatio: '16 / 9' };
+
+  const waitingOverlayClass = embedWithoutAppStyles ? undefined : 'absolute inset-0 flex items-center justify-center text-gray-500 text-sm pointer-events-none';
+  const waitingOverlayStyle = embedWithoutAppStyles
+    ? {
+        position: 'absolute' as const,
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#6b7280',
+        fontSize: 14,
+        pointerEvents: 'none' as const,
+      }
+    : undefined;
+
+  const fabWrapClass = embedWithoutAppStyles ? undefined : 'absolute z-20 flex flex-wrap gap-2 items-center';
+  const fabWrapStyle =
+    proposedIntent && fabPos
+      ? embedWithoutAppStyles
+        ? {
+            position: 'absolute' as const,
+            zIndex: 20,
+            display: 'flex',
+            flexWrap: 'wrap' as const,
+            gap: 8,
+            alignItems: 'center',
+            left: fabPos.left,
+            top: fabPos.top,
+            maxWidth: 'calc(100% - 1rem)',
+          }
+        : { left: fabPos.left, top: fabPos.top, maxWidth: 'calc(100% - 1rem)' }
+      : undefined;
+
+  const btnPrimaryStyle = embedWithoutAppStyles
+    ? {
+        borderRadius: 8,
+        background: '#059669',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 500,
+        padding: '6px 12px',
+        border: 'none',
+        cursor: 'pointer',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+      }
+    : undefined;
+  const btnSecondaryStyle = embedWithoutAppStyles
+    ? {
+        borderRadius: 8,
+        border: '1px solid #d1d5db',
+        background: '#fff',
+        color: '#374151',
+        fontSize: 12,
+        fontWeight: 500,
+        padding: '6px 12px',
+        cursor: 'pointer',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+      }
+    : undefined;
+
   return (
-    <div ref={wrapRef} className="relative w-full">
+    <div ref={wrapRef} className={wrapClass} style={wrapStyle}>
       <canvas
         ref={canvasRef}
         onClick={handleClick}
         onWheel={handleWheel}
-        className={`w-full rounded-lg border border-gray-200 bg-black ${
-          blockCanvasInteraction ? 'pointer-events-none opacity-70' : 'cursor-crosshair'
-        }`}
-        style={{ aspectRatio: '16 / 9' }}
+        className={canvasClass}
+        style={canvasStyle}
       />
       {!frameDataUrl && (
-        <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm pointer-events-none">
+        <div className={waitingOverlayClass} style={waitingOverlayStyle}>
           Waiting for browser frame...
         </div>
       )}
       {proposedIntent && fabPos && (
-        <div
-          className="absolute z-20 flex flex-wrap gap-2 items-center"
-          style={{ left: fabPos.left, top: fabPos.top, maxWidth: 'calc(100% - 1rem)' }}
-        >
+        <div className={fabWrapClass} style={fabWrapStyle}>
           <button
             type="button"
-            className="rounded-lg bg-emerald-600 text-white text-xs font-medium py-1.5 px-3 shadow-md hover:bg-emerald-700"
+            className={embedWithoutAppStyles ? undefined : 'rounded-lg bg-emerald-600 text-white text-xs font-medium py-1.5 px-3 shadow-md hover:bg-emerald-700'}
+            style={btnPrimaryStyle}
             onClick={onConfirmIntent}
           >
             Confirm &amp; click
           </button>
           <button
             type="button"
-            className="rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-medium py-1.5 px-3 shadow-sm hover:bg-gray-50"
+            className={embedWithoutAppStyles ? undefined : 'rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-medium py-1.5 px-3 shadow-sm hover:bg-gray-50'}
+            style={btnSecondaryStyle}
             onClick={onCancelIntent}
           >
             Cancel

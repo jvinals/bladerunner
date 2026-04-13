@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsDefined,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -129,11 +128,26 @@ export class ImproveNavigationActionInstructionDto {
   pageUrl?: string | null;
 }
 
-/** Body for PATCH …/actions/:sequence — persist optional Skyvern goal override. */
-export class PatchNavigationActionInstructionDto {
-  @IsDefined()
+/** Body for PATCH …/actions/:sequence — optional instruction and/or recorded step fields (at least one required). */
+export class PatchNavigationActionDto {
+  @IsOptional()
   @ValidateIf((_, v) => v != null)
   @IsString()
   @MaxLength(8000)
-  actionInstruction!: string | null;
+  actionInstruction?: string | null;
+
+  @IsOptional()
+  @IsIn(['navigate', 'click', 'type', 'variable_input', 'prompt', 'prompt_type'])
+  actionType?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsString()
+  @MaxLength(8000)
+  inputValue?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null)
+  @IsIn(['static', 'variable'])
+  inputMode?: 'static' | 'variable' | null;
 }
