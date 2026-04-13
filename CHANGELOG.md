@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-04-13
+
+- `0.10.305`: **Navigation Play — workflow preview + read-only step details** — **API**: `GET /navigations/:id/skyvern-workflow` returns the same JSON as Skyvern create/update (`title`, `workflow_definition`, `status: published`); shared loader with `startPlay`. **Web**: **Preview workflow** opens a modal with JSON / YAML / PDF preview and per-format download (`js-yaml`, `jspdf`). Play timeline uses **`readOnlyInteractive`**: accordion rows with **default Skyvern goal**, **action instruction override**, and **recorded fields** (`PlayStepReadOnlyDetail`). **`navigationUrl`** passed into Play workspace for navigate defaults. `@bladerunner/api 0.6.220`, `@bladerunner/web 0.7.168`.
+
+- `0.10.304`: **Navigation timeline — show default Skyvern goals** — Expanded steps now show a read-only **Default Skyvern goal** (same strings as Play / `buildSkyvernWorkflowApiPayload`) so the “original” instruction is visible while the override field is empty. **`prompt_type`** inline editor state syncs when switching steps. **Improve with AI** uses the default goal as the draft when no override is set. **`navigationUrl`** passed from `NavigationDetail` into the recorder layout. `@bladerunner/web 0.7.167`.
+
+- `0.10.303`: **Navigation recording — show initial navigate step** — `nav:sessionStarted` no longer clears the action list (it ran after the server’s first `nav:actionRecorded` and wiped the auto `navigate`). The list is reset in `startRecording` before emitting `nav:startRecording`. On `nav:error` before recording actually starts, restore the sidebar from the cached navigation detail when persisted steps exist. `@bladerunner/web 0.7.166`.
+
+- `0.10.302`: **Navigation — action instruction + Improve with AI** — Optional per-step `action_instruction` drives Skyvern `navigation_goal` when set (schema + recording persist were already in place). Added **`LlmService.improveNavigationActionInstruction`**, usage key **`navigation_action_instruction_improve`**, **`POST /navigations/:id/actions/improve-instruction`**, and **`PATCH /navigations/:id/actions/:sequence`** to persist instructions after recording. Web: timeline field with wand, **`ChooseActionPromptModal`** (Original vs Improved, Cancel, Use this prompt), API client + `RecordedNavigationAction.actionInstruction`, debounced PATCH when not recording. `@bladerunner/api 0.6.219`, `@bladerunner/web 0.7.165`.
+
 ## 2026-04-12
 
 - `0.10.301`: **Chore — remove Skyvern verify-script debug ingest** — Dropped NDJSON `127.0.0.1:7445` instrumentation from `scripts/verify-skyvern-artifact-signed-url.mjs` after screenshot fix confirmed.

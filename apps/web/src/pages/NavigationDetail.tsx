@@ -37,6 +37,7 @@ function toRecordedActions(rows: NavigationDetailDto['actions']): RecordedNaviga
     inputValue: a.inputValue,
     inputMode: (a.inputMode as RecordedNavigationAction['inputMode']) ?? null,
     pageUrl: a.pageUrl,
+    actionInstruction: a.actionInstruction ?? null,
   }));
 }
 
@@ -444,7 +445,11 @@ export default function NavigationDetailPage() {
                   API (<code className="text-[10px] bg-gray-100 px-1 rounded">SKYVERN_API_BASE_URL</code> when
                   self-hosted).
                 </p>
-                <NavigationPlayWorkspace navId={id} persistedActions={persistedRecorded} />
+                <NavigationPlayWorkspace
+                  navId={id}
+                  persistedActions={persistedRecorded}
+                  navigationUrl={ev?.url ?? ''}
+                />
               </div>
             )}
 
@@ -455,6 +460,7 @@ export default function NavigationDetailPage() {
               >
                 <NavigationRecorderLayout
                   navId={id}
+                  navigationUrl={ev.url}
                   onSessionActivityChange={setRecordingSessionActive}
                 />
               </div>

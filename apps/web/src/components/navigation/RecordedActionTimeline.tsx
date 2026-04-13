@@ -14,13 +14,22 @@ import {
   Sparkles,
   Check,
   X,
+  Wand2,
 } from 'lucide-react';
 import type {
   RecordedNavigationAction,
   NavigationAuditSuggestion,
 } from '@/hooks/useNavigationRecording';
+import { navigationsApi } from '@/lib/api';
+import { defaultSkyvernNavigationGoal } from '@/lib/navigationSkyvernDefaults';
+import { ChooseActionPromptModal } from './ChooseActionPromptModal';
+import { PlayStepReadOnlyDetail } from './PlayStepReadOnlyDetail';
 
 interface RecordedActionTimelineProps {
+  /** Required for Improve with AI and persisting instruction patches when not recording. */
+  navigationId?: string;
+  /** Navigation base URL — used to show the default Skyvern goal for `navigate` steps. */
+  navigationUrl?: string;
   actions: RecordedNavigationAction[];
   onUpdateAction: (sequence: number, updates: Partial<RecordedNavigationAction>) => void;
   auditSuggestions?: Record<number, NavigationAuditSuggestion>;
@@ -28,6 +37,10 @@ interface RecordedActionTimelineProps {
   onRejectAuditSuggestion?: (sequence: number) => void;
   /** Play mode: list only, no editing or expansion. */
   readOnly?: boolean;
+  /**
+   * When `readOnly` is true, allow accordion expand for step details (Play) without inline editors.
+   */
+  readOnlyInteractive?: boolean;
   /** When set (e.g. Skyvern Play), highlight this action row. */
   highlightSequence?: number | null;
 }
@@ -126,14 +139,103 @@ function isClickRefineRow(action: RecordedNavigationAction): boolean {
   return action.actionType === 'click';
 }
 
+function supportsActionInstruction(action: RecordedNavigationAction): boolean {
+  switch (action.actionType) {
+    case 'navigate':
+    case 'click':
+    case 'type':
+    case 'variable_input':
+    case 'prompt_type':
+    case 'prompt':
+      return true;
+    default:
+      return false;
+  }
+}
+
 type DynamicCompileMode = 'variable_input' | 'prompt_type';
 
 interface InlineEditorProps {
   action: RecordedNavigationAction;
   onUpdate: (updates: Partial<RecordedNavigationAction>) => void;
+  navigationId?: string;
+  navigationUrl: string;
+  improveLoadingSequence: number | null;
+  onImproveClick: (action: RecordedNavigationAction) => void;
 }
 
-function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
+function ActionInstructionEditor({
+  action,
+  onUpdate,
+  navigationId,
+  navigationUrl,
+  improveLoadingSequence,
+  onImproveClick,
+}: {
+  action: RecordedNavigationAction;
+  onUpdate: (updates: Partial<RecordedNavigationAction>) => void;
+  navigationId?: string;
+  navigationUrl: string;
+  improveLoadingSequence: number | null;
+  onImproveClick: (action: RecordedNavigationAction) => void;
+}) {
+  if (!supportsActionInstruction(action)) return null;
+  const loading = improveLoadingSequence === action.sequence;
+  const defaultGoal = defaultSkyvernNavigationGoal(action, navigationUrl);
+  return (
+    <div className="mb-2 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
+      {defaultGoal ? (
+        <div className="space-y-1 rounded-md border border-slate-100 bg-white/90 px-2 py-1.5">
+          <p className="text-[10px] font-medium text-gray-600">Default Skyvern goal</p>
+          <p className="text-[11px] leading-snug text-gray-800 whitespace-pre-wrap break-words">
+            {defaultGoal}
+          </p>
+          <p className="text-[9px] text-gray-500">
+            Used when the override below is empty. Matches the Play / export workflow.
+          </p>
+        </div>
+      ) : null}
+      <div className="flex items-start justify-between gap-2">
+        <label className="min-w-0 flex-1 space-y-1">
+          <span className="text-[10px] font-medium text-gray-700">Override (optional)</span>
+          <textarea
+            value={action.actionInstruction ?? ''}
+            onChange={(e) =>
+              onUpdate({
+                actionInstruction: e.target.value.trim() === '' ? null : e.target.value,
+              })
+            }
+            placeholder="Leave empty to use the default goal above…"
+            rows={3}
+            className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-900 placeholder:text-gray-400"
+          />
+        </label>
+        <button
+          type="button"
+          title={navigationId ? 'Improve with AI' : 'Navigation id missing'}
+          disabled={!navigationId || loading}
+          onClick={() => onImproveClick(action)}
+          className="mt-5 shrink-0 rounded-md border border-violet-200 bg-white p-1.5 text-violet-700 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Wand2 size={14} strokeWidth={2} className={loading ? 'animate-pulse' : ''} aria-hidden />
+        </button>
+      </div>
+      <p className="text-[9px] leading-snug text-gray-500">
+        One browser action per block. Improve with AI uses the default + step context when the
+        override is empty.
+      </p>
+    </div>
+  );
+}
+
+function TimelineInlineEditor({
+  action,
+  onUpdate,
+  navigationId,
+  navigationUrl,
+  improveLoadingSequence,
+  onImproveClick,
+}: InlineEditorProps) {
   const [tab, setTab] = useState<'static' | 'variable'>(() =>
     action.actionType === 'type' ? 'static' : 'variable',
   );
@@ -157,6 +259,10 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
       setTab('variable');
       setVarName(stripMustache(action.inputValue ?? ''));
       setCompileAs('variable_input');
+    } else if (action.actionType === 'prompt_type') {
+      setTab('variable');
+      setVarName(stripMustache(action.inputValue ?? ''));
+      setCompileAs('prompt_type');
     }
   }, [action.sequence, action.actionType, action.inputValue]);
 
@@ -179,7 +285,16 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
 
   if (supportsStaticDynamicTabs(action)) {
     return (
-      <div className="mt-2 space-y-2 rounded-lg border border-violet-100 bg-violet-50/40 p-2.5">
+      <>
+        <ActionInstructionEditor
+          action={action}
+          onUpdate={onUpdate}
+          navigationId={navigationId}
+          navigationUrl={navigationUrl}
+          improveLoadingSequence={improveLoadingSequence}
+          onImproveClick={onImproveClick}
+        />
+        <div className="mt-2 space-y-2 rounded-lg border border-violet-100 bg-violet-50/40 p-2.5">
         <div className="flex gap-1.5">
           <button
             type="button"
@@ -259,12 +374,22 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
           </>
         )}
       </div>
+      </>
     );
   }
 
   if (isPromptInstructionRow(action)) {
     return (
-      <div className="mt-2 space-y-2 rounded-lg border border-rose-100 bg-rose-50/40 p-2.5">
+      <>
+        <ActionInstructionEditor
+          action={action}
+          onUpdate={onUpdate}
+          navigationId={navigationId}
+          navigationUrl={navigationUrl}
+          improveLoadingSequence={improveLoadingSequence}
+          onImproveClick={onImproveClick}
+        />
+        <div className="mt-2 space-y-2 rounded-lg border border-rose-100 bg-rose-50/40 p-2.5">
         <label className="block space-y-1">
           <span className="text-[10px] font-medium text-gray-700">Edit AI Instruction</span>
           <textarea
@@ -275,13 +400,23 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
           />
         </label>
       </div>
+      </>
     );
   }
 
   if (isPromptTypeRow(action)) {
     const v = stripMustache(action.inputValue ?? '');
     return (
-      <div className="mt-2 space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
+      <>
+        <ActionInstructionEditor
+          action={action}
+          onUpdate={onUpdate}
+          navigationId={navigationId}
+          navigationUrl={navigationUrl}
+          improveLoadingSequence={improveLoadingSequence}
+          onImproveClick={onImproveClick}
+        />
+        <div className="mt-2 space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
         <label className="block space-y-1">
           <span className="text-[10px] font-medium text-gray-700">Edit AI Instruction</span>
           <input
@@ -301,13 +436,23 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
           <p className="text-[10px] text-indigo-800 font-mono">{formatVariablePill(v)}</p>
         ) : null}
       </div>
+      </>
     );
   }
 
   if (isClickRefineRow(action)) {
     const detected = defaultClickCaption(action);
     return (
-      <div className="mt-2 space-y-2 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5">
+      <>
+        <ActionInstructionEditor
+          action={action}
+          onUpdate={onUpdate}
+          navigationId={navigationId}
+          navigationUrl={navigationUrl}
+          improveLoadingSequence={improveLoadingSequence}
+          onImproveClick={onImproveClick}
+        />
+        <div className="mt-2 space-y-2 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5">
         <label className="block space-y-1">
           <span className="text-[10px] font-medium text-gray-700">Refine click instruction</span>
           <textarea
@@ -331,6 +476,30 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
           Leave blank to use the detected label in the exported workflow.
         </p>
       </div>
+      </>
+    );
+  }
+
+  if (action.actionType === 'navigate') {
+    const target = (action.inputValue ?? action.pageUrl ?? '').trim();
+    return (
+      <>
+        <ActionInstructionEditor
+          action={action}
+          onUpdate={onUpdate}
+          navigationId={navigationId}
+          navigationUrl={navigationUrl}
+          improveLoadingSequence={improveLoadingSequence}
+          onImproveClick={onImproveClick}
+        />
+        {target ? (
+          <p className="text-[10px] text-gray-600">
+            <span className="font-medium text-gray-700">URL: </span>
+            <span className="break-all">{target.slice(0, 240)}</span>
+            {target.length > 240 ? '…' : ''}
+          </p>
+        ) : null}
+      </>
     );
   }
 
@@ -342,15 +511,61 @@ function TimelineInlineEditor({ action, onUpdate }: InlineEditorProps) {
 }
 
 export function RecordedActionTimeline({
+  navigationId,
+  navigationUrl = '',
   actions,
   onUpdateAction,
   auditSuggestions = {},
   onAcceptAuditSuggestion,
   onRejectAuditSuggestion,
   readOnly = false,
+  readOnlyInteractive = false,
   highlightSequence = null,
 }: RecordedActionTimelineProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
+  const [improveLoadingSeq, setImproveLoadingSeq] = useState<number | null>(null);
+  const [improveModal, setImproveModal] = useState<{
+    sequence: number;
+    original: string;
+    improved: string;
+  } | null>(null);
+  const [improveErr, setImproveErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!readOnly || !readOnlyInteractive) return;
+    if (highlightSequence != null) {
+      setExpandedSequence(highlightSequence);
+    }
+  }, [readOnly, readOnlyInteractive, highlightSequence]);
+
+  const handleImproveClick = async (action: RecordedNavigationAction) => {
+    if (!navigationId) return;
+    const override = (action.actionInstruction ?? '').trim();
+    const draftForImprove =
+      override || defaultSkyvernNavigationGoal(action, navigationUrl) || '';
+    setImproveErr(null);
+    setImproveLoadingSeq(action.sequence);
+    try {
+      const res = await navigationsApi.improveActionInstruction(navigationId, {
+        draft: draftForImprove,
+        sequence: action.sequence,
+        actionType: action.actionType,
+        elementText: action.elementText,
+        ariaLabel: action.ariaLabel,
+        inputValue: action.inputValue,
+        pageUrl: action.pageUrl,
+      });
+      setImproveModal({
+        sequence: action.sequence,
+        original: draftForImprove,
+        improved: res.improved,
+      });
+    } catch (e) {
+      setImproveErr(e instanceof Error ? e.message : 'Could not improve instruction');
+    } finally {
+      setImproveLoadingSeq(null);
+    }
+  };
 
   if (actions.length === 0) {
     return (
@@ -363,7 +578,11 @@ export function RecordedActionTimeline({
   }
 
   return (
-    <div className="overflow-y-auto max-h-[600px]">
+    <>
+      {improveErr && !readOnly ? (
+        <p className="border-b border-red-100 px-3 py-2 text-[11px] text-red-600">{improveErr}</p>
+      ) : null}
+      <div className="overflow-y-auto max-h-[600px]">
       <ul className="divide-y divide-gray-50">
         {actions.map((action) => {
           const refined = isRefinedHighlight(action);
@@ -380,7 +599,7 @@ export function RecordedActionTimeline({
           const playHere =
             readOnly && highlightSequence != null && action.sequence === highlightSequence;
 
-          if (readOnly) {
+          if (readOnly && !readOnlyInteractive) {
             return (
               <li key={action.sequence}>
                 <div
@@ -407,6 +626,42 @@ export function RecordedActionTimeline({
                     )}
                   </div>
                 </div>
+              </li>
+            );
+          }
+
+          if (readOnly && readOnlyInteractive) {
+            return (
+              <li key={action.sequence}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedSequence(expanded ? null : action.sequence)}
+                  className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-xs transition-colors ${rowBg} ${
+                    playHere
+                      ? 'ring-2 ring-emerald-500/80 ring-inset bg-emerald-50/90 shadow-sm'
+                      : ''
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                      playHere
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gray-100 text-gray-500'
+                    }`}
+                  >
+                    {action.sequence}
+                  </span>
+                  {actionIcon(action.actionType, isVariableStyleRefinement(action))}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-gray-800">{actionLabel(action)}</p>
+                    {action.actionType !== 'navigate' && action.pageUrl && (
+                      <p className="mt-0.5 truncate text-[10px] text-gray-400">{action.pageUrl}</p>
+                    )}
+                  </div>
+                </button>
+                {expanded ? (
+                  <PlayStepReadOnlyDetail action={action} navigationUrl={navigationUrl} />
+                ) : null}
               </li>
             );
           }
@@ -461,6 +716,10 @@ export function RecordedActionTimeline({
                 <div className="border-t border-gray-100 bg-white px-3 pb-3">
                   <TimelineInlineEditor
                     action={action}
+                    navigationId={navigationId}
+                    navigationUrl={navigationUrl}
+                    improveLoadingSequence={improveLoadingSeq}
+                    onImproveClick={handleImproveClick}
                     onUpdate={(u) => onUpdateAction(action.sequence, u)}
                   />
                 </div>
@@ -470,5 +729,23 @@ export function RecordedActionTimeline({
         })}
       </ul>
     </div>
+      <ChooseActionPromptModal
+        open={improveModal !== null}
+        onOpenChange={(open) => {
+          if (!open) setImproveModal(null);
+        }}
+        originalText={improveModal?.original ?? ''}
+        improvedText={improveModal?.improved ?? ''}
+        onCancel={() => setImproveModal(null)}
+        onUse={(choice) => {
+          if (!improveModal) return;
+          const text = choice === 'improved' ? improveModal.improved : improveModal.original;
+          onUpdateAction(improveModal.sequence, {
+            actionInstruction: text.trim() === '' ? null : text,
+          });
+          setImproveModal(null);
+        }}
+      />
+    </>
   );
 }
