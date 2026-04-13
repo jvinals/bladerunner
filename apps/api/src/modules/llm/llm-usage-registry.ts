@@ -16,6 +16,7 @@ export const LLM_USAGE_KEYS = [
   'evaluation_human_question',
   'evaluation_report',
   'project_discovery',
+  'navigation_skyvern_workflow_refinement',
 ] as const;
 
 export type LlmUsageKey = (typeof LLM_USAGE_KEYS)[number];
@@ -48,6 +49,7 @@ export const LLM_USAGE_LABELS: Record<LlmUsageKey, string> = {
   evaluation_human_question: 'Evaluation — phrase human verification question',
   evaluation_report: 'Evaluation — final app report',
   project_discovery: 'Project — app discovery (initial map + summary)',
+  navigation_skyvern_workflow_refinement: 'Navigation — Skyvern Workflow Refinement Evaluation',
 };
 
 export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
@@ -64,6 +66,7 @@ export const LLM_USAGE_SUPPORTS_VISION: Record<LlmUsageKey, boolean> = {
   evaluation_human_question: false,
   evaluation_report: true,
   project_discovery: true,
+  navigation_skyvern_workflow_refinement: false,
 };
 
 const SUGGESTED_MODELS_BY_PROVIDER: Record<string, string[]> = {
@@ -136,6 +139,13 @@ export function getDefaultPreferenceForUsage(config: ConfigService, usage: LlmUs
   };
 
   switch (usage) {
+    case 'navigation_skyvern_workflow_refinement':
+      return {
+        provider: 'openrouter',
+        model:
+          config.get<string>('NAVIGATION_SKYVERN_REFINEMENT_MODEL')?.trim() ||
+          'anthropic/claude-3.5-sonnet',
+      };
     case 'evaluation_codegen':
     case 'evaluation_analyzer':
       return { provider: 'gemini', model: evaluationVisionModel };

@@ -93,8 +93,9 @@ model Project {
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  runs        Run[]
-  evaluations Evaluation[]
+  runs         Run[]
+  evaluations  Evaluation[]
+  navigations  Navigation[]
   agentKnowledge ProjectAgentKnowledge?
 
   @@index([userId])
@@ -320,6 +321,65 @@ model Evaluation {
   @@index([userId, createdAt(sort: Desc)])
   @@index([projectId])
   @@map("evaluations")
+}
+
+/// Navigation planning records (UI shell; separate from autonomous `Evaluation` runs).
+model Navigation {
+  id                     String            @id @default(uuid())
+  userId                 String            @map("user_id")
+  projectId              String?           @map("project_id")
+  name                   String            @default("Navigation")
+  url                    String
+  intent                 String            @db.Text
+  desiredOutput          String            @map("desired_output") @db.Text
+  progressSummary        String?           @map("progress_summary") @db.Text
+  status                 EvaluationStatus  @default(QUEUED)
+  startedAt              DateTime?         @map("started_at")
+  completedAt            DateTime?         @map("completed_at")
+  failureMessage         String?           @map("failure_message") @db.Text
+  runMode                EvaluationRunMode @default(continuous) @map("run_mode")
+  autoSignIn             Boolean           @default(false) @map("auto_sign_in")
+  autoSignInClerkOtpMode String?           @map("auto_sign_in_clerk_otp_mode")
+  /// Skyvern `wpid_…` after workflow is created or updated via API (Play mode).
+  skyvernWorkflowId      String?           @map("skyvern_workflow_id")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  actions NavigationAction[]
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId])
+  @@map("navigations")
+}
+
+/// Recorded user interaction within a Navigation recording session.
+/// Scroll events are transient (ephemeral) and are NOT stored here.
+model NavigationAction {
+  id             String   @id @default(uuid())
+  navigationId   String   @map("navigation_id")
+  userId         String   @map("user_id")
+  sequence       Int
+  /// click | type | navigate | variable_input | prompt | prompt_type
+  actionType     String   @map("action_type")
+  x              Float?
+  y              Float?
+  elementTag     String?  @map("element_tag")
+  elementId      String?  @map("element_id")
+  elementText    String?  @map("element_text")  @db.Text
+  ariaLabel      String?  @map("aria_label")
+  /// Static text literal or {{variable_name}} template
+  inputValue     String?  @map("input_value")   @db.Text
+  /// "static" | "variable" — null for non-input actions
+  inputMode      String?  @map("input_mode")
+  pageUrl        String?  @map("page_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  navigation Navigation @relation(fields: [navigationId], references: [id], onDelete: Cascade)
+
+  @@index([navigationId, sequence])
+  @@map("navigation_actions")
 }
 
 model EvaluationStep {

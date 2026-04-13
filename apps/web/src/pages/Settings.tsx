@@ -29,6 +29,10 @@ const LLM_USAGE_ROWS: { key: string; label: string }[] = [
   { key: 'evaluation_human_question', label: 'Evaluation — phrase human verification question' },
   { key: 'evaluation_report', label: 'Evaluation — final app report' },
   { key: 'project_discovery', label: 'Project — app discovery (initial map + summary)' },
+  {
+    key: 'navigation_skyvern_workflow_refinement',
+    label: 'Navigation — Skyvern Workflow Refinement Evaluation',
+  },
 ];
 
 type LlmProviderCapability = {

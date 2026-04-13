@@ -56,11 +56,85 @@ services:
       dockerfile: apps/browser-worker/Dockerfile
     ports:
       - "3002:3002"
+      # Playwright CDP (launchServer); Skyvern / API connect here — publish or they only see loopback inside the container.
+      - "3003:3003"
     environment:
       - WORKER_PORT=3002
     shm_size: '2gb'
     cap_add:
       - SYS_ADMIN
 
+  # ─── Self-hosted Skyvern (optional): docker compose --profile skyvern up -d ───
+  skyvern-db:
+    profiles: [skyvern]
+    image: postgres:16-alpine
+    command: postgres -c timezone=UTC
+    environment:
+      POSTGRES_USER: skyvern
+      POSTGRES_PASSWORD: skyvern
+      POSTGRES_DB: skyvern
+    ports:
+      - "5433:5432"
+    volumes:
+      - skyvern-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U skyvern -d skyvern']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern:
+    profiles: [skyvern]
+    build:
+      context: ./apps/skyvern
+      dockerfile: Dockerfile
+    image: bladerunner-skyvern:local
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - ENV=local
+      - BROWSER_TYPE=chromium-headful
+      - ENABLE_OPENAI=true
+      - LLM_KEY=OPENAI_GPT4O
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_STRING=postgresql+psycopg://skyvern:skyvern@skyvern-db:5432/skyvern
+      - SECRET_KEY=bladerunner-skyvern-local-dev-key-32b
+      - TZ=UTC
+      - ALLOWED_ORIGINS=["*"]
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./videos:/data/videos
+      - ./.streamlit:/app/.streamlit
+    depends_on:
+      skyvern-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/.streamlit/secrets.toml"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  skyvern-ui:
+    profiles: [skyvern]
+    image: public.ecr.aws/skyvern/skyvern-ui:latest
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./videos:/data/videos
+      - ./.streamlit:/app/.streamlit
+    env_file:
+      - skyvern-frontend/.env
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      - VITE_WSS_BASE_URL=ws://localhost:8000/api/v1
+      - VITE_ARTIFACT_API_BASE_URL=http://localhost:9090
+    depends_on:
+      skyvern:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  skyvern-pgdata:

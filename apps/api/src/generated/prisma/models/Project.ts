@@ -240,6 +240,7 @@ export type ProjectWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Project"> | Date | string
   runs?: Prisma.RunListRelationFilter
   evaluations?: Prisma.EvaluationListRelationFilter
+  navigations?: Prisma.NavigationListRelationFilter
   agentKnowledge?: Prisma.XOR<Prisma.ProjectAgentKnowledgeNullableScalarRelationFilter, Prisma.ProjectAgentKnowledgeWhereInput> | null
 }
 
@@ -258,6 +259,7 @@ export type ProjectOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   runs?: Prisma.RunOrderByRelationAggregateInput
   evaluations?: Prisma.EvaluationOrderByRelationAggregateInput
+  navigations?: Prisma.NavigationOrderByRelationAggregateInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeOrderByWithRelationInput
 }
 
@@ -279,6 +281,7 @@ export type ProjectWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"Project"> | Date | string
   runs?: Prisma.RunListRelationFilter
   evaluations?: Prisma.EvaluationListRelationFilter
+  navigations?: Prisma.NavigationListRelationFilter
   agentKnowledge?: Prisma.XOR<Prisma.ProjectAgentKnowledgeNullableScalarRelationFilter, Prisma.ProjectAgentKnowledgeWhereInput> | null
 }, "id">
 
@@ -333,6 +336,7 @@ export type ProjectCreateInput = {
   updatedAt?: Date | string
   runs?: Prisma.RunCreateNestedManyWithoutProjectInput
   evaluations?: Prisma.EvaluationCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationCreateNestedManyWithoutProjectInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeCreateNestedOneWithoutProjectInput
 }
 
@@ -351,6 +355,7 @@ export type ProjectUncheckedCreateInput = {
   updatedAt?: Date | string
   runs?: Prisma.RunUncheckedCreateNestedManyWithoutProjectInput
   evaluations?: Prisma.EvaluationUncheckedCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationUncheckedCreateNestedManyWithoutProjectInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedCreateNestedOneWithoutProjectInput
 }
 
@@ -369,6 +374,7 @@ export type ProjectUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   runs?: Prisma.RunUpdateManyWithoutProjectNestedInput
   evaluations?: Prisma.EvaluationUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUpdateManyWithoutProjectNestedInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUpdateOneWithoutProjectNestedInput
 }
 
@@ -387,6 +393,7 @@ export type ProjectUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   runs?: Prisma.RunUncheckedUpdateManyWithoutProjectNestedInput
   evaluations?: Prisma.EvaluationUncheckedUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUncheckedUpdateManyWithoutProjectNestedInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedUpdateOneWithoutProjectNestedInput
 }
 
@@ -548,6 +555,22 @@ export type ProjectUpdateOneWithoutEvaluationsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutEvaluationsInput, Prisma.ProjectUpdateWithoutEvaluationsInput>, Prisma.ProjectUncheckedUpdateWithoutEvaluationsInput>
 }
 
+export type ProjectCreateNestedOneWithoutNavigationsInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutNavigationsInput, Prisma.ProjectUncheckedCreateWithoutNavigationsInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutNavigationsInput
+  connect?: Prisma.ProjectWhereUniqueInput
+}
+
+export type ProjectUpdateOneWithoutNavigationsNestedInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutNavigationsInput, Prisma.ProjectUncheckedCreateWithoutNavigationsInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutNavigationsInput
+  upsert?: Prisma.ProjectUpsertWithoutNavigationsInput
+  disconnect?: Prisma.ProjectWhereInput | boolean
+  delete?: Prisma.ProjectWhereInput | boolean
+  connect?: Prisma.ProjectWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutNavigationsInput, Prisma.ProjectUpdateWithoutNavigationsInput>, Prisma.ProjectUncheckedUpdateWithoutNavigationsInput>
+}
+
 export type ProjectCreateWithoutAgentKnowledgeInput = {
   id?: string
   userId: string
@@ -563,6 +586,7 @@ export type ProjectCreateWithoutAgentKnowledgeInput = {
   updatedAt?: Date | string
   runs?: Prisma.RunCreateNestedManyWithoutProjectInput
   evaluations?: Prisma.EvaluationCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectUncheckedCreateWithoutAgentKnowledgeInput = {
@@ -580,6 +604,7 @@ export type ProjectUncheckedCreateWithoutAgentKnowledgeInput = {
   updatedAt?: Date | string
   runs?: Prisma.RunUncheckedCreateNestedManyWithoutProjectInput
   evaluations?: Prisma.EvaluationUncheckedCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationUncheckedCreateNestedManyWithoutProjectInput
 }
 
 export type ProjectCreateOrConnectWithoutAgentKnowledgeInput = {
@@ -613,6 +638,7 @@ export type ProjectUpdateWithoutAgentKnowledgeInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   runs?: Prisma.RunUpdateManyWithoutProjectNestedInput
   evaluations?: Prisma.EvaluationUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectUncheckedUpdateWithoutAgentKnowledgeInput = {
@@ -630,6 +656,7 @@ export type ProjectUncheckedUpdateWithoutAgentKnowledgeInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   runs?: Prisma.RunUncheckedUpdateManyWithoutProjectNestedInput
   evaluations?: Prisma.EvaluationUncheckedUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUncheckedUpdateManyWithoutProjectNestedInput
 }
 
 export type ProjectCreateWithoutRunsInput = {
@@ -646,6 +673,7 @@ export type ProjectCreateWithoutRunsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   evaluations?: Prisma.EvaluationCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationCreateNestedManyWithoutProjectInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeCreateNestedOneWithoutProjectInput
 }
 
@@ -663,6 +691,7 @@ export type ProjectUncheckedCreateWithoutRunsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   evaluations?: Prisma.EvaluationUncheckedCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationUncheckedCreateNestedManyWithoutProjectInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedCreateNestedOneWithoutProjectInput
 }
 
@@ -696,6 +725,7 @@ export type ProjectUpdateWithoutRunsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   evaluations?: Prisma.EvaluationUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUpdateManyWithoutProjectNestedInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUpdateOneWithoutProjectNestedInput
 }
 
@@ -713,6 +743,7 @@ export type ProjectUncheckedUpdateWithoutRunsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   evaluations?: Prisma.EvaluationUncheckedUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUncheckedUpdateManyWithoutProjectNestedInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedUpdateOneWithoutProjectNestedInput
 }
 
@@ -730,6 +761,7 @@ export type ProjectCreateWithoutEvaluationsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   runs?: Prisma.RunCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationCreateNestedManyWithoutProjectInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeCreateNestedOneWithoutProjectInput
 }
 
@@ -747,6 +779,7 @@ export type ProjectUncheckedCreateWithoutEvaluationsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   runs?: Prisma.RunUncheckedCreateNestedManyWithoutProjectInput
+  navigations?: Prisma.NavigationUncheckedCreateNestedManyWithoutProjectInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedCreateNestedOneWithoutProjectInput
 }
 
@@ -780,6 +813,7 @@ export type ProjectUpdateWithoutEvaluationsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   runs?: Prisma.RunUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUpdateManyWithoutProjectNestedInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUpdateOneWithoutProjectNestedInput
 }
 
@@ -797,6 +831,95 @@ export type ProjectUncheckedUpdateWithoutEvaluationsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   runs?: Prisma.RunUncheckedUpdateManyWithoutProjectNestedInput
+  navigations?: Prisma.NavigationUncheckedUpdateManyWithoutProjectNestedInput
+  agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedUpdateOneWithoutProjectNestedInput
+}
+
+export type ProjectCreateWithoutNavigationsInput = {
+  id?: string
+  userId: string
+  name: string
+  kind?: $Enums.ProjectKind
+  url?: string | null
+  artifactUrl?: string | null
+  color?: string
+  testUserEmail?: string | null
+  testUserPassword?: string | null
+  testEmailProvider?: $Enums.TestEmailProvider | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  runs?: Prisma.RunCreateNestedManyWithoutProjectInput
+  evaluations?: Prisma.EvaluationCreateNestedManyWithoutProjectInput
+  agentKnowledge?: Prisma.ProjectAgentKnowledgeCreateNestedOneWithoutProjectInput
+}
+
+export type ProjectUncheckedCreateWithoutNavigationsInput = {
+  id?: string
+  userId: string
+  name: string
+  kind?: $Enums.ProjectKind
+  url?: string | null
+  artifactUrl?: string | null
+  color?: string
+  testUserEmail?: string | null
+  testUserPassword?: string | null
+  testEmailProvider?: $Enums.TestEmailProvider | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  runs?: Prisma.RunUncheckedCreateNestedManyWithoutProjectInput
+  evaluations?: Prisma.EvaluationUncheckedCreateNestedManyWithoutProjectInput
+  agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedCreateNestedOneWithoutProjectInput
+}
+
+export type ProjectCreateOrConnectWithoutNavigationsInput = {
+  where: Prisma.ProjectWhereUniqueInput
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutNavigationsInput, Prisma.ProjectUncheckedCreateWithoutNavigationsInput>
+}
+
+export type ProjectUpsertWithoutNavigationsInput = {
+  update: Prisma.XOR<Prisma.ProjectUpdateWithoutNavigationsInput, Prisma.ProjectUncheckedUpdateWithoutNavigationsInput>
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutNavigationsInput, Prisma.ProjectUncheckedCreateWithoutNavigationsInput>
+  where?: Prisma.ProjectWhereInput
+}
+
+export type ProjectUpdateToOneWithWhereWithoutNavigationsInput = {
+  where?: Prisma.ProjectWhereInput
+  data: Prisma.XOR<Prisma.ProjectUpdateWithoutNavigationsInput, Prisma.ProjectUncheckedUpdateWithoutNavigationsInput>
+}
+
+export type ProjectUpdateWithoutNavigationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  kind?: Prisma.EnumProjectKindFieldUpdateOperationsInput | $Enums.ProjectKind
+  url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  artifactUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  color?: Prisma.StringFieldUpdateOperationsInput | string
+  testUserEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  testUserPassword?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  testEmailProvider?: Prisma.NullableEnumTestEmailProviderFieldUpdateOperationsInput | $Enums.TestEmailProvider | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  runs?: Prisma.RunUpdateManyWithoutProjectNestedInput
+  evaluations?: Prisma.EvaluationUpdateManyWithoutProjectNestedInput
+  agentKnowledge?: Prisma.ProjectAgentKnowledgeUpdateOneWithoutProjectNestedInput
+}
+
+export type ProjectUncheckedUpdateWithoutNavigationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  kind?: Prisma.EnumProjectKindFieldUpdateOperationsInput | $Enums.ProjectKind
+  url?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  artifactUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  color?: Prisma.StringFieldUpdateOperationsInput | string
+  testUserEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  testUserPassword?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  testEmailProvider?: Prisma.NullableEnumTestEmailProviderFieldUpdateOperationsInput | $Enums.TestEmailProvider | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  runs?: Prisma.RunUncheckedUpdateManyWithoutProjectNestedInput
+  evaluations?: Prisma.EvaluationUncheckedUpdateManyWithoutProjectNestedInput
   agentKnowledge?: Prisma.ProjectAgentKnowledgeUncheckedUpdateOneWithoutProjectNestedInput
 }
 
@@ -808,11 +931,13 @@ export type ProjectUncheckedUpdateWithoutEvaluationsInput = {
 export type ProjectCountOutputType = {
   runs: number
   evaluations: number
+  navigations: number
 }
 
 export type ProjectCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   runs?: boolean | ProjectCountOutputTypeCountRunsArgs
   evaluations?: boolean | ProjectCountOutputTypeCountEvaluationsArgs
+  navigations?: boolean | ProjectCountOutputTypeCountNavigationsArgs
 }
 
 /**
@@ -839,6 +964,13 @@ export type ProjectCountOutputTypeCountEvaluationsArgs<ExtArgs extends runtime.T
   where?: Prisma.EvaluationWhereInput
 }
 
+/**
+ * ProjectCountOutputType without action
+ */
+export type ProjectCountOutputTypeCountNavigationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.NavigationWhereInput
+}
+
 
 export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -855,6 +987,7 @@ export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   updatedAt?: boolean
   runs?: boolean | Prisma.Project$runsArgs<ExtArgs>
   evaluations?: boolean | Prisma.Project$evaluationsArgs<ExtArgs>
+  navigations?: boolean | Prisma.Project$navigationsArgs<ExtArgs>
   agentKnowledge?: boolean | Prisma.Project$agentKnowledgeArgs<ExtArgs>
   _count?: boolean | Prisma.ProjectCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["project"]>
@@ -908,6 +1041,7 @@ export type ProjectOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
 export type ProjectInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   runs?: boolean | Prisma.Project$runsArgs<ExtArgs>
   evaluations?: boolean | Prisma.Project$evaluationsArgs<ExtArgs>
+  navigations?: boolean | Prisma.Project$navigationsArgs<ExtArgs>
   agentKnowledge?: boolean | Prisma.Project$agentKnowledgeArgs<ExtArgs>
   _count?: boolean | Prisma.ProjectCountOutputTypeDefaultArgs<ExtArgs>
 }
@@ -919,6 +1053,7 @@ export type $ProjectPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
   objects: {
     runs: Prisma.$RunPayload<ExtArgs>[]
     evaluations: Prisma.$EvaluationPayload<ExtArgs>[]
+    navigations: Prisma.$NavigationPayload<ExtArgs>[]
     agentKnowledge: Prisma.$ProjectAgentKnowledgePayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -1348,6 +1483,7 @@ export interface Prisma__ProjectClient<T, Null = never, ExtArgs extends runtime.
   readonly [Symbol.toStringTag]: "PrismaPromise"
   runs<T extends Prisma.Project$runsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$runsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$RunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   evaluations<T extends Prisma.Project$evaluationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$evaluationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$EvaluationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  navigations<T extends Prisma.Project$navigationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$navigationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$NavigationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   agentKnowledge<T extends Prisma.Project$agentKnowledgeArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$agentKnowledgeArgs<ExtArgs>>): Prisma.Prisma__ProjectAgentKnowledgeClient<runtime.Types.Result.GetResult<Prisma.$ProjectAgentKnowledgePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1828,6 +1964,30 @@ export type Project$evaluationsArgs<ExtArgs extends runtime.Types.Extensions.Int
   take?: number
   skip?: number
   distinct?: Prisma.EvaluationScalarFieldEnum | Prisma.EvaluationScalarFieldEnum[]
+}
+
+/**
+ * Project.navigations
+ */
+export type Project$navigationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Navigation
+   */
+  select?: Prisma.NavigationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Navigation
+   */
+  omit?: Prisma.NavigationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.NavigationInclude<ExtArgs> | null
+  where?: Prisma.NavigationWhereInput
+  orderBy?: Prisma.NavigationOrderByWithRelationInput | Prisma.NavigationOrderByWithRelationInput[]
+  cursor?: Prisma.NavigationWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.NavigationScalarFieldEnum | Prisma.NavigationScalarFieldEnum[]
 }
 
 /**

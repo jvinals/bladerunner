@@ -95,6 +95,17 @@ export type UserLlmCredentials = Prisma.UserLlmCredentialsModel
  */
 export type Evaluation = Prisma.EvaluationModel
 /**
+ * Model Navigation
+ * Navigation planning records (UI shell; separate from autonomous `Evaluation` runs).
+ */
+export type Navigation = Prisma.NavigationModel
+/**
+ * Model NavigationAction
+ * Recorded user interaction within a Navigation recording session.
+ * Scroll events are transient (ephemeral) and are NOT stored here.
+ */
+export type NavigationAction = Prisma.NavigationActionModel
+/**
  * Model EvaluationStep
  * 
  */

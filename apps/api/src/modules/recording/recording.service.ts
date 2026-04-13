@@ -3793,7 +3793,6 @@ export class RecordingService extends EventEmitter {
    * center panels stay above ~232 until data/charts mount.
    */
   private async waitForMainContentLandmarkHydrated(page: Page): Promise<void> {
-    let mainHydrationTimedOut = false;
     try {
       await page.waitForFunction(
         () => {
@@ -3838,51 +3837,12 @@ export class RecordingService extends EventEmitter {
         { timeout: 22_000, polling: 450 },
       );
     } catch {
-      mainHydrationTimedOut = true;
       this.logger.warn(
         'waitForMainContentLandmarkHydrated: main landmark still sparse after timeout; capturing anyway',
       );
     }
     await this.applyFontsAndDoubleRaf(page);
     await this.waitUntilMainScreenshotNotMostlyWhite(page);
-    // #region agent log
-    const probe = await page
-      .evaluate(() => {
-        let mainRegions = 0;
-        let maxText = 0;
-        let maxWidgets = 0;
-        for (const sel of ['main', '[role="main"]']) {
-          for (const el of Array.from(document.querySelectorAll(sel))) {
-            if (!(el instanceof HTMLElement)) continue;
-            const st = window.getComputedStyle(el);
-            if (st.display === 'none' || st.visibility === 'hidden') continue;
-            const r = el.getBoundingClientRect();
-            if (r.width < 72 || r.height < 72) continue;
-            mainRegions++;
-            maxText = Math.max(maxText, (el.innerText ?? '').trim().length);
-            maxWidgets = Math.max(
-              maxWidgets,
-              el.querySelectorAll(
-                'button, a[href], input, select, textarea, table, canvas, svg, [role="grid"], [role="article"], [role="table"]',
-              ).length,
-            );
-          }
-        }
-        return { mainRegions, maxText, maxWidgets };
-      })
-      .catch(() => ({ mainRegions: 0, maxText: 0, maxWidgets: 0 }));
-    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-      body: JSON.stringify({
-        sessionId: 'ba63e6',
-        location: 'recording.service.ts:waitForMainContentLandmarkHydrated',
-        message: 'main landmark probe',
-        data: { pageUrl: page.url(), ...probe, mainHydrationTimedOut, hypothesisId: 'H6' },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
   }
 
   /**
@@ -3920,25 +3880,6 @@ export class RecordingService extends EventEmitter {
         return;
       }
       lastLuma = meanLuma;
-
-      // #region agent log
-      fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-        body: JSON.stringify({
-          sessionId: 'ba63e6',
-          location: 'recording.service.ts:waitUntilMainScreenshotNotMostlyWhite',
-          message: 'main landmark crop luma',
-          data: {
-            pageUrl: page.url(),
-            round,
-            mainCropMeanLuma: Math.round(meanLuma * 100) / 100,
-            hypothesisId: 'H7',
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       if (meanLuma <= LUMA_OK_MAX) return;
 
@@ -4089,26 +4030,6 @@ export class RecordingService extends EventEmitter {
     }
 
     this.throwIfAborted(signal);
-    // #region agent log
-    fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-      body: JSON.stringify({
-        sessionId: 'ba63e6',
-        location: 'recording.service.ts:settlePageForLlmVisionCapture',
-        message: 'llm vision settle',
-        data: {
-          pageUrl: page.url(),
-          settleTimedOut,
-          interactiveCountAfter,
-          sparseShellRecovery,
-          sparseShellRecoveryTimedOut,
-          hypothesisId: 'H1',
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
   }
 
   private async captureLlmPageContext(
@@ -4166,39 +4087,6 @@ export class RecordingService extends EventEmitter {
         }));
       }
       screenshotBase64 = buf.toString('base64');
-      // #region agent log
-      {
-        let meanLuma = 0;
-        try {
-          const st = await sharp(buf).stats();
-          const r = st.channels[0]?.mean ?? 0;
-          const g = st.channels[1]?.mean ?? r;
-          const b = st.channels[2]?.mean ?? r;
-          meanLuma = 0.299 * r + 0.587 * g + 0.114 * b;
-        } catch {
-          /* ignore */
-        }
-        fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-          body: JSON.stringify({
-            sessionId: 'ba63e6',
-            location: 'recording.service.ts:captureLlmPageContext',
-            message: 'llm vision jpeg stats',
-            data: {
-              pageUrl,
-              bufLen: buf.length,
-              w: screenshotWidth,
-              h: screenshotHeight,
-              meanLuma: Math.round(meanLuma * 100) / 100,
-              somManifestChars: somManifest.length,
-              hypothesisId: 'H2',
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
     } catch (err) {
       /** Tagged screenshot is best-effort when overlay/screenshot fails; a11y snapshot was already captured. */
       this.logger.warn(`captureLlmPageContext: Set-of-Marks or screenshot failed (${err})`);
@@ -4214,39 +4102,6 @@ export class RecordingService extends EventEmitter {
         screenshotWidth = meta.width ?? undefined;
         screenshotHeight = meta.height ?? undefined;
         screenshotBase64 = buf.toString('base64');
-        // #region agent log
-        {
-          let meanLuma = 0;
-          try {
-            const st = await sharp(buf).stats();
-            const r = st.channels[0]?.mean ?? 0;
-            const g = st.channels[1]?.mean ?? r;
-            const b = st.channels[2]?.mean ?? r;
-            meanLuma = 0.299 * r + 0.587 * g + 0.114 * b;
-          } catch {
-            /* ignore */
-          }
-          fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-            body: JSON.stringify({
-              sessionId: 'ba63e6',
-              location: 'recording.service.ts:captureLlmPageContext:fallback',
-              message: 'llm vision jpeg stats (fallback screenshot)',
-              data: {
-                pageUrl,
-                bufLen: buf.length,
-                w: screenshotWidth,
-                h: screenshotHeight,
-                meanLuma: Math.round(meanLuma * 100) / 100,
-                somManifestChars: somManifest.length,
-                hypothesisId: 'H2',
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-        // #endregion
       } catch {
         /* optional */
       }

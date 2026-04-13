@@ -397,19 +397,6 @@ export class ProjectDiscoveryService {
             outcome: 'blocked',
             error: blockedMsg,
           });
-          // #region agent log
-          fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-            body: JSON.stringify({
-              sessionId: 'ba63e6',
-              location: 'project-discovery.service.ts:discovery_duplicate_blocked',
-              message: 'discovery duplicate playwright blocked',
-              data: { hypothesisId: 'H2', priorAttempts, keyPreview: pwKey.slice(0, 200) },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           await sleepMsOrAbort(500, signal);
           continue;
         }
@@ -444,19 +431,6 @@ export class ProjectDiscoveryService {
           const msg = err instanceof Error ? err.message : String(err);
           codeAttemptCounts.set(pwKey, (codeAttemptCounts.get(pwKey) ?? 0) + 1);
           lastStepOutcome = { code: plan.playwrightCode ?? '', ok: false, error: msg };
-          // #region agent log
-          fetch('http://127.0.0.1:7445/ingest/178741b1-421d-4e0d-a730-90b4f66ebe43', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ba63e6' },
-            body: JSON.stringify({
-              sessionId: 'ba63e6',
-              location: 'project-discovery.service.ts:discovery_pw_fail',
-              message: 'discovery explore snippet failed',
-              data: { hypothesisId: 'H1', errPreview: msg.slice(0, 300), codePreview: (plan.playwrightCode ?? '').slice(0, 200) },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           log('Playwright snippet failed', { error: msg.slice(0, 800), consecutiveFailures });
           explorationLogLines.push(`Step ${stepIndex + 1} FAILED: ${msg}`);
           await this.appendDiscoveryStep(projectId, discoverySteps, {

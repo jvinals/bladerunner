@@ -1,62 +1,83 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { AutoClerkOtpUiMode, EvaluationRow } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  buildClientNavigationDetail,
-  getAllNavigationRows,
-  registerClientNavigation,
-} from '@/pages/navigation/mockNavigations';
+  navigationsApi,
+  projectsApi,
+  type AutoClerkOtpUiMode,
+  type CreateNavigationBody,
+  type ProjectDto,
+} from '@/lib/api';
+import { LoadingState, ErrorState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Navigation as NavigationIcon, Plus, ExternalLink } from 'lucide-react';
 
+/** Ensure API-required `https://` URL when copying from project settings. */
+function startUrlFromProject(projectUrl: string | null | undefined): string | null {
+  const t = projectUrl?.trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) return t;
+  return `https://${t}`;
+}
+
 export default function NavigationsPage() {
+  const queryClient = useQueryClient();
   const [panelOpen, setPanelOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('https://');
   const [intent, setIntent] = useState('');
   const [desiredOutput, setDesiredOutput] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [autoSignIn, setAutoSignIn] = useState(false);
   const [autoSignInOtp, setAutoSignInOtp] = useState<AutoClerkOtpUiMode>('default');
-  /** Bumps when client-only rows are added so the list re-renders. */
-  const [listEpoch, setListEpoch] = useState(0);
 
-  const rows = useMemo(() => {
-    void listEpoch;
-    return getAllNavigationRows();
-  }, [listEpoch]);
+  const { data: rows = [], isLoading, error } = useQuery({
+    queryKey: ['navigations'],
+    queryFn: () => navigationsApi.list(),
+  });
+
+  const { data: projects = [] as ProjectDto[] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (body: CreateNavigationBody) => navigationsApi.create(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['navigations'] });
+      setName('');
+      setUrl('https://');
+      setIntent('');
+      setDesiredOutput('');
+      setProjectId('');
+      setAutoSignIn(false);
+      setAutoSignInOtp('default');
+      setPanelOpen(false);
+    },
+  });
 
   const submit = () => {
     const u = url.trim();
     if (!u || !intent.trim() || !desiredOutput.trim()) return;
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const row: EvaluationRow = {
-      id,
-      name: name.trim() || 'Untitled navigation',
+    const body: CreateNavigationBody = {
+      name: name.trim() || undefined,
       url: u,
-      projectId: null,
-      project: null,
+      intent: intent.trim(),
+      desiredOutput: desiredOutput.trim(),
+      ...(projectId ? { projectId } : {}),
       autoSignIn,
-      autoSignInClerkOtpMode:
-        autoSignIn && autoSignInOtp !== 'default' ? autoSignInOtp : null,
-      runMode: 'continuous',
-      status: 'QUEUED',
-      createdAt: now,
-      updatedAt: now,
-      startedAt: null,
-      completedAt: null,
     };
-    const detail = buildClientNavigationDetail(row, intent.trim(), desiredOutput.trim());
-    registerClientNavigation(row, detail);
-    setName('');
-    setUrl('https://');
-    setIntent('');
-    setDesiredOutput('');
-    setAutoSignIn(false);
-    setAutoSignInOtp('default');
-    setPanelOpen(false);
-    setListEpoch((e) => e + 1);
+    if (autoSignIn && autoSignInOtp !== 'default') {
+      body.autoSignInClerkOtpMode = autoSignInOtp;
+    }
+    createMutation.mutate(body);
   };
+
+  const canCreate =
+    url.trim().length > 0 && intent.trim().length > 0 && desiredOutput.trim().length > 0;
+
+  if (isLoading) return <LoadingState message="Loading navigations..." />;
+  if (error) return <ErrorState message="Failed to load navigations" />;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -67,14 +88,16 @@ export default function NavigationsPage() {
             Navigations
           </h1>
           <p className="text-sm text-gray-500 mt-1 max-w-xl">
-            Plan and review app navigation flows. This area mirrors Evaluations; backend wiring comes later—use it to
-            iterate on the UI and behavior step by step.
+            Plan and review app navigation flows. Same fields as Evaluations; stored in the navigations table until runs
+            are wired.
           </p>
         </div>
         <button
           type="button"
           aria-label="New navigation"
-          onClick={() => setPanelOpen((o) => !o)}
+          onClick={() => {
+            setPanelOpen((o) => !o);
+          }}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#4B90FF] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#3d7fe6] sm:px-4"
         >
           <span className="text-xl font-medium leading-none sm:hidden">+</span>
@@ -98,6 +121,32 @@ export default function NavigationsPage() {
                 placeholder="e.g. Primary IA review"
               />
             </label>
+            <label className="block sm:col-span-2">
+              <span className="text-xs font-medium text-gray-500">Project (optional)</span>
+              <select
+                className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 bg-white"
+                value={projectId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setProjectId(id);
+                  if (!id) return;
+                  const p = projects.find((x) => x.id === id);
+                  const next = startUrlFromProject(p?.url ?? null);
+                  if (next) setUrl(next);
+                }}
+                aria-label="Project"
+              >
+                <option value="">No project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Manage projects under <Link to="/projects" className="text-[#4B90FF] hover:underline">Projects</Link>.
+              </p>
+            </label>
             <div className="block sm:col-span-2 rounded-md border border-gray-100 bg-gray-50/80 px-3 py-3 space-y-2">
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
@@ -107,7 +156,7 @@ export default function NavigationsPage() {
                   onChange={(e) => setAutoSignIn(e.target.checked)}
                 />
                 <span className="text-sm text-gray-800">
-                  Auto-sign in when the app shows a sign-in screen (not wired yet—saved for later).
+                  Auto-sign in when the app shows a sign-in screen (Clerk or project test user credentials).
                 </span>
               </label>
               {autoSignIn && (
@@ -155,6 +204,15 @@ export default function NavigationsPage() {
               />
             </label>
           </div>
+          {!canCreate && (
+            <p
+              id="nav-create-hint"
+              className="mt-4 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2"
+            >
+              Add <strong>Global intent</strong> and <strong>Desired report output</strong> (and a non-empty{' '}
+              <strong>Start URL</strong>) to enable Create.
+            </p>
+          )}
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
@@ -165,10 +223,17 @@ export default function NavigationsPage() {
             </button>
             <button
               type="button"
+              disabled={createMutation.isPending || !canCreate}
               onClick={submit}
+              aria-describedby={!canCreate ? 'nav-create-hint' : undefined}
+              title={
+                !canCreate
+                  ? 'Fill Global intent, Desired report output, and Start URL before creating.'
+                  : undefined
+              }
               className="rounded-lg bg-[#4B90FF] text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
             >
-              Create
+              {createMutation.isPending ? 'Creating…' : 'Create'}
             </button>
           </div>
         </div>
@@ -176,7 +241,7 @@ export default function NavigationsPage() {
 
       {rows.length === 0 ? (
         <p className="text-sm text-gray-500 py-12 text-center border border-dashed border-gray-200 rounded-xl">
-          No navigations yet. Create one to get started (stored locally until the API is connected).
+          No navigations yet. Create one to get started.
         </p>
       ) : (
         <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white overflow-hidden">

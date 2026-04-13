@@ -1,0 +1,42 @@
+# Fly.io configuration for self-hosted Skyvern
+# Internal-only service (Flycast) -- only the Bladerunner API calls it.
+# Builds from `apps/skyvern/Dockerfile` (official image + LocalStorage patch for UI screenshots).
+#
+# Deploy: fly deploy --config apps/skyvern/fly.toml -a bladerunner-skyvern
+#
+# Required secrets (set via `fly secrets set -a bladerunner-skyvern`):
+#   DATABASE_STRING   postgresql+psycopg://user:pass@host:5432/skyvern
+#   LLM_KEY           OPENAI
+#   OPENAI_API_KEY    sk-...
+#   SECONDARY_LLM_KEY OPENAI
+#
+# After first boot, grab the auto-generated API key from `fly logs -a bladerunner-skyvern`
+# and set it on the Bladerunner API app:
+#   fly secrets set SKYVERN_API_KEY=<key> SKYVERN_API_BASE_URL=http://bladerunner-skyvern.flycast \
+#     SKYVERN_BROWSER_CDP_HOST=bladerunner-browser-worker.flycast SKYVERN_BROWSER_CDP_PORT=3003 \
+#     -a bladerunner-edgehealth-api
+
+app = "bladerunner-skyvern"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  ENV = "production"
+  BROWSER_TYPE = "cdp-connect"
+  ALLOWED_ORIGINS = '["*"]'
+  ENABLE_OPENAI = "true"
+
+[http_service]
+  internal_port = 8000
+  force_https = false
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2

@@ -137,6 +137,79 @@ Smoke check: `node scripts/verify-api-health.mjs` (expects HTTP 200 and `databas
 docker compose up
 ```
 
+### Navigation Play -- Self-hosted Skyvern
+
+Navigation Play replays recorded navigations via Skyvern (LLM-driven browser automation). By default it uses **Skyvern Cloud** (`api.skyvern.com`), but self-hosting eliminates the shared queue and is significantly faster.
+
+#### Local (alongside `pnpm dev`)
+
+```bash
+# 1. Start Docker Desktop
+
+# 2. Start Skyvern + its Postgres + dashboard/artifact server (profile keeps it separate)
+#    First build may take a minute (thin Dockerfile over official Skyvern + LocalStorage patch for UI screenshots).
+docker compose --profile skyvern up -d skyvern-db skyvern skyvern-ui
+
+# 3. Wait ~30s for first boot (DB migrations), then grab the auto-generated API key
+docker compose --profile skyvern logs skyvern 2>&1 | grep -i "token\|organization"
+# Look for the JWT in .streamlit/secrets.toml output, or run:
+docker compose --profile skyvern exec skyvern cat /app/.streamlit/secrets.toml
+
+# 4. Set the key in .env (replace the existing SKYVERN_API_KEY value)
+# SKYVERN_API_KEY=<key-from-step-3>
+# These should already be set in .env:
+# SKYVERN_API_BASE_URL=http://localhost:8000
+# SKYVERN_BROWSER_CDP_HOST=host.docker.internal
+# SKYVERN_BROWSER_CDP_PORT=3003
+
+# 5. Start your usual native dev stack
+pnpm dev
+
+# 6. Open a navigation, switch to Play, click Play (Skyvern)
+# The API routes to http://localhost:8000 and passes browser_address to your local browser-worker.
+```
+
+To stop Skyvern: `docker compose --profile skyvern down`
+
+#### Production (Fly.io)
+
+Deploy Skyvern as an internal Flycast service in the same region as the API and browser-worker:
+
+```bash
+# Create the app (internal-only, no public IP)
+fly apps create bladerunner-skyvern --org <your-org>
+
+# Provision a dedicated Postgres for Skyvern
+fly postgres create --name bladerunner-skyvern-db --region iad
+
+# Set Skyvern secrets (LLM keys + DB connection)
+fly secrets set \
+  DATABASE_STRING="postgresql+asyncpg://<user>:<pass>@<host>:5432/skyvern" \
+  LLM_KEY=OPENAI \
+  OPENAI_API_KEY="sk-..." \
+  SECONDARY_LLM_KEY=OPENAI \
+  -a bladerunner-skyvern
+
+# Allocate private Flycast IP (reachable from other apps in the same org)
+fly ips allocate-v6 --private -a bladerunner-skyvern
+
+# Deploy using the config in the repo
+fly deploy --config apps/skyvern/fly.toml -a bladerunner-skyvern
+
+# Grab the auto-generated API key from first-boot logs
+fly logs -a bladerunner-skyvern | grep -i "token\|organization"
+
+# Point the Bladerunner API at the self-hosted Skyvern
+fly secrets set \
+  SKYVERN_API_BASE_URL="http://bladerunner-skyvern.flycast" \
+  SKYVERN_API_KEY="<key-from-logs>" \
+  SKYVERN_BROWSER_CDP_HOST="bladerunner-browser-worker.flycast" \
+  SKYVERN_BROWSER_CDP_PORT="3003" \
+  -a bladerunner-edgehealth-api
+```
+
+All traffic stays on Fly private networking (`*.flycast`) in the `iad` region.
+
 ## API Endpoints
 
 
