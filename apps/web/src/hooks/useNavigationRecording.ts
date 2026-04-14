@@ -7,6 +7,7 @@
  *
  * Scroll is exposed as `sendScroll` but throttling is the caller's
  * responsibility (the InteractiveCanvasStream component throttles at ~50ms).
+ * Pointer hover uses `sendPointerMove` (throttled on the canvas) for :hover popovers.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -151,6 +152,8 @@ export interface UseNavigationRecordingReturn {
   sendClick: (x: number, y: number, streamWidth: number, streamHeight: number) => void;
   /** Ephemeral scroll — caller should throttle at ~50ms. */
   sendScroll: (deltaX: number, deltaY: number) => void;
+  /** Ephemeral pointer position for remote :hover — caller should throttle. */
+  sendPointerMove: (x: number, y: number, streamWidth: number, streamHeight: number) => void;
   resolveInput: (mode: 'static' | 'variable', value: string) => void;
   dismissInputPrompt: () => void;
   analyzePrompt: (text: string) => void;
@@ -483,6 +486,25 @@ export function useNavigationRecording(
     [navId, userId, isPaused, proposedIntent],
   );
 
+  const sendPointerMove = useCallback(
+    (x: number, y: number, streamWidth: number, streamHeight: number) => {
+      if (!navId || !socketRef.current?.connected) return;
+      if (!isRecording) return;
+      if (inputPrompt !== null) return;
+      if (proposedIntent !== null) return;
+      if (isPaused) return;
+      socketRef.current.emit('nav:pointerMove', {
+        navId,
+        userId,
+        x,
+        y,
+        streamWidth,
+        streamHeight,
+      });
+    },
+    [navId, userId, isRecording, inputPrompt, proposedIntent, isPaused],
+  );
+
   const resolveInput = useCallback(
     (mode: 'static' | 'variable', value: string) => {
       if (!navId || !socketRef.current?.connected) return;
@@ -655,6 +677,7 @@ export function useNavigationRecording(
     cancelRecording,
     sendClick,
     sendScroll,
+    sendPointerMove,
     resolveInput,
     dismissInputPrompt,
     analyzePrompt,

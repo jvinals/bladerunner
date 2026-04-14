@@ -7,6 +7,8 @@
  * - Pointer clicks are forwarded as `sendClick` with bitmap coords and canvas size.
  * - Wheel events are forwarded as `sendScroll(deltaX, deltaY)`, throttled
  *   at ~50ms to prevent WebSocket flooding from trackpad inertia.
+ * - Pointer moves are forwarded as `sendPointerMove` (when provided), throttled
+ *   at ~32ms so remote CSS :hover / popovers track the cursor without flooding.
  * - When the variable injection modal is open (`isInputModalOpen`), ALL
  *   keyboard and pointer events on the canvas are suppressed so the user
  *   cannot accidentally interact with the headless browser.
@@ -36,6 +38,8 @@ interface InteractiveCanvasStreamProps {
   onCancelIntent: () => void;
   sendClick: (x: number, y: number, streamWidth: number, streamHeight: number) => void;
   sendScroll: (deltaX: number, deltaY: number) => void;
+  /** Optional — navigation recording forwards moves for remote :hover; play UI omits. */
+  sendPointerMove?: (x: number, y: number, streamWidth: number, streamHeight: number) => void;
   /**
    * Use inline layout only (no Tailwind). Required when rendered in a detached `window`
    * that does not load the app stylesheet.
@@ -44,6 +48,7 @@ interface InteractiveCanvasStreamProps {
 }
 
 const SCROLL_THROTTLE_MS = 50;
+const POINTER_MOVE_THROTTLE_MS = 32;
 
 export function InteractiveCanvasStream({
   frameDataUrl,
@@ -54,11 +59,13 @@ export function InteractiveCanvasStream({
   onCancelIntent,
   sendClick,
   sendScroll,
+  sendPointerMove,
   embedWithoutAppStyles = false,
 }: InteractiveCanvasStreamProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const lastScrollTs = useRef(0);
+  const lastPointerMoveTs = useRef(0);
   const [fabPos, setFabPos] = useState<{ left: number; top: number } | null>(null);
 
   // -----------------------------------------------------------------------
@@ -161,6 +168,22 @@ export function InteractiveCanvasStream({
       sendScroll(e.deltaX, e.deltaY);
     },
     [blockCanvasInteraction, sendScroll],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!sendPointerMove) return;
+      if (blockCanvasInteraction) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (canvas.width <= 0 || canvas.height <= 0) return;
+      const now = Date.now();
+      if (now - lastPointerMoveTs.current < POINTER_MOVE_THROTTLE_MS) return;
+      lastPointerMoveTs.current = now;
+      const { x, y } = clientToViewportCoords(canvas, e.clientX, e.clientY);
+      sendPointerMove(x, y, canvas.width, canvas.height);
+    },
+    [blockCanvasInteraction, sendPointerMove],
   );
 
   // -----------------------------------------------------------------------
@@ -268,6 +291,7 @@ export function InteractiveCanvasStream({
       <canvas
         ref={canvasRef}
         onClick={handleClick}
+        onPointerMove={sendPointerMove ? handlePointerMove : undefined}
         onWheel={handleWheel}
         className={canvasClass}
         style={canvasStyle}
