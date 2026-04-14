@@ -95,6 +95,16 @@ export type UserLlmCredentials = Prisma.UserLlmCredentialsModel
  */
 export type Evaluation = Prisma.EvaluationModel
 /**
+ * Model NavigationSkyvernWorkflowRun
+ * One execution of a navigation’s Skyvern workflow (Navigation Play).
+ */
+export type NavigationSkyvernWorkflowRun = Prisma.NavigationSkyvernWorkflowRunModel
+/**
+ * Model NavigationSkyvernWorkflowRunBlock
+ * Per-workflow-block metrics for a Skyvern run (block index aligns with Play compiler order).
+ */
+export type NavigationSkyvernWorkflowRunBlock = Prisma.NavigationSkyvernWorkflowRunBlockModel
+/**
  * Model Navigation
  * Navigation planning records (UI shell; separate from autonomous `Evaluation` runs).
  */

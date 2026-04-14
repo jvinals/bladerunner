@@ -780,6 +780,8 @@ export type NavigationRecordingSessionDto = {
   playStatus: string | null;
   /** Skyvern workflow block aligned to `NavigationAction.sequence` while Play is active. */
   playActiveSequence: number | null;
+  /** Persisted `NavigationSkyvernWorkflowRun` id while Play is active (if the run row was created). */
+  skyvernWorkflowRunId: string | null;
 };
 
 /** Same payload Skyvern create/update uses (Play sync). */
@@ -787,6 +789,52 @@ export type SkyvernWorkflowDefinitionDto = {
   title: string;
   workflow_definition: Record<string, unknown>;
   status: 'published';
+};
+
+export type SkyvernWorkflowRunListItemDto = {
+  id: string;
+  skyvernRunId: string;
+  skyvernWorkflowPermanentId: string;
+  runStartedAt: string;
+  lastStatus: string;
+  finishedAt: string | null;
+  failureReason: string | null;
+  browserMode: string;
+  createdAt: string;
+};
+
+export type SkyvernWorkflowRunBlockDto = {
+  id: string;
+  runId: string;
+  userId: string;
+  blockIndex: number;
+  skyvernBlockLabel: string;
+  navigationActionSequence: number | null;
+  skyvernTimelineStatus: string | null;
+  skyvernBlockStartedAt: string | null;
+  skyvernBlockCompletedAt: string | null;
+  exclusiveAppDurationMs: number | null;
+  metricsJson: unknown | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SkyvernWorkflowRunDetailDto = {
+  id: string;
+  navigationId: string;
+  userId: string;
+  skyvernRunId: string;
+  skyvernWorkflowPermanentId: string;
+  runStartedAt: string;
+  lastStatus: string;
+  finishedAt: string | null;
+  failureReason: string | null;
+  browserMode: string;
+  skyvernRunSnapshotJson: unknown | null;
+  skyvernTimelineJson: unknown | null;
+  createdAt: string;
+  updatedAt: string;
+  blocks: SkyvernWorkflowRunBlockDto[];
 };
 
 export const navigationsApi = {
@@ -804,10 +852,15 @@ export const navigationsApi = {
       workflowId: string;
       browserAddress: string;
       activeSequence: number | null;
+      dbRunId: string | null;
+      runStartedAt: string;
     }>(`/navigations/${id}/play/start`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   playStop: (id: string) => apiFetchVoid(`/navigations/${id}/play/stop`, { method: 'POST' }),
   skyvernWorkflow: (id: string) =>
     apiFetch<SkyvernWorkflowDefinitionDto>(`/navigations/${id}/skyvern-workflow`),
+  skyvernRuns: (id: string) => apiFetch<SkyvernWorkflowRunListItemDto[]>(`/navigations/${id}/skyvern-runs`),
+  skyvernRun: (id: string, runId: string) =>
+    apiFetch<SkyvernWorkflowRunDetailDto>(`/navigations/${id}/skyvern-runs/${runId}`),
   improveActionInstruction: (id: string, body: ImproveNavigationActionInstructionBody) =>
     apiFetch<{ improved: string }>(`/navigations/${id}/actions/improve-instruction`, {
       method: 'POST',

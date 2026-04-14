@@ -395,6 +395,8 @@ export const ModelName = {
   UserLlmPreferences: 'UserLlmPreferences',
   UserLlmCredentials: 'UserLlmCredentials',
   Evaluation: 'Evaluation',
+  NavigationSkyvernWorkflowRun: 'NavigationSkyvernWorkflowRun',
+  NavigationSkyvernWorkflowRunBlock: 'NavigationSkyvernWorkflowRunBlock',
   Navigation: 'Navigation',
   NavigationAction: 'NavigationAction',
   EvaluationStep: 'EvaluationStep',
@@ -415,7 +417,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "userAgentContext" | "project" | "projectAgentKnowledge" | "run" | "aiVisualIdTest" | "runCheckpoint" | "runStep" | "runRecording" | "userLlmPreferences" | "userLlmCredentials" | "evaluation" | "navigation" | "navigationAction" | "evaluationStep" | "evaluationQuestion" | "evaluationReport"
+    modelProps: "userAgentContext" | "project" | "projectAgentKnowledge" | "run" | "aiVisualIdTest" | "runCheckpoint" | "runStep" | "runRecording" | "userLlmPreferences" | "userLlmCredentials" | "evaluation" | "navigationSkyvernWorkflowRun" | "navigationSkyvernWorkflowRunBlock" | "navigation" | "navigationAction" | "evaluationStep" | "evaluationQuestion" | "evaluationReport"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1233,6 +1235,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    NavigationSkyvernWorkflowRun: {
+      payload: Prisma.$NavigationSkyvernWorkflowRunPayload<ExtArgs>
+      fields: Prisma.NavigationSkyvernWorkflowRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.NavigationSkyvernWorkflowRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.NavigationSkyvernWorkflowRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>
+        }
+        findFirst: {
+          args: Prisma.NavigationSkyvernWorkflowRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.NavigationSkyvernWorkflowRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>
+        }
+        findMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>[]
+        }
+        create: {
+          args: Prisma.NavigationSkyvernWorkflowRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>
+        }
+        createMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.NavigationSkyvernWorkflowRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>[]
+        }
+        delete: {
+          args: Prisma.NavigationSkyvernWorkflowRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>
+        }
+        update: {
+          args: Prisma.NavigationSkyvernWorkflowRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.NavigationSkyvernWorkflowRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.NavigationSkyvernWorkflowRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunPayload>
+        }
+        aggregate: {
+          args: Prisma.NavigationSkyvernWorkflowRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateNavigationSkyvernWorkflowRun>
+        }
+        groupBy: {
+          args: Prisma.NavigationSkyvernWorkflowRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NavigationSkyvernWorkflowRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.NavigationSkyvernWorkflowRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NavigationSkyvernWorkflowRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    NavigationSkyvernWorkflowRunBlock: {
+      payload: Prisma.$NavigationSkyvernWorkflowRunBlockPayload<ExtArgs>
+      fields: Prisma.NavigationSkyvernWorkflowRunBlockFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>
+        }
+        findFirst: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>
+        }
+        findMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>[]
+        }
+        create: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>
+        }
+        createMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>[]
+        }
+        delete: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>
+        }
+        update: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>
+        }
+        deleteMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>[]
+        }
+        upsert: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$NavigationSkyvernWorkflowRunBlockPayload>
+        }
+        aggregate: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateNavigationSkyvernWorkflowRunBlock>
+        }
+        groupBy: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NavigationSkyvernWorkflowRunBlockGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.NavigationSkyvernWorkflowRunBlockCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.NavigationSkyvernWorkflowRunBlockCountAggregateOutputType> | number
+        }
+      }
+    }
     Navigation: {
       payload: Prisma.$NavigationPayload<ExtArgs>
       fields: Prisma.NavigationFieldRefs
@@ -1821,6 +1971,45 @@ export const EvaluationScalarFieldEnum = {
 export type EvaluationScalarFieldEnum = (typeof EvaluationScalarFieldEnum)[keyof typeof EvaluationScalarFieldEnum]
 
 
+export const NavigationSkyvernWorkflowRunScalarFieldEnum = {
+  id: 'id',
+  navigationId: 'navigationId',
+  userId: 'userId',
+  skyvernRunId: 'skyvernRunId',
+  skyvernWorkflowPermanentId: 'skyvernWorkflowPermanentId',
+  runStartedAt: 'runStartedAt',
+  lastStatus: 'lastStatus',
+  finishedAt: 'finishedAt',
+  failureReason: 'failureReason',
+  browserMode: 'browserMode',
+  skyvernRunSnapshotJson: 'skyvernRunSnapshotJson',
+  skyvernTimelineJson: 'skyvernTimelineJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type NavigationSkyvernWorkflowRunScalarFieldEnum = (typeof NavigationSkyvernWorkflowRunScalarFieldEnum)[keyof typeof NavigationSkyvernWorkflowRunScalarFieldEnum]
+
+
+export const NavigationSkyvernWorkflowRunBlockScalarFieldEnum = {
+  id: 'id',
+  runId: 'runId',
+  userId: 'userId',
+  blockIndex: 'blockIndex',
+  skyvernBlockLabel: 'skyvernBlockLabel',
+  navigationActionSequence: 'navigationActionSequence',
+  skyvernTimelineStatus: 'skyvernTimelineStatus',
+  skyvernBlockStartedAt: 'skyvernBlockStartedAt',
+  skyvernBlockCompletedAt: 'skyvernBlockCompletedAt',
+  exclusiveAppDurationMs: 'exclusiveAppDurationMs',
+  metricsJson: 'metricsJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type NavigationSkyvernWorkflowRunBlockScalarFieldEnum = (typeof NavigationSkyvernWorkflowRunBlockScalarFieldEnum)[keyof typeof NavigationSkyvernWorkflowRunBlockScalarFieldEnum]
+
+
 export const NavigationScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -2181,6 +2370,20 @@ export type ListEnumEvaluationRunModeFieldRefInput<$PrismaModel> = FieldRefInput
 
 
 /**
+ * Reference to a field of type 'SkyvernWorkflowRunLifecycleStatus'
+ */
+export type EnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SkyvernWorkflowRunLifecycleStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'SkyvernWorkflowRunLifecycleStatus[]'
+ */
+export type ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SkyvernWorkflowRunLifecycleStatus[]'>
+    
+
+
+/**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -2327,6 +2530,8 @@ export type GlobalOmitConfig = {
   userLlmPreferences?: Prisma.UserLlmPreferencesOmit
   userLlmCredentials?: Prisma.UserLlmCredentialsOmit
   evaluation?: Prisma.EvaluationOmit
+  navigationSkyvernWorkflowRun?: Prisma.NavigationSkyvernWorkflowRunOmit
+  navigationSkyvernWorkflowRunBlock?: Prisma.NavigationSkyvernWorkflowRunBlockOmit
   navigation?: Prisma.NavigationOmit
   navigationAction?: Prisma.NavigationActionOmit
   evaluationStep?: Prisma.EvaluationStepOmit

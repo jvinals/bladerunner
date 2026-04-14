@@ -146,6 +146,7 @@ export class NavigationsService {
       skyvernRunId: play.skyvernRunId,
       playStatus: play.lastStatus,
       playActiveSequence: play.playActiveSequence,
+      skyvernWorkflowRunId: play.dbRunId,
     };
   }
 

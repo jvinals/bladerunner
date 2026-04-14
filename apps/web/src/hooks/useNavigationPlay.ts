@@ -113,6 +113,7 @@ export function useNavigationPlay(navId: string | undefined): UseNavigationPlayR
       setPlayActiveSequence(null);
       setAppUrl(null);
       void queryClient.invalidateQueries({ queryKey: ['navigation', navId] });
+      void queryClient.invalidateQueries({ queryKey: ['navigation', navId, 'skyvernRuns'] });
     });
 
     return () => {
