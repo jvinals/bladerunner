@@ -21,7 +21,10 @@ import {
   navigationPlayUsesSkyvernHostedBrowser,
   resolveBrowserAddressForSkyvern,
 } from './skyvern-browser-address.util';
-import { buildSkyvernWorkflowApiPayload } from './skyvern-workflow-api.mapper';
+import {
+  buildSkyvernWorkflowApiPayload,
+  defaultLocalhostRewriteHostForSkyvern,
+} from './skyvern-workflow-api.mapper';
 import type { RecordedNavigationAction } from './navigation-recording.service';
 import { NavigationRecordingService } from './navigation-recording.service';
 import { collectTimelineScreenshotUrls } from './_timeline-screenshots';
@@ -431,6 +434,21 @@ export class NavigationPlayService {
     }
   }
 
+  /**
+   * When Skyvern runs in Docker, workflow URLs must not use `localhost` (that is the container).
+   * Optional **`SKYVERN_PLAY_LOCALHOST_REWRITE_HOST`** (e.g. `host.docker.internal`).
+   * If unset and **`SKYVERN_API_BASE_URL`** points at loopback, defaults to `host.docker.internal`.
+   * Set **`SKYVERN_PLAY_DISABLE_LOCALHOST_REWRITE=true`** to skip rewriting.
+   */
+  private skyvernLocalhostRewriteHost(): string | undefined {
+    if (this.config.get<string>('SKYVERN_PLAY_DISABLE_LOCALHOST_REWRITE')?.trim() === 'true') {
+      return undefined;
+    }
+    const explicit = this.config.get<string>('SKYVERN_PLAY_LOCALHOST_REWRITE_HOST')?.trim();
+    if (explicit) return explicit;
+    return defaultLocalhostRewriteHostForSkyvern(this.config.get<string>('SKYVERN_API_BASE_URL'));
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -512,9 +530,14 @@ export class NavigationPlayService {
       throw new BadRequestException('No recorded actions — record a navigation first');
     }
     const recorded = nav.actions.map(prismaActionToRecorded);
+    const localhostRewriteHost = this.skyvernLocalhostRewriteHost();
+    if (localhostRewriteHost) {
+      this.logger.debug(`Navigation Play: rewriting loopback URLs in workflow to host ${localhostRewriteHost}`);
+    }
     const { title, workflow_definition } = buildSkyvernWorkflowApiPayload(
       { id: nav.id, name: nav.name, url: nav.url },
       recorded,
+      { localhostRewriteHost },
     );
     return {
       nav,

@@ -41,6 +41,48 @@ function skyvernMustacheText(key: string): string {
 }
 
 /**
+ * When Skyvern runs in Docker, `http://localhost:…` in workflow URLs points at the container, not the dev app.
+ * Rewrite loopback hosts to a hostname reachable from Skyvern (e.g. `host.docker.internal` on Docker Desktop / compose `extra_hosts`).
+ */
+export function rewriteLocalhostUrlForSkyvernPlay(raw: string, dockerReachableHost: string | undefined): string {
+  const h = dockerReachableHost?.trim();
+  if (!h) return raw;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return raw;
+  }
+  const hn = u.hostname.toLowerCase();
+  if (hn === 'localhost' || hn === '127.0.0.1' || hn === '::1') {
+    u.hostname = h;
+  }
+  return u.toString();
+}
+
+/**
+ * If the API talks to Skyvern at loopback, assume Skyvern may run in Docker and default rewrite target.
+ */
+export function defaultLocalhostRewriteHostForSkyvern(skyvernApiBaseUrl: string | undefined): string | undefined {
+  const raw = skyvernApiBaseUrl?.trim() || 'https://api.skyvern.com';
+  try {
+    const u = new URL(raw);
+    const hn = u.hostname.toLowerCase();
+    if (hn === 'localhost' || hn === '127.0.0.1' || hn === '::1') {
+      return 'host.docker.internal';
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
+export type BuildSkyvernWorkflowApiPayloadOptions = {
+  /** When set, navigation block `url` values that use loopback are rewritten to this host (port/path preserved). */
+  localhostRewriteHost?: string | null;
+};
+
+/**
  * Skyvern requires **unique** `label` per block. Recording `sequence` can repeat in the DB
  * (e.g. duplicate rows) or across types; use a monotonic index per emitted block.
  */
@@ -59,7 +101,9 @@ function makeNextBlockLabel(): (kind: string) => string {
 export function buildSkyvernWorkflowApiPayload(
   navigation: { id: string; name: string; url: string },
   actions: RecordedNavigationAction[],
+  options?: BuildSkyvernWorkflowApiPayloadOptions,
 ): { title: string; workflow_definition: SkyvernWorkflowDefinitionPayload } {
+  const rewrite = options?.localhostRewriteHost ?? undefined;
   const blocks: SkyvernApiBlock[] = [];
   const variableNames = new Set<string>();
   const nextLabel = makeNextBlockLabel();
@@ -68,7 +112,8 @@ export function buildSkyvernWorkflowApiPayload(
     const ins = action.actionInstruction?.trim();
     switch (action.actionType) {
       case 'navigate': {
-        const url = action.inputValue ?? action.pageUrl ?? navigation.url;
+        const rawUrl = action.inputValue ?? action.pageUrl ?? navigation.url;
+        const url = rewriteLocalhostUrlForSkyvernPlay(rawUrl, rewrite);
         const navigation_goal = ins
           ? ins
           : `Navigate to ${url} and wait for the page to load. The task is complete once the page has loaded.`;

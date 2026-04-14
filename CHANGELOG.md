@@ -2,6 +2,8 @@
 
 ## 2026-04-14
 
+- `0.10.319`: **Navigation Play — rewrite loopback URLs for Docker Skyvern** — When **`SKYVERN_API_BASE_URL`** targets loopback (local Skyvern), navigation block URLs using **`localhost` / `127.0.0.1` / `::1`** are rewritten to **`host.docker.internal`** so Skyvern’s browser can reach the dev app. Override with **`SKYVERN_PLAY_LOCALHOST_REWRITE_HOST`**, or disable with **`SKYVERN_PLAY_DISABLE_LOCALHOST_REWRITE=true`**. `@bladerunner/api 0.6.230`.
+
 - `0.10.318`: **Vite dev server — bind `0.0.0.0`** — Set **`server.host: true`** so the web app is reachable from Docker (e.g. Skyvern Play against `http://host.docker.internal:5173`). Fixes **connection refused** when the dev server only listened on loopback. `@bladerunner/web 0.7.176`.
 
 - `0.10.317`: **Docker Compose — Skyvern `host.docker.internal` on Linux** — Added **`extra_hosts: host.docker.internal:host-gateway`** to the **`skyvern`** service so Chromium inside the container can reach apps on the host (e.g. Vite `:5173`) without DNS failures.
