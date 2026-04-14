@@ -122,6 +122,22 @@ export class NavigationsController {
     return this.navigationPlay.getSkyvernWorkflowDefinition(id, req.user.sub);
   }
 
+  @Get(':id/skyvern-runs')
+  @ApiOperation({ summary: 'List persisted Skyvern workflow runs for this navigation' })
+  listSkyvernRuns(@Req() req: { user: { sub: string } }, @Param('id') id: string) {
+    return this.navigationPlay.listSkyvernWorkflowRuns(id, req.user.sub);
+  }
+
+  @Get(':id/skyvern-runs/:runId')
+  @ApiOperation({ summary: 'Get one persisted Skyvern workflow run with per-block metrics' })
+  getSkyvernRun(
+    @Req() req: { user: { sub: string } },
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+  ) {
+    return this.navigationPlay.getSkyvernWorkflowRunDetail(id, runId, req.user.sub);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get navigation' })
   findOne(@Req() req: { user: { sub: string } }, @Param('id') id: string) {

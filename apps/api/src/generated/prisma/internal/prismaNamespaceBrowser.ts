@@ -62,6 +62,8 @@ export const ModelName = {
   UserLlmPreferences: 'UserLlmPreferences',
   UserLlmCredentials: 'UserLlmCredentials',
   Evaluation: 'Evaluation',
+  NavigationSkyvernWorkflowRun: 'NavigationSkyvernWorkflowRun',
+  NavigationSkyvernWorkflowRunBlock: 'NavigationSkyvernWorkflowRunBlock',
   Navigation: 'Navigation',
   NavigationAction: 'NavigationAction',
   EvaluationStep: 'EvaluationStep',
@@ -262,6 +264,45 @@ export const EvaluationScalarFieldEnum = {
 } as const
 
 export type EvaluationScalarFieldEnum = (typeof EvaluationScalarFieldEnum)[keyof typeof EvaluationScalarFieldEnum]
+
+
+export const NavigationSkyvernWorkflowRunScalarFieldEnum = {
+  id: 'id',
+  navigationId: 'navigationId',
+  userId: 'userId',
+  skyvernRunId: 'skyvernRunId',
+  skyvernWorkflowPermanentId: 'skyvernWorkflowPermanentId',
+  runStartedAt: 'runStartedAt',
+  lastStatus: 'lastStatus',
+  finishedAt: 'finishedAt',
+  failureReason: 'failureReason',
+  browserMode: 'browserMode',
+  skyvernRunSnapshotJson: 'skyvernRunSnapshotJson',
+  skyvernTimelineJson: 'skyvernTimelineJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type NavigationSkyvernWorkflowRunScalarFieldEnum = (typeof NavigationSkyvernWorkflowRunScalarFieldEnum)[keyof typeof NavigationSkyvernWorkflowRunScalarFieldEnum]
+
+
+export const NavigationSkyvernWorkflowRunBlockScalarFieldEnum = {
+  id: 'id',
+  runId: 'runId',
+  userId: 'userId',
+  blockIndex: 'blockIndex',
+  skyvernBlockLabel: 'skyvernBlockLabel',
+  navigationActionSequence: 'navigationActionSequence',
+  skyvernTimelineStatus: 'skyvernTimelineStatus',
+  skyvernBlockStartedAt: 'skyvernBlockStartedAt',
+  skyvernBlockCompletedAt: 'skyvernBlockCompletedAt',
+  exclusiveAppDurationMs: 'exclusiveAppDurationMs',
+  metricsJson: 'metricsJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type NavigationSkyvernWorkflowRunBlockScalarFieldEnum = (typeof NavigationSkyvernWorkflowRunBlockScalarFieldEnum)[keyof typeof NavigationSkyvernWorkflowRunBlockScalarFieldEnum]
 
 
 export const NavigationScalarFieldEnum = {

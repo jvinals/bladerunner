@@ -474,6 +474,23 @@ export type EnumEvaluationRunModeWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
 }
 
+export type EnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.SkyvernWorkflowRunLifecycleStatus | Prisma.EnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel> | $Enums.SkyvernWorkflowRunLifecycleStatus
+}
+
+export type EnumSkyvernWorkflowRunLifecycleStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SkyvernWorkflowRunLifecycleStatus | Prisma.EnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusWithAggregatesFilter<$PrismaModel> | $Enums.SkyvernWorkflowRunLifecycleStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel>
+}
+
 export type FloatNullableFilter<$PrismaModel = never> = {
   equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
   in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
@@ -952,6 +969,23 @@ export type NestedEnumEvaluationRunModeWithAggregatesFilter<$PrismaModel = never
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
   _max?: Prisma.NestedEnumEvaluationRunModeFilter<$PrismaModel>
+}
+
+export type NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.SkyvernWorkflowRunLifecycleStatus | Prisma.EnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel> | $Enums.SkyvernWorkflowRunLifecycleStatus
+}
+
+export type NestedEnumSkyvernWorkflowRunLifecycleStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SkyvernWorkflowRunLifecycleStatus | Prisma.EnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SkyvernWorkflowRunLifecycleStatus[] | Prisma.ListEnumSkyvernWorkflowRunLifecycleStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusWithAggregatesFilter<$PrismaModel> | $Enums.SkyvernWorkflowRunLifecycleStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSkyvernWorkflowRunLifecycleStatusFilter<$PrismaModel>
 }
 
 export type NestedFloatNullableWithAggregatesFilter<$PrismaModel = never> = {

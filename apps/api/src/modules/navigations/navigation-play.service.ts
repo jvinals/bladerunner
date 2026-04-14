@@ -1,7 +1,10 @@
+import { randomUUID } from 'crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import WebSocket from 'ws';
+import type { Prisma } from '../../generated/prisma/client';
+import { SkyvernWorkflowRunLifecycleStatus } from '../../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordingService } from '../recording/recording.service';
 import { resolveBrowserWorkerWebSocketUrl } from '../recording/browser-worker-url.util';
@@ -22,6 +25,11 @@ import { buildSkyvernWorkflowApiPayload } from './skyvern-workflow-api.mapper';
 import type { RecordedNavigationAction } from './navigation-recording.service';
 import { NavigationRecordingService } from './navigation-recording.service';
 import { collectTimelineScreenshotUrls } from './_timeline-screenshots';
+import {
+  alignEnrichedBlocksToLabels,
+  collectSkyvernTimelineEnrichedBlocks,
+  durationMsExclusive,
+} from './skyvern-timeline-metrics';
 
 const WORKER_WS_ATTEMPTS = 10;
 const WORKER_WS_ATTEMPT_MS = 60_000;
@@ -206,6 +214,40 @@ function deriveActivePlaySequence(
   return seqs[n - 1] ?? null;
 }
 
+function skyvernApiStatusToPrisma(
+  status: SkyvernWorkflowRunStatus,
+): (typeof SkyvernWorkflowRunLifecycleStatus)[keyof typeof SkyvernWorkflowRunLifecycleStatus] {
+  switch (status) {
+    case 'created':
+      return SkyvernWorkflowRunLifecycleStatus.created;
+    case 'queued':
+      return SkyvernWorkflowRunLifecycleStatus.queued;
+    case 'running':
+      return SkyvernWorkflowRunLifecycleStatus.running;
+    case 'timed_out':
+      return SkyvernWorkflowRunLifecycleStatus.timed_out;
+    case 'failed':
+      return SkyvernWorkflowRunLifecycleStatus.failed;
+    case 'terminated':
+      return SkyvernWorkflowRunLifecycleStatus.terminated;
+    case 'completed':
+      return SkyvernWorkflowRunLifecycleStatus.completed;
+    case 'canceled':
+      return SkyvernWorkflowRunLifecycleStatus.canceled;
+    default:
+      return SkyvernWorkflowRunLifecycleStatus.running;
+  }
+}
+
+function parseSkyvernRunStartedAt(run: SkyvernWorkflowRunResponse, fallback: Date): Date {
+  const raw = run.created_at?.trim();
+  if (raw) {
+    const t = Date.parse(raw);
+    if (!Number.isNaN(t)) return new Date(t);
+  }
+  return fallback;
+}
+
 function prismaActionToRecorded(row: {
   sequence: number;
   actionType: string;
@@ -241,6 +283,10 @@ interface NavigationPlaySession {
   navigationId: string;
   userId: string;
   skyvernRunId: string;
+  /** Persisted `NavigationSkyvernWorkflowRun.id` (null if DB insert failed). */
+  dbRunId: string | null;
+  /** `wpid_…` used when this run was started. */
+  workflowPermanentIdForRun: string;
   wsEndpoint: string;
   pollTimer: ReturnType<typeof setTimeout> | null;
   /** Monotonic clock at session start — used for burst polling until first frame. */
@@ -261,6 +307,129 @@ interface NavigationPlaySession {
 export class NavigationPlayService {
   private readonly logger = new Logger(NavigationPlayService.name);
   private readonly sessions = new Map<string, NavigationPlaySession>();
+
+  private buildSkyvernBlockMetricRows(
+    runId: string,
+    userId: string,
+    skyvernBlockLabels: string[],
+    playActionSequences: number[],
+    timelineRaw: unknown,
+  ): Prisma.NavigationSkyvernWorkflowRunBlockCreateManyInput[] {
+    const enriched = collectSkyvernTimelineEnrichedBlocks(timelineRaw);
+    const aligned = alignEnrichedBlocksToLabels(skyvernBlockLabels, enriched);
+    const rows: Prisma.NavigationSkyvernWorkflowRunBlockCreateManyInput[] = [];
+    for (let i = 0; i < skyvernBlockLabels.length; i++) {
+      const lab = skyvernBlockLabels[i]!;
+      const seq = i < playActionSequences.length ? playActionSequences[i]! : null;
+      const e = aligned[i] ?? { label: lab, status: null, startedAt: null, completedAt: null };
+      const orchMs = durationMsExclusive(e.startedAt, e.completedAt);
+      const metricsJson: Prisma.InputJsonValue | undefined =
+        orchMs != null ? { orchestratorBlockDurationMs: orchMs } : undefined;
+      rows.push({
+        id: randomUUID(),
+        runId,
+        userId,
+        blockIndex: i,
+        skyvernBlockLabel: lab,
+        navigationActionSequence: seq,
+        skyvernTimelineStatus: e.status,
+        skyvernBlockStartedAt: e.startedAt,
+        skyvernBlockCompletedAt: e.completedAt,
+        exclusiveAppDurationMs: null,
+        ...(metricsJson !== undefined ? { metricsJson } : {}),
+      });
+    }
+    return rows;
+  }
+
+  private async persistSkyvernRunStart(params: {
+    navigationId: string;
+    userId: string;
+    skyvernRunId: string;
+    workflowPermanentId: string;
+    run: SkyvernWorkflowRunResponse;
+    receiptTime: Date;
+    browserMode: 'hosted' | 'browser_worker';
+  }): Promise<string | null> {
+    const runStartedAt = parseSkyvernRunStartedAt(params.run, params.receiptTime);
+    const status = skyvernApiStatusToPrisma(params.run.status);
+    try {
+      const row = await this.prisma.navigationSkyvernWorkflowRun.create({
+        data: {
+          navigationId: params.navigationId,
+          userId: params.userId,
+          skyvernRunId: params.skyvernRunId,
+          skyvernWorkflowPermanentId: params.workflowPermanentId,
+          runStartedAt,
+          lastStatus: status,
+          browserMode: params.browserMode,
+          skyvernRunSnapshotJson: params.run as unknown as Prisma.InputJsonValue,
+        },
+      });
+      return row.id;
+    } catch (err) {
+      this.logger.warn(
+        `Failed to persist Skyvern workflow run: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  private async persistSkyvernRunPoll(
+    session: NavigationPlaySession,
+    run: SkyvernWorkflowRunResponse,
+    timelineRaw: unknown,
+  ): Promise<void> {
+    if (!session.dbRunId) return;
+    const status = skyvernApiStatusToPrisma(run.status);
+    const terminal: SkyvernWorkflowRunStatus[] = [
+      'completed',
+      'failed',
+      'terminated',
+      'timed_out',
+      'canceled',
+    ];
+    const isTerminal = terminal.includes(run.status);
+    let finishedAt: Date | null = null;
+    if (isTerminal) {
+      const raw = run.finished_at?.trim();
+      if (raw) {
+        const t = Date.parse(raw);
+        finishedAt = Number.isNaN(t) ? new Date() : new Date(t);
+      } else {
+        finishedAt = new Date();
+      }
+    }
+    const blockRows = this.buildSkyvernBlockMetricRows(
+      session.dbRunId,
+      session.userId,
+      session.skyvernBlockLabels,
+      session.playActionSequences,
+      timelineRaw,
+    );
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.navigationSkyvernWorkflowRun.update({
+          where: { id: session.dbRunId! },
+          data: {
+            lastStatus: status,
+            failureReason: run.failure_reason ?? null,
+            skyvernRunSnapshotJson: run as unknown as Prisma.InputJsonValue,
+            skyvernTimelineJson: timelineRaw as Prisma.InputJsonValue,
+            ...(finishedAt ? { finishedAt } : {}),
+          },
+        });
+        await tx.navigationSkyvernWorkflowRunBlock.deleteMany({ where: { runId: session.dbRunId! } });
+        if (blockRows.length > 0) {
+          await tx.navigationSkyvernWorkflowRunBlock.createMany({ data: blockRows });
+        }
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Skyvern run metrics persist failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -297,16 +466,24 @@ export class NavigationPlayService {
     skyvernRunId: string | null;
     lastStatus: SkyvernWorkflowRunStatus | null;
     playActiveSequence: number | null;
+    dbRunId: string | null;
   } {
     const s = this.sessions.get(navId);
     if (!s || s.userId !== userId) {
-      return { active: false, skyvernRunId: null, lastStatus: null, playActiveSequence: null };
+      return {
+        active: false,
+        skyvernRunId: null,
+        lastStatus: null,
+        playActiveSequence: null,
+        dbRunId: null,
+      };
     }
     return {
       active: true,
       skyvernRunId: s.skyvernRunId,
       lastStatus: s.lastStatus,
       playActiveSequence: s.lastActiveSequence,
+      dbRunId: s.dbRunId,
     };
   }
 
@@ -375,6 +552,10 @@ export class NavigationPlayService {
     browserAddress: string;
     /** Initial highlighted workflow step; same as first `navPlay:runUpdate` when timeline is empty. */
     activeSequence: number | null;
+    /** Persisted run row id (null if DB insert failed). */
+    dbRunId: string | null;
+    /** Canonical run start timestamp (ISO 8601). */
+    runStartedAt: string;
   }> {
     this.skyvern.assertConfigured();
     if (this.moduleRef.get(NavigationRecordingService, { strict: false }).hasSession(navId)) {
@@ -451,6 +632,7 @@ export class NavigationPlayService {
     }
 
     let run: SkyvernWorkflowRunResponse;
+    const receiptTime = new Date();
     try {
       run = await this.skyvern.runWorkflow({
         workflow_id: workflowId,
@@ -479,12 +661,24 @@ export class NavigationPlayService {
 
     const skyvernBlockLabels = jsonDefinition.workflow_definition.blocks.map((b) => b.label);
     const playActionSequences = recorded.map((a) => a.sequence);
+    const browserMode: 'hosted' | 'browser_worker' = useHostedBrowser ? 'hosted' : 'browser_worker';
+    const dbRunId = await this.persistSkyvernRunStart({
+      navigationId: navId,
+      userId,
+      skyvernRunId: run.run_id,
+      workflowPermanentId: workflowId,
+      run,
+      receiptTime,
+      browserMode,
+    });
 
     const room = this.playRoomId(navId);
     const session: NavigationPlaySession = {
       navigationId: navId,
       userId,
       skyvernRunId: run.run_id,
+      dbRunId,
+      workflowPermanentIdForRun: workflowId,
       wsEndpoint: browserAddressForSkyvern ?? '',
       pollTimer: null,
       playStartedAt: Date.now(),
@@ -528,6 +722,8 @@ export class NavigationPlayService {
       workflowId,
       browserAddress: browserAddressForSkyvern ?? '',
       activeSequence: session.lastActiveSequence,
+      dbRunId,
+      runStartedAt: parseSkyvernRunStartedAt(run, receiptTime).toISOString(),
     };
   }
 
@@ -541,6 +737,7 @@ export class NavigationPlayService {
         this.skyvern.getRunTimeline(session.skyvernRunId),
       ]);
       session.lastStatus = run.status;
+      await this.persistSkyvernRunPoll(session, run, timelineRaw);
 
       const timelineBlocks = collectSkyvernTimelineBlockRows(timelineRaw);
       if (timelineBlocks.length > 0) {
@@ -747,6 +944,19 @@ export class NavigationPlayService {
   private async cleanupSession(navId: string, cancelled: boolean): Promise<void> {
     const session = this.sessions.get(navId);
     if (!session) return;
+    if (cancelled && session.dbRunId) {
+      try {
+        const [run, timelineRaw] = await Promise.all([
+          this.skyvern.getRun(session.skyvernRunId),
+          this.skyvern.getRunTimeline(session.skyvernRunId),
+        ]);
+        await this.persistSkyvernRunPoll(session, run, timelineRaw);
+      } catch (err) {
+        this.logger.warn(
+          `Skyvern run final persist on cancel failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
     session.stopped = true;
     if (session.pollTimer) {
       clearTimeout(session.pollTimer);
@@ -773,6 +983,47 @@ export class NavigationPlayService {
       }
     }
     throw lastErr;
+  }
+
+  async listSkyvernWorkflowRuns(navId: string, userId: string) {
+    const nav = await this.prisma.navigation.findFirst({
+      where: { id: navId, userId },
+      select: { id: true },
+    });
+    if (!nav) throw new NotFoundException(`Navigation ${navId} not found`);
+
+    return this.prisma.navigationSkyvernWorkflowRun.findMany({
+      where: { navigationId: navId, userId },
+      orderBy: { runStartedAt: 'desc' },
+      select: {
+        id: true,
+        skyvernRunId: true,
+        skyvernWorkflowPermanentId: true,
+        runStartedAt: true,
+        lastStatus: true,
+        finishedAt: true,
+        failureReason: true,
+        browserMode: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async getSkyvernWorkflowRunDetail(navId: string, runId: string, userId: string) {
+    const nav = await this.prisma.navigation.findFirst({
+      where: { id: navId, userId },
+      select: { id: true },
+    });
+    if (!nav) throw new NotFoundException(`Navigation ${navId} not found`);
+
+    const run = await this.prisma.navigationSkyvernWorkflowRun.findFirst({
+      where: { id: runId, navigationId: navId, userId },
+      include: {
+        blocks: { orderBy: { blockIndex: 'asc' } },
+      },
+    });
+    if (!run) throw new NotFoundException(`Skyvern workflow run ${runId} not found`);
+    return run;
   }
 
   private connectBrowserWorkerOnce(workerUrl: string, timeoutMs: number): Promise<string> {

@@ -288,6 +288,7 @@ export type NavigationWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   actions?: Prisma.NavigationActionListRelationFilter
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunListRelationFilter
 }
 
 export type NavigationOrderByWithRelationInput = {
@@ -311,6 +312,7 @@ export type NavigationOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
   actions?: Prisma.NavigationActionOrderByRelationAggregateInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunOrderByRelationAggregateInput
 }
 
 export type NavigationWhereUniqueInput = Prisma.AtLeast<{
@@ -337,6 +339,7 @@ export type NavigationWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   actions?: Prisma.NavigationActionListRelationFilter
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunListRelationFilter
 }, "id">
 
 export type NavigationOrderByWithAggregationInput = {
@@ -407,6 +410,7 @@ export type NavigationCreateInput = {
   updatedAt?: Date | string
   project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
   actions?: Prisma.NavigationActionCreateNestedManyWithoutNavigationInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUncheckedCreateInput = {
@@ -429,6 +433,7 @@ export type NavigationUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUncheckedCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUpdateInput = {
@@ -451,6 +456,7 @@ export type NavigationUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
   actions?: Prisma.NavigationActionUpdateManyWithoutNavigationNestedInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateInput = {
@@ -473,6 +479,7 @@ export type NavigationUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUncheckedUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationCreateManyInput = {
@@ -547,6 +554,11 @@ export type NavigationOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
+export type NavigationScalarRelationFilter = {
+  is?: Prisma.NavigationWhereInput
+  isNot?: Prisma.NavigationWhereInput
+}
+
 export type NavigationCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -610,11 +622,6 @@ export type NavigationMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
-export type NavigationScalarRelationFilter = {
-  is?: Prisma.NavigationWhereInput
-  isNot?: Prisma.NavigationWhereInput
-}
-
 export type NavigationCreateNestedManyWithoutProjectInput = {
   create?: Prisma.XOR<Prisma.NavigationCreateWithoutProjectInput, Prisma.NavigationUncheckedCreateWithoutProjectInput> | Prisma.NavigationCreateWithoutProjectInput[] | Prisma.NavigationUncheckedCreateWithoutProjectInput[]
   connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutProjectInput | Prisma.NavigationCreateOrConnectWithoutProjectInput[]
@@ -657,6 +664,20 @@ export type NavigationUncheckedUpdateManyWithoutProjectNestedInput = {
   deleteMany?: Prisma.NavigationScalarWhereInput | Prisma.NavigationScalarWhereInput[]
 }
 
+export type NavigationCreateNestedOneWithoutSkyvernWorkflowRunsInput = {
+  create?: Prisma.XOR<Prisma.NavigationCreateWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUncheckedCreateWithoutSkyvernWorkflowRunsInput>
+  connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutSkyvernWorkflowRunsInput
+  connect?: Prisma.NavigationWhereUniqueInput
+}
+
+export type NavigationUpdateOneRequiredWithoutSkyvernWorkflowRunsNestedInput = {
+  create?: Prisma.XOR<Prisma.NavigationCreateWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUncheckedCreateWithoutSkyvernWorkflowRunsInput>
+  connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutSkyvernWorkflowRunsInput
+  upsert?: Prisma.NavigationUpsertWithoutSkyvernWorkflowRunsInput
+  connect?: Prisma.NavigationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.NavigationUpdateToOneWithWhereWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUpdateWithoutSkyvernWorkflowRunsInput>, Prisma.NavigationUncheckedUpdateWithoutSkyvernWorkflowRunsInput>
+}
+
 export type NavigationCreateNestedOneWithoutActionsInput = {
   create?: Prisma.XOR<Prisma.NavigationCreateWithoutActionsInput, Prisma.NavigationUncheckedCreateWithoutActionsInput>
   connectOrCreate?: Prisma.NavigationCreateOrConnectWithoutActionsInput
@@ -690,6 +711,7 @@ export type NavigationCreateWithoutProjectInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.NavigationActionCreateNestedManyWithoutNavigationInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUncheckedCreateWithoutProjectInput = {
@@ -711,6 +733,7 @@ export type NavigationUncheckedCreateWithoutProjectInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUncheckedCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationCreateOrConnectWithoutProjectInput = {
@@ -763,6 +786,110 @@ export type NavigationScalarWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Navigation"> | Date | string
 }
 
+export type NavigationCreateWithoutSkyvernWorkflowRunsInput = {
+  id?: string
+  userId: string
+  name?: string
+  url: string
+  intent: string
+  desiredOutput: string
+  progressSummary?: string | null
+  status?: $Enums.EvaluationStatus
+  startedAt?: Date | string | null
+  completedAt?: Date | string | null
+  failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
+  autoSignIn?: boolean
+  autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
+  actions?: Prisma.NavigationActionCreateNestedManyWithoutNavigationInput
+}
+
+export type NavigationUncheckedCreateWithoutSkyvernWorkflowRunsInput = {
+  id?: string
+  userId: string
+  projectId?: string | null
+  name?: string
+  url: string
+  intent: string
+  desiredOutput: string
+  progressSummary?: string | null
+  status?: $Enums.EvaluationStatus
+  startedAt?: Date | string | null
+  completedAt?: Date | string | null
+  failureMessage?: string | null
+  runMode?: $Enums.EvaluationRunMode
+  autoSignIn?: boolean
+  autoSignInClerkOtpMode?: string | null
+  skyvernWorkflowId?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  actions?: Prisma.NavigationActionUncheckedCreateNestedManyWithoutNavigationInput
+}
+
+export type NavigationCreateOrConnectWithoutSkyvernWorkflowRunsInput = {
+  where: Prisma.NavigationWhereUniqueInput
+  create: Prisma.XOR<Prisma.NavigationCreateWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUncheckedCreateWithoutSkyvernWorkflowRunsInput>
+}
+
+export type NavigationUpsertWithoutSkyvernWorkflowRunsInput = {
+  update: Prisma.XOR<Prisma.NavigationUpdateWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUncheckedUpdateWithoutSkyvernWorkflowRunsInput>
+  create: Prisma.XOR<Prisma.NavigationCreateWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUncheckedCreateWithoutSkyvernWorkflowRunsInput>
+  where?: Prisma.NavigationWhereInput
+}
+
+export type NavigationUpdateToOneWithWhereWithoutSkyvernWorkflowRunsInput = {
+  where?: Prisma.NavigationWhereInput
+  data: Prisma.XOR<Prisma.NavigationUpdateWithoutSkyvernWorkflowRunsInput, Prisma.NavigationUncheckedUpdateWithoutSkyvernWorkflowRunsInput>
+}
+
+export type NavigationUpdateWithoutSkyvernWorkflowRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  url?: Prisma.StringFieldUpdateOperationsInput | string
+  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  desiredOutput?: Prisma.StringFieldUpdateOperationsInput | string
+  progressSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumEvaluationStatusFieldUpdateOperationsInput | $Enums.EvaluationStatus
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
+  autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
+  actions?: Prisma.NavigationActionUpdateManyWithoutNavigationNestedInput
+}
+
+export type NavigationUncheckedUpdateWithoutSkyvernWorkflowRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  url?: Prisma.StringFieldUpdateOperationsInput | string
+  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  desiredOutput?: Prisma.StringFieldUpdateOperationsInput | string
+  progressSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumEvaluationStatusFieldUpdateOperationsInput | $Enums.EvaluationStatus
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failureMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  runMode?: Prisma.EnumEvaluationRunModeFieldUpdateOperationsInput | $Enums.EvaluationRunMode
+  autoSignIn?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  autoSignInClerkOtpMode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
+}
+
 export type NavigationCreateWithoutActionsInput = {
   id?: string
   userId: string
@@ -782,6 +909,7 @@ export type NavigationCreateWithoutActionsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   project?: Prisma.ProjectCreateNestedOneWithoutNavigationsInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationUncheckedCreateWithoutActionsInput = {
@@ -803,6 +931,7 @@ export type NavigationUncheckedCreateWithoutActionsInput = {
   skyvernWorkflowId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUncheckedCreateNestedManyWithoutNavigationInput
 }
 
 export type NavigationCreateOrConnectWithoutActionsInput = {
@@ -840,6 +969,7 @@ export type NavigationUpdateWithoutActionsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneWithoutNavigationsNestedInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateWithoutActionsInput = {
@@ -861,6 +991,7 @@ export type NavigationUncheckedUpdateWithoutActionsInput = {
   skyvernWorkflowId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUncheckedUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationCreateManyProjectInput = {
@@ -902,6 +1033,7 @@ export type NavigationUpdateWithoutProjectInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.NavigationActionUpdateManyWithoutNavigationNestedInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateWithoutProjectInput = {
@@ -923,6 +1055,7 @@ export type NavigationUncheckedUpdateWithoutProjectInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.NavigationActionUncheckedUpdateManyWithoutNavigationNestedInput
+  skyvernWorkflowRuns?: Prisma.NavigationSkyvernWorkflowRunUncheckedUpdateManyWithoutNavigationNestedInput
 }
 
 export type NavigationUncheckedUpdateManyWithoutProjectInput = {
@@ -952,10 +1085,12 @@ export type NavigationUncheckedUpdateManyWithoutProjectInput = {
 
 export type NavigationCountOutputType = {
   actions: number
+  skyvernWorkflowRuns: number
 }
 
 export type NavigationCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   actions?: boolean | NavigationCountOutputTypeCountActionsArgs
+  skyvernWorkflowRuns?: boolean | NavigationCountOutputTypeCountSkyvernWorkflowRunsArgs
 }
 
 /**
@@ -973,6 +1108,13 @@ export type NavigationCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.E
  */
 export type NavigationCountOutputTypeCountActionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.NavigationActionWhereInput
+}
+
+/**
+ * NavigationCountOutputType without action
+ */
+export type NavigationCountOutputTypeCountSkyvernWorkflowRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.NavigationSkyvernWorkflowRunWhereInput
 }
 
 
@@ -997,6 +1139,7 @@ export type NavigationSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   updatedAt?: boolean
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
   actions?: boolean | Prisma.Navigation$actionsArgs<ExtArgs>
+  skyvernWorkflowRuns?: boolean | Prisma.Navigation$skyvernWorkflowRunsArgs<ExtArgs>
   _count?: boolean | Prisma.NavigationCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["navigation"]>
 
@@ -1069,6 +1212,7 @@ export type NavigationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs
 export type NavigationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.Navigation$projectArgs<ExtArgs>
   actions?: boolean | Prisma.Navigation$actionsArgs<ExtArgs>
+  skyvernWorkflowRuns?: boolean | Prisma.Navigation$skyvernWorkflowRunsArgs<ExtArgs>
   _count?: boolean | Prisma.NavigationCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type NavigationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1083,6 +1227,7 @@ export type $NavigationPayload<ExtArgs extends runtime.Types.Extensions.Internal
   objects: {
     project: Prisma.$ProjectPayload<ExtArgs> | null
     actions: Prisma.$NavigationActionPayload<ExtArgs>[]
+    skyvernWorkflowRuns: Prisma.$NavigationSkyvernWorkflowRunPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1502,6 +1647,7 @@ export interface Prisma__NavigationClient<T, Null = never, ExtArgs extends runti
   readonly [Symbol.toStringTag]: "PrismaPromise"
   project<T extends Prisma.Navigation$projectArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Navigation$projectArgs<ExtArgs>>): Prisma.Prisma__ProjectClient<runtime.Types.Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   actions<T extends Prisma.Navigation$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Navigation$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$NavigationActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  skyvernWorkflowRuns<T extends Prisma.Navigation$skyvernWorkflowRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Navigation$skyvernWorkflowRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$NavigationSkyvernWorkflowRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1990,6 +2136,30 @@ export type Navigation$actionsArgs<ExtArgs extends runtime.Types.Extensions.Inte
   take?: number
   skip?: number
   distinct?: Prisma.NavigationActionScalarFieldEnum | Prisma.NavigationActionScalarFieldEnum[]
+}
+
+/**
+ * Navigation.skyvernWorkflowRuns
+ */
+export type Navigation$skyvernWorkflowRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the NavigationSkyvernWorkflowRun
+   */
+  select?: Prisma.NavigationSkyvernWorkflowRunSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the NavigationSkyvernWorkflowRun
+   */
+  omit?: Prisma.NavigationSkyvernWorkflowRunOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.NavigationSkyvernWorkflowRunInclude<ExtArgs> | null
+  where?: Prisma.NavigationSkyvernWorkflowRunWhereInput
+  orderBy?: Prisma.NavigationSkyvernWorkflowRunOrderByWithRelationInput | Prisma.NavigationSkyvernWorkflowRunOrderByWithRelationInput[]
+  cursor?: Prisma.NavigationSkyvernWorkflowRunWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.NavigationSkyvernWorkflowRunScalarFieldEnum | Prisma.NavigationSkyvernWorkflowRunScalarFieldEnum[]
 }
 
 /**

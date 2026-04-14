@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-14
+
+- `0.10.316`: **Navigation Play — persist Skyvern workflow runs and block timing** — New tables **`navigation_skyvern_workflow_runs`** / **`navigation_skyvern_workflow_run_blocks`**: canonical **`run_started_at`**, timeline snapshots, per-block orchestrator duration in **`metrics_json`** when Skyvern exposes timestamps; **`exclusive_app_duration_ms`** reserved for future CDP timing. **`GET /navigations/:id/skyvern-runs`** and **`GET /navigations/:id/skyvern-runs/:runId`**. **`POST /play/start`** returns **`dbRunId`** + **`runStartedAt`**; recording-session includes **`skyvernWorkflowRunId`**. `@bladerunner/api 0.6.229`, `@bladerunner/web 0.7.175`.
+
 ## 2026-04-13
 
 - `0.10.315`: **Chore — remove navigation recording cmdk debug NDJSON** — Dropped **`inspectAndClick`** **`appendFileSync`** to **`.cursor/debug-d7957e.log`** and **`ElementMetadata`** debug fields. `@bladerunner/api 0.6.228`.

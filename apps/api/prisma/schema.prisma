@@ -323,6 +323,81 @@ model Evaluation {
   @@map("evaluations")
 }
 
+/// Terminal states for a Skyvern workflow run (`GET /v1/runs/{id}` `status`).
+enum SkyvernWorkflowRunLifecycleStatus {
+  created
+  queued
+  running
+  timed_out
+  failed
+  terminated
+  completed
+  canceled
+}
+
+/// One execution of a navigation’s Skyvern workflow (Navigation Play).
+model NavigationSkyvernWorkflowRun {
+  id                        String   @id @default(uuid())
+  navigationId              String   @map("navigation_id")
+  userId                    String   @map("user_id")
+  /// Skyvern `run_id` from `POST /v1/run/workflows`.
+  skyvernRunId              String   @map("skyvern_run_id")
+  /// Stable workflow id (`wpid_…`) used for the run.
+  skyvernWorkflowPermanentId String  @map("skyvern_workflow_permanent_id")
+  /// Canonical timestamp for all metrics for this run: Skyvern `created_at` when present, else API receipt time.
+  runStartedAt              DateTime @map("run_started_at")
+  /// Last known or final Skyvern run status.
+  lastStatus                SkyvernWorkflowRunLifecycleStatus @map("last_status")
+  finishedAt                DateTime? @map("finished_at")
+  failureReason             String?  @map("failure_reason") @db.Text
+  /// `hosted` when Skyvern Cloud runs the browser; `browser_worker` when `browser_address` is set.
+  browserMode               String   @map("browser_mode")
+  /// Last `GET /v1/runs/{id}` payload (debug / future metrics).
+  skyvernRunSnapshotJson    Json?    @map("skyvern_run_snapshot_json")
+  /// Last `GET /v1/runs/{id}/timeline` payload.
+  skyvernTimelineJson       Json?    @map("skyvern_timeline_json")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  navigation Navigation                        @relation(fields: [navigationId], references: [id], onDelete: Cascade)
+  blocks     NavigationSkyvernWorkflowRunBlock[]
+
+  @@unique([skyvernRunId])
+  @@index([navigationId, runStartedAt(sort: Desc)])
+  @@index([userId])
+  @@map("navigation_skyvern_workflow_runs")
+}
+
+/// Per-workflow-block metrics for a Skyvern run (block index aligns with Play compiler order).
+model NavigationSkyvernWorkflowRunBlock {
+  id                       String   @id @default(uuid())
+  runId                    String   @map("run_id")
+  userId                   String   @map("user_id")
+  /// Zero-based index matching `workflow_definition.blocks` order for this run.
+  blockIndex               Int      @map("block_index")
+  /// Skyvern block label, e.g. `s1_nav`.
+  skyvernBlockLabel        String   @map("skyvern_block_label")
+  /// Recorded step `sequence` when aligned with the workflow; null if unknown.
+  navigationActionSequence Int?     @map("navigation_action_sequence")
+  /// Latest status string from Skyvern timeline for this block (orchestrator-level, not app-ready).
+  skyvernTimelineStatus    String?  @map("skyvern_timeline_status")
+  /// Parsed from timeline when Skyvern exposes timestamps (orchestrator timing).
+  skyvernBlockStartedAt    DateTime? @map("skyvern_block_started_at")
+  skyvernBlockCompletedAt  DateTime? @map("skyvern_block_completed_at")
+  /// Exclusive app time (UI action → app readiness); reserved for CDP/worker instrumentation.
+  exclusiveAppDurationMs   Int?     @map("exclusive_app_duration_ms")
+  /// Extra key/value metrics without schema churn.
+  metricsJson              Json?    @map("metrics_json")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  run NavigationSkyvernWorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, blockIndex])
+  @@index([runId])
+  @@map("navigation_skyvern_workflow_run_blocks")
+}
+
 /// Navigation planning records (UI shell; separate from autonomous `Evaluation` runs).
 model Navigation {
   id                     String            @id @default(uuid())
@@ -345,8 +420,9 @@ model Navigation {
   createdAt              DateTime          @default(now()) @map("created_at")
   updatedAt              DateTime          @updatedAt @map("updated_at")
 
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  actions NavigationAction[]
+  project                Project?                         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  actions                NavigationAction[]
+  skyvernWorkflowRuns    NavigationSkyvernWorkflowRun[]
 
   @@index([userId])
   @@index([userId, createdAt(sort: Desc)])

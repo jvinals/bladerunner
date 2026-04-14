@@ -121,3 +121,17 @@ export const EvaluationStepKind = {
 } as const
 
 export type EvaluationStepKind = (typeof EvaluationStepKind)[keyof typeof EvaluationStepKind]
+
+
+export const SkyvernWorkflowRunLifecycleStatus = {
+  created: 'created',
+  queued: 'queued',
+  running: 'running',
+  timed_out: 'timed_out',
+  failed: 'failed',
+  terminated: 'terminated',
+  completed: 'completed',
+  canceled: 'canceled'
+} as const
+
+export type SkyvernWorkflowRunLifecycleStatus = (typeof SkyvernWorkflowRunLifecycleStatus)[keyof typeof SkyvernWorkflowRunLifecycleStatus]
