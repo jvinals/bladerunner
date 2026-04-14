@@ -2,7 +2,6 @@ import { Injectable, Logger, ConflictException, NotFoundException } from '@nestj
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
-import * as fs from 'node:fs';
 import { chromium, type Browser, type Page, type CDPSession, type Frame } from 'playwright-core';
 import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
@@ -156,36 +155,6 @@ const STREAM_MAX_HEIGHT = 720;
 /** Browser-worker control WS: max attempts and per-attempt timeout. */
 const WORKER_WS_ATTEMPTS = 10;
 const WORKER_WS_ATTEMPT_MS = 60_000;
-
-/** Session `d7957e` — browser worker WS failures after Record (empty log `()` / code 1006). */
-const NAV_WORKER_DEBUG_LOG = '/Users/jvinals/code/bladerunner/.cursor/debug-d7957e.log';
-
-function browserWorkerUrlForLog(url: string): string {
-  try {
-    const u = new URL(url);
-    return `${u.protocol}//${u.host}`;
-  } catch {
-    return 'invalid-url';
-  }
-}
-
-// #region agent log
-function navWorkerDebugAppend(payload: Record<string, unknown>): void {
-  try {
-    fs.appendFileSync(
-      NAV_WORKER_DEBUG_LOG,
-      `${JSON.stringify({
-        sessionId: 'd7957e',
-        timestamp: Date.now(),
-        runId: 'nav-browser-worker',
-        ...payload,
-      })}\n`,
-    );
-  } catch {
-    /* ignore */
-  }
-}
-// #endregion
 
 /** Live prompt injection: scan up to this many matching nodes per frame (perf cap). */
 const PROMPT_TARGET_MAX_PER_FRAME = 120;
@@ -653,7 +622,7 @@ export class NavigationRecordingService {
       this.configService.get<string>('BROWSER_WORKER_URL'),
       this.logger,
     );
-    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl, navId);
+    const wsEndpoint = await this.requestBrowserFromWorker(workerUrl);
     const browser = await chromium.connect(wsEndpoint);
 
     try {
@@ -1340,39 +1309,14 @@ export class NavigationRecordingService {
   // Browser-worker control plane (mirrors RecordingService pattern)
   // -----------------------------------------------------------------------
 
-  private async requestBrowserFromWorker(workerUrl: string, navId: string): Promise<string> {
+  private async requestBrowserFromWorker(workerUrl: string): Promise<string> {
     let lastErr: Error = new Error('Browser worker connection failed');
-    const workerHost = browserWorkerUrlForLog(workerUrl);
-    // #region agent log
-    navWorkerDebugAppend({
-      hypothesisId: 'H3',
-      location: 'requestBrowserFromWorker:start',
-      message: 'navigation recording worker connect',
-      data: { navId, workerHost, pid: process.pid },
-    });
-    // #endregion
     for (let i = 1; i <= WORKER_WS_ATTEMPTS; i++) {
       try {
-        return await this.connectBrowserWorkerOnce(workerUrl, WORKER_WS_ATTEMPT_MS, { navId, attempt: i });
+        return await this.connectBrowserWorkerOnce(workerUrl, WORKER_WS_ATTEMPT_MS);
       } catch (err) {
         lastErr = err instanceof Error ? err : new Error(String(err));
         const errno = lastErr as NodeJS.ErrnoException;
-        // #region agent log
-        navWorkerDebugAppend({
-          hypothesisId: 'H1',
-          location: 'requestBrowserFromWorker:catch',
-          message: 'attempt failed',
-          data: {
-            navId,
-            attempt: i,
-            workerHost,
-            errMessage: lastErr.message,
-            errName: lastErr.name,
-            errCode: errno.code,
-            errString: String(err),
-          },
-        });
-        // #endregion
         if (!this.isTransientWorkerError(lastErr) || i === WORKER_WS_ATTEMPTS) {
           throw lastErr;
         }
@@ -1391,12 +1335,7 @@ export class NavigationRecordingService {
     throw lastErr;
   }
 
-  private connectBrowserWorkerOnce(
-    workerUrl: string,
-    timeoutMs: number,
-    ctx: { navId: string; attempt: number },
-  ): Promise<string> {
-    const sockId = randomBytes(4).toString('hex');
+  private connectBrowserWorkerOnce(workerUrl: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
       let settled = false;
       const ws = new WebSocket(workerUrl);
@@ -1404,14 +1343,6 @@ export class NavigationRecordingService {
         if (settled) return;
         settled = true;
         ws.close();
-        // #region agent log
-        navWorkerDebugAppend({
-          hypothesisId: 'H5',
-          location: 'connectBrowserWorkerOnce:timeout',
-          message: 'worker ws timeout',
-          data: { ...ctx, sockId, timeoutMs },
-        });
-        // #endregion
         reject(new Error('Browser worker connection timeout'));
       }, timeoutMs);
 
@@ -1423,14 +1354,6 @@ export class NavigationRecordingService {
       };
 
       ws.on('open', () => {
-        // #region agent log
-        navWorkerDebugAppend({
-          hypothesisId: 'H4',
-          location: 'connectBrowserWorkerOnce:open',
-          message: 'worker ws open, send launch',
-          data: { ...ctx, sockId, workerHost: browserWorkerUrlForLog(workerUrl) },
-        });
-        // #endregion
         ws.send(JSON.stringify({ type: 'launch' }));
       });
 
@@ -1447,14 +1370,6 @@ export class NavigationRecordingService {
             resolve(msg.wsEndpoint!);
           });
         } else if (msg.type === 'error') {
-          // #region agent log
-          navWorkerDebugAppend({
-            hypothesisId: 'H2',
-            location: 'connectBrowserWorkerOnce:launchError',
-            message: msg.error ?? 'worker error frame',
-            data: { ...ctx, sockId },
-          });
-          // #endregion
           finish(() => {
             ws.close();
             reject(new Error(msg.error ?? 'Browser worker error'));
@@ -1462,38 +1377,13 @@ export class NavigationRecordingService {
         }
       });
 
-      ws.on('error', (err) => {
-        const e = err instanceof Error ? err : new Error(String(err));
-        const en = e as NodeJS.ErrnoException;
-        // #region agent log
-        navWorkerDebugAppend({
-          hypothesisId: 'H1',
-          location: 'connectBrowserWorkerOnce:wsError',
-          message: 'worker ws error event',
-          data: {
-            ...ctx,
-            sockId,
-            msg: e.message,
-            name: e.name,
-            code: en.code,
-            raw: String(err),
-          },
-        });
-        // #endregion
-        finish(() => reject(e));
-      });
+      ws.on('error', (err) =>
+        finish(() => reject(err instanceof Error ? err : new Error(String(err)))),
+      );
 
       ws.on('close', (code, reason) => {
         if (settled) return;
         const r = reason?.toString?.() ?? '';
-        // #region agent log
-        navWorkerDebugAppend({
-          hypothesisId: 'H2',
-          location: 'connectBrowserWorkerOnce:wsClose',
-          message: 'worker ws close before launch',
-          data: { ...ctx, sockId, code, reason: r },
-        });
-        // #endregion
         finish(() =>
           reject(new Error(`Browser worker WS closed before launch: code=${code}${r ? ` ${r}` : ''}`)),
         );

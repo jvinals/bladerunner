@@ -2,6 +2,8 @@
 
 ## 2026-04-14
 
+- `0.10.318`: **Chore — remove navigation browser-worker NDJSON instrumentation** — Dropped **`navWorkerDebugAppend`** / **`.cursor/debug-d7957e.log`** from **`NavigationRecordingService`**; kept richer Nest **`Browser worker WS failed (...)`** **`warnDetail`** line. `@bladerunner/api 0.6.231`.
+
 - `0.10.317`: **Navigation recording — hover / pointer move** — Ephemeral **`nav:pointerMove`** maps stream coordinates like clicks and runs **`page.mouse.move`** so CSS **:hover** tooltips and popovers work while recording. **`InteractiveCanvasStream`** throttles moves (~32ms); not persisted (same as scroll). `@bladerunner/api 0.6.230`, `@bladerunner/web 0.7.175`.
 
 - `0.10.316`: **Debug — navigation recording browser-worker WebSocket** — NDJSON to **`.cursor/debug-d7957e.log`** (`runId: nav-browser-worker`) on **`requestBrowserFromWorker`** / **`connectBrowserWorkerOnce`**: **`navId`**, **`workerHost`**, attempt, **`ws` error/close/timeout** details (investigate **`()`** / **1006** after Record). Nest warn uses **`message || code || name || …`** when present. `@bladerunner/api 0.6.229`.
