@@ -2,6 +2,10 @@
 
 ## 2026-04-14
 
+- `0.10.318`: **Vite dev server — bind `0.0.0.0`** — Set **`server.host: true`** so the web app is reachable from Docker (e.g. Skyvern Play against `http://host.docker.internal:5173`). Fixes **connection refused** when the dev server only listened on loopback. `@bladerunner/web 0.7.176`.
+
+- `0.10.317`: **Docker Compose — Skyvern `host.docker.internal` on Linux** — Added **`extra_hosts: host.docker.internal:host-gateway`** to the **`skyvern`** service so Chromium inside the container can reach apps on the host (e.g. Vite `:5173`) without DNS failures.
+
 - `0.10.316`: **Navigation Play — persist Skyvern workflow runs and block timing** — New tables **`navigation_skyvern_workflow_runs`** / **`navigation_skyvern_workflow_run_blocks`**: canonical **`run_started_at`**, timeline snapshots, per-block orchestrator duration in **`metrics_json`** when Skyvern exposes timestamps; **`exclusive_app_duration_ms`** reserved for future CDP timing. **`GET /navigations/:id/skyvern-runs`** and **`GET /navigations/:id/skyvern-runs/:runId`**. **`POST /play/start`** returns **`dbRunId`** + **`runStartedAt`**; recording-session includes **`skyvernWorkflowRunId`**. `@bladerunner/api 0.6.229`, `@bladerunner/web 0.7.175`.
 
 ## 2026-04-13
