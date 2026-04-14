@@ -53,6 +53,7 @@ export function NavigationRecorderLayout({
     cancelRecording,
     sendClick,
     sendScroll,
+    sendPointerMove,
     resolveInput,
     dismissInputPrompt,
     analyzePrompt,
@@ -113,6 +114,7 @@ export function NavigationRecorderLayout({
               onCancelIntent={cancelIntent}
               sendClick={sendClick}
               sendScroll={sendScroll}
+              sendPointerMove={sendPointerMove}
             />
           ) : (
             <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/90 px-4 py-14 text-center text-sm text-slate-600">
@@ -134,6 +136,7 @@ export function NavigationRecorderLayout({
               onCancelIntent={cancelIntent}
               sendClick={sendClick}
               sendScroll={sendScroll}
+              sendPointerMove={sendPointerMove}
               embedWithoutAppStyles
             />
           </DetachedStreamPortal>

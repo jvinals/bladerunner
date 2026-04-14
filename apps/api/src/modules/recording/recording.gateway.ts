@@ -463,6 +463,37 @@ export class RecordingGateway implements OnGatewayInit {
     return { ok: true };
   }
 
+  /** Ephemeral pointer move — :hover / tooltips; NOT persisted or compiled. */
+  @SubscribeMessage('nav:pointerMove')
+  async handleNavPointerMove(
+    @MessageBody()
+    data: {
+      navId: string;
+      userId: string;
+      x: number;
+      y: number;
+      streamWidth?: number;
+      streamHeight?: number;
+    },
+  ) {
+    try {
+      if (this.navigationRecording.isPausedForUser(data.navId, data.userId)) {
+        return { ok: true, ignored: true };
+      }
+      await this.navigationRecording.pointerMove(
+        data.navId,
+        data.userId,
+        data.x,
+        data.y,
+        data.streamWidth,
+        data.streamHeight,
+      );
+    } catch {
+      /* transient move failure is non-fatal */
+    }
+    return { ok: true };
+  }
+
   @SubscribeMessage('nav:deleteAction')
   async handleNavDeleteAction(
     @ConnectedSocket() client: Socket,
